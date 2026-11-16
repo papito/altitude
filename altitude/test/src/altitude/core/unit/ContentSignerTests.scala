@@ -53,8 +53,8 @@ import altitude.core.service.ContentSigner
      *
      * Assertions:
      *
-     * `sign` makes exactly the path, the expiry and that signature, and `verify` accepts it. A link already issued must keep
-     * verifying through any change to this code, so the format is pinned to a value the code did not produce.
+     * `sign` makes exactly that URL, and `verify` accepts it. An issued link must keep verifying through any change to this code,
+     * so the format is pinned to a value the code did not produce.
      */
     val vector = "SCOu-8ZLHnbRqlxZlb8v2BlzcC_RNH-IilNAAUydoC8"
 
@@ -101,7 +101,7 @@ import altitude.core.service.ContentSigner
      * Setup:
      *
      * A signed content path, then its expiry moved a second later, one character of its signature changed, and its signature
-     * presented with another item's path.
+     * presented with another path.
      *
      * Assertions:
      *
@@ -140,8 +140,8 @@ import altitude.core.service.ContentSigner
     /**
      * Setup:
      *
-     * A signed content path, then its expiry replaced by text that is not a number, and its signature by text that is not
-     * URL-safe Base64, by an empty one, and by a valid Base64URL value of the wrong length.
+     * A signed content path, its expiry replaced by text that is not a number, and its signature by text that is not URL-safe
+     * Base64, an empty string, and a value of the wrong length.
      *
      * Assertions:
      *

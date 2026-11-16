@@ -20,9 +20,9 @@ import altitude.core.dao.sqlite.SqliteOverrides
      *
      * Assertions:
      *
-     * A whole second is written exactly as before, `yyyy-MM-dd HH:mm:ss`, so existing rows and the `date()` index expressions see
-     * one format; a fraction is appended with no trailing zeros, and every form parses back to the value it spells. Only the
-     * canonical forms are parsed here: every writer produces them, since the stored text is compared as text.
+     * A whole second is written as `yyyy-MM-dd HH:mm:ss` and a fraction is appended with no trailing zeros; every form parses
+     * back to its value. Only canonical forms are parsed, since every writer produces them for the stored text to compare as
+     * text.
      */
     val second = LocalDateTime.of(2024, 7, 4, 8, 9, 10)
     val formatter = SqliteOverrides.DATETIME_FORMATTER

@@ -6,13 +6,9 @@
   formJson: ujson.Obj = ujson.Obj(),
   postUrl: String = s"/htmx/library/r/${RequestContext.getRepository.persistedId}/new")
 
-@* The New library dialog (GET /htmx/library/r/:repoId/dialogs/new, an Admin's or the Create Libraries flag's), a popover dialog the nav's Library menu opens
-   below its trigger. Return or Create submits, and Cancel, Escape and the host's × dismiss it. A refused name comes back as a
-   validation response replacing this form, with the typed name and the Library name rule's error; a created Library answers
-   with HX-Redirect to its Import page. The field sets no length limits: the rule counts the name normalized, its spaces
-   collapsed, which the browser cannot, and the server's error says what is wrong. The bare x-data is Cancel's Alpine handler's:
-   the popover host has none. `postUrl` is the create route but in the style guide, whose sample posts where nothing is
-   created. *@
+@* The New library dialog, an Admin's or the Create Libraries flag's. The field sets no length limits: the rule counts the
+   name with its spaces collapsed, which the browser cannot. The bare x-data serves Cancel's Alpine handler, since the
+   popover host has none. `postUrl` differs only in the style guide, whose sample creates nothing. *@
 <form action="#"
       id="newLibrary"
       x-data

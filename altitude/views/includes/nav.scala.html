@@ -8,18 +8,16 @@
 @import altitude.core.RequestContext
 @import altitude.core.routes.decorators.mayCreateLibraries
 
-@* `current` is the entry of the page shown (a `Const.NavEntry` key), which carries `aria-current="page"`; a nav reload
-   passes it again. `reload` is a nav reload's (NavController), which renders the Library menu's host empty (below). *@
+@* `current` is the entry of the page shown (a `Const.NavEntry` key); `reload` is a nav reload's, which renders the Library
+   menu's host empty. *@
 @(stats: Stats = Stats(List()), repoId: String = RequestContext.getRepository.persistedId, current: String = "", reload: Boolean = false)
 
 @currentAttr(entry: String) = {@if(entry == current){ aria-current="page"}}
 
-@* Every nav is rendered behind a login, so the account is always here. An entry shows only where the account may open what it
-   leads to, by the Permissions of the login token in this Library (`RequestContext.holds`): Triage and Trash for a member (a
+@* An entry shows only where the account may open what it leads to in this Library: Triage and Trash for a member (a
    Guest sees Browse alone), Import for the holder of Import, Users for the holder of Create Users or Create Guests in any
-   Library, which the token's grants say (`RequestContext.createsAccounts`; an Admin holds both), New library for an Admin or the holder of the Create Libraries flag, Settings for an Admin. The account's
-   cell, every account's, says who is logged in and of which type, and opens the account info dialog, which changes the password
-   and logs out. *@
+   Library (`RequestContext.createsAccounts`), New library for an Admin or the Create Libraries flag, Settings for an
+   Admin. *@
 @isAdmin = @{ RequestContext.getAccount.accountType == AccountType.Admin }
 
 @libraryMenuHostId = @{ "libraryMenuHost" }
@@ -27,9 +25,8 @@
 <div class="brand">
     <a href="/"><i class="fas fa-chevron-up"></i><span>Altitude</span></a>
 </div>
-@* Browse goes to the current Library's main page with no search; the Library's name after it is the Library menu's trigger:
-   the Libraries the account can see, and New library for an Admin or the holder of the Create Libraries flag. A nav reload renders the menu's host empty, by its ID and
-   `hx-preserve`: htmx swaps the page's built host back in for it, so a list would be read for nothing. *@
+@* A nav reload renders the Library menu's host empty: htmx swaps the page's built host back in by its ID and
+   `hx-preserve`, so a list would be read for nothing. *@
 <div class="menu repository"@currentAttr(Const.NavEntry.BROWSE)>
     @includes.html.library_menu(
         hostId = libraryMenuHostId,
@@ -40,19 +37,11 @@
         emptyHost = reload)
 </div>
 
-@* The quick search is on every page. Where js/search-results/search-input.js binds it (the main page), Enter searches
-   in place, in Browse and in Triage, or navigates to Browse from the Trash; elsewhere the form's own submit opens
-   Browse with the text as `q`. Its placeholder says what a search typed there covers: "search triage" in Triage, the
-   triaged assets alone, and "quick search" anywhere else. `hx-preserve`
-   keeps this very element, and with it the text being typed, when the nav is reloaded for fresh counts. The clear (×)
-   control empties the text. The filter button opens the advanced search panel beside the form (`popovertarget`), and
-   carries the number of filters in force in its badge, `data-app-filter-count` (js/search-results/search-panel.js).
-
-   The panel is a native popover under the form, empty until it opens: opening loads its form (htmx/search_panel) from
-   `data-panel-url` for the search in force. It is `hx-preserve` too, so a nav reload keeps the open panel and what is
-   typed in it; a reload renders it empty, by its ID, and htmx puts the page's own back in its place. For a member it
-   says that the account sees triaged items (`data-app-sees-triaged`, read by `context.seesTriaged`), which a Guest
-   does not: the scripts ask for the triage filter, on by default and remembered in the browser, for a member alone. *@
+@* The quick search, on every page. Where js/search-results/search-input.js binds it (the main page), Enter searches in
+   place, or opens Browse from the Trash; elsewhere the form's own submit opens Browse with the text as `q`. The form and
+   the advanced search panel are `hx-preserve`d, so a nav reload for fresh counts keeps the text being typed and an open
+   panel; the panel loads its form when it opens. `data-app-sees-triaged` marks a member, for whom alone the scripts ask
+   for the triage filter. *@
 <div class="search">
   <form id="searchForm" role="search" method="get" action="/r/@repoId" hx-preserve>
     <i class="fas fa-search"></i>
@@ -91,7 +80,6 @@
 </div>
 }
 
-@* Settings are an Admin's alone *@
 @if(isAdmin) {
 <div class="menu settings"@currentAttr(Const.NavEntry.SETTINGS)>
     <a href="/settings/r/@repoId"><i class="fas fa-cog"></i><span>Settings</span></a>
@@ -112,20 +100,18 @@
 }
 }
 
-@* Dev only, like the routes behind it (StyleGuideController). The design tweaks panel has no nav entry: `Ctrl+Alt+T`
-   toggles it (js/design-tweaks.js) *@
+@* Dev only, like the routes behind it. The design tweaks panel has no nav entry: `Ctrl+Alt+T` toggles it once its
+   script tags are enabled *@
 @if(Environment.isDev) {
     <div class="menu style-guide"@currentAttr(Const.NavEntry.STYLE_GUIDE)>
         <a href="/style-guide/r/@repoId"><i class="fas fa-swatchbook"></i><span>Style Guide</span></a>
     </div>
 }
 
-@* The account's cell (includes/account_menu), its trigger the icon in the account type's color and the username, which opens
-   the account info dialog of this Library below itself: its Change password opens that dialog below the trigger, and its Log
-   out posts the empty form beside the trigger, which takes no room *@
+@* The account's cell; the account info dialog's Log out posts the empty form beside the trigger, which takes no room *@
 @includes.html.account_menu("accountMenuBtn", s"/htmx/account/r/$repoId/dialogs/info") {
     <form id="logoutForm" method="post" action="/logout"></form>
 }
 
-@* The theme switch, always the last cell. The stylesheet shows one of its two icons (js/global.js handles the click) *@
+@* The theme switch, always the last cell; the stylesheet shows one of its two icons *@
 <button type="button" class="menu theme-switch" data-app-theme-switch title="Toggle light and dark theme" aria-label="Toggle light and dark theme"><i class="fas fa-sun" aria-hidden="true"></i><i class="fas fa-moon" aria-hidden="true"></i></button>

@@ -51,9 +51,8 @@ object DescribeSearchTests {
   private val CACTUS = "images/cactus.jpg"
 
   /**
-   * The filters a description is searched within: in the repository view, outside the trash and, unless `triaged`, outside
-   * triage; or, with `triageView`, in the Triage view, among the triaged assets alone. With none set, the description is searched
-   * alone.
+   * The filters a description is searched within: the repository view outside the trash and, unless `triaged`, outside triage;
+   * or, with `triageView`, the triaged assets alone
    */
   private case class Filters(
       triaged: Boolean = false,
@@ -67,9 +66,8 @@ object DescribeSearchTests {
       importedRange: Option[DateRange] = None) {
 
     /**
-     * The search of these filters as a request asks for it, unresolved: the page of `pageSize` assets after `cursor`, in the
-     * order of `sort` and under `grouping` when it has them. `exactLimit` is how many matching assets PostgreSQL ranks one by one
-     * before it ranks through its vector index.
+     * The search of these filters as a request asks for it, unresolved. `exactLimit` is how many matching assets PostgreSQL ranks
+     * exactly before it ranks through its vector index.
      */
     def query(
         cursor: Option[SearchCursor] = None,
@@ -105,8 +103,8 @@ object DescribeSearchTests {
 }
 
 /**
- * The Describe search: a description ranked against the SigLIP 2 Scene embeddings of the repository's still images, in the
- * database, on both engines. The fixtures are embedded by the real Scene models and the descriptions by the real text tower.
+ * The Describe search: a description ranked against the SigLIP 2 Scene embeddings of the repository's still images, on both
+ * engines, with the real Scene models and text tower.
  */
 @DoNotDiscover class DescribeSearchTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
   import DescribeSearchTests.*
@@ -115,11 +113,11 @@ object DescribeSearchTests {
 
   override protected def usesDescribeModel: Boolean = true
 
-  /** A fixture image imported through the whole pipeline, which leaves it in triage, as the import returned it */
+  /** A fixture image imported through the whole pipeline, which leaves it in triage */
   private def triaged(relPath: String): Asset =
     testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset(relPath))
 
-  /** A fixture image imported and moved into `folder`, the repository's root folder when none is given, so out of triage */
+  /** A fixture image imported and moved out of triage into `folder`, the root folder by default */
   private def sorted(relPath: String, folder: Option[Folder] = None): Asset = {
     val asset = triaged(relPath)
     testApp.service.library
@@ -164,7 +162,7 @@ object DescribeSearchTests {
     photos.sortBy(photo => (-photo.embedding.similarity(described), photo.id)).map(_.id)
   }
 
-  /** A reproducible unit vector of the model's dimensions */
+  /** A unit vector of the model's dimensions, random by `seed` */
   private def unitVector(seed: Int): SceneEmbedding = {
     val random = new Random(seed)
     val values = Array.fill(SceneModel.Siglip2.dimensions)(random.nextGaussian())
@@ -185,7 +183,7 @@ object DescribeSearchTests {
   /** The probability, by the model, that the image matches the description */
   private def probability(asset: Asset, description: String): Double = probabilityAt(cosine(asset, description))
 
-  /** A probability as a Setting's text: a plain decimal */
+  /** A probability as a Setting's text: a plain decimal, never in exponent notation */
   private def plain(probability: Double): String = BigDecimal(probability).bigDecimal.toPlainString
 
   private def describe(
@@ -209,7 +207,7 @@ object DescribeSearchTests {
     testApp.service.search
       .describeGrouped(description, filters.query(cursor, pageSize, exactLimit, Some(sort), Some(grouping)))
 
-  /** Every page of a search that a cursor continues, the first read with no cursor and each next one from the cursor before it */
+  /** Every page of a search, each read from the cursor of the page before it */
   private def continued[Page](read: Option[SearchCursor] => Page)(next: Page => Option[SearchCursor]): List[Page] = {
     val first = read(None)
     first :: List.unfold(next(first))(_.map {
@@ -222,10 +220,7 @@ object DescribeSearchTests {
   /** A page's groups as its assets' IDs, group by group */
   private def groupIds(result: GroupedSearchResult): List[List[String]] = result.groups.map(_.assets.map(_.persistedId))
 
-  /**
-   * A page read from the DAO, with the cutoff and the limit given, inside a transaction set up for a search of that limit, where
-   * the filters' search is resolved as the service resolves one
-   */
+  /** A page read from the DAO with the cutoff and limit given, in a transaction set up for a vector search of that limit */
   private def page(
       embedding: SceneEmbedding,
       minCosine: Double = -1,
@@ -245,10 +240,7 @@ object DescribeSearchTests {
   private def matchedBy(filters: Filters): Set[String] =
     testApp.service.library.search(filters.query(pageSize = 500)).records.map(_.persistedId).toSet
 
-  /**
-   * Every page of a description's results within the filters, `pageSize` assets at a time, each continued from the cursor of the
-   * page before it
-   */
+  /** Every page of a description's results within the filters, `pageSize` assets at a time */
   private def pages(
       description: String,
       pageSize: Int,
@@ -266,9 +258,8 @@ object DescribeSearchTests {
      *
      * Assertions:
      *
-     * "a cactus" finds all four with the cactus first, and "a man in a suit" a portrait first and the cactus after it. Each
-     * result is in the order of the cosines of the images' Scene embeddings to the description's, highest first, carries the
-     * total, and is sorted by similarity.
+     * "a cactus" finds all four with the cactus first, and "a man in a suit" a portrait first. Each result is in descending order
+     * of cosine to the description, carries the total, and is sorted by similarity.
      *
      * Edge cases:
      *
@@ -303,14 +294,12 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with a photo of a cactus and a portrait, and the page of the DAO for the embedding of "a cactus", with no
-     * cutoff.
+     * A photo of a cactus and a portrait, and the DAO's page for "a cactus" with no cutoff.
      *
      * Assertions:
      *
-     * Each row's position is one less the cosine of its image's Scene embedding to the description's, as computed from the
-     * embeddings the import returned, to the precision of a float, on either engine; the rows are nearest first, the page counts
-     * both and nothing follows it.
+     * Each row's sort value is one minus its image's cosine to the description, to float precision on either engine; the rows are
+     * nearest first and the page counts both.
      */
     val assets = List(sorted(CACTUS), sorted(PHOTOS.head))
     val found = page(embeddingOf("a cactus"))
@@ -370,20 +359,19 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with four triaged assets placed at cosines of 0.8, 0.6, 0.4 and 0.2 to "a cactus", the second and the fourth
-     * named beach; a triaged asset with no Scene embedding; a sorted asset at 0.9, named beach too; and a triaged one at 0.95
-     * that is recycled. The Describe match threshold is one every image clears.
+     * Four triaged assets at cosines of 0.8, 0.6, 0.4 and 0.2 to "a cactus", the second and fourth named beach; a triaged asset
+     * with no Scene embedding; a sorted beach asset at 0.9; and a recycled triaged one at 0.95. Every image clears the threshold.
      *
      * Assertions:
      *
-     * In the Triage view "a cactus" finds the four triaged assets, nearest first, with the total of 4. Within the Search text
-     * "beach" it finds the two triaged assets of that name, in the same order. Two to a page, the pages concatenate to the whole
-     * list. Ranked through PostgreSQL's vector index, under an exact limit of 1, the list and the total are the same.
+     * In the Triage view "a cactus" finds the four triaged assets, nearest first, with a total of 4, and within the Search text
+     * "beach" the two of that name. Two to a page, the pages concatenate to the whole list, and ranking through PostgreSQL's
+     * vector index gives the same list and total.
      *
      * Edge cases:
      *
-     * The sorted asset, though nearest of all and matched by the Search text, the recycled one and the one with no embedding are
-     * never found. The repository view finds the sorted asset alone, and with the triaged assets asked for, the five.
+     * The sorted asset, though nearest, the recycled one and the one with no embedding are never found there. The repository view
+     * finds the sorted asset alone, and with the triaged assets asked for, the five.
      */
     val description = "a cactus"
     val inTriage = List(0.8 -> None, 0.6 -> Some("beach one.jpg"), 0.4 -> None, 0.2 -> Some("beach two.jpg")).zipWithIndex.map {
@@ -418,14 +406,12 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * Two repositories. The first holds a sorted portrait, a Video of that portrait and an asset with no Scene embedding; the
-     * second a sorted photo of a cactus. The Describe match threshold is one every image clears, and the triaged assets are asked
-     * for, the Video being in triage.
+     * Two repositories: the first with a sorted portrait, a triaged Video and an asset with no Scene embedding, the second with a
+     * photo of a cactus. Every image clears the threshold, and the triaged assets are asked for.
      *
      * Assertions:
      *
-     * In the first repository "a cactus" finds its portrait alone, though the nearest image is the other repository's, and in the
-     * second it finds the cactus alone.
+     * In each repository "a cactus" finds that repository's image alone.
      *
      * Edge cases:
      *
@@ -457,19 +443,17 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with a photo of a cactus and three portraits, and the probability the model gives each of matching "a cactus",
-     * computed from the embeddings the import returned. The Describe match threshold is saved between the cactus's probability
-     * and the most likely portrait's, then above the cactus's.
+     * A photo of a cactus and three portraits, and the probability the model gives each of matching "a cactus". The threshold is
+     * set between the cactus's probability and the likeliest portrait's, then above the cactus's.
      *
      * Assertions:
      *
-     * Under the first threshold "a cactus" finds the cactus alone, and its total is 1. Under the second it finds nothing, and its
-     * total is 0.
+     * Under the first threshold "a cactus" finds the cactus alone, under the second nothing, and the totals agree.
      *
      * Edge cases:
      *
-     * The DAO, given the cosine halfway between the cactus's and the nearest portrait's, returns the cactus alone, and given the
-     * cosine of no cutoff, all four.
+     * The DAO, given a cosine cutoff between the cactus's and the nearest portrait's, returns the cactus alone, and with no
+     * cutoff all four.
      */
     val cactus = sorted(CACTUS)
     val photos = PHOTOS.map(sorted(_))
@@ -500,16 +484,15 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with a photo of a cactus and three portraits, a Describe match threshold that every image clears, and a
-     * Describe result limit of 2.
+     * A photo of a cactus and three portraits, a threshold every image clears, and a Describe result limit of 2.
      *
      * Assertions:
      *
-     * "a cactus" finds the two nearest of the four, the cactus first, and its total is 2, the limit.
+     * "a cactus" finds the two nearest, the cactus first, with a total of 2.
      *
      * Edge cases:
      *
-     * Read a page of one asset at a time, the results end after the second: the limit bounds the pages together, not each.
+     * One asset to a page, the results end after the second: the limit bounds the pages together, not each.
      */
     val all = sorted(CACTUS) :: PHOTOS.map(sorted(_))
     val nearest = all.sortBy(asset => -cosine(asset, "a cactus")).map(_.persistedId).take(2)
@@ -533,20 +516,18 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with five photos placed at cosines of 0.40, 0.36, 0.31, 0.29 and 0.20 to "a cactus", the last three in the
-     * folder Trips, and two at -0.05 and -0.10 in the folder Apart; a Describe match threshold every image clears, and a Describe
-     * weaker matches ratio of 0.75, which puts the line at a cosine of 0.30, three quarters of the best match's.
+     * Photos at cosines of 0.40, 0.36, 0.31, 0.29 and 0.20 to "a cactus", the last three in the folder Trips, and two at -0.05
+     * and -0.10 in the folder Apart. Every image clears the threshold, and a weaker matches ratio of 0.75 puts the line at 0.30.
      *
      * Assertions:
      *
-     * The search finds the seven in the order of their cosines and says its weaker matches begin at the fourth, four of them.
-     * Within Trips the best match is the photo at 0.31, so the line is at 0.2325 and the last photo alone is weaker.
+     * The search finds the seven by cosine, with four weaker matches from the fourth. Within Trips the best match is at 0.31, so
+     * the line is at 0.2325 and only the last photo is weaker.
      *
      * Edge cases:
      *
-     * A ratio of 0 names no weaker match. A ratio of 1 leaves the best match alone above the line. A search whose best match has
-     * no positive cosine, here the folder Apart with photos at -0.05 and -0.10, names none: a fraction of such a cosine is no
-     * line.
+     * A ratio of 0 names no weaker match, and a ratio of 1 leaves the best match alone above the line. A search whose best match
+     * has no positive cosine (Apart) names none: a fraction of such a cosine is no line.
      */
     val description = "a cactus"
     val trips = testApp.service.folder.add("Trips")
@@ -593,20 +574,17 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with six photos placed at cosines of 0.40, 0.38, 0.36, 0.29, 0.25 and 0.20 to "a cactus", a Describe match
-     * threshold every image clears, and a Describe weaker matches ratio of 0.75: the line is at 0.30, so the last three are
-     * weaker.
+     * Six photos at cosines of 0.40, 0.38, 0.36, 0.29, 0.25 and 0.20 to "a cactus", every one clearing the threshold, and a
+     * weaker matches ratio of 0.75, so the last three are weaker.
      *
      * Assertions:
      *
-     * Read two at a time, the second page, which holds the photos at 0.36 and 0.29, says its weaker matches begin at its second
-     * row and are three, and the pages before and after it say nothing. Read one at a time, the fourth page alone says so, at its
-     * only row.
+     * Two to a page, only the second page (0.36 and 0.29) names the weaker matches, at its second row. One to a page, only the
+     * fourth does.
      *
      * Edge cases:
      *
-     * Read three at a time, the weaker matches open the second page: it names its first row, which follows the cursor's, a match
-     * above the line.
+     * Three to a page, the weaker matches open the second page, which names its first row.
      */
     val description = "a cactus"
     List(0.40, 0.38, 0.36, 0.29, 0.25, 0.20).zipWithIndex.foreach((cosine, seed) => placed(description, cosine, seed))
@@ -626,24 +604,20 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with six photos placed at cosines of 0.40, 0.38, 0.36, 0.29, 0.25 and 0.20 to "a cactus", named c, a, e, f, b
-     * and d in that order, a Describe match threshold every image clears and a Describe weaker matches ratio of 0.75: the line is
-     * at 0.30, so a, c and e are above it and b, d and f are weaker matches. The description is searched sorted by file name, A
-     * to Z.
+     * Six photos at cosines of 0.40, 0.38, 0.36, 0.29, 0.25 and 0.20 to "a cactus", named c, a, e, f, b and d, every one clearing
+     * the threshold, and a weaker matches ratio of 0.75, so a, c and e are above the line. The search is sorted by file name.
      *
      * Assertions:
      *
-     * One page holds a, c, e and then b, d, f: each part in the order of the names. It says the weaker matches begin at its
-     * fourth asset and are three, carries the total of 6, and says it is sorted by file name. Read two at a time, the second page
-     * holds e and b and says the weaker matches begin at its second asset; the first page carries the total and the others none.
-     * Read one at a time, the fourth page says so at its only asset.
+     * One page holds a, c, e, then b, d, f, each part by name, names the three weaker matches from its fourth asset, carries a
+     * total of 6 and says it is sorted by file name. Two to a page, the second page (e, b) names the weaker matches at its second
+     * asset; one to a page, the fourth does. Only the first page carries the total.
      *
      * Edge cases:
      *
-     * Read three at a time, the first page ends with the last match above the line and still has a cursor, and the weaker matches
-     * open the second page. Under a ratio of 0 the six are one part, a to f, with no weaker match named. A cursor of the sorted
-     * search is refused by the search in its own order, by the search sorted Z to A and by another description, and a cursor of
-     * the search in its own order by the sorted one.
+     * Three to a page, the weaker matches open the second page. Under a ratio of 0 the six are one part, a to f. A cursor of the
+     * sorted search is refused by the similarity order, the reverse sort and another description, and a similarity cursor by the
+     * sorted search.
      */
     val description = "a cactus"
     val byName = Some(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC))
@@ -698,24 +672,20 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with six photos placed at cosines to "a cactus": taken on January 2, 2026 the ones at 0.40, 0.36 and 0.29, and
-     * on January 1 the ones at 0.38, 0.25 and 0.20, named c, e, f, a, b and d. The Describe match threshold is one every image
-     * clears and the Describe weaker matches ratio 0.75, so the photos under 0.30 are weaker matches. The description is searched
-     * grouped by Date Taken, newest day first, sorted by similarity and then by file name.
+     * Six photos at cosines to "a cactus": c, e, f at 0.40, 0.36, 0.29 taken on January 2, 2026, and a, b, d at 0.38, 0.25, 0.20
+     * on January 1. Every image clears the threshold and the weaker matches ratio is 0.75, so those under 0.30 are weaker. The
+     * search is grouped by Date Taken, newest first, sorted by similarity and then by file name.
      *
      * Assertions:
      *
-     * Sorted by similarity, the page has four groups: January 2 with the photos at 0.40 and 0.36, most alike first, and January 1
-     * with the one at 0.38, then, for the weaker matches, January 2 with the one at 0.29 and January 1 with those at 0.25 and
-     * 0.20. Each group counts its own part's matches of its day, the weaker matches begin at the third group and are three, and
-     * the total is 6. Read two at a time, the second page holds January 1's match above the line and then the weaker matches'
-     * January 2, which it names as its second group and does not take for a continuation; the third page continues nothing
-     * either, its group being the weaker matches' January 1.
+     * Sorted by similarity, the page has four groups, January 2 (c, e) and January 1 (a), then for the weaker matches January 2
+     * (f) and January 1 (b, d), each counting its own part's matches; the weaker matches begin at the third group. Two to a page,
+     * no page continues a group: a day's weaker part is a group of its own.
      *
      * Edge cases:
      *
-     * Sorted by file name, each group is in the order of the names within its part: January 2 is c, e and January 1 is a, then
-     * January 2 is f and January 1 is b, d. A page of one continues the first group with its second photo.
+     * Sorted by file name, the groups are the same, each by name. One to a page by similarity, the second page continues the
+     * first group.
      */
     val description = "a cactus"
     val second = LocalDateTime.of(2026, 1, 2, 10, 0)
@@ -772,21 +742,19 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with the Locations Lisbon and Porto and four sorted photos placed at cosines of 0.40, 0.36, 0.29 and 0.25 to
-     * "a cactus": the first and the third in Lisbon, the second in Porto and the fourth in no Location; and three triaged photos
-     * at 0.39, 0.33 and 0.21, in no Sequence. The Describe match threshold is one every image clears and the Describe weaker
-     * matches ratio 0.75: among the sorted photos the line is at 0.30, and among the triaged ones at 0.2925.
+     * Four sorted photos at cosines of 0.40, 0.36, 0.29 and 0.25 to "a cactus": the first and third in Lisbon, the second in
+     * Porto, the fourth in no Location; and three triaged photos at 0.39, 0.33 and 0.21 in no Sequence. Every image clears the
+     * threshold and the weaker matches ratio is 0.75.
      *
      * Assertions:
      *
-     * Grouped by Location under the similarity sort, the sorted photos are in four groups: Lisbon with the photo at 0.40 and
-     * Porto with the one at 0.36, then, for the weaker matches, Lisbon with the one at 0.29 and the photos in no Location with
-     * the one at 0.25; the weaker matches begin at the third group and are two. In the Triage view grouped by Sequence, the
-     * triaged photos are in two groups of no Sequence: the photos at 0.39 and 0.33, most alike first, then the weaker one.
+     * Grouped by Location, the sorted photos are in four groups: Lisbon (0.40), Porto (0.36), then for the weaker matches Lisbon
+     * (0.29) and no Location (0.25). In the Triage view grouped by Sequence, the triaged photos are in two groups of no Sequence:
+     * 0.39 and 0.33, then the weaker one.
      *
      * Edge cases:
      *
-     * Read one at a time, the pages of the Location grouping hold the same photos in the same order.
+     * One to a page, the Location grouping's pages hold the same photos in the same order.
      */
     val description = "a cactus"
     val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14)
@@ -828,20 +796,19 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with a photo of a cactus, three portraits and two assets that share the cactus's Scene embedding, so three
-     * images stand at one distance from any description. The Describe match threshold is one every image clears.
+     * A photo of a cactus, three portraits and two assets sharing the cactus's Scene embedding, so three images tie on distance.
+     * Every image clears the threshold.
      *
      * Assertions:
      *
-     * Read two assets at a time, and one at a time, the pages of "a cactus" hold the six assets of the single page that holds
-     * them all, in its order. A first page carries the total and a cursor, a page after it no total, and the last page no cursor.
+     * Two and one to a page, the pages of "a cactus" concatenate to the single page of all six. Only the first page carries the
+     * total, and the last has no cursor.
      *
      * Edge cases:
      *
-     * The three images at one distance are in the order of their IDs, and a page that ends among them is continued with the next
-     * of them. A cursor is refused for another description and for the same description with the triaged assets asked for. A page
-     * of no assets is refused, and so is a flat search asked for with the similarity sort: likeness is the order of the query
-     * that names no sort.
+     * The tied images are in ID order, and a page ending among them continues with the next. A cursor is refused for another
+     * description or other filters. A page of no assets is refused, and so is an explicit similarity sort: likeness is the order
+     * of a query that names no sort.
      */
     val cactus = sorted(CACTUS)
     PHOTOS.foreach(sorted(_))
@@ -876,8 +843,7 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with a photo of a cactus, and a cursor that names it with the fingerprint of a description's search but, as
-     * its position, a text and not a distance: what no page of a Describe search hands out.
+     * A photo of a cactus, and a cursor with a description search's fingerprint but a text, not a distance, as its position.
      *
      * Assertions:
      *
@@ -896,8 +862,7 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with a photo of a cactus, and the test instance's Describe embedder switched off for the search, so it embeds
-     * nothing.
+     * A photo of a cactus, and the Describe embedder switched off, so it embeds nothing.
      *
      * Assertions:
      *
@@ -918,24 +883,19 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with the folder Trips and its subfolder Lisbon, the people Alice, Bob and Carol, who has no Face, and the
-     * Location Lisbon. Nine still images, each with a Scene embedding: the photo of a cactus and three portraits, imported, and
-     * five placed at cosines of their own to "a cactus", two of them left in triage. They differ in their folder, their Faces,
-     * their Location, their capture day, their import day and their file name. The Describe match threshold is one every image
-     * clears.
+     * The folder Trips with its subfolder Lisbon, the people Alice, Bob and Carol (who has no Face), and the Location Lisbon.
+     * Nine embedded still images, the cactus and three portraits imported and five placed, two of them in triage, differing in
+     * folder, Faces, Location, capture day, import day and file name. Every image clears the threshold.
      *
      * Assertions:
      *
-     * With the triaged assets and nothing else, "a cactus" ranks all nine by the cosine of their embeddings, and with no filter
-     * at all the seven sorted ones: the description alone. Within each filter (a Search text matched by file names and one
-     * matched by a person's name, the folder with its subfolder, one person, two people as all and as any of them, the Location,
-     * a Date Taken range, a Date Imported range) and within two or three together, it finds exactly the images of that ranking
-     * that the filters' own search finds, in the ranking's order, and counts them.
+     * With the triaged assets, "a cactus" ranks all nine by cosine, and with no filter the seven sorted ones. Within each Search
+     * filter, alone and two or three together, it finds exactly what the filters' own search finds, in the ranking's order, and
+     * counts them.
      *
      * Edge cases:
      *
-     * Filters that match no asset find nothing, with a total of 0, and are no error: a person with no Face, a person and a
-     * Location the repository does not have, a Search text no asset has, and two filters no asset passes together.
+     * Filters that match no asset find nothing, with a total of 0, and are no error.
      */
     val description = "a cactus"
     val trips = testApp.service.folder.add("Trips")
@@ -961,7 +921,6 @@ object DescribeSearchTests {
     faces(bob, damon, bullock, plainOne)
     testApp.service.location.addAssets(lisbon.persistedId, Set(cactus, damon, beachOne, beachThree).map(_.id))
 
-    // Each photo's capture day, none for one of them, and its import day
     val dates = Map(
       cactus -> (Some("2024-06-10"), "2025-01-05"),
       affleck -> (Some("2024-06-15"), "2025-01-08"),
@@ -1040,16 +999,14 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * Two repositories. The first has the Location Lisbon, which holds a sorted portrait, a second portrait that is then
-     * recycled, a Video of a portrait and an asset with no Scene embedding, each of them named for a beach, and a third sorted
-     * portrait outside the Location, under its own name. The second holds a photo of a cactus named for a beach too. The Describe
-     * match threshold is one every image clears, and the triaged assets are asked for, the Video being in triage.
+     * Two repositories. In the first, the Location Lisbon holds a sorted portrait, a recycled one, a triaged Video and an asset
+     * with no Scene embedding, all named for a beach; a third portrait is outside it under its own name. The second holds a
+     * cactus named for a beach. Every image clears the threshold, and the triaged assets are asked for.
      *
      * Assertions:
      *
      * In the first repository "a cactus" within the Location, and within the Search text "beach", finds the sorted portrait
-     * alone, with a total of 1, though the image nearest the description is the other repository's. In the second, within the
-     * Search text, it finds the cactus alone.
+     * alone, with a total of 1. In the second it finds the cactus alone.
      *
      * Edge cases:
      *
@@ -1094,20 +1051,19 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with the folder Trips, which holds four assets whose Scene embeddings are at cosines of 0.20, 0.18, 0.16 and
-     * 0.14 to "a cactus", and two assets outside it at 0.30 and 0.28, nearer the description than any in the folder.
+     * The folder Trips with four assets at cosines of 0.20, 0.18, 0.16 and 0.14 to "a cactus", and two nearer assets outside it
+     * at 0.30 and 0.28.
      *
      * Assertions:
      *
-     * With a Describe result limit of 2 and a threshold every image clears, "a cactus" within the folder finds the folder's two
-     * nearest, with a total of 2: the limit counts the assets the filters match, not the nearer ones they leave out. With the
-     * threshold at the probability of a cosine of 0.17, it finds those two again, the only ones of the folder that clear it.
+     * With a result limit of 2, "a cactus" within the folder finds the folder's two nearest, with a total of 2: the limit counts
+     * the assets the filters match. With the threshold at a cosine of 0.17, it finds those two again.
      *
      * Edge cases:
      *
-     * Read one asset to a page under the limit, the results end after the second. A threshold at the probability of a cosine of
-     * 0.25, which only the assets outside the folder clear, finds nothing within it, with a total of 0, while the description
-     * alone finds those two. The DAO, given a cosine of 0.15 and a limit of 3, returns the folder's three nearest.
+     * One to a page under the limit, the results end after the second. A threshold at a cosine of 0.25 finds nothing in the
+     * folder, while the description alone finds the two outside. The DAO, given a cutoff of 0.15 and a limit of 3, returns the
+     * folder's three nearest.
      */
     val description = "a cactus"
     val trips = testApp.service.folder.add("Trips")
@@ -1153,22 +1109,19 @@ object DescribeSearchTests {
     /**
      * Setup:
      *
-     * A repository with the folders Trips and Work. Trips holds five assets: three that share one Scene embedding, at a cosine of
-     * 0.5 to "a cactus", so they stand at one distance from it, and two at 0.4 and 0.3. Work holds one at 0.45, and the root
-     * folder one at 0.6. The Describe match threshold is one every image clears.
+     * The folder Trips with three assets tied at a cosine of 0.5 to "a cactus" and two at 0.4 and 0.3; the folder Work with one
+     * at 0.45; the root folder one at 0.6. Every image clears the threshold.
      *
      * Assertions:
      *
-     * Read two assets at a time, and one at a time, the pages of "a cactus" within Trips hold the five assets of the single page
-     * that holds them all, in its order, and none of the assets outside the folder. A first page carries the total and a cursor,
-     * a page after it no total, and the last page no cursor.
+     * Two and one to a page, the pages of "a cactus" within Trips concatenate to the single page of its five. Only the first page
+     * carries the total, and the last has no cursor.
      *
      * Edge cases:
      *
-     * The three images at one distance are in the order of their IDs, and a page that ends among them is continued with the next
-     * of them. A cursor of the description within Trips is refused for the description alone, within Work, within Trips with the
-     * triaged assets, for another description within Trips, and for the folder's own search with no description; that search's
-     * cursor is refused for the description within the folder.
+     * The tied images are in ID order, and a page ending among them continues with the next. A cursor of the search within Trips
+     * is refused by any other filters or description and by the folder's search with no description, and that search's cursor by
+     * the description.
      */
     val description = "a cactus"
     val trips = testApp.service.folder.add("Trips")
@@ -1209,10 +1162,7 @@ object DescribeSearchTests {
 
   if (isPostgres) {
 
-    /**
-     * `count` sorted assets, copies of `templateId` in its repository, each with a random unit vector of its own as its SigLIP 2
-     * Scene embedding, their IDs opening with `prefix`
-     */
+    /** `count` copies of `templateId`, each with a random unit vector as its SigLIP 2 embedding, IDs opening with `prefix` */
     def seedEmbedded(templateId: String, count: Int, prefix: String): Unit =
       update(
         s"""INSERT INTO asset (id, repository_id, owner_user_id, original_owner, checksum, media_type, media_subtype, mime_type,
@@ -1228,7 +1178,7 @@ object DescribeSearchTests {
         templateId
       )
 
-    /** Has the planner read the vector index for a nearest-rows statement, which over seeded rows it may cost above a scan */
+    /** Makes the planner read the vector index, which over seeded rows it may cost above a scan */
     def preferVectorIndex(): Unit =
       List("seqscan", "bitmapscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
 
@@ -1241,26 +1191,25 @@ object DescribeSearchTests {
       /**
        * Setup:
        *
-       * A repository of 2,500 sorted assets, each with a random unit vector as its Scene embedding, with the planner told to read
-       * the vector index, and a random unit vector as the description's embedding. pgvector keeps 1,000 candidates at most as it
-       * scans an index. Every search ranks through the index, the limit of an exact ranking being 0.
+       * 2,500 assets with random unit vectors as Scene embeddings, a random description embedding, and the planner told to read
+       * the vector index. pgvector keeps at most 1,000 candidates in a scan. Every search ranks through the index.
        *
        * Assertions:
        *
-       * A page for a limit of 2,000 counts 2,000 rows, twice the candidates, read from the vector index, and its rows are the
-       * first of them, nearest first. Read 700 rows at a time, the pages hold the 2,000 once each, in order.
+       * A page for a limit of 2,000 counts 2,000 rows, twice the candidates, in one index scan. 700 to a page, the pages hold the
+       * 2,000 once each, nearest first.
        *
        * Edge cases:
        *
-       * The same statement in a transaction not set up for a vector search counts only the index's candidates, a handful: it is
-       * the setup that has the scan go on until the limit is met.
+       * The same statement in a transaction not set up for a vector search counts only a handful: the setup makes the scan go on
+       * until the limit is met.
        */
       val template = testContext.insertAsset()
       val description = unitVector(1)
 
       atScale(seedEmbedded(template.persistedId, 2500, "embedded-")) {
         preferVectorIndex()
-        // Before any search sets the transaction up, which lasts until it ends
+        // Before any search sets the transaction up: the setup lasts until it ends
         val notSetUp =
           testApp.DAO.search
             .describe(
@@ -1294,25 +1243,20 @@ object DescribeSearchTests {
       /**
        * Setup:
        *
-       * A repository with the folder Trips, which holds the photo of a cactus and three portraits, imported, two assets placed at
-       * cosines of their own to "a cactus", and one asset with no Scene embedding: six that carry an embedding. Two more are
-       * placed outside the folder. The planner is told to read the vector index wherever a statement lets it, the Describe match
-       * threshold is one every image clears, and the Describe weaker matches ratio is the test Settings' 0.75.
+       * The folder Trips with the cactus and three portraits, two placed assets and one with no Scene embedding: six embedded.
+       * Two more are placed outside it. The planner is told to read the vector index, every image clears the threshold, and the
+       * weaker matches ratio is the test Settings' 0.75.
        *
        * Assertions:
        *
-       * Within the folder, "a cactus" ranked exactly, as six assets are under the limit of 75,000, and ranked through the index,
-       * under a limit of 5, finds the same six in the same order, with the same total. The exact search scans the vector index
-       * not once and the search past the limit once a page. A cursor of the exact search's first page continues through the index
-       * and one of the index's continues exactly, each to the rest of the list with no repeat and no gap. Both ways name the same
-       * weaker matches, the five after the asset placed at 0.5, the folder's best match, and the page that continues past their
-       * first names none. Sorted by file name, the search holds the same six in its two parts either way, the best match and then
-       * the five weaker ones: ranked exactly it scans the vector index not once, and past the limit once for each part's
-       * statement.
+       * Within the folder, "a cactus" ranked exactly (six under the default limit) and through the index (under a limit of 5)
+       * finds the same six in the same order, total and weaker matches. The exact search makes no index scan and the other one a
+       * page. A cursor from either continues the other way with no repeat and no gap. Sorted by file name, both hold the same two
+       * parts; past the limit, each part's statement scans the index once.
        *
        * Edge cases:
        *
-       * The limit counts the assets that carry an embedding: six under a limit of 6 are ranked exactly.
+       * The limit counts only assets with an embedding: six under a limit of 6 are ranked exactly.
        */
       val description = "a cactus"
       val trips = testApp.service.folder.add("Trips")
@@ -1382,24 +1326,20 @@ object DescribeSearchTests {
       /**
        * Setup:
        *
-       * Two repositories. The context's holds three sorted assets placed at cosines of their own to "a cactus", two more left in
-       * triage, one sorted and then recycled, and a sorted asset with no Scene embedding; the other holds five sorted assets,
-       * each with an embedding. The planner is told to read the vector index wherever a statement lets it, and the Describe match
-       * threshold is one every image clears.
+       * Two repositories. The context's holds three sorted placed assets, two triaged, one recycled, and one with no Scene
+       * embedding; the other holds five embedded assets. The planner is told to read the vector index, and every image clears the
+       * threshold.
        *
        * Assertions:
        *
-       * "a cactus" with no filter finds the context repository's three sorted assets, nearest first, and scans the vector index
-       * not once: the view's three are counted, as any search's matches are, and being under the limit of 75,000 they are ranked
-       * exactly. Under a limit of 3 they are ranked exactly still, and under a limit of 2 through the index, in one scan.
+       * "a cactus" with no filter finds the three sorted assets, nearest first, with no index scan: the view's count is under the
+       * limit, so they are ranked exactly. Under a limit of 3 still exactly, under a limit of 2 through the index in one scan.
        *
        * Edge cases:
        *
-       * The count is of the view's assets that carry an embedding, so the other repository's five, the recycled asset, the two in
-       * triage and the one with no embedding count for nothing. With the triaged assets asked for the view holds five, ranked
-       * exactly under a limit of 5 and through the index under a limit of 4. What the index hands out is held to the exact
-       * ranking's rows in its order, and not to every one of them: the index is approximate, and over a few rows a scan was seen
-       * to miss one (`docs/test-coverage.md`, **Describe search**).
+       * Only the view's embedded assets count. With the triaged assets asked for, the view's five are ranked exactly under a
+       * limit of 5 and through the index under 4. The index's rows are checked to follow the exact ranking's order, not to be all
+       * of it: the index is approximate, and over a few rows a scan was seen to miss one.
        */
       val description = "a cactus"
       val kept = List(0.5, 0.4, 0.3).zipWithIndex.map((cosine, seed) => placed(description, cosine, seed))
@@ -1451,22 +1391,19 @@ object DescribeSearchTests {
       /**
        * Setup:
        *
-       * A repository with the folder Trips holding 2,500 sorted assets, each with a random unit vector as its Scene embedding,
-       * every other one of them in the Location Lisbon, with the planner told to read the vector index wherever a statement lets
-       * it, and a random unit vector as the description's embedding. The search is within the folder, the Location, a Date
-       * Imported range that holds them all, and a Search text matched over the library that excludes a word none of them has.
+       * The folder Trips with 2,500 assets with random unit vectors as Scene embeddings, every other one in the Location Lisbon,
+       * a random description embedding, and the planner told to read the vector index. The search is within the folder, the
+       * Location, a Date Imported range holding them all, and a Search text excluding a word none has.
        *
        * Assertions:
        *
-       * The plan of the page ranked exactly names no `asset_describe`, the vector index, and sorts. The plan of the page ranked
-       * through the index scans `asset_describe` in its order, with the folder, the Location and the Search text tested on the
-       * rows it hands out. Read with a limit of 1,000, both find 1,000 of the 1,250 matching assets, all of the Location; the
-       * exact page scans the vector index not once and the index page once, and the exact page's are the 1,000 nearest of all.
+       * The exact page's query plan sorts and names no `asset_describe`. The index page's plan scans `asset_describe` in order,
+       * testing the folder, Location and Search text on the rows it hands out. Under a limit of 1,000, both find 1,000 of the
+       * 1,250 matches, the exact one with no index scan and the other with one, and no index row is nearer than the exact row.
        *
        * Edge cases:
        *
-       * The capped count that chooses between the two, 1,250 against a limit of 1,249 and of 1,250, does not read the vector
-       * index either.
+       * The capped count that chooses between the two (1,250 against limits of 1,249 and 1,250) reads no vector index.
        */
       val trips = testApp.service.folder.add("Trips")
       val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14)
@@ -1529,20 +1466,17 @@ object DescribeSearchTests {
       /**
        * Setup:
        *
-       * Two repositories in one database, with the planner told to read the vector index: the context's holds 600 sorted assets
-       * and another 40,000, each asset with a random unit vector as its Scene embedding. A scan of the index that goes on stops,
-       * by pgvector's own cap, once it has visited 20,000 vectors.
+       * Two repositories, the context's with 600 assets and the other with 40,000, each with a random unit vector as its Scene
+       * embedding, and the planner told to read the vector index. pgvector's own cap stops a scan after 20,000 vectors.
        *
        * Assertions:
        *
-       * Ranked through the index, the limit of an exact ranking being 0, a page for a limit of 580 counts 580 rows, all the
-       * context repository's, though the scan passes nearly all of the other repository's 40,000 vectors to find them: the search
-       * lifts the cap.
+       * Ranked through the index, a page for a limit of 580 counts 580 rows, all the context repository's, though the scan passes
+       * nearly all of the other's 40,000 vectors: the search lifts the cap.
        *
        * Edge cases:
        *
-       * Under the limit of 75,000 the same search does not scan the index at all: the repository's 600 are counted and ranked
-       * exactly, and the page counts 580 of them again.
+       * Under the default limit the same search makes no index scan: the 600 are ranked exactly, and the page counts 580 again.
        */
       val template = testContext.insertAsset()
       val first = testContext.repository

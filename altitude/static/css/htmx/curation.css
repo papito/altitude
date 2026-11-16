@@ -1,4 +1,4 @@
-/* Curation's host and shell (includes/html_common, htmx/curation): it fills the window, over the nav, the explorer and the grid */
+/* Curation fills the window, over the nav, the explorer and the grid */
 #curationModalContainer {
   position: fixed;
   z-index: 4;
@@ -20,8 +20,8 @@
   min-height: 0;
 }
 
-/* The header over both columns; below it the main column, which each set's fragment and the states with no set fill, and the
-   Sequence rail, which takes its own width on the queue and no column when hidden */
+/* The header over both columns; below it the main column and the Sequence rail, which takes its own width and no column
+   when hidden */
 #curation {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -50,7 +50,7 @@
   color: var(--theme-neutral-3);
 }
 
-/* The Sequence rail's switch while the rail shows: the stage's pressed rule, a success edge and label */
+/* The Sequence rail's switch while the rail shows, pressed like the stage's buttons */
 #curation > header button[aria-pressed="true"] {
   border-color: var(--success-color);
   color: var(--success-color);
@@ -74,7 +74,7 @@
   min-height: 0;
 }
 
-/* The Sequence rail: its header over the queue's rows, which scroll by themselves */
+/* The Sequence rail: its header over rows that scroll by themselves */
 #curationSequenceRail {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);

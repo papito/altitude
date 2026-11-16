@@ -30,8 +30,8 @@ import altitude.core.suites.TestDatabase
 import altitude.core.util.Sha256
 
 /**
- * What a server starting against this test database does: creates the schema of a fresh database, migrates only when behind,
- * loads the Settings, and sizes the import dispatcher from `import.parallelism` as it was saved, which is the Restart semantics.
+ * Startup against the test database: a fresh database gets the schema, an existing one is migrated only when behind, the Settings
+ * load, and the import dispatcher is sized from `import.parallelism` as saved, so a change applies on restart.
  */
 @DoNotDiscover class StartupTests(override val testApp: Altitude) extends IntegrationTestCore with TestFocus {
 
@@ -60,8 +60,8 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * A description has no embedding. Inside `withDescribeModel` the same description has one, of SigLIP 2's dimensions, and
-     * after it the model is off again.
+     * A description has no embedding, except inside `withDescribeModel`, where it has SigLIP 2's dimensions. The model is off
+     * again afterwards.
      */
     testApp.describeEmbedder.embed("a cactus") shouldBe None
 
@@ -77,13 +77,11 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A second instance against the test database with its Describe model turned on, which has embedded a description and so
-     * holds the text tower open.
+     * A second instance with its Describe model on, which has embedded a description and so holds the text tower open.
      *
      * Assertions:
      *
-     * Once the instance is cleaned up its embedder refuses a description, a new one and the one it embedded: the text tower is
-     * closed with the instance.
+     * After the instance's cleanup its embedder refuses every description, the one it already embedded included.
      */
     val other = TestAltitudeApp.build(testApp.dataSourceType)
     try {
@@ -118,8 +116,8 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * The signing key the test database holds (created by asking for it, as the suite bundle resets the database after the
-     * running instance has started), then a second instance started against the database.
+     * The signing key the test database holds, then a second instance started against it. The key is created by asking for it,
+     * because the suite bundle resets the database after the running instance has started.
      *
      * Assertions:
      *

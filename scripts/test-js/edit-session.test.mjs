@@ -1,11 +1,5 @@
 /**
- * The Edit panel's server sync (`altitude/static/js/edit/edit-session.js`) over a fake server: a change is held until
- * Done, which saves the Edit shown as one change, and Cancel shows the saved Edit again; the saves go one at a time, each
- * on the version the one before answered, and a save waiting behind another is replaced by a later Done; Undo and Redo
- * are the browser's, held as any change, and Done folds what it saves into one step of Undo; a 409 adopts the state it
- * carries, drops the stale save and forgets Undo and Redo; a failure reads the state again; a discard puts the server
- * back where it was confirmed; the caller hears of every state adopted, a save's, a read's, a conflict's. Run by
- * `make test-js`.
+ * The Edit panel's server sync (`altitude/static/js/edit/edit-session.js`) over a fake server. Run by `make test-js`.
  */
 import { test } from "node:test"
 import assert from "node:assert/strict"

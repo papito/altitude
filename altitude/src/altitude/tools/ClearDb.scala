@@ -55,8 +55,8 @@ import altitude.core.Environment
       System.err.println(s"ERROR: Unknown db.engine value: '$other'. Aborting.")
       sys.exit(1)
 
-  // Files, previews, and faces are stored under repository and asset IDs that no longer exist once the database is gone.
-  // Cleared after the database, so a failed database clear leaves both intact.
+  // Stored files are keyed by repository and asset IDs that die with the database. Cleared after it, so a failed database
+  // clear leaves both intact.
   clearDir(new File(dataDir, Const.DataStore.REPOSITORIES), "repository files")
 
 /** Empties a directory, keeping the directory itself */

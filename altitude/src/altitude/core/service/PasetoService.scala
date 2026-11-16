@@ -19,16 +19,14 @@ import altitude.core.models.User
 object PasetoService:
 
   /**
-   * The longest token the session cookie carries: a browser keeps 4096 bytes of a cookie, its name and attributes included (about
-   * 130 bytes as `SessionController.authCookie` writes them). `RepositoryService.MAX_GRANTS_PER_ACCOUNT` and the account rules
-   * (`User.valid`) keep every token within it; one past it is logged at ERROR.
+   * The longest token the session cookie carries: a browser keeps 4096 bytes of a cookie, its name and attributes (about 130
+   * bytes) included. `RepositoryService.MAX_GRANTS_PER_ACCOUNT` and the account rules (`User.valid`) keep every token within it.
    */
   val MAX_TOKEN_BYTES = 3950
 
 class PasetoService(val app: Altitude):
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  // Initialize BouncyCastle provider for PASETO
   private def initializeBouncyCastle(): Unit =
     try
       val bcProvider = Class
@@ -44,7 +42,7 @@ class PasetoService(val app: Altitude):
 
   initializeBouncyCastle()
 
-  // Generate a secret key for PASETO local tokens (symmetric encryption)
+  // A fresh key per process: a token does not outlive a restart
   private val secretKey: SecretKey =
     val random = new SecureRandom()
     val keyBytes = new Array[Byte](32) // 256 bits for PASETO v2 local
@@ -62,10 +60,8 @@ class PasetoService(val app: Altitude):
     val VERSION = "ver"
 
   /**
-   * A token of `claims`: the account's ID as the subject, its email, username, name, account type and Create Libraries flag, its
-   * grants (none for an Admin) and its version, expiring at `claims.expiresAt`. It does not carry the last active Library, which
-   * changes with every switch the token outlives: that is read from the database. The grants make most of its length, which
-   * bounds how many an account may hold (`RepositoryService.MAX_GRANTS_PER_ACCOUNT`).
+   * A token of `claims`. It leaves out the last active Library, which changes with every switch the token outlives and is read
+   * from the database. The grants make most of its length, which bounds how many an account may hold.
    */
   def createToken(claims: TokenClaims): String =
     val token = compact(claims)
@@ -96,9 +92,8 @@ class PasetoService(val app: Altitude):
       .compact()
 
   /**
-   * The claims of a token this process minted, read with no database query, so the account has no last active Library; None for a
-   * token that does not decrypt under the key, has expired, or lacks a claim or carries one that is not what `createToken` writes
-   * (a Permission bit that does not exist among them). The one place a token's claims are read.
+   * The claims of a token this process minted, read with no database query (so with no last active Library); None for a token
+   * that does not decrypt, has expired, or lacks a claim or carries one `createToken` would not write
    */
   def readToken(token: String): Option[TokenClaims] =
     try

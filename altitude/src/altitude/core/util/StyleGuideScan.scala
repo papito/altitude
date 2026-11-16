@@ -7,9 +7,8 @@ import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex
 
 /**
- * What the dev-only style guide and the design tweaks panel know about the styles as they are written in the source tree: the
- * design tokens (CSS custom properties) and where they are declared and referenced, the color and length literals written past
- * them, and the icons in use.
+ * Scans the style sources for the dev-only style guide and the design tweaks panel: the design tokens (CSS custom properties) and
+ * where they are declared and referenced, the color and length literals written instead of tokens, and the icons in use.
  *
  * A location is `<root directory name>/<path under the root>:<line>`.
  */
@@ -48,7 +47,7 @@ object StyleGuideScan:
       }
 
       ujson.Obj(
-        // The sources schema version the tokentweak package (the design tweaks panel) reads this as
+        // The sources schema version the vendored tokentweak package reads
         "version" -> 1,
         "rootTokens" -> declarations(rootTokens),
         "scopedTokens" -> declarations(scopedTokens),
@@ -75,8 +74,8 @@ object StyleGuideScan:
   private val SET_OR_REMOVE = """(?:set|remove)Property\(\s*["'](--[a-zA-Z][\w-]*)["']""".r
   private val SET_PROPERTY = """setProperty\(\s*["'](--[a-zA-Z][\w-]*)["']""".r
   private val COLOR_LITERAL = """#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])|rgba?\([^)]*\)""".r
-  // The properties whose px, rem and em values should be tokens: a text size, a box's size and bounds, a grid's tracks and
-  // an inset. A property starts a declaration like a token does; `-width` inside `border-width` or a token name does not
+  // The properties whose px, rem and em values should be tokens. The lookbehind keeps `-width` inside `border-width` or a
+  // token name from matching
   private val SIZING_PROPERTY = "font-size|width|height|min-[a-z-]+|max-[a-z-]+|grid-template-[a-z-]+|top|left|right|bottom"
   private val SIZING_DECLARATION = s"""(?<=^|[;{"'\\s])($SIZING_PROPERTY)\\s*:\\s*([^;}]+)""".r
   // A length with a unit a token could hold; `0` has none, and a number inside a name or a decimal is no length
@@ -91,14 +90,11 @@ object StyleGuideScan:
 
     def location(offset: Int): String = s"$label:${text.substring(0, offset).count(_ == '\n') + 1}"
 
-  /**
-   * Scans the `*.css`, `*.js` and `*.html` files under `roots`, skipping `lib` directories and the files named in
-   * `excludedFiles`. A root that does not exist holds no files.
-   */
+  /** Scans the `*.css`, `*.js` and `*.html` files under `roots`, skipping `lib` directories, `excludedFiles` and missing roots */
   def scan(roots: Seq[Path], excludedFiles: Set[String] = Set.empty): Result =
     val sources = roots.filter(Files.isDirectory(_)).flatMap(root => readSources(root, excludedFiles))
 
-    // (declaration, is it in a `:root` rule), and the spans the declarations occupy, per source
+    // Per source: (declaration, whether a `:root` rule holds it, its span)
     val declared = sources.map(source => source -> declarationsOf(source))
     val declarations = declared.flatMap((_, found) => found.map((declaration, isRoot, _) => declaration -> isRoot))
     val declaredNames = declarations.map((declaration, _) => declaration.name).toSet
@@ -215,9 +211,8 @@ object StyleGuideScan:
     TOKEN_NAME.findAllMatchIn(source.text).filterNot(m => notReferences.contains(m.start)).map(_.matched).toSeq
 
   /**
-   * The color literals of a stylesheet or a template outside the token declarations, each with its location. A hex literal counts
-   * only as a value: after a colon on its line and with no rule opening after it, which leaves out ID selectors and fragment
-   * links.
+   * The color literals outside token declarations, with their locations. A hex literal counts only after a colon on its line and
+   * with no `{` after it, which leaves out ID selectors and fragment links.
    */
   private def literalsIn(source: Source, declarationSpans: Seq[Range]): Seq[(String, String)] =
     if source.isScript then Seq.empty
@@ -238,10 +233,7 @@ object StyleGuideScan:
         .map(m => m.matched -> source.location(m.start))
         .toSeq
 
-  /**
-   * The length literals of a stylesheet or a template: each px, rem or em value of a sizing property outside the token
-   * declarations, as (property, literal, location)
-   */
+  /** The px, rem and em values of sizing properties outside token declarations, as (property, literal, location) */
   private def lengthLiteralsIn(source: Source, declarationSpans: Seq[Range]): Seq[(String, String, String)] =
     if source.isScript then Seq.empty
     else

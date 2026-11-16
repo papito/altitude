@@ -18,10 +18,7 @@ import altitude.core.util.Util
 
   private val fields = Api.Field.Search
 
-  /**
-   * What a fragment says of an option, or of a chosen one in the panel's form: the ID and the label a chip shows, which its
-   * element carries, the URL of the cover Face it shows, whether the element is a listbox option, and the text it shows
-   */
+  /** What a fragment says of an option, or of a chip in the panel's form */
   private case class Carried(id: String, label: String, coverUrl: Option[String], isOption: Boolean, text: String)
 
   /** Every element of `html` that carries an option's ID, in document order */
@@ -80,10 +77,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * With nothing typed, the options are every folder in path order, a folder directly before the folders below it, each
-     * carrying its ID and labelled by its path from the top-level folder down. Typed text is matched as the Search text matches a
-     * name: "lis" offers the two folders with a word starting with it, whatever its case, "office lis" the one folder with both
-     * words, "elo" the folder written with an accent, and "sun" the folder written with a camelCase hump.
+     * With nothing typed, the options are every folder in path order, each labelled by its path. Typed text matches as the Search
+     * text matches a name: by word prefix in any case ("lis"), all words ("office lis"), without accents ("elo") and at a
+     * camelCase hump ("sun").
      *
      * Edge cases:
      *
@@ -109,7 +105,7 @@ import altitude.core.util.Util
         def offered(typed: String): List[String] = options(host, repoId, "folders", Some(typed)).map(_.id)
 
         val all = options(host, repoId, "folders")
-        // The order of the folder tree: by name key, which folds case and no accent
+        // The folder tree's order, by name key: case folded, accents kept
         all.map(_.label) shouldBe List(
           "Archive",
           "beachSunset",
@@ -143,19 +139,18 @@ import altitude.core.util.Util
      * Setup:
      *
      * A logged-in user's repository with the named people Alice Anders, on two assets, and Alan Bo, Bob Alto and Carol, on one of
-     * them; and five people a search does not offer: one with no name, the hidden "Alina Hidden", "Alba Bad" marked as a bad
-     * match, "Alma Merged" merged into Carol, and "Alto Noface", named, with no Face on any asset.
+     * them; and five people not to offer: one with no name, a hidden one, a bad match, one merged into Carol, and one with no
+     * Face on any asset.
      *
      * Assertions:
      *
-     * With nothing typed, the options are the four named, visible, live people by name, each carrying their ID and name and
-     * showing their cover Face; Alice's shows hers and her two assets, Alan's his one asset. "al" offers the three with a word of
-     * their name starting with it.
+     * With nothing typed, the options are the four named, visible, live people by name, each showing their cover Face and asset
+     * count. "al" offers the three with a word of their name starting with it.
      *
      * Edge cases:
      *
-     * The person with no name, the hidden one, the bad match, the one merged away and the one a search finds nothing for are
-     * never options, typed or not. No option carries its cover's URL as an attribute: a new chip copies the cover it shows.
+     * The five others are never options, typed or not. No option carries its cover's URL as an attribute, since a new chip copies
+     * the cover it shows.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -216,16 +211,14 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * With no `triaged` parameter Alice's option shows 2 assets, what the search finds, and Bella, whose search finds nothing, is
-     * no option, as the People tab lists neither more for Alice nor Bella at all. With `triaged=true` Alice shows 5 assets and
-     * Bella is offered with 2. With the Triage view Alice shows her 3 triaged assets and Bella her 2, and Cara, with none, is no
-     * option. Cara's count is grouped, "1,840". The panel's form gives its People field the options route alone, and names the
-     * form's `view` and `triaged` as what a request for its options carries.
+     * By default Alice shows 2 assets and Bella, whose search finds nothing, is no option. With `triaged=true` Alice shows 5 and
+     * Bella 2. With the Triage view Alice shows her 3 triaged assets and Bella her 2, and Cara is no option. Cara's count is
+     * grouped, "1,840". The panel's People field requests its options with the form's `view` and `triaged`.
      *
      * Edge cases:
      *
-     * Only `true` shows triaged items: `triaged=false` reads as the default does. A value that is no boolean is a 400, and so is
-     * `triaged=false` with the Triage view, which holds triaged assets alone; `triaged=true` with it changes nothing.
+     * `triaged=false` reads as the default does. A value that is no boolean is a 400, and so is `triaged=false` with the Triage
+     * view; `triaged=true` with it changes nothing.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -292,13 +285,13 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * With nothing typed, the options are the four Locations by their own names, each carrying its ID and labelled by its
-     * Category and its name, or by its name alone in no Category. "po" offers Porto.
+     * With nothing typed, the options are the four Locations by their own names, each labelled by its Category, if any, and its
+     * name. "po" offers Porto.
      *
      * Edge cases:
      *
-     * A Category is never an option, and text naming one ("lis", which Lisbon and the Category "Lisboa region" both have) offers
-     * the Location whose own name has it and not the Locations of the Category.
+     * A Category is never an option, and text naming one ("lis" matches "Lisboa region") offers only the Locations whose own name
+     * has it.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -335,11 +328,11 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Each options route answers 50 options, the first 50 in order, both with nothing typed and with text every name has.
+     * Each options route answers the first 50 in order, with nothing typed and with text every name has.
      *
      * Edge cases:
      *
-     * Text that only the last five names have offers those five: the cap is on what matches, not on what is read.
+     * Text that only the last names have offers them: the cap is on what matches, not on what is read.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -377,8 +370,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Through the first repository each options route offers that repository's one name and nothing of the second's, typed or
-     * not; through the second, the second's alone.
+     * Each options route offers only the asked repository's names, typed or not.
      *
      * Edge cases:
      *
@@ -435,18 +427,15 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The panel asked for with a search's parameters is a form whose fields hold them under their parameter names: the
-     * description, without the white space around it, the text, the folder, the people and the Locations as given,
-     * comma-separated, the people match and the four dates. The Describe field comes first, a multi-line field of at most 300
-     * characters labelled "Describe", whose placeholder asks what is in the photo; the Search text's field follows it, labelled
-     * "Keywords", under the ID and the parameter it has always had. The folder is a chip labelled by its path, each person a chip
-     * with their name, Alice's showing her cover Face, and each Location a chip labelled with its Category, the chips of a field
-     * in the order its IDs were given in.
+     * The panel asked for with a search's parameters is a form whose fields hold them under their parameter names, the
+     * description trimmed. The Describe field, a textarea of at most 300 characters, comes before the Search text's field,
+     * labelled "Keywords". The folder, people and Locations are chips with their labels in the order given, Alice's with her
+     * cover Face.
      *
      * Edge cases:
      *
-     * The panel asked for with no parameter holds no description, no text, no chip and no date, and matches all people. The
-     * parameters of a search that are no filter of the panel (the sort, the layout) are ignored.
+     * With no parameter the panel holds no description, text, chip or date, and matches all people. The sort and the layout are
+     * ignored.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -553,16 +542,15 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The form opens with a toggle group named "Search in", before the Describe field, of three segments in the order Library,
-     * Triage and All, one of them pressed, and holds the pick in two hidden inputs, `view` and `triaged`: Library, the repository
-     * view with `triaged` false, with no parameter and with `triaged=false`; All, the repository view with `triaged` true; and
-     * Triage, the Triage view with no `triaged`. The Folder field is shown by whether the form searches Triage, and is rendered
-     * hidden under the Triage view alone, where it still holds the folder's chip and ID.
+     * The form opens with a "Search in" toggle group before the Describe field, its segments Library, Triage and All, the pick
+     * pressed and held in hidden `view` and `triaged` inputs. Library (`triaged` false) is the default, All is `triaged=true`,
+     * and Triage is the Triage view with no `triaged`. The Folder field is hidden under the Triage view alone, still holding the
+     * folder's chip and ID.
      *
      * Edge cases:
      *
-     * `triaged=false` with the Triage view is a 400, as a search of it is. Any view but the Triage view is the repository view's:
-     * the panel searches no trash.
+     * `triaged=false` with the Triage view is a 400, as a search of it is. Any other view is the repository view: the panel
+     * searches no trash.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -586,7 +574,7 @@ import altitude.core.util.Util
           (buttons.map(_._1), buttons.filter(_._2).map(_._1))
         }
 
-        /** The opening tag of the Folder field, which says how it is shown */
+        /** The opening tag of the Folder field */
         def folderField(form: String): String =
           """(?s)<div class="field"[^>]*>(?=\s*<label for="searchPanelFolder">)""".r.findFirstIn(form).get
 
@@ -629,15 +617,13 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The panel asked for with Alice, Zed, the person with no name, Sintra and Trips beside IDs that name nothing renders a chip
-     * for each of the five and holds their IDs alone in its inputs: a hidden person and one with no name are people a search can
-     * be scoped to, so they stay.
+     * Asked with Alice, Zed, the person with no name, Sintra and Trips beside IDs that name nothing, the panel shows a chip for
+     * each of the five and holds only their IDs. A hidden or unnamed person can scope a search, so they stay.
      *
      * Edge cases:
      *
-     * Dropped, from the chips and from the inputs alike: an ID that does not exist, the second repository's folder, person and
-     * Location, the person merged away, a Category given as a Location, and the root folder, which is the whole Library. The form
-     * names nothing of the second repository.
+     * Dropped from chips and inputs alike: an unknown ID, the second repository's rows, the person merged away, a Category given
+     * as a Location, and the root folder, which is the whole Library. The form names nothing of the second repository.
      */
     val mine = testContext.persistRepository()
     val repoId = mine.persistedId
@@ -702,9 +688,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The panel asked for with a date that is not an ISO day, a range whose start is after its end, a people match that is
-     * neither `all` nor `any`, eleven people in one parameter, a blank description or one of 301 characters is a plain-text 400,
-     * as the search with them is.
+     * A malformed date, a reversed range, an unknown people match, eleven people, and a blank or 301-character description are
+     * each a plain-text 400, as in a search.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -733,19 +718,16 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with the folder Trips, and the panel asked for with a description alone, with a description
-     * beside the Search text and the folder, and with a description beside a sort, a grouping and the map layout, which the
-     * client's parameters of a search may still hold.
+     * A logged-in user's repository with the folder Trips, and the panel asked for with a description alone, beside the Search
+     * text and the folder, and beside a sort, a grouping and the map layout as well.
      *
      * Assertions:
      *
-     * Each answers the form, filled in from the description and the filters beside it: the description in the Describe field, the
-     * Search text as typed and the folder's chip.
+     * Each answers the form filled in from the description and the filters beside it.
      *
      * Edge cases:
      *
-     * The sort, the grouping and the layout are no filter of the panel: beside a description they are ignored there, where the
-     * results route refuses them.
+     * The sort, the grouping and the layout are no filter of the panel, so beside a description they are ignored.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId

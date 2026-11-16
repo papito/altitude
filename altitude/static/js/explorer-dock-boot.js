@@ -1,14 +1,10 @@
 /**
- * Lays the main page out before its first paint: the Dock side and the explorer's share are written
- * on <html> from what this browser remembers, so the modules, which run later, never move the
- * explorer under the user. A plain blocking script, loaded by views/index.scala.html with the
- * storage key in its `data-key`; js/common/explorer-dock.js owns the same key from then on and
- * writes the two the same way.
+ * Writes the Dock side and the explorer's share on <html> before the first paint, from what this
+ * browser remembers, so the modules, which run later, never move the explorer under the user. With
+ * nothing remembered a portrait viewport docks it at the bottom, any other on the left.
  *
- * Nothing remembered, or nothing readable, docks the explorer by the viewport's proportions: a
- * portrait viewport puts it at the bottom, any other on the left. A plain script imports nothing,
- * so the sides and the two default shares below mirror `Const.dockSides` and the module's
- * `DEFAULT_WIDTH_SHARE` / `DEFAULT_HEIGHT_SHARE`.
+ * A plain blocking script imports nothing, so the sides and default shares mirror `Const.dockSides`
+ * and `common/explorer-dock.js`'s `DEFAULT_WIDTH_SHARE` / `DEFAULT_HEIGHT_SHARE`.
  */
 ;(() => {
     "use strict"

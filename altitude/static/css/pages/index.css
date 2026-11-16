@@ -1,5 +1,4 @@
-/* The index page's own layout. The bundle applies on every page, so these rules are scoped to its body's class;
-   :where() adds no specificity, so they win and lose exactly as they did inline */
+/* The bundle applies on every page, so these rules are scoped to the body's class; :where() adds no specificity */
 
 body:where(.index) {
   display: grid;
@@ -8,10 +7,9 @@ body:where(.index) {
   margin: 0;
 }
 
-/* The explorer, the divider and the results are the three areas of a grid whose shape is the Dock side, written on
-   <html> as data-dock-side by static/js/explorer-dock-boot.js before the first paint and kept by
-   js/common/explorer-dock.js. The explorer's track is its share of the width or the height, --explorer-share, bounded
-   by the minimums of core.css; the divider's track is as thick as the divider; the results take the rest */
+/* The explorer, the divider and the results: a grid shaped by the Dock side (`data-dock-side` on <html>, written before
+   the first paint). The explorer's track is its share, --explorer-share, bounded by the minimums; the results take the
+   rest */
 :where(body.index) main {
   height: 100%;
   overflow: hidden;
@@ -38,8 +36,7 @@ html[data-dock-side="bottom"] main {
   grid-template-areas: "content" "gutter" "explorer";
 }
 
-/* The trash bin has no use for the explorer: the results fill the page and no divider is shown, whatever the Dock side.
-   The page script marks the results area with the view's name */
+/* The trash bin has no explorer: the results fill the page whatever the Dock side */
 :where(body.index) main:has(> #content.trashbin) {
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
@@ -51,11 +48,9 @@ html[data-dock-side="bottom"] main {
   display: none;
 }
 
-/* A grid track may shrink below its content only when the item allows it, so each area resets the automatic
-   minimum, except the explorer's width: its column's minimum is its min-content, which is its header's (the panel
-   contributes nothing, see #explorerPanelContent) and never less than --explorer-min-width, so the tabs and the Dock
-   side control always fit however far the divider is dragged. The explorer's own overflow never engages, its panel
-   scrolls (see #explorerViews) */
+/* A grid track shrinks below its content only when the item allows it, so each area resets its automatic minimum,
+   except the explorer's width: its min-content is its header's (the panel contributes none) and never less than
+   --explorer-min-width, so the tabs and the Dock side control always fit however far the divider is dragged */
 #explorer {
   grid-area: explorer;
   min-width: var(--explorer-min-width);
@@ -74,7 +69,7 @@ html[data-dock-side="bottom"] main {
   overflow-y: scroll;
 }
 
-/* The hairline between the two areas is drawn by each on the edge that faces the divider */
+/* Each area draws a hairline on the edge facing the divider */
 html[data-dock-side="left"] #explorer { border-right: var(--border-hairline) var(--panel-border-color); }
 html[data-dock-side="left"] #content { border-left: var(--border-hairline) var(--panel-border-color); }
 html[data-dock-side="right"] #explorer { border-left: var(--border-hairline) var(--panel-border-color); }
@@ -84,10 +79,9 @@ html[data-dock-side="top"] #content { border-top: var(--border-hairline) var(--p
 html[data-dock-side="bottom"] #explorer { border-top: var(--border-hairline) var(--panel-border-color); }
 html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) var(--panel-border-color); }
 
-/* The explorer's header: the tab list, growing, and whatever sits at its end, under the Triage summary in Triage, which
-   spans both columns. The tab list's own bottom edge (tabs.css) moves up to the header so it spans the whole row; the
-   selected tab's primary edge still sits right above it. The summary's sentences wrap, so the header's min-content, the
-   explorer's minimum width (#explorer), is still the tabs and the Dock side control in full */
+/* The growing tab list and the Dock side menu, under the Triage summary in Triage. The tab list's bottom edge moves to
+   the header so it spans the whole row. The summary wraps, so the header's min-content, the explorer's minimum width,
+   stays the tabs and the Dock side control in full */
 #explorerHeader {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -99,23 +93,20 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   border-bottom: 0;
 }
 
-/* The Triage summary's host (htmx/triage_summary), inset as the tab list is, so the summary's icon lines up with the
-   first tab's */
+/* Inset as the tab list is, so the summary's icon lines up with the first tab's */
 #triageSummary {
   grid-column: 1 / -1;
   margin: 0 var(--panel-padding) var(--space-4);
 }
 
-/* The Dock side menu at the header's end, after the growing tab list: centered on the tab row, inset as the tab list
-   is */
+/* Centered on the tab row, inset as the tab list is */
 #dockSideMenuHost {
   align-self: center;
   padding-inline-end: var(--panel-padding);
 }
 
-/* The header stays put and the panel scrolls: the panel, not #explorer, is the explorer's scroll container, so a
-   Split.js instance inside it has a definite box to divide. #explorer's padding-top sits inside its height
-   (core.css sets border-box on every element), so 100% fits under it and #explorer's own overflow never engages */
+/* The panel, not #explorer, is the scroll container, so a Split.js inside it has a definite box to divide. #explorer's
+   padding-top sits inside its height (border-box), so 100% fits under it and #explorer's own overflow never engages */
 #explorerViews {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -124,7 +115,7 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
 }
 
 /* Inline-size containment gives the panel no intrinsic width, so a long folder name or a wide People grid never widens
-   the explorer's column: the header alone sets its minimum (see #explorer) */
+   the explorer's column */
 #explorerPanelContent {
   min-height: 0;
   overflow-y: auto;
@@ -137,12 +128,10 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   background-color: hsl(from var(--theme-accent) h s l / 0.17);
 }
 
-/* The view band: the view's name on a strip of frosted glass with an edge of the view's color (--band-color: Triage's
-   accent, the Trash's warning color), down the left edge of the results, from the toolbar's bottom edge to the pane's.
-   It is positioned in the results' own grid area (main is its containing block), over the gutter the striped pane
-   leaves (core.css), so it stays put while the results scroll; its top is anchored to the toolbar, wherever the
-   results title and a wrapped row put it. It takes no pointer events and, with an empty alternative text, is not
-   announced */
+/* The view band: the view's name down the left edge of the results, from the toolbar's bottom to the pane's. Placed in
+   the results' grid area (main is its containing block), over the gutter the striped pane leaves, so it stays put while
+   the results scroll; its top is anchored to the toolbar wherever that sits. The empty alternative text keeps it from
+   being announced */
 :where(body.index) main:has(> #content:is(.triage, .trashbin)) {
   position: relative;
 }
@@ -182,22 +171,20 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   margin-left: calc(-1 * var(--view-band-width));
 }
 
-/* Triage counts nothing in the explorer: no asset count of a folder or a Location (.asset-count), nor a Person's
-   (people_list's .count). The cells stay in the page, and the code that patches them goes on as in Browse */
+/* Triage shows no counts in the explorer. The cells stay in the page, and the code that patches them runs as in
+   Browse */
 :where(body.index) main:has(> #content.triage) #explorer .asset-count,
 :where(body.index) main:has(> #content.triage) #people .cell .count {
   display: none;
 }
 
-/* A click on the root folder does nothing in Triage, where a folder is described rather than searched and the root is
-   the whole repository (js/search-results/search-triggers.js), so its name and icon show the arrow, and not the pointer
-   of folders.css. Everything else that searches in Browse acts in Triage and keeps its pointer */
+/* A click on the root folder does nothing in Triage, so its name and icon show the arrow rather than folders.css's
+   pointer. Everything else that searches in Browse acts in Triage and keeps its pointer */
 :where(body.index) main:has(> #content.triage) #rootFolderList .folder.root > .controls > :is(.folder-name, .folder-icon) {
   cursor: default;
 }
 
-/* The divider between the explorer and the results, in the grid's gutter area: a .divider of core.css that, with no
-   orientation of its own, runs across the Dock side's axis */
+/* With no orientation class of its own, the divider runs across the Dock side's axis */
 #explorerDivider {
   grid-area: gutter;
 }

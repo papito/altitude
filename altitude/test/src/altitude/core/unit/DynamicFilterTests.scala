@@ -18,11 +18,8 @@ import altitude.core.util.Sort
 import altitude.core.util.SortDirection
 
 /**
- * The string-keyed `Query` turned into a typed predicate.
- *
- * The assertions are structural rather than exact SQL: what matters is that each value is bound rather than inlined, that the
- * number of placeholders matches the number of values, and that a parameter the layer cannot honor is an error instead of a
- * quietly different query.
+ * The string-keyed `Query` turned into a typed predicate. The assertions are structural rather than exact SQL: values are bound,
+ * one placeholder per value, and a parameter the layer cannot honor is an error rather than a quietly different query.
  */
 @DoNotDiscover class DynamicFilterTests extends funsuite.AnyFunSuite with TestFocus {
 
@@ -103,13 +100,13 @@ import altitude.core.util.SortDirection
     /**
      * Setup:
      *
-     * A query for non-recycled assets, sorted by file name descending, for the second page of ten, rendered the way a paged read
-     * is built: a window count over the filtered rows, the sort, then the offset and limit.
+     * A query for non-recycled assets sorted by file name descending, second page of ten, rendered as a paged read is built: a
+     * window count over the filtered rows, the sort, then offset and limit.
      *
      * Assertions:
      *
-     * The count is a window over the whole match in a single SELECT rather than a wrapped subquery, the sort orders by the
-     * column's alias, and the limit and offset are bound rather than inlined.
+     * The count is a window in a single SELECT rather than a wrapped subquery, the sort orders by the column's alias, and the
+     * limit and offset are bound.
      */
     val query =
       new Query(params = Map("is_recycled" -> false), rpp = 10, page = 2, sort = List(Sort("filename", SortDirection.DESC)))
@@ -117,12 +114,11 @@ import altitude.core.util.SortDirection
 
     withClue(sql) {
       sql.contains("COUNT(1) OVER ()") shouldBe true
-      // The sort term renders as the column's select-list alias, which is what both engines order by
+      // Both engines order by the column's select-list alias
       "ORDER BY \\S*filename DESC".r.findFirstIn(sql).isDefined shouldBe true
       sql.contains("LIMIT ?") shouldBe true
       sql.contains("OFFSET ?") shouldBe true
 
-      // One SELECT level: the count is a window over the filtered rows, not a wrapped subquery
       "SELECT".r.findAllIn(sql).size shouldBe 1
     }
   }

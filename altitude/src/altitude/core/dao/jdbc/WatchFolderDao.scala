@@ -88,7 +88,7 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
     val sql = s"SELECT * FROM $tableName WHERE ${FieldConst.REPO_ID} = ? ORDER BY ${F.NAME}, ${FieldConst.ID}"
     manyBySqlQuery(sql, List(repositoryId)).map(makeModel)
 
-  // No Library in it: a Watch folder's directory may overlap no other's, whichever Library that one is in
+  // Across Libraries: a Watch folder's directory may overlap no other's, in any Library
   override def everywhere(): List[Placed] =
     val sql = s"""
       SELECT w.*, r.name AS $REPOSITORY_NAME
@@ -166,7 +166,7 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
     val sql = s"UPDATE $tableName SET ${F.LAST_SCAN_AT} = ? WHERE ${FieldConst.ID} = ? AND ${FieldConst.REPO_ID} = ?"
     updateByBySql(sql, List(nativeUtcTimestamp(at), id, repositoryId))
 
-  // No Library in it: an account's Watch folders are reached by the account, in the transaction that deactivates or demotes it
+  // Across Libraries, by the account, when it is deactivated or demoted
   override def pauseOwnedBy(accountId: String, reason: String): Int =
     val sql = s"""
       UPDATE $tableName
@@ -176,7 +176,7 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
 
     updateByBySql(sql, List(nativeBool(true), reason, nativeUtcTimestamp(now), accountId))
 
-  // No Library in it: an account's Watch folders are reached by the account, in the transaction that deletes it
+  // Across Libraries, by the account, when it is deleted
   override def reassignOwner(fromAccountId: String, toAccountId: String): Int =
     val sql = s"UPDATE $tableName SET ${F.ACCOUNT_ID} = ?, ${FieldConst.UPDATED_AT} = ? WHERE ${F.ACCOUNT_ID} = ?"
     updateByBySql(sql, List(toAccountId, nativeUtcTimestamp(now), fromAccountId))

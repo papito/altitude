@@ -1,18 +1,13 @@
-/* The Watch folder dialog (htmx/watch_folder_form) and the Remove dialog (htmx/remove_watch_folder_dialog) of the Import
-   page, scoped by the IDs of their roots */
-
-/* The general modal, widened for a path */
+/* Widen the general modal for a path */
 #modalContent:has(#watchFolderForm) {
   --modal-content-width: var(--watch-folder-form-width);
 }
 
-/* One column: the three fieldsets, the note on the owner, the actions */
 #watchFolderForm {
   display: grid;
   row-gap: var(--space-6);
 }
 
-/* A fieldset: boxed, its fields one under the other */
 #watchFolderForm fieldset {
   display: grid;
   row-gap: var(--space-5);
@@ -57,7 +52,7 @@
   margin: 0;
 }
 
-/* A switch and its label on one row, the label in the body's type rather than a field label's */
+/* The switch's label is in the body's type, not a field label's */
 #watchFolderForm .switch-row {
   display: flex;
   align-items: center;
@@ -73,14 +68,13 @@
   text-transform: none;
 }
 
-/* The destination folder is the advanced search panel's Folder field, whose rules are scoped by the panel's class
-   (htmx/search_panel.css): its host wears the class for them and draws no box, so the field, its error and its help lie
-   in the fieldset's own column, as in the upload sections */
+/* The destination is the advanced search panel's Folder field: its host wears `.search-panel` for those rules but
+   draws no box, so the field, its error and its help lie in the fieldset's column */
 #watchFolderForm .destination {
   display: contents;
 }
 
-/* "into" before the field's box, on its row */
+/* The "into" label on the field box's row */
 #watchFolderForm .destination .field {
   grid-template-columns: max-content 1fr;
   align-items: center;
@@ -96,7 +90,7 @@
   margin-top: 0;
 }
 
-/* What is deleted, said in the error fill on the error's edge before anything is saved */
+/* What would be deleted, warned before anything is saved */
 #watchFolderForm .notice.deletion {
   border-left: var(--border-heavy) var(--error-color);
   background-color: var(--error-background-color);

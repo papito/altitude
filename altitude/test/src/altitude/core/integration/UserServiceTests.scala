@@ -40,14 +40,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A User added with an email address and a username in mixed case, created by the common setup's account, with the Create
-     * Libraries flag and the new-Library grant of Import and Curate own.
+     * A User added by the common setup's account with a mixed-case email address and username, the Create Libraries flag and a
+     * new-Library grant of Import and Curate own.
      *
      * Assertions:
      *
-     * The account reads back by its ID with every field as added, and the time it was added: active, never logged in, and with no
-     * last active Library. The stored `email_key` and `username_key` are the name keys (`NameKey.of`) of the address and the
-     * username.
+     * The account reads back with every field as added plus its creation time: active, never logged in, no last active Library.
+     * The stored `email_key` and `username_key` are the name keys of the address and the username.
      */
     val creator = testContext.users.head
     val model = testContext
@@ -84,9 +83,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Remembering the first Library records it, reports a write and stamps the account's update time. Remembering it again
-     * reports no write and leaves the update time as it was (cleared beforehand, so a write would show). Remembering the second
-     * Library records it and reports a write.
+     * Remembering the first Library records it, reports a write and stamps the update time. Remembering it again reports no write
+     * and leaves the update time, cleared beforehand, empty. Remembering the second Library records it and reports a write.
      */
     val user: User = testContext.persistUser()
     val first = testContext.repository.persistedId
@@ -119,7 +117,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Logging in with the user's email and that password succeeds and yields that user and a non-empty session token.
+     * Logging in with the user's email and that password yields that user and a non-empty token.
      */
     val password = "MyPassword123"
 
@@ -147,8 +145,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The second user is refused as a duplicate, and the first logs in with the email in either case or with its first letter
-     * full-width, which the login folds.
+     * The second user is a duplicate, and the first logs in with the email in either case or with its first letter full-width.
      */
     val email = s"Mixed.Case.${Util.randomStr(8)}@Example.com"
     val fullWidth = "\uFF2D" + email.drop(1)
@@ -169,11 +166,11 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A user named "Jane.Doe" (under a random suffix), then a second user of another email address named "jane.doe".
+     * A user named "Jane.Doe" (plus a random suffix), then a second user with another email address named "jane.doe".
      *
      * Assertions:
      *
-     * The second user is refused as a duplicate, and only the first holds the username.
+     * The second user is a duplicate, and only the first holds the username.
      */
     val username = s"Jane.Doe.${Util.randomStr(8)}"
     testContext.persistUser(username = Some(username))
@@ -192,13 +189,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Accounts added under usernames of 2 and 33 characters, with a space, with an "@", with a full-width letter, and empty; and
-     * accounts under usernames of 3 and 32 characters using every character the rule allows.
+     * Accounts added under usernames that break the rule (too short or long, a space, an "@", a full-width letter, empty), and
+     * under ones of 3 and 32 characters using every character it allows.
      *
      * Assertions:
      *
-     * Each refused username fails with a `ValidationException` whose error, under the username field, states the rule (empty:
-     * required), and adds no account. Each allowed username is added as typed.
+     * Each refused username fails validation with the rule (or, when empty, "required") under the username field, and adds no
+     * account. Each allowed username is added as typed.
      */
     val refused = List(
       "ab",
@@ -231,13 +228,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Two adds of an account under one username, in other capitals and of other email addresses, from two transactions: the first
-     * holds its transaction open until the second waits for it.
+     * Two adds of accounts under one username in other capitals, from two transactions, the first held open until the second
+     * waits for it.
      *
      * Assertions:
      *
-     * The second add fails with a `DuplicateException` once the first commits, and one account holds the username, the first's,
-     * as it spelled it. The database decides it: on PostgreSQL both transactions insert before either commits.
+     * The second add is a duplicate once the first commits, and only the first's spelling is stored. The database decides it: on
+     * PostgreSQL both transactions insert before either commits.
      */
     val username = s"Race.${Util.randomStr(8)}"
 
@@ -263,12 +260,12 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The User logs in with the username as stored, in lower case and in upper case, and with its email address.
+     * The User logs in with the username in any case, and with its email address.
      *
      * Edge cases:
      *
-     * A second account's username is the first's email address's local part: a login with that local part, which holds no "@", is
-     * looked up as a username and logs the second account in.
+     * A second account is named after the first's email local part: a login with that local part, having no "@", is a username
+     * and logs the second account in.
      */
     val user = testContext.persistUser(username = Some(s"Mixed.Case.${Util.randomStr(8)}"))
     val localPart = user.email.takeWhile(_ != '@')
@@ -287,13 +284,12 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Accounts added with a one-character name, an 81-character name, an email address with no "@", one of 81 characters, and one
-     * with a full-width letter.
+     * Accounts added with a name too short or too long, and with an email address with no "@", too long, or with a full-width
+     * letter.
      *
      * Assertions:
      *
-     * Each fails with a `ValidationException` whose error is under the name or the email field, and adds no account: the login
-     * token's length is bounded by the longest name and email address these rules allow.
+     * Each fails validation under the name or the email field and adds no account. These limits bound the login token's length.
      */
     val refused = List(
       testContext.makeUser().copy(name = "J") -> FieldConst.User.NAME,
@@ -318,8 +314,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * A login with its username and its right password yields nothing, as one with a wrong password does, and records a failed
-     * login naming the account, with nothing recorded as its last login.
+     * A login with the right password yields nothing, as a wrong one does, and records a failed login naming the account, with no
+     * last login.
      */
     val user = testContext.persistUser()
     testApp.txManager.withTransaction(update("UPDATE account SET is_active = ? WHERE id = ?", false, user.persistedId))
@@ -343,9 +339,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The login sets the account's last login time, and records a successful login whose actor is the User, with the first IP.
-     * The wrong password records a failed login with no actor, the User as its target, the typed login in its detail and the
-     * second IP; the unknown login a failed login with no actor and no target. The last login time stays the successful one's.
+     * The login sets the last login time and records a successful login with the User as actor and the first IP. The wrong
+     * password records a failed login with no actor, the User as target, the typed login and the second IP; the unknown login one
+     * with no actor and no target. The last login time stays the successful one's.
      */
     val user = testContext.persistUser()
     val unknown = s"nobody.${Util.randomStr(8)}"
@@ -384,8 +380,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The account's times (`UserService.accountTimes`) put its addition between the readings around the add, and its last login
-     * between the readings around the login, on either engine and whatever the JVM's zone.
+     * `UserService.accountTimes` puts the addition and the last login between the clock readings around each, on either engine
+     * and whatever the JVM's zone.
      *
      * Edge cases:
      *
@@ -422,9 +418,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Each login yields nothing, as a wrong password does, on both engines (PostgreSQL refuses a NUL in a text parameter, so the
-     * login is never looked up). Each records a failed login whose detail holds the login with the control character escaped, cut
-     * to 64 characters, with no NUL or line break in it.
+     * Each login yields nothing on both engines (PostgreSQL refuses a NUL in a text parameter, so the login is never looked up),
+     * and records a failed login whose login is escaped and cut to 64 characters, with no control character in it.
      */
     val user = testContext.persistUser()
     val withNul = s"${user.username}\u0000"
@@ -456,14 +451,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A User logged in as the dev user by its username and password; then granted a Library, then deactivated by hand-written
-     * SQL, neither raising its version. Dev credentials that name no account.
+     * A User logged in as the dev user, then granted a Library, then deactivated by hand-written SQL, neither raising its
+     * version; and dev credentials that name no account.
      *
      * Assertions:
      *
-     * The dev user's claims carry the grant once it is written, and none once the account is deactivated. The credentials that
-     * name no account fail twice in a row with one failed login recorded: the failure is remembered for a while rather than
-     * logged in again on every request.
+     * The dev user's claims carry the grant once it is written, and none once the account is deactivated. The unknown credentials
+     * fail twice with one failed login recorded: the failure is remembered rather than retried on every request.
      */
     val user = testContext.persistUser()
     val credentials = (user.username, TestContext.USER_PASSWORD)
@@ -493,8 +487,8 @@ import altitude.core.util.Util
   }
 
   /**
-   * Runs a login of `user` with `password` while another transaction holds the account (its row lock on PostgreSQL, the one write
-   * connection on SQLite) with `change` written in it, released once the login waits for it: the login's result
+   * The result of a login of `user` run while another transaction holds the account (its row lock on PostgreSQL, the write
+   * connection on SQLite) with `change` written in it, released once the login waits for it
    */
   private def loginWhileHeld(user: User, password: String)(change: => Unit): Option[(User, String, java.time.Instant)] = {
     val holding = new CountDownLatch(1)
@@ -539,14 +533,12 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A User, and another transaction holding the account (its row lock on PostgreSQL, the write connection on SQLite) with the
-     * User's name changed in it, until the login waits for it.
+     * A User, and another transaction holding the account with the User's name changed in it until the login waits for it.
      *
      * Assertions:
      *
-     * The login, started while the account is held, comes to wait for it and, once released, succeeds and records its last login
-     * time. The account it answers has the name from before the change: it was read, and the password checked, before the login
-     * waited for any writer.
+     * Once released, the login succeeds and records its last login time. It answers the name from before the change: the account
+     * was read and the password checked before the login waited for any writer.
      */
     val user = testContext.persistUser()
     val result = loginWhileHeld(user, TestContext.USER_PASSWORD) {
@@ -567,8 +559,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Once released, the login yields nothing and records no last login time: it checked the old hash, but the hash it reads
-     * again, after reading the account's version, is the new one, so no token is minted for a password that no longer holds.
+     * Once released, the login yields nothing and records no last login time: the hash it reads again under the lock is the new
+     * one, so no token is minted for a password that no longer holds.
      */
     val user = testContext.persistUser()
     val result = loginWhileHeld(user, TestContext.USER_PASSWORD) {
@@ -644,7 +636,7 @@ import altitude.core.util.Util
        * Assertions:
        *
        * While the write connection is held, remembering the recorded Library again completes within a few seconds and reports no
-       * write, since it only reads the account to find there is nothing to write.
+       * write: it only reads.
        */
       val user: User = testContext.persistUser()
       val repoId = testContext.repository.persistedId
@@ -652,7 +644,6 @@ import altitude.core.util.Util
 
       val writing = new CountDownLatch(1)
       val release = new CountDownLatch(1)
-      // A write transaction on a thread of its own holds the one write connection until released
       val writer = new Thread(
         () =>
           testApp.txManager.withTransaction {

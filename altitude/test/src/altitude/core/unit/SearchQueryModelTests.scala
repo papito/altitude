@@ -44,11 +44,11 @@ import altitude.core.util.SortValue
      *
      * Assertions:
      *
-     * Only the query with a usable term is accepted, as a text search; the other two are refused.
+     * Only the query with a usable term is accepted, as a text search.
      *
      * Edge cases:
      *
-     * Text that is present but parses to nothing counts as no text.
+     * Text that parses to nothing counts as no text.
      */
     new SearchQuery(text = Some("beach"), searchSort = List(SearchSort.Relevance)).isText shouldBe true
     intercept[IllegalArgumentException](new SearchQuery(searchSort = List(SearchSort.Relevance)))
@@ -64,8 +64,7 @@ import altitude.core.util.SortValue
      *
      * Assertions:
      *
-     * A range with both ends or with either one alone is accepted; a range with no end and a range whose first day is after its
-     * last are refused when they are constructed.
+     * A range with both ends or either one is accepted; one with no end or with its first day after its last is refused.
      *
      * Edge cases:
      *
@@ -88,14 +87,13 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A range within one year, a range across two years, a single day, a range open at its start and one open at its end, and the
-     * 8th of every month of 2024.
+     * Ranges within one year and across two, a single day, ranges open at either end, and the 8th of every month of 2024.
      *
      * Assertions:
      *
-     * A range within a year names the year once, after its last day; across two years each end has its year; a single day is read
-     * once; an open end reads `from` or `until` its day. Every month is its first three letters in English, the fixed table the
-     * panel's date field reads the same range by (`MONTHS` in js/alpine/components/date-range.js).
+     * A range within a year names the year once, at the end; across two years each end has its year; a single day reads once; an
+     * open range reads `from` or `until` its day. Every month is its English three letters, a fixed table like `MONTHS` in the
+     * date field's `date-range.js`.
      *
      * Edge cases:
      *
@@ -122,13 +120,12 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A query with no people match given, and a query matching any of its people within a Date Taken and a Date Imported range,
-     * copied each way a query is copied: with a folder set, a metadata filter, a column filter, a text probe limit and no total.
+     * A plain query, and a query matching any of its people within a Date Taken and a Date Imported range, copied each way a
+     * query is copied.
      *
      * Assertions:
      *
-     * The query with no people match given matches all, and has no date range. Every copy of the other still matches any of its
-     * people within both ranges.
+     * The plain query matches all its people and has no date range. Every copy of the other keeps its people match and ranges.
      */
     val taken = DateRange(Some(LocalDate.parse("2024-06-01")), Some(LocalDate.parse("2024-06-30")))
     val imported = DateRange(None, Some(LocalDate.parse("2024-07-04")))
@@ -159,13 +156,12 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A search of two people, and the same search matching any of them, within a Date Taken range, within another Date Taken
-     * range, within a Date Imported range of the first one's days, and within both ranges.
+     * A search of two people, then the same matching any of them, within either of two Date Taken ranges, within a Date Imported
+     * range of the same days, and within both ranges.
      *
      * Assertions:
      *
-     * The six searches have six fingerprints, so a cursor of one cannot continue another, and the same search has the same
-     * fingerprint again.
+     * The six searches have six fingerprints, so a cursor of one cannot continue another, and a search's fingerprint is stable.
      *
      * Edge cases:
      *
@@ -205,23 +201,18 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * The fingerprint of a description's search of the repository view in a repository on an engine; of the same search with the
-     * triaged assets, with another description, in another repository, on the other engine, and within each filter in turn: a
-     * Search text, a folder, a person, two people, the two matching any, a Location, a Date Taken range and a Date Imported
-     * range; of the searches of the same filters with no description; and of the description's search sorted by file name, in
-     * each of its two parts, and sorted the other way.
+     * Fingerprints of a Describe search of the repository view, varied by description, repository, engine and each filter in
+     * turn; of the same filters with no description; and of the search sorted by file name, in each of its two parts and in the
+     * other direction.
      *
      * Assertions:
      *
-     * Every fingerprint differs from every other, so a cursor of one cannot continue another: a Describe search's from the same
-     * description within other filters, and from the same filters without the description. The same Describe search has the same
-     * fingerprint again.
+     * Every fingerprint differs, so a cursor of one cannot continue another, and a Describe search's fingerprint is stable.
      *
      * Edge cases:
      *
-     * A description is fingerprinted as written: another case, or a space more, is another search. A search whose Search text is
-     * the description's words is another search too. A sorted Describe search is read in two parts, and a cursor continues one:
-     * each part's fingerprint is its own, and neither is the search's in its own order or under another sort.
+     * A description is fingerprinted as written, so another case or an extra space is another search, and so is Search text of
+     * the same words. Each part of a sorted Describe search has its own fingerprint.
      */
     val june = DateRange(Some(LocalDate.parse("2024-06-01")), Some(LocalDate.parse("2024-06-30")))
     def view(triaged: Boolean): Map[String, Any] =
@@ -275,12 +266,11 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A search of the repository view with nothing said of how many assets a Describe search ranks exactly, and one that says 7,
-     * then copied with a folder scope and without its total.
+     * A search with the default exact Describe limit, and one with a limit of 7 copied with a folder scope and without its total.
      *
      * Assertions:
      *
-     * The first ranks 75,000 exactly, the constant, and the copy of the second still 7.
+     * The first's limit is the 75,000 default, and the copy keeps 7.
      */
     val view = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false)
 
@@ -294,13 +284,12 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * Cursors whose positions are cosine distances no short decimal spells: a third, the smallest double above zero, a distance
-     * past 1, and a float's value widened to a double.
+     * Cursors whose positions are cosine distances no short decimal spells: a third, the smallest positive double, a distance
+     * past 1, and a widened float.
      *
      * Assertions:
      *
-     * Each cursor decoded from its token is the cursor that was encoded: the distance is the same double, bit for bit, so a page
-     * continues exactly after the row the cursor names.
+     * Each decodes from its token bit for bit, so a page continues exactly after the row the cursor names.
      */
     List(1.0 / 3, java.lang.Double.MIN_VALUE, 1.0000001192092896, 0.9400720596313477f.toDouble).foreach {
       distance =>
@@ -314,13 +303,11 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A parsed scope of two people matching any of them within a Date Taken and a Date Imported range, and a scope with none of
-     * the three given.
+     * A scope of two people matching any of them within a Date Taken and a Date Imported range, and one with none of the three.
      *
      * Assertions:
      *
-     * The query built from the first scope carries its people match and both ranges; the query built from the second matches all
-     * of its people and has no date range.
+     * The first scope's query carries its people match and both ranges; the second's matches all its people with no range.
      */
     val taken = DateRange(Some(LocalDate.parse("2024-06-01")), None)
     val imported = DateRange(None, Some(LocalDate.parse("2024-07-04")))
@@ -342,25 +329,22 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * Bounding box strings: a Paris box with spaces around its values, a box across the date line, and a list of malformed or
-     * out-of-range ones.
+     * A Paris box with spaces around its values, a box across the date line, and malformed or out-of-range strings.
      *
      * Assertions:
      *
-     * A valid box parses into its south, west, north and east edges, round-trips through its string form and knows whether it
-     * crosses the antimeridian; every malformed or out-of-range string is refused.
+     * A valid box parses into its edges, round-trips through its string form and knows whether it crosses the antimeridian; every
+     * malformed or out-of-range string is refused.
      *
      * Edge cases:
      *
-     * West greater than east across the date line, an empty string, too few or too many parts, a value that is not a number,
-     * latitudes and longitudes out of range, a south edge north of the north edge, and NaN.
+     * A west edge greater than the east edge crosses the date line; a south edge north of the north edge is refused.
      */
     val box = BoundingBox.parse(" 48.8, 2.2, 48.9 ,2.4")
     box shouldBe BoundingBox(48.8, 2.2, 48.9, 2.4)
     box.crossesAntimeridian shouldBe false
     BoundingBox.parse(box.toString) shouldBe box
 
-    // West of the east edge across the date line
     BoundingBox.parse("-1,179,1,-179").crossesAntimeridian shouldBe true
 
     List("", "1,2,3", "1,2,3,4,5", "a,2,3,4", "91,0,92,1", "0,181,1,182", "0,0,-1,1", "NaN,0,1,1").foreach {

@@ -20,19 +20,15 @@ import altitude.core.util.BoundingBox
 /**
  * Viewport aggregates and place-name lookup; no route sends the map a library's asset rows.
  *
- * Cells and bounds take the search scope as the grid does, an advanced search's people, Locations and date ranges included, so
- * the client sends its search parameters verbatim: the ones that only shape a grid (`sort`, `layout`, grouping, paging) are
- * accepted and ignored (`cask.QueryParams`), and the `bbox` search filter is ignored too. `bbox` is the crowded-pin panel's
- * scope, and the map behind the panel keeps showing the whole search; `viewport` is the map's own clipping box. A visible
- * Location keeps its full matching membership count even when a member's own GPS point is outside the viewport. A scope the
- * parser refuses (Search text with the trash view, an unknown `subset`, a malformed date or people match, too many people or
- * Locations) is the message of a JSON 400. A Guest's cells or bounds of Triage or the Trash, or of `triaged=true`, are a JSON 403
- * (`refusedView`): it sees Browse alone.
+ * Cells and bounds read the search scope as the grid does, so the client sends its search parameters verbatim: the grid-only ones
+ * (`sort`, `layout`, grouping, paging) are accepted and ignored, and so is the `bbox` filter, which scopes the crowded-pin panel
+ * while the map behind it keeps showing the whole search. `viewport` is the map's own clipping box. A visible Location keeps its
+ * full matching count even when a member's own GPS point is outside the viewport.
  */
 class MapController(using logger: Logger) extends BaseController:
   private val prefix = "api/map"
 
-  // viewport and zoom are strings so invalid or missing values receive our JSON error, including non-integer zooms.
+  // viewport and zoom are strings, so a missing or bad value (a non-integer zoom too) gets our JSON error
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/cells")
   def cells(

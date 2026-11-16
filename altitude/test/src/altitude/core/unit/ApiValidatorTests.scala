@@ -19,15 +19,11 @@ import altitude.core.Validators.ApiRequestValidator
     /**
      * Setup:
      *
-     * A validator with an email check on the admin email field, run once for each of five malformed addresses.
+     * A validator with an email check on the admin email field, run on each of five malformed addresses.
      *
      * Assertions:
      *
      * Every address fails with exactly one error, the not-an-email message.
-     *
-     * Edge cases:
-     *
-     * No @ at all, no domain, no local part, a comma in the domain, and two dots in a row in the domain.
      */
     val validator: ApiRequestValidator = ApiRequestValidator(
       email = List(Api.Field.Setup.ADMIN_EMAIL)
@@ -61,7 +57,7 @@ import altitude.core.Validators.ApiRequestValidator
     /**
      * Setup:
      *
-     * A validator with an email check on the admin email field, run once for each of five well-formed addresses.
+     * A validator with an email check on the admin email field, run on each of five well-formed addresses.
      *
      * Assertions:
      *
@@ -69,7 +65,7 @@ import altitude.core.Validators.ApiRequestValidator
      *
      * Edge cases:
      *
-     * Plus, slash and equals signs in the local part, a host with no top-level domain, and a subdomain.
+     * A host with no top-level domain is accepted.
      */
     val validator: ApiRequestValidator = ApiRequestValidator(
       email = List(Api.Field.Setup.ADMIN_EMAIL)
@@ -103,8 +99,7 @@ import altitude.core.Validators.ApiRequestValidator
      *
      * Assertions:
      *
-     * Every failing field is reported at once: the two missing fields as required, and the email that is present but malformed as
-     * not an email.
+     * Every failing field is reported at once: the two missing fields as required, and the malformed email as not an email.
      */
     val validator: ApiRequestValidator = ApiRequestValidator(
       required = List(Api.Field.ID, Api.Field.Folder.NAME, Api.Field.Setup.ADMIN_EMAIL),
@@ -243,7 +238,7 @@ import altitude.core.Validators.ApiRequestValidator
      *
      * Assertions:
      *
-     * The missing name yields a single error - the length check skips a field that is not there.
+     * The missing name yields a single error: the length check skips a field that is not there.
      */
     val validator: ApiRequestValidator = ApiRequestValidator(
       required = List(Api.Field.Folder.NAME),
@@ -269,7 +264,7 @@ import altitude.core.Validators.ApiRequestValidator
      *
      * Assertions:
      *
-     * Different kinds of failures are reported together, each under its own field: the path as too long, the name as required.
+     * Both kinds of failure are reported together, each under its own field: the path as too long, the name as required.
      */
     val maxFieldLength = 10
 
@@ -322,15 +317,11 @@ import altitude.core.Validators.ApiRequestValidator
     /**
      * Setup:
      *
-     * A validator with a UUID check on the ID field, run once for each of four malformed IDs.
+     * A validator with a UUID check on the ID field, run on each of four malformed IDs.
      *
      * Assertions:
      *
      * Every ID fails with exactly one error, the not-a-UUID message.
-     *
-     * Edge cases:
-     *
-     * Free text, a last group with an extra non-hex character, a last group that is too short, and an extra trailing group.
      */
     val validator: ApiRequestValidator = ApiRequestValidator(
       uuid = List(Api.Field.ID)

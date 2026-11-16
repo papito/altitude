@@ -170,7 +170,6 @@ import altitude.core.util.Query
     results3.records.length shouldBe 2
     results3.totalPages shouldBe 3
 
-    // page too far
     val q4 = new Query(rpp = 2, page = 4)
     val results4 = testApp.service.library.query(q4)
     results4.total shouldBe 0

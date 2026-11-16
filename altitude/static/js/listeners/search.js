@@ -1,6 +1,6 @@
 import { Const } from "../constants.js"
 
-/** Keyboard handling of the results: previous/next, Space's play/pause, `m`'s Detail panel, `p`'s Face highlights and `f`'s fullscreen in asset detail, and Escape */
+/** Asset detail's key events from `global.js`, and the Escape broadcast */
 export function registerSearchListeners(app) {
     document.body.addEventListener(Const.events.showNext, () => {
         app.searchDetailCoordinator.handleShowNext()

@@ -25,9 +25,8 @@ import altitude.core.util.JsonCodec
 import altitude.core.util.Util
 
 /**
- * Account management (`UserService`'s writes behind the Users page): create, update, deactivate, reactivate, delete and the
- * password changes, the ceiling of a creator who is no Admin, the guards on Admins, and the three statements that reach an
- * account's assets in every Library at once
+ * Account management, `UserService`'s writes behind the Users page: the ceiling of a creator who is no Admin, the guards on
+ * Admins, and the statements that reach an account's assets in every Library at once
  */
 @DoNotDiscover class AccountManagementTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -67,7 +66,7 @@ import altitude.core.util.Util
   /** The state an Admin's edit form opens the account over, which its save carries back */
   private def stateOf(account: User): String = users.openForEdit(account.persistedId).state
 
-  /** An asset `owner` imported into `library`, the context left on the first Library of the test */
+  /** An asset `owner` imported into `library`, the context switched back to the test's first Library */
   private def assetIn(library: Repository, owner: User): Asset = {
     switchContextRepo(library)
     val asset = testContext.insertAsset(testContext.makeAsset(repository = Some(library), user = Some(owner)))
@@ -75,7 +74,7 @@ import altitude.core.util.Util
     asset
   }
 
-  /** The stored owner and importer record of each asset, by hand-written SQL that reaches every Library */
+  /** The stored owner and importer record of each asset, by SQL that reaches every Library */
   private def ownership(assets: Asset*): Map[String, (String, AccountSnapshot)] =
     testApp.txManager.asReadOnly {
       assets.map {
@@ -95,13 +94,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin, and two Libraries; the Admin creates a User granted Import and Organize in the first and access alone in the
-     * second, with the Create Libraries flag and the new-Library grant of Import.
+     * An Admin and two Libraries; the Admin creates a User with Import and Organize in the first, access alone in the second, the
+     * Create Libraries flag and a new-Library grant of Import.
      *
      * Assertions:
      *
-     * The account is stored active, created by the Admin, with its flag and new-Library grant, and holds exactly the two grants
-     * asked for. It logs in with the password given. Its creation is recorded as an event naming the Admin.
+     * The account is stored active, created by the Admin, with its flag, new-Library grant and exactly the two grants. It logs in
+     * with its password, and its creation is recorded.
      */
     val admin = persistAdmin()
     val (first, second) = (addLibrary(), addLibrary())
@@ -132,14 +131,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin and a Library; accounts to create with an invalid username, a name too short, an address that is none, a password
-     * too short, and a User with no Library; then one with as many Libraries as the bound and one past it.
+     * An Admin and a Library; an account with an invalid username, name, email address and password, a User with no Library, and
+     * Users with as many Libraries as the bound and one past it.
      *
      * Assertions:
      *
-     * The first is refused with a `ValidationException` holding the error of each of its fields (username, name, email,
-     * password); the User with no Library is refused on its grants (`LIBRARY_REQUIRED`), and one past the bound with
-     * `TOO_MANY_GRANTS`. None is stored.
+     * The first is refused with an error on each of the four fields; the User with no Library, and the one past the bound, on its
+     * grants. None is stored.
      *
      * Edge cases:
      *
@@ -176,12 +174,12 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin, a Library and a User; then a create under the User's email address in other capitals, a create under its username
-     * in other capitals, and an update of a second User to the first one's username.
+     * An Admin, a Library and a User; creates under its email address and its username in other capitals, and an update of a
+     * second User to its username.
      *
      * Assertions:
      *
-     * Each is a `ValidationException` on its field, `EMAIL_TAKEN` or `USERNAME_TAKEN`, and the second User keeps its username.
+     * Each is refused as taken on its field, and the second User keeps its username.
      */
     val admin = persistAdmin()
     val grants = Map(addLibrary().persistedId -> Permissions.none)
@@ -210,10 +208,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * It creates a User with Import in the first Library, and a Guest in the second, each recorded as its creator. Each of these
-     * is a `ForbiddenException` and writes no account: a User given Organize in the first Library (a Permission it does not
-     * hold), a User in the second (no Create Users there), a Guest in the first (no Create Guests there), a User in the third
-     * Library or in one that does not exist, an Admin, and a User with the Create Libraries flag or the new-Library grant.
+     * It creates a User with Import in the first Library and a Guest in the second, as their creator. Anything above its ceiling
+     * is a `ForbiddenException` that writes no account: a Permission it does not hold, a type it may not create in that Library,
+     * a Library it holds nothing in or that does not exist, an Admin, or either Admin-only flag.
      */
     val creator = testContext.persistUser()
     val (first, second, third) = (addLibrary(), addLibrary(), addLibrary())
@@ -248,13 +245,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin and a Library; an Admin created with a grant, the Create Libraries flag and the new-Library grant, and a Guest
-     * created with Import in the Library, the Create Libraries flag and the new-Library grant of Import.
+     * An Admin and a Library; an Admin and a Guest created each with Import in the Library, the Create Libraries flag and a
+     * new-Library grant of Import.
      *
      * Assertions:
      *
-     * The new Admin holds no grant, flag or new-Library grant. The Guest holds access to the Library with no Permission, no flag,
-     * and a new-Library grant of access alone.
+     * The new Admin holds no grant, flag or new-Library grant. The Guest holds access with no Permission, no flag, and a
+     * new-Library grant of access alone.
      */
     val admin = persistAdmin()
     val library = addLibrary()
@@ -283,15 +280,15 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin, two Libraries, and two Users each holding every Permission in both. The first User imported an asset into each
-     * Library, and a third asset that the second User owns now; the second User imported an asset of its own. Then the Admin
-     * changes the first User's name, username and email address, and its grants.
+     * An Admin, two Libraries, and two Users holding every Permission in both. The first User imported an asset into each Library
+     * and a third that the second User owns now; the second User imported one of its own. The Admin changes the first User's
+     * names, email address and grants.
      *
      * Assertions:
      *
-     * The importer record of the first User's three assets, in both Libraries and whoever owns them, names the account as it is
-     * now; the owners stay as they were. The second User's asset keeps its record. The account is stored with its new names and
-     * grants, its version is bumped, and the edit and the change of Permissions are recorded as events.
+     * The importer record of the first User's three assets, whoever owns them, names the account as it is now, and the owners
+     * stay. The second User's asset keeps its record. The account is stored changed, its version is bumped, and the edit and the
+     * Permissions change are recorded.
      */
     val admin = persistAdmin()
     val (first, second) = (addLibrary(), addLibrary())
@@ -329,13 +326,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin, two Libraries, and a User holding Import in the first and Organize in the second. The Admin makes the User a
-     * Guest with its grants as they are, then an Admin, then a User again with Import in the second Library.
+     * An Admin, two Libraries, and a User holding Import in the first and Organize in the second. The Admin makes it a Guest with
+     * its grants as they are, then an Admin, then a User with Import in the second Library.
      *
      * Assertions:
      *
-     * As a Guest it keeps both Libraries with no Permission; as an Admin it holds no grant; as a User again it holds Import in
-     * the second Library alone. Each change of type is recorded.
+     * As a Guest it keeps both Libraries with no Permission; as an Admin it holds no grant; as a User it holds the one grant
+     * given. Each change of type is recorded.
      */
     val admin = persistAdmin()
     val (first, second) = (addLibrary(), addLibrary())
@@ -369,8 +366,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Each of the User's attempts is a `ForbiddenException` and changes nothing. The Admin's own demotion is a
-     * `ValidationException` on the account type (`OWN_ACCOUNT`), and it stays an Admin.
+     * Each of the User's attempts is a `ForbiddenException` and changes nothing. The Admin's own demotion is refused on the
+     * account type, and it stays an Admin.
      */
     val admin = persistAdmin()
     val otherAdmin = persistAdmin()
@@ -403,19 +400,18 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin and a User with access to a Library, logged in; the Admin deactivates the User, then reactivates it; then tries to
+     * An Admin and a logged-in User with access to a Library; the Admin deactivates the User, then reactivates it, then tries to
      * deactivate and to delete its own account.
      *
      * Assertions:
      *
-     * Deactivated, the User's login is refused and its claims are gone, and its version was bumped; reactivated, it logs in
-     * again. Both changes are recorded. The Admin's own deactivation and deletion are each an `IllegalOperationException`
-     * (`OWN_ACCOUNT`), and it stays active.
+     * Deactivated, the User cannot log in, has no claims and its version is bumped; reactivated, it logs in again. Both changes
+     * are recorded. The Admin's own deactivation and deletion are each an `IllegalOperationException`, and it stays active.
      *
      * Edge cases:
      *
-     * The token the User held before its deactivation stays refused once it is reactivated: a deactivation revokes the account's
-     * tokens, so the reactivated account logs in again.
+     * The User's token from before the deactivation stays refused after the reactivation, since a deactivation revokes the
+     * account's tokens.
      */
     val admin = persistAdmin()
     val user = users.create(admin.persistedId, model(), "password 1", Map(addLibrary().persistedId -> Permissions.none))
@@ -444,16 +440,14 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin, two Libraries, a User holding every Permission in both who imported an asset into each and recycled one of them,
-     * an account the User created, and a second User with an asset of its own. The Admin counts the User's assets, then deletes
-     * the User.
+     * An Admin, two Libraries, a User holding every Permission in both who imported an asset into each and recycled one, an
+     * account the User created, and a second User with an asset of its own. The Admin counts the User's assets, then deletes it.
      *
      * Assertions:
      *
-     * The count is the User's two assets, in both Libraries, the recycled one included, and the delete answers the same number.
-     * Both assets are the Admin's now, with their importer records left naming the User; the second User's asset stays its own.
-     * The account and its grants are gone, the account it created has no creator, its version was bumped, and the delete is
-     * recorded with the number of assets moved.
+     * The count and the delete both give 2, the recycled asset included. Both assets are the Admin's, their importer records
+     * still naming the User; the second User's asset stays its own. The account and its grants are gone, the account it created
+     * has no creator, its version is bumped, and the delete is recorded with the number of assets moved.
      */
     val admin = persistAdmin()
     val (first, second) = (addLibrary(), addLibrary())
@@ -489,13 +483,12 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Two active Admins, and no other; each deactivates the other from a transaction of its own, the first holding its
-     * transaction open until the second waits for it.
+     * Two active Admins and no other; each deactivates the other in its own transaction, the first holding its open until the
+     * second waits for it.
      *
      * Assertions:
      *
-     * The second is refused once the first commits (the second Admin is no longer active, so it may act no more), and the first
-     * Admin is the one active Admin left.
+     * The second is refused once the first commits, its actor no longer active, and the first Admin is the one active Admin left.
      */
     // A removal locks the active Admins' rows before it reads the actor among them: on PostgreSQL, without the lock both would
     // read two active Admins and both would commit
@@ -517,14 +510,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin, a Library, and a User holding Import there who imported an asset into it. The Admin changes the User's name
-     * alone, then its username alone, then its email address alone, then its Create Libraries flag alone, each with its grants as
-     * they are.
+     * An Admin, a Library, and a User holding Import there who imported an asset into it. The Admin changes, one at a time, the
+     * User's name, username, email address and Create Libraries flag.
      *
      * Assertions:
      *
-     * After each change of a name, the asset's importer record names the account as it is now, the other two fields as they were
-     * before. Every one of the four edits raises the account's version, the flag's included, which changes no importer record.
+     * After each change, the asset's importer record names the account as it is now. Each of the four edits bumps the account's
+     * version, the flag's included, though it changes no importer record.
      */
     val admin = persistAdmin()
     val library = addLibrary()
@@ -555,15 +547,14 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Two active Admins, and no other; each makes the other a User from a transaction of its own, the first holding its
-     * transaction open until the second waits for it.
+     * Two active Admins and no other; each makes the other a User in its own transaction, the first holding its open until the
+     * second waits for it.
      *
      * Assertions:
      *
-     * The second is refused once the first commits (the second Admin is no longer an Admin, so it may act no more), and the first
-     * Admin is the one active Admin left.
+     * The second is refused once the first commits, its actor no longer an Admin, and the first Admin is the one active Admin
+     * left.
      */
-    // On PostgreSQL, without the lock of the active Admins' rows both would read two Admins and both would commit
     testApp.txManager.withTransaction(update("UPDATE account SET is_active = ? WHERE account_type = 'Admin'", Boolean.box(false)))
     val (admin, otherAdmin) = (persistAdmin(), persistAdmin())
     val grants = Map(addLibrary().persistedId -> Permissions.none)
@@ -584,13 +575,12 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Two active Admins, and no other; each deletes the other from a transaction of its own, the first holding its transaction
-     * open until the second waits for it.
+     * Two active Admins and no other; each deletes the other in its own transaction, the first holding its open until the second
+     * waits for it.
      *
      * Assertions:
      *
-     * The second is refused once the first commits (the second Admin is gone, so it may act no more), and the first Admin is the
-     * one active Admin left.
+     * The second is refused once the first commits, its actor gone, and the first Admin is the one active Admin left.
      */
     testApp.txManager.withTransaction(update("UPDATE account SET is_active = ? WHERE account_type = 'Admin'", Boolean.box(false)))
     val (admin, otherAdmin) = (persistAdmin(), persistAdmin())
@@ -609,13 +599,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Two active Admins, and no other; the first makes the second a User from a transaction of its own, holding it open until the
-     * second, deleting the first from another transaction, waits for it.
+     * Two active Admins and no other; the first makes the second a User in its own transaction, holding it open until the second,
+     * deleting the first, waits for it.
      *
      * Assertions:
      *
-     * The delete is refused once the demotion commits (its actor is no longer an Admin), and the first Admin is the one active
-     * Admin left, its account still there.
+     * The delete is refused once the demotion commits, its actor no longer an Admin, and the first Admin is the one active Admin
+     * left.
      */
     testApp.txManager.withTransaction(update("UPDATE account SET is_active = ? WHERE account_type = 'Admin'", Boolean.box(false)))
     val (admin, otherAdmin) = (persistAdmin(), persistAdmin())
@@ -637,13 +627,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Two Admins, a Library, and a User holding Import there. Both Admins open the User's edit form; the second saves the User
-     * with Organize added; then the first saves it renamed, from the form it opened before.
+     * Two Admins, a Library, and a User holding Import there. Both Admins open the User's edit form; the second saves it with
+     * Organize added, then the first saves it renamed.
      *
      * Assertions:
      *
-     * The first Admin's save is a `ValidationException` (`ACCOUNT_CHANGED`) and writes nothing: the User keeps its name and the
-     * second Admin's grant. Saved again from a form opened now, the rename goes through.
+     * The first Admin's save is refused as changed meanwhile and writes nothing: the User keeps its name and the second Admin's
+     * grant. Saved from a form opened afterwards, the rename goes through.
      */
     val admin = persistAdmin()
     val otherAdmin = persistAdmin()
@@ -670,12 +660,12 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin, a Library, and a User holding Import there whose new-Library switch is on. The Admin opens the User's edit form;
-     * then a Library is created, which grants the User access to it; then the Admin saves the form, its grants as it showed them.
+     * An Admin, a Library, and a User with the new-Library switch on. The Admin opens the User's edit form; a new Library then
+     * grants the User access; the Admin saves the form with the grants it showed.
      *
      * Assertions:
      *
-     * The save is a `ValidationException` (`ACCOUNT_CHANGED`), and the User keeps the new Library's grant.
+     * The save is refused as changed meanwhile, and the User keeps the new Library's grant.
      */
     val admin = persistAdmin()
     val library = addLibrary()
@@ -704,7 +694,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The User's create of an account in the Library is a `ForbiddenException`, and no account of that username exists.
+     * The User's create is a `ForbiddenException` and writes no account.
      */
     val admin = persistAdmin()
     val library = addLibrary()
@@ -727,12 +717,12 @@ import altitude.core.util.Util
      * Setup:
      *
      * An Admin, a Library, and a User holding Import and Create Users there; the User creates an account with the new-Library
-     * switch off but Import in its Permissions; the Admin creates one the same way, and one with the switch on.
+     * switch off but Import as its new-Library Permissions; the Admin creates one the same way, and one with the switch on.
      *
      * Assertions:
      *
      * The User's create is a `ForbiddenException` and writes no account. The Admin's account with the switch off is stored with
-     * no new-Library Permissions, and the one with the switch on keeps Import.
+     * no new-Library Permissions; the one with it on keeps Import.
      */
     val admin = persistAdmin()
     val library = addLibrary()
@@ -763,13 +753,12 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin and a User with access to a Library, whose token is minted at its current version; then the Admin sets the User's
-     * password, first one too short, then a valid one.
+     * An Admin and a User with access to a Library and a token; the Admin sets the User's password, first too short, then valid.
      *
      * Assertions:
      *
-     * The short one is a `ValidationException` on the password and changes nothing. After the valid one, the old password fails,
-     * the new one logs in, the token minted before is refused (its account's tokens were revoked), and the change is recorded.
+     * The short one is refused on the password and changes nothing. After the valid one, only the new password logs in, the
+     * earlier token is refused, and the change is recorded.
      */
     val admin = persistAdmin()
     val user = users.create(admin.persistedId, model(), "password 1", Map(addLibrary().persistedId -> Permissions.none))
@@ -791,15 +780,14 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A User with access to a Library and a token of it; a change of its password with a wrong current password, one with a new
-     * password too short, then one with the current password.
+     * A User with access to a Library and a token; changes of its password with a wrong current password, with a new one too
+     * short, then a valid one.
      *
      * Assertions:
      *
-     * The wrong current password is a `ValidationException` on the current field (`WRONG_PASSWORD`), recorded as a failed change
-     * with the client IP, and the short one is one on the new field; neither changes the password. After the third, the new
-     * password logs in, the old one does not, the earlier token is refused, and claims built now (as the session that made the
-     * change mints its new token from) hold.
+     * The wrong current password is refused on its field and recorded as a failed change with the client IP; the short one is
+     * refused on the new field; neither changes the password. After the valid change only the new password logs in, the earlier
+     * token is refused, and a token minted from claims built now, as the changing session's is, holds.
      */
     val admin = persistAdmin()
     val user = users.create(admin.persistedId, model(), "password 1", Map(addLibrary().persistedId -> Permissions.none))
@@ -837,16 +825,15 @@ import altitude.core.util.Util
      * Setup:
      *
      * An Admin, two Libraries, and a User holding Create Users in the first alone; the User creates an account with access to the
-     * first, and the Admin grants that account the second as well; the Admin creates an account of its own.
+     * first, which the Admin also grants the second; the Admin creates an account of its own.
      *
      * Assertions:
      *
-     * The Admin sees every account, its own creation and the User's among them, with every grant. The User sees the one account
-     * it created, with its grant in the first Library alone.
+     * The Admin sees every account with every grant. The User sees only the account it created, with its first-Library grant.
      *
      * Edge cases:
      *
-     * Once the Admin makes that account an Admin, the User sees it no more, and the Admin still does.
+     * Once the Admin makes that account an Admin, the User no longer sees it, and the Admin still does.
      */
     val admin = persistAdmin()
     val (first, second) = (addLibrary(), addLibrary())

@@ -4,8 +4,8 @@ import java.time.OffsetDateTime
 import scalasql.Table
 
 /**
- * The `face` table, without `features`: the model never carries the vector back out of the database, and the column is a pgvector
- * `vector` on PostgreSQL against a `BLOB` on SQLite. Face vector search stays on its hand-written engine SQL.
+ * The `face` table without `features`: the model never carries the vector, and the column's type differs by engine (pgvector
+ * `vector`, SQLite `BLOB`). Face vector search uses hand-written engine SQL.
  */
 case class FaceRow[T[_]](
     id: T[String],

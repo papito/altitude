@@ -11,10 +11,9 @@ import scala.collection.mutable
 import altitude.core.transactions.SqlExplainer.Bind
 
 /**
- * A connection that offers each DML statement prepared on it to a [[SqlExplainer]], just before the statement first runs.
- * Everything else goes to the wrapped connection untouched, statements run through `createStatement` included, so the
- * housekeeping of a transaction and DDL are never explained - and neither is a statement with no bind values, which ScalaSql (an
- * update) and the commons-dbutils query runner send through `createStatement`.
+ * Wraps a connection so each DML statement prepared on it is offered to a [[SqlExplainer]] just before it first runs.
+ * `createStatement` passes through untouched, so transaction housekeeping, DDL, and the bind-less statements ScalaSql and
+ * commons-dbutils send that way are never explained.
  */
 object ExplainingConnection:
 
@@ -32,8 +31,8 @@ object ExplainingConnection:
     }
 
   /**
-   * A prepared statement that records the values bound to it and, the first time it is run or added to a batch, offers itself
-   * with them to the explainer, on the connection it was prepared on. A batch is so explained once, with its first row.
+   * Records the values bound to the statement and offers it, with them, to the explainer the first time it runs or is added to a
+   * batch, so a batch is explained once, with its first row.
    */
   private def explainingStatement(
       conn: Connection,
@@ -63,7 +62,7 @@ object ExplainingConnection:
       .newProxyInstance(interface.getClassLoader, Array[Class[?]](interface), (_, method, args) => handler(method, args))
       .asInstanceOf[A]
 
-  /** Calls the method on the wrapped object; its failure is thrown as it is, not wrapped in the reflection's own */
+  /** Calls the method on the wrapped object, rethrowing its failure unwrapped */
   private def forward(target: AnyRef, method: Method, args: Array[AnyRef]): AnyRef =
     try method.invoke(target, args*)
     catch case ex: InvocationTargetException => throw ex.getCause

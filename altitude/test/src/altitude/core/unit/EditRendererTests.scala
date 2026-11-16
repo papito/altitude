@@ -20,7 +20,7 @@ import altitude.core.models.EditRecipe
 import altitude.core.util.EditRenderer
 import altitude.core.util.ImageUtil
 
-/** The renderer of an Edit (`EditRenderer`): the spec's geometry and per-pixel math, checked by hand, on synthetic images */
+/** `EditRenderer`'s geometry and per-pixel math, checked against values worked by hand, on synthetic images */
 @DoNotDiscover class EditRendererTests extends AnyFunSuite with TestFocus {
 
   Loader.load(classOf[opencv_java])
@@ -42,7 +42,7 @@ import altitude.core.util.ImageUtil
     mat.get(y, x, bytes)
     bytes.toSeq.map(_ & 0xff)
 
-  /** A color of its own for each pixel of a small image, so where a pixel lands tells which it was */
+  /** A distinct color per pixel of a small image, so where a pixel lands tells which it was */
   private def distinct(x: Int, y: Int): (Int, Int, Int) = (10 + x * 20, 10 + y * 20, 200 - x * 10 - y * 10)
 
   private def rendered(source: Mat, recipe: EditRecipe, longEdge: Option[Int] = None): Mat =
@@ -55,19 +55,19 @@ import altitude.core.util.ImageUtil
     /**
      * Setup:
      *
-     * Single slider Edits, and the sRGB values each is computed for by hand from the spec.
+     * Single-slider Edits, and sRGB values worked by hand for each.
      *
      * Assertions:
      *
      * Temperature +100 gives the gains (1.28, 1, 0.72) divided by their luminance, so a neutral gray keeps its luminance.
-     * Exposure +1 takes 0.5 to 0.6858 (its linear value doubled). Whites +100 takes 0.85 to white, Blacks −100 takes 0.1 to
-     * black. Shadows +100 lifts 0.25 by 0.95 × 0.25 × 0.75², Highlights −100 takes 0.95 to its shoulder 0.7278, Highlights +100
-     * lifts 0.675 by 0.3 × smoothstep(0.5). Gamma +100 (γ 2) takes 0.25 to 0.5. Contrast +100 takes 0.25 to 0.1620 along the
-     * cosine S, and −100 to 0.3208 along its inverse.
+     * Exposure +1 takes 0.5 to 0.6858 (linear doubled). Whites +100 takes 0.85 to white, Blacks −100 takes 0.1 to black. Shadows
+     * +100 lifts 0.25 by 0.95 × 0.25 × 0.75², Highlights −100 takes 0.95 to its shoulder 0.7278, Highlights +100 lifts 0.675 by
+     * 0.3 × smoothstep(0.5). Gamma +100 (γ 2) takes 0.25 to 0.5. Contrast +100 takes 0.25 to 0.1620 along the cosine S, −100 to
+     * 0.3208 along its inverse.
      *
      * Edge cases:
      *
-     * Every step clamps its result to [0, 1], and the identity leaves a value as it is.
+     * Every step clamps to [0, 1], and the identity leaves a value as it is.
      */
     val (gr, gg, gb) = EditRenderer.whiteBalanceGains(identity.copy(temperature = 100))
     val luminance = 0.2126 * 1.28 + 0.7152 + 0.0722 * 0.72
@@ -102,9 +102,9 @@ import altitude.core.util.ImageUtil
      *
      * Assertions:
      *
-     * The first curve passes through its points and gives 0.40625 at 0.25, the Hermite value by hand. The second is 0.1 below 0.2
-     * and 0.9 above 0.8. A table holds 4096 entries per channel, entry i being the steps run on i / 4095, and a value between two
-     * entries is read between them linearly.
+     * The first curve passes through its points and gives the hand-worked Hermite value 0.40625 at 0.25. The second is 0.1 below
+     * 0.2 and 0.9 above 0.8. A table holds 4096 entries per channel, entry i being the steps run on i / 4095, read linearly
+     * between entries.
      */
     val curve = EditRenderer.Curve(List((0.0, 0.0), (0.5, 0.75), (1.0, 1.0)))
     curve(0) should near(0, 1e-12)
@@ -135,10 +135,10 @@ import altitude.core.util.ImageUtil
      * Assertions:
      *
      * Saturation −100 turns the color into its luminance Y. Vibrance +100 scales its distance from Y by 1 + (1 − min(1, 1.6 ×
-     * 0.4)). The vignette's weight is 0 at the center and smoothstep((1 − 0.39375) / 0.65625) at a corner, where d is 1. The hash
-     * is the grain's 32-bit integer hash (`docs/image-edits.md`, step 10): in [0, 1], the same for the same cell, and 0 at (0,
-     * 0). The grain's cell is 1.75 px at a 3840 px long edge, its strength whole; at a 1000 px long edge the cell is floored at a
-     * pixel and the strength is scaled by the 1.75 × 1000 / 3840 px the cell would have been.
+     * 0.4)). The vignette's weight is 0 at the center and smoothstep((1 − 0.39375) / 0.65625) at a corner, where d is 1. The
+     * grain's integer hash is in [0, 1], stable per cell, and 0 at (0, 0). The grain's cell is 1.75 px at a 3840 px long edge at
+     * full strength; at 1000 px the cell is floored at a pixel and the strength scaled by the 1.75 × 1000 / 3840 px it would have
+     * been.
      */
     val y = 0.2126 * 0.6 + 0.7152 * 0.4 + 0.0722 * 0.2
     val gray = EditRenderer.saturate(0.6, 0.4, 0.2, identity.copy(saturation = -100))
@@ -170,8 +170,8 @@ import altitude.core.util.ImageUtil
      *
      * Assertions:
      *
-     * A quarter turn clockwise makes a 2 × 4 frame and takes (1, 0.5) to (1.5, 1); a flip mirrors in the turned frame. Straighten
-     * 90 takes a point right of the center to below it, and the inverse warp takes every warped point back.
+     * A quarter turn clockwise makes a 2 × 4 frame and takes (1, 0.5) to (1.5, 1); a flip mirrors within the turned frame.
+     * Straighten 90 takes a point right of the center to below it, and the inverse warp takes every warped point back.
      */
     val quarter = identity.copy(rotate = 90)
     EditRenderer.frameSize(4, 2, quarter) shouldBe (2, 4)
@@ -197,17 +197,14 @@ import altitude.core.util.ImageUtil
     /**
      * Setup:
      *
-     * `test/resources/edit/vectors.json`, which the Edit panel's modules are checked against too (`_doc` there says what each
-     * group holds), read with the tolerance it states per group.
+     * `test/resources/edit/vectors.json`, which the JS renderer is checked against too, read with each group's tolerance.
      *
      * Assertions:
      *
-     * Every value of every group is what the renderer computes: the white balance gains, the table entries and lookups of each
-     * tone recipe, the curve samples, the saturation, the frame, edited size, outline, turned, warped and unwarped points of each
-     * geometry recipe with whether each warped point shows the image, and the hash, grain, vignette and output sizes. The vectors
-     * agree with the spec by hand: the identity's table entry i is i / 4095, a quarter turn takes (x, y) to (H₀ − y, x), the
-     * outline of an unwarped frame is its corners, an unwarped point warped again is the point, a point shows the image exactly
-     * where its source lies within the frame, and the hash of (0, 0) is 0.
+     * Every value of every group is what the renderer computes. Where the math is simple enough to check by hand, the vectors
+     * agree with it: the identity's table entry i is i / 4095, a quarter turn takes (x, y) to (H₀ − y, x), an unwarped frame's
+     * outline is its corners, warp and unwarp invert each other, a point shows the image exactly where its source lies within the
+     * frame, and the hash of (0, 0) is 0.
      *
      * Edge cases:
      *
@@ -327,7 +324,7 @@ import altitude.core.util.ImageUtil
      *
      * Assertions:
      *
-     * The identity's output is the image within 1/255, each pixel opaque, at 7 × 5. The cropped output is the Edit's edited size.
+     * The identity's output is the image within 1/255, opaque, at 7 × 5. The cropped output is the Edit's edited size.
      */
     val source = image(7, 5)(distinct)
     val output = rendered(source, identity)
@@ -354,9 +351,8 @@ import altitude.core.util.ImageUtil
      *
      * Assertions:
      *
-     * Each output pixel's frame point, through the inverse warp, is the source: where that lies inside the frame, the pixel is
-     * opaque and its color is the frame sampled bilinearly there, the edge pixels repeated beyond the last pixel centers, within
-     * 1/255; where it lies outside, the pixel is transparent. The edge is hard: alpha is 0 or 255.
+     * Where an output pixel's inverse-warped point lies inside the frame, the pixel is opaque and is the frame sampled bilinearly
+     * there (edge pixels repeated), within 1/255; outside, it is transparent. Alpha is only ever 0 or 255.
      */
     val (width, height) = (29, 19)
     def color(x: Int, y: Int): (Int, Int, Int) = (10 + x * 7, 10 + y * 9, 40 + (x + y) * 4)
@@ -407,8 +403,8 @@ import altitude.core.util.ImageUtil
      *
      * Assertions:
      *
-     * A quarter turn is OpenCV's clockwise rotation, 4 × 6; a horizontal flip mirrors each row; both together mirror the turned
-     * frame. A crop of the top right quarter is 3 × 2 holding that quarter's pixels.
+     * A quarter turn is OpenCV's clockwise rotation; a horizontal flip mirrors each row; both together mirror the turned frame. A
+     * crop of the top right quarter holds that quarter's pixels.
      */
     val source = image(6, 4)(distinct)
 
@@ -439,14 +435,14 @@ import altitude.core.util.ImageUtil
     /**
      * Setup:
      *
-     * The fixture tagged with EXIF orientation 6, rendered from its file and from its image decoded and turned upright, with no
-     * turn, with a quarter turn and a horizontal flip, and with three quarters and a vertical flip. A 2400 × 1600 JPEG of smooth
-     * gradients, rendered at a long edge of 300 from its file (decoded at an eighth by the decoder) and from its decoded image.
+     * The EXIF orientation 6 fixture, rendered from its file and from its upright decoded image, with no turn, a quarter turn and
+     * a horizontal flip, and three quarters and a vertical flip. A 2400 × 1600 JPEG of smooth gradients, rendered at a long edge
+     * of 300 from its file (decoded at an eighth) and from its decoded image.
      *
      * Assertions:
      *
-     * The oriented file's renders are its upright image's, pixel for pixel within 1/255. The small JPEG's are of one size and
-     * differ by under 2/255 on average.
+     * The oriented file renders as its upright image, within 1/255 per pixel. The JPEG's two renders are of one size and differ
+     * by under 2/255 on average.
      */
     val oriented = java.nio.file.Path.of(getClass.getResource("/import/images/exif/orientation-6.jpg").toURI)
     val stored = ImageUtil.decodeUnchanged(Files.readAllBytes(oriented))
@@ -485,11 +481,11 @@ import altitude.core.util.ImageUtil
     /**
      * Setup:
      *
-     * A 6 × 6 image of a color per pixel, with Straighten set to 90 (outside the slider's range, which the case class holds).
+     * A 6 × 6 image of a color per pixel with Straighten 90, outside the slider's range but allowed by the case class.
      *
      * Assertions:
      *
-     * Its output is the image turned a quarter clockwise, within 1/255 at every pixel.
+     * The output is the image turned a quarter clockwise, within 1/255 at every pixel.
      */
     val source = image(6, 6)(distinct)
     val turned = new Mat()
@@ -529,8 +525,8 @@ import altitude.core.util.ImageUtil
      *
      * Assertions:
      *
-     * The outputs are 3840 × 96 and 500 × 13: the long edge is the cap and the short side its share, rounded. The white column is
-     * still at the center of the smaller one.
+     * The outputs are 3840 × 96 and 500 × 13, the short side rounded to its share. The white column is still at the center of the
+     * smaller one.
      *
      * Edge cases:
      *
@@ -559,13 +555,13 @@ import altitude.core.util.ImageUtil
      *
      * Assertions:
      *
-     * The vignette leaves the center as it was and makes a corner darker. The grain changes pixels, and two renders at one size
-     * are the same.
+     * The vignette leaves the center as it was and darkens a corner. The grain changes pixels, and two renders at one size are
+     * the same.
      *
      * Edge cases:
      *
-     * At 1024 px the grain's cell is floored at a pixel, so each pixel is its own cell: the grain at a pixel is the hash at it,
-     * less ½, at the strength scaled by 1.75 × 1024 / 3840.
+     * At 1024 px the grain's cell is floored at a pixel, so a pixel's grain is its hash less ½, at the strength scaled by 1.75 ×
+     * 1024 / 3840.
      */
     val source = new Mat(48, 64, CvType.CV_8UC3, new Scalar(128, 128, 128))
     val vignetted = rendered(source, identity.copy(vignette = -100))
@@ -589,9 +585,8 @@ import altitude.core.util.ImageUtil
     /**
      * Setup:
      *
-     * A 1600 × 1200 JPEG on disk of dark lines on white, each rising 2.7° to the right, and a few short marks that are no line; a
-     * blank image; and two portraits of the import fixtures, busy pictures with no horizon, `people/affleck.jpg` and
-     * `people/bullock.jpg`.
+     * A 1600 × 1200 JPEG of dark lines on white rising 2.7° to the right, plus a mark that is no line; a blank image; and two
+     * busy portrait fixtures with no horizon.
      *
      * Assertions:
      *
@@ -599,7 +594,7 @@ import altitude.core.util.ImageUtil
      *
      * Edge cases:
      *
-     * The blank image, with no line, answers nothing; so do the portraits, whose edges are no level or plumb lines that agree.
+     * The blank image and the portraits, with no agreeing level or plumb lines, answer nothing.
      */
     val drawing = new Mat(1200, 1600, CvType.CV_8UC3, new Scalar(255, 255, 255))
     val rise = Math.tan(Math.toRadians(2.7))

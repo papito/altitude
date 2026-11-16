@@ -30,7 +30,6 @@ private class AltitudeActorSystem(context: ActorContext[AltitudeActorSystem.Comm
   implicit val ec: ExecutionContext = context.executionContext
   val logger: Logger = context.log
 
-  /** Route messages to the appropriate actors and actor managers */
   override def onMessage(msg: AltitudeActorSystem.Command): Behavior[AltitudeActorSystem.Command] =
     msg match {
       case command: ImportStatusWsActor.Command =>

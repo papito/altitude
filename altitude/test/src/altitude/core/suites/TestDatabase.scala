@@ -19,7 +19,7 @@ object TestDatabase {
         """.stripMargin
 
       val conn = testApp.txManager.connection(readOnly = false)
-      // disables transaction for this connection (cannot use VACUUM in a transaction)
+      // Autocommit, since VACUUM cannot run in a transaction
       conn.setAutoCommit(true)
 
       val stmt = conn.createStatement()

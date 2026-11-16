@@ -76,63 +76,56 @@
     --list-indent: var(--space-7);
 
     --footer-height: 2.75rem;
-    /* The explorer's share of the main page along its Dock side's axis (a width for left and right, a height for top
-       and bottom), and the least the explorer and the results may be squeezed to on each axis (the explorer's width
-       also never drops below its header's, pages/index.css); js/common/explorer-dock.js sets the share and reads the
-       minimums in px to bound the divider */
+    /* The explorer's share of the main page along its Dock side's axis, and the least the explorer and the results may
+       be squeezed to; the script reads the minimums in px (registered lengths, below) to bound the divider */
     --explorer-share: 25%;
     --explorer-min-width: 6.25rem;
     --explorer-min-height: 7.5rem;
     --content-min-width: 18.75rem;
     --content-min-height: 12.5rem;
     /* The Detail panel's share of Asset detail along its Dock side's axis, and the least the panel and the media stage
-       may be squeezed to on each axis (htmx/view_image_detail_modal.css); js/search-results/detail-panel.js sets the
-       share on the fragment and reads the minimums in px to bound the divider */
+       may be squeezed to; read in px to bound the divider */
     --detail-panel-share: 30%;
     --detail-panel-min-width: 12.5rem;
     --detail-panel-min-height: 7.5rem;
     --detail-stage-min-width: 12.5rem;
     --detail-stage-min-height: 7.5rem;
-    /* The Edit panel's share of Asset detail along its axis, docked opposite the Detail panel, and the least it may be
-       squeezed to (htmx/view_image_detail_modal.css); js/edit/edit-panel.js sets the share and reads the minimums in px */
+    /* The Edit panel's share of Asset detail, docked opposite the Detail panel, and the least it may be squeezed to */
     --edit-panel-share: 28%;
     --edit-panel-min-width: 18rem;
     --edit-panel-min-height: 12rem;
-    /* The Histogram's height, under a pane of Curation's stage and in the Edit panel (includes/histogram.css) */
+    /* The Histogram's height, under a Curation pane and in the Edit panel */
     --histogram-height: 4.25rem;
-    /* The Edit panel (includes/edit_panel.css): the curve editor's widest, a column of a section docked top or bottom,
-       and the gutter the stage leaves around the frame while the Crop tool is open, where a drag turns the image */
+    /* The Edit panel: the curve editor's widest, a section's column when docked top or bottom, and the gutter around
+       the frame while the Crop tool is open, where a drag turns the image */
     --edit-curve-max-size: 16rem;
     --edit-column-width: 15rem;
     --edit-crop-gutter: var(--space-9);
     --edit-slider-field-width: 4.5rem;
-    /* The band naming the view along the results' left edge, and the gutter the results leave for it (pages/index.css) */
+    /* The band naming the view along the results' left edge, and the gutter the results leave for it */
     --view-band-width: var(--space-9);
     --nav-brand-width: 12.5rem;
     --nav-search-width: 11.5rem;
     --nav-search-focus-width: 15.5rem;
     /* The longest a Library's name runs in the nav's Library menu, its trigger and its entries, before an ellipsis */
     --library-name-max-width: 16rem;
-    /* The Browse entry's least width, wider than an entry's share of a laptop's nav, so the trigger shows some of the
-       Library's name; a share of the viewport, so the nav still fits a narrow window */
+    /* The Browse entry's least width, wide enough for some of the Library's name on a laptop; capped by the viewport,
+       so the nav still fits a narrow window */
     --nav-browse-min-width: min(16rem, 18vw);
 
     --snackbar-width: 31.25rem;
-    /* A snackbar message's entry and its fade when dismissed; js/common/snackbar.js reads it, in ms, to remove the
-       message once the fade has run */
+    /* A snackbar message's entry and dismiss fade; the script reads it, in ms, to remove the message after the fade */
     --snackbar-exit-duration: 150ms;
     --person-avatar-size: 4rem;
     --detail-cover-size: 2.5rem;
-    /* The most height a combobox's listbox takes before it scrolls: the Change combobox's (htmx/detail_panel.css) and the
-       advanced search panel's (htmx/search_panel.css) */
+    /* The most height a combobox's listbox takes before it scrolls */
     --listbox-max-height: 16rem;
-    /* The advanced search panel (htmx/search_panel.css): its width, a Person's cover Face on a chip and in the options, and
-       the days of one month of its calendar */
+    /* The advanced search panel: its width, a Person's cover Face on a chip and in the options, and one calendar month */
     --search-panel-width: 26rem;
     --search-panel-chip-cover-size: 1.25rem;
     --search-panel-option-cover-size: 1.75rem;
     --search-panel-month-width: 13.5625rem;
-    /* The corners of a Face highlight's box over Asset detail's media (htmx/view_image_detail_modal.css) */
+    /* The corners of a Face highlight's box over Asset detail's media */
     --face-highlight-radius: 0.875rem;
     --merge-arrow-column: 5rem;
     --map-panel-width: min(60%, 43.75rem);
@@ -154,12 +147,10 @@
     --import-page-max-width: 75rem;
     --import-uploads-min-width: 18.75rem;
     --import-history-min-width: 26.25rem;
-    /* A Watch folder's card on the Import page (htmx/watch_folders.css), and the Watch folder dialog
-       (htmx/watch_folder_form.css) */
+    /* A Watch folder's card on the Import page, and the Watch folder dialog */
     --watch-folder-card-width: 16rem;
     --watch-folder-form-width: 32rem;
-    /* The Import history (htmx/import_history.css, includes/import_status.css): the node of an Import on the timeline and
-       the height of its progress bar */
+    /* The Import history: an Import's node on the timeline and the height of its progress bar */
     --import-node-size: 0.625rem;
     --import-bar-height: 0.625rem;
     --account-card-width: 17rem;
@@ -179,14 +170,13 @@
     --warning-background-color: light-dark(hsl(from var(--warning-color) h calc(s * 0.7) 90%), hsl(from var(--warning-color) h calc(s * 0.6) 35%));
     --error-background-color: light-dark(hsl(from var(--error-color) h calc(s * 0.7) 90%), hsl(from var(--error-color) h calc(s * 0.6) 35%));
     --info-background-color: light-dark(hsl(from var(--info-color) h calc(s * 0.7) 90%), hsl(from var(--info-color) h calc(s * 0.6) 35%));
-    /* The channels of the Histogram (includes/histogram.css), a soft red, green and blue: drawn as light, two that overlap
-       read yellow, cyan or magenta and the three a neutral. The strip is dark in either theme, so each pair holds one color */
+    /* The Histogram's channels, a soft red, green and blue: drawn as light, two that overlap read yellow, cyan or magenta
+       and the three a neutral. The strip is dark in either theme, so each pair holds one color */
     --histogram-red: light-dark(#d5594b, #d5594b);
     --histogram-green: light-dark(#6fbb63, #6fbb63);
     --histogram-blue: light-dark(#5879f7, #5879f7);
-    /* The gradient tracks of the Edit panel's sliders (.edit-slider): what each slider's ends do to the picture, drawn
-       from the palette (Tint's magenta end is `--theme-magenta`, its one use), the neutral at the middle where the slider
-       is 0 */
+    /* The gradient tracks of the Edit panel's sliders: what each end does to the picture, the neutral at the middle
+       where the slider is 0. Tint's magenta end is `--theme-magenta`'s one use */
     --edit-track-exposure: linear-gradient(to right, var(--shadow-color), var(--theme-neutral-3), var(--theme-neutral-1));
     --edit-track-temperature: linear-gradient(to right, var(--info-color), var(--theme-neutral-3), var(--warning-color));
     --edit-track-tint: linear-gradient(to right, var(--success-color), var(--theme-neutral-3), var(--theme-magenta));
@@ -448,7 +438,7 @@ nav .theme-switch {
     background: none;
 }
 
-/* The icon names the theme a press goes to. CSS picks it from <html>'s data-theme, since a nav reload renders the cell again */
+/* The icon names the theme a press goes to. CSS picks it from <html>'s data-theme, since a nav reload re-renders the cell */
 :root:not([data-theme="light"]) nav .theme-switch .fa-moon,
 :root[data-theme="light"] nav .theme-switch .fa-sun {
     display: none;
@@ -460,10 +450,8 @@ nav .menu[aria-current="page"] {
     font-weight: var(--font-weight-bold);
 }
 
-/* The Browse cell (includes/library_menu) holds two targets side by side, centered: Browse, a link like every entry's, and the
-   Library menu's trigger, the current Library's name. The cell's padding is theirs, so each reaches the cell's top and bottom
-   edge, and each glows on its own hover. The cell takes an entry's share of the nav, and at least --nav-browse-min-width,
-   whatever the Library's name, which the trigger cuts to fit */
+/* The Browse cell holds two targets, the Browse link and the Library menu's trigger. The cell's padding is theirs, so each
+   reaches the cell's top and bottom edge and glows on its own hover */
 nav .menu:has(> [data-choice-menu]) {
     align-self: stretch;
     min-width: var(--nav-browse-min-width);
@@ -519,8 +507,8 @@ nav .nav-menu-trigger .choice {
     }
 }
 
-/* An account type's color (see Nav in views/AGENTS.md): the nav's account icon, and the account info dialog, whose popover
-   host takes the type of the account it shows */
+/* An account type's color, for the nav's account icon and the account info dialog, whose popover host takes the type of
+   the account it shows */
 :is([data-account-type="Admin"], #popoverDialog:has([data-account-type="Admin"])) {
     --account-type-color: var(--error-color);
 }
@@ -533,7 +521,7 @@ nav .nav-menu-trigger .choice {
     --account-type-color: var(--info-color);
 }
 
-/* The account's cell (includes/account_menu): as wide as its one target, the trigger, whose padding is the cell's */
+/* The account's cell: as wide as its one target, the trigger, whose padding is the cell's */
 nav .menu.account {
     flex: 0 0 auto;
     align-self: stretch;
@@ -553,13 +541,12 @@ nav .menu.account .username {
     white-space: nowrap;
 }
 
-/* Log out's form, empty: its button is in the account info dialog, and the form takes no room in the cell */
+/* Log out's form is empty here (its button is in the account info dialog) and takes no room */
 nav .menu.account form {
     display: none;
 }
 
-/* A panel in the nav takes the page's text rather than its entry's: the nav font, lowercase, the current entry's accent and
-   weight */
+/* A panel in the nav takes the page's text, not its entry's nav font, lowercase, accent and weight */
 nav .context-menu {
     color: var(--theme-neutral-4);
     font-family: var(--font);
@@ -576,10 +563,9 @@ nav .context-menu .actions a > span {
     white-space: nowrap;
 }
 
-/* The quick search cell is as wide as every entry (the same flex and side padding) and holds the form at its own
-   width. The rules are the cell's own form's: the advanced search panel, in the cell beside it, holds a form too
-   (htmx/search_panel.css). The form is the panel's anchor, named for its own cell alone, since the style guide holds a
-   second nav */
+/* The quick search cell is as wide as every entry and holds the form at its own width. The rules target the cell's own
+   form, since the advanced search panel beside it holds a form too. The form is the panel's anchor, scoped to its cell
+   because the style guide holds a second nav */
 nav .search {
     flex: 1 1 0;
     padding: 0 var(--space-3);
@@ -596,9 +582,8 @@ nav .search > form {
     transition: width 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* The field widens while it has focus, and the glow is its one focus indicator, in place of the focus ring the
-   input would draw inside it (see Nav in views/AGENTS.md). Focus on the filter button, where a closing advanced search
-   panel returns it, is no focus in the field: the button draws the focus ring */
+/* The field widens while it has focus, and the glow replaces the input's focus ring. Focus on the filter button, where a
+   closing advanced search panel returns it, does not count: the button draws its own ring */
 nav .search > form:focus-within:not(:has(.filters:focus)) {
     width: var(--nav-search-focus-width);
     box-shadow: 0 0 0 1px var(--theme-accent), 0 0 14px hsl(from var(--theme-accent) h s l / 0.55);
@@ -646,8 +631,7 @@ nav .search > form:has(input:placeholder-shown) .clear {
     display: none;
 }
 
-/* The filter button, which opens the advanced search panel: the sliders icon in a tinted circle, with the number of
-   filters in force as a badge on its corner, a pill that shows from one up (js/search-results/search-panel.js) */
+/* The filter button, which opens the advanced search panel, with the number of filters in force as a badge on its corner */
 nav .search > form .filters {
     position: relative;
     margin-left: var(--space-3);
@@ -688,9 +672,8 @@ nav .search > form .filters span:empty {
 /* CONTENT */
 /*         */
 
-/* Triage's and the Trash's panes: diagonal stripes of the view's color, --view-tint and a weaker --view-stripe. The bars
-   that stick inside the pane paint --view-tint alone. The left padding is the gutter of the view band (pages/index.css),
-   so nothing lies under it. Triage's color is the accent, the Trash's the warning color */
+/* Triage's and the Trash's panes: diagonal stripes of --view-tint and a weaker --view-stripe; the bars that stick inside
+   the pane paint --view-tint alone. The left padding is the view band's gutter, so nothing lies under the band */
 #content:is(.triage, .trashbin) {
     padding-left: var(--view-band-width);
     background: repeating-linear-gradient(135deg, var(--view-tint) 0 var(--space-8), var(--view-stripe) var(--space-8) calc(var(--space-8) * 2));
@@ -726,8 +709,8 @@ footer {
 /* FORMS */
 /*       */
 
-/* A text-like field anywhere but the setup screen, the nav search and the toolbar dropdowns, at zero specificity so a
-   page's own rule outranks it; its focus indicator replaces the focus ring (see Forms in views/AGENTS.md) */
+/* A text-like field anywhere but the setup screen and the nav, at zero specificity so a page's own rule outranks it; its
+   focus indicator replaces the focus ring */
 :where(body:not(.setup) :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"],
                                       [type="submit"]), textarea, select):not(nav *)) {
     padding: var(--space-4) var(--space-5);
@@ -771,8 +754,8 @@ footer {
     color: hsl(from currentColor h s l / 0.6);
 }
 
-/* Behind @supports, so a browser without the customizable select keeps the native one; the options take a rule of their
-   own, since the design tweaks panel matches no nested descendant selector (see Do in views/AGENTS.md) */
+/* Behind @supports, so a browser without the customizable select keeps the native one. The options take a rule of their
+   own because the design tweaks panel matches no nested descendant selector */
 @supports (appearance: base-select) {
     :where(body:not(.setup) select) {
         appearance: base-select;
@@ -830,7 +813,7 @@ footer {
     box-shadow: var(--sheen-shadow), var(--lift-shadow);
 }
 
-/* A disabled button is dimmed whole, whatever its variant, as a chip whose input is disabled is (pages/users.css) */
+/* A disabled button is dimmed whole, whatever its variant */
 .action-button:disabled {
     opacity: 0.5;
     cursor: default;
@@ -939,7 +922,7 @@ footer {
 /* CHIPS */
 /*       */
 
-/* The chips' fill: the filter chip's, and the fill of a chosen filter's chip (below) */
+/* The fill of the filter chip and of a chosen filter's chip */
 .filter-chip, :is(.search-panel, .results-title) .chip {
     --chip-fill: linear-gradient(in oklch 180deg, hsl(from var(--theme-primary) h s l / 0.12), var(--theme-neutral-2));
 }
@@ -958,9 +941,8 @@ footer {
     background: linear-gradient(hsl(from var(--theme-neutral-1) h s l / 0.08) 0 0), var(--chip-fill);
 }
 
-/* A chosen filter's chip: a name chosen in the advanced search panel (htmx/search_panel) and a filter of a filtered search's
-   results title (includes/search_filter_chips). A rounded rectangle on the chips' fill, the name cut with an ellipsis, then
-   its remove control. A Person's leads with the cover Face as a circle */
+/* A chosen filter's chip, in the advanced search panel and a filtered search's results title: the name cut with an
+   ellipsis, then its remove control. A Person's leads with the cover Face */
 :is(.search-panel, .results-title) .chip {
     display: flex;
     align-items: center;
@@ -1015,15 +997,9 @@ footer {
 /* SWITCH */
 /*        */
 
-/* An on/off setting that applies as it is flipped: a `button[role="switch"]` whose `aria-checked` an Alpine binding
-   keeps in step with the setting, labelled by a `<label for>`, whose click flips it natively. Used by the View
-   settings dialog, the People tab's buckets, the Advanced search panel, the Watch folder and account forms, and the
-   Change combobox's "This face only" switch (htmx/detail_panel_people). The last is the exception: focus has to stay in the combobox's input, so the switch's and
-   the label's pointer `mousedown` is prevented, and the label's click, prevented too, is routed to the component's
-   `toggleFaceOnly` (views/AGENTS.md, **Forms** and **Detail panel**). The knob is a
-   pseudo-element that slides across the track by the track's width less its height. The track off is a veil of
-   the neutral that stays visible on the frosted popover surface (the toggle group's secondary veil fades into it),
-   and on it takes the primary color, as a checkbox's accent does */
+/* An on/off setting that applies as it is flipped: a `button[role="switch"]` with `aria-checked`, labelled by a
+   `<label for>` whose click flips it natively. The knob slides by the track's width less its height. The off track is a
+   veil of the neutral, which stays visible on the frosted popover surface, where a secondary veil would fade */
 .switch {
     display: inline-grid;
     align-items: center;
@@ -1058,10 +1034,8 @@ footer {
 /* EDIT SLIDER */
 /*             */
 
-/* A slider of the Edit panel (includes/edit_panel): a row of its label and the value's number field at its end (Enter
-   sets it), over a thin native range track filled from its left end to the thumb (`--edit-slider-fill`, the percentage
-   the component writes), unless the element sets the track itself (`--edit-slider-track`, inline: a slider with a
-   gradient track, its `--edit-track-*` token). A changed slider's label is bold. The field is quiet until hovered or focused */
+/* An Edit panel slider: its label and number field over a thin range track filled to the thumb (`--edit-slider-fill`,
+   which the component writes), unless the element sets `--edit-slider-track` inline to a gradient track */
 .edit-slider {
     display: grid;
     gap: var(--space-1);
@@ -1168,11 +1142,8 @@ footer {
 /* CRUMBS */
 /*        */
 
-/* A path's breadcrumb: the results title's folder path (includes/results_title_inner), the Detail panel's Folder row
-   (htmx/detail_panel) and Quick view's path (htmx/quick_view_modal). Each ancestor is dimmed (.crumb), a link that brightens
-   under the pointer except in Quick view, whose crumbs are plain text, and the crumbs are parted by a faint chevron (.sep);
-   the row wraps rather than hiding an ancestor. The results title's leaf is its own (.leaf, includes/results_title.css), and
-   the Detail panel colors its crumbs as its other links (htmx/detail_panel.css). */
+/* A path's breadcrumb: dimmed ancestors (.crumb), which brighten on hover when they are links, parted by faint chevrons
+   (.sep). The row wraps rather than hiding an ancestor */
 .crumbs {
     display: flex;
     flex-wrap: wrap;
@@ -1201,9 +1172,7 @@ a.crumb:hover {
 /* NO COVER */
 /*          */
 
-/* What stands in a person's cover face when they have none (no Face left to be one): the People tab's cell
-   (htmx/people_list), the person's results title (includes/results_title_inner) and the merge modal
-   (htmx/merge_people_modal), each of which sizes and rounds it as it does the face */
+/* Stands in for a person's cover face when they have none; each host sizes and rounds it as it does the face */
 .no-cover {
     display: grid;
     place-items: center;
@@ -1216,14 +1185,9 @@ a.crumb:hover {
 /* DIVIDER */
 /*         */
 
-/* A draggable divider between two panes: the explorer's against the results (#explorerDivider, views/index.scala.html),
-   the Detail panel's against Asset detail's media (#detailPanelDivider, htmx/view_image_detail_modal) and the Split.js
-   gutter between the People panes (js/alpine/components/people-tab.js). A transparent band,
-   --space-3 thick, with a short dotted grip centered on it, a tile of one dot drawn in currentColor and repeated
-   along the band, so the hover and drag tint is one color change. Its orientation is its own class, .vertical (a
-   column, as between a left or right dock and the results) or .horizontal (a row); a divider with neither runs across
-   the Dock side's axis, which is how the explorer's is laid out before any script runs. Split.js sets its gutter's
-   thickness inline. */
+/* A draggable divider between two panes: a transparent band with a dotted grip, one dot tile in currentColor repeated,
+   so the hover and drag tint is one color change. .vertical or .horizontal sets its orientation; a divider with neither
+   runs across the Dock side's axis, which lays out the explorer's before any script runs */
 .divider {
     position: relative;
     color: var(--theme-neutral-3);
@@ -1292,7 +1256,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     background: hsl(from currentColor h s l / 0.12);
 }
 
-/* The popover dialog's frosted surface, and the select picker's: every floating panel wears the one surface */
+/* The frosted surface every floating panel wears, the popover dialog and the select picker included */
 .context-menu {
     position: fixed;
     margin: 0;
@@ -1319,9 +1283,8 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     visibility: hidden;
 }
 
-/* A row is tinted on hover as a select picker's option is, and when checked as a checked option is. The leading
-   column is the check mark's, drawn on the checked option of a choice menu and left empty on the others, so the
-   labels line up; a ⋯ menu's actions, never checked, keep the column for one look across the menus */
+/* Rows are tinted like a select picker's options. The leading column holds a choice menu's check mark and stays empty
+   elsewhere, ⋯ menus included, so labels line up across the menus */
 .context-menu .actions :is(button, a) {
     display: grid;
     grid-template-columns: var(--space-6) 1fr;
@@ -1371,20 +1334,20 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     color: hsl(from currentColor h s l / 0.6);
 }
 
-/* A choice menu host before its control is built (common/choice-menus.js): its options, separator and actions, which the
-   build moves into the panel, are not shown raw. Only an unbuilt host has them as direct children */
+/* An unbuilt choice menu host hides its raw options, separator and actions, which the build moves into the panel. Only an
+   unbuilt host has them as direct children */
 [data-choice-menu] > :is(button, a, hr) {
     display: none;
 }
 
-/* The separator between a choice menu's options and its actions (the Library menu's New library), in the panel's edge color */
+/* The separator between a choice menu's options and its actions */
 .context-menu .actions hr {
     margin: var(--space-2) 0;
     border: none;
     border-top: var(--border-hairline) var(--popover-border-color);
 }
 
-/* A compact choice menu's trigger (the Dock side menu): a square button showing the checked option's glyph alone */
+/* A compact choice menu's trigger: a square button showing the checked option's glyph alone */
 .choice-menu-ctrl .compact {
     display: inline-grid;
     place-items: center;
@@ -1397,8 +1360,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     height: 1.25em;
 }
 
-/* An option with a glyph lays it out in a column of its own before the label (a span, so it is an item of its own),
-   the two a gap apart; the check keeps the first column */
+/* A glyph takes a column of its own before the label; the check keeps the first column */
 .context-menu .actions button:has(> .glyph) {
     grid-template-columns: var(--space-6) auto 1fr;
     column-gap: var(--space-3);
@@ -1433,8 +1395,8 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     font-size: var(--font-size-medium);
 }
 
-/* The two stacks of html_common: manual popovers in the top layer, their UA popover style reset. A closed popover's
-   display is the UA's none, so only an open one lays out; the gaps between messages let clicks through */
+/* The two stacks are manual popovers in the top layer, their UA popover style reset. A closed popover keeps the UA's
+   display: none, so only an open one lays out; the gaps between messages let clicks through */
 .snackbar-stack {
     position: fixed;
     inset: auto;
@@ -1468,8 +1430,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     bottom: var(--viewport-gap);
 }
 
-/* Icon, message, count and dismiss button in a row; the message takes the rest of the width and wraps, a long
-   unbroken path included */
+/* The message takes the rest of the row and wraps, a long unbroken path included */
 .snackbar {
     display: flex;
     align-items: center;
@@ -1516,7 +1477,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     white-space: nowrap;
 }
 
-/* The close control's look (.close-modal), a step smaller; the focus ring is the global one */
+/* The close control's look (.close-modal), a step smaller */
 .snackbar-dismiss {
     padding: 0 var(--space-2);
     background: none;
@@ -1530,8 +1491,8 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     cursor: pointer;
 }
 
-/* A message enters from its stack's edge and fades out when dismissed, both over --snackbar-exit-duration, which
-   js/common/snackbar.js waits out before it removes the message */
+/* A message enters from its stack's edge and fades out when dismissed over --snackbar-exit-duration, which the script
+   waits out before removing it */
 @media (prefers-reduced-motion: no-preference) {
     .snackbar {
         transition: opacity var(--snackbar-exit-duration) ease-out, translate var(--snackbar-exit-duration) ease-out;
@@ -1554,8 +1515,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     }
 }
 
-/* A notice: what a view holds rather than the outcome of an action, in the info fill, or the warning fill (.warning).
-   Curation's notices (htmx/curation_set) and the Triage summary (htmx/triage_summary.css) wear it. */
+/* A notice: what a view holds rather than the outcome of an action */
 .notice {
     margin: 0;
     padding: var(--space-3) var(--space-5);
@@ -1652,7 +1612,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     box-shadow: var(--drop-shadow);
 }
 
-/* The title, then whatever controls the host puts after it (asset detail's toggle), then the × */
+/* The title, then whatever controls the host adds, then the × */
 .modal-toolbar {
     display: grid;
     align-items: center;
@@ -1675,9 +1635,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     cursor: pointer;
 }
 
-/* A toggle in a modal's toolbar, before its ×: the Edit panel's, Show original's, the Detail panel's, the Face highlights'
-   and fullscreen's in asset detail (includes/html_common), an icon alone in the secondary text color that takes the accent while pressed, as the current
-   nav entry does */
+/* An icon toggle in a modal's toolbar, before its ×; it takes the accent while pressed, as the current nav entry does */
 .toolbar-toggle {
     background: none;
     border: 0;
@@ -1696,7 +1654,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     color: var(--theme-accent);
 }
 
-/* The Edit toggle on an asset no Edit may change: dimmed, its title saying why, still focusable (`aria-disabled`) */
+/* The Edit toggle on an asset no Edit may change: dimmed, and focusable (`aria-disabled`) so its title can say why */
 .toolbar-toggle:is(:disabled, [aria-disabled="true"]) {
     color: hsl(from var(--theme-neutral-3) h s l / 0.4);
     cursor: default;
@@ -1709,8 +1667,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     text-transform: capitalize;
 }
 
-/* The badge after Asset detail's title on an edited asset (includes/html_common): "Edited" while the stage shows the Edit,
-   "Original" while it shows the original (js/edit/edit-stage.js), as the snackbar's count is drawn */
+/* The badge after Asset detail's title on an edited asset, drawn like the snackbar's count */
 .edit-badge {
     margin-left: var(--space-4);
     padding: var(--space-1) var(--space-3);
@@ -1732,8 +1689,8 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     background-color: var(--asset-detail-backdrop-color);
 }
 
-/* The box is fitted to the media's size as shown (--asset-width and --asset-height, set by setAssetDetailSize): its
-   content row takes what the toolbar leaves, and the fragment fills it (htmx/view_image_detail_modal.css) */
+/* The box is fitted to the media's shown size (--asset-width and --asset-height, set by setAssetDetailSize); its content
+   row takes what the toolbar leaves */
 #imageDetailModalContainer .modal-box {
     --fit-width: min(var(--asset-width) * 1px, 100dvw - 10px,
                      (100dvh - var(--modal-toolbar-height)) * var(--asset-width) / var(--asset-height));
@@ -1747,16 +1704,15 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     border-radius: 0;
 }
 
-/* With the Detail panel or the Edit panel open the box fills the viewport, less the gap the fit leaves at the sides, and
-   the panels and the stage share it; in fullscreen the box is the whole screen whatever the panels do */
+/* With the Detail or Edit panel open the box fills the viewport, less the side gap, and the panels and the stage share it;
+   in fullscreen the box is the whole screen regardless */
 #imageDetailModalContainer:not(:fullscreen) .modal-box:has(#imageDetailView:is([data-app-detail-panel-open], [data-app-edit-panel-open])) {
     width: calc(100dvw - var(--viewport-gap));
     height: 100dvh;
 }
 
-/* Fullscreen (`f`, the toolbar's toggle or the player's button, js/search-results/detail-fullscreen.js): the container is
-   the fullscreen element, so the Detail panel and the Face highlights come along; its toolbar is hidden and the box is the
-   whole screen, so the stage fits the media to it, enlarged when it is smaller, and the panel keeps its share of it */
+/* Fullscreen: the container is the fullscreen element, so the Detail panel and the Face highlights come along. The
+   toolbar hides and the box takes the whole screen, so the stage fits the media to it, enlarged when smaller */
 #imageDetailModalContainer:fullscreen .modal-toolbar {
     display: none;
 }
@@ -1776,7 +1732,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     visibility: hidden;
 }
 
-/* A spinner centered over the positioned box that holds it: asset detail's and a Curation pane's */
+/* A spinner centered over the positioned box that holds it */
 .media-spinner {
     position: absolute;
     inset: 0;
@@ -1788,7 +1744,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
 }
 
 /* Below the anchor, its margins replacing the UA popover's; most-height tries the roomier side's fallbacks first, so
-   one that does not fit either side is capped on the roomier one (see Modals in views/AGENTS.md) */
+   one that does not fit either side is capped on the roomier one */
 #popoverDialog {
     inset: auto;
     position-area: bottom;
@@ -1819,7 +1775,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     grid-template-rows: auto 1fr;
 }
 
-/* An open with no displayed trigger to anchor to, which modal.js marks, is placed like the general host */
+/* With no displayed trigger to anchor to, placed like the general modal host */
 #popoverDialog[data-unanchored] {
     position-area: none;
     position-try-fallbacks: none;
@@ -1857,8 +1813,8 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     color: hsl(from currentColor h s l / 0.6);
 }
 
-/* anywhere, unlike break-word, lowers the min-content width the popover's grid sizes the content by, so a long
-   unbroken name (the Delete button's) wraps */
+/* `anywhere`, unlike break-word, lowers the min-content width the popover's grid sizes the content by, so a long
+   unbroken name wraps */
 #popoverContent {
     padding: var(--space-4) var(--modal-content-padding) var(--modal-content-padding);
     overflow-wrap: anywhere;
@@ -1893,10 +1849,9 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     }
 }
 
-/* The tooltip of common/tooltip.js, the host html_common renders: a manual popover centered above the element the
-   magic names --tooltip-anchor, flipped below when the top has no room, in the menus' frosted surface. Its inset and
-   margins replace the UA popover's, which would pin it to the viewport. No exit fade: it hides at the press that may
-   take its anchor out of the tree a tick later, and a fading box with no anchor would sit at the viewport's corner */
+/* A manual popover centered above the element named --tooltip-anchor, flipped below when the top has no room. Its inset
+   and margins replace the UA popover's, which would pin it to the viewport. No exit fade: it hides at a press that may
+   remove its anchor a tick later, and a fading box with no anchor would sit at the viewport's corner */
 #tooltip {
     inset: auto;
     position-anchor: --tooltip-anchor;
@@ -1935,8 +1890,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     display: none !important;
 }
 
-/* Read by screen readers but not drawn, and out of the layout (a grid parent gives it no cell): the snackbar's
-   announcers */
+/* Read by screen readers but not drawn, and out of the layout (a grid parent gives it no cell) */
 .visually-hidden {
     position: absolute;
     width: 1px;
@@ -1946,8 +1900,8 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     white-space: nowrap;
 }
 
-/* A sheet of SVG symbols (includes/dock_glyphs) takes no room: it is drawn only through <use>, never on its own.
-   Not display: none, which would keep a browser from drawing what it defines */
+/* A sheet of SVG symbols takes no room: it is drawn only through <use>. Not display: none, which would keep a browser
+   from drawing what it defines */
 .svg-sprite {
     position: absolute;
     width: 0;

@@ -7,35 +7,25 @@ import scalasql.Table
 import altitude.core.FieldConst
 import altitude.core.dao.sql.Db
 
-/**
- * What a select of the asset's columns does with the two bulky metadata JSON columns, `user_metadata` and `extracted_metadata`
- * ([[AssetRow.columnList]])
- */
+/** What [[AssetRow.columnList]] does with the two bulky metadata JSON columns, `user_metadata` and `extracted_metadata` */
 enum BulkyMetadata:
-  /** Selected as stored */
   case Kept
 
-  /** Left out of the list, for a hand-written read, whose mapper reads an absent column as empty (`AssetDao.makeModel`) */
+  /** Left out, for a hand-written read, whose mapper reads an absent column as empty (`AssetDao.makeModel`) */
   case Omitted
 
-  /** Read as NULL in their places, for a typed read, whose row reads back by position: its model's two are empty */
+  /** Selected as NULL, for a typed read, which reads its row back by position */
   case AsNull
 
 /**
  * The `asset` table.
  *
- * `originalCreatedAt` is the camera's wall clock with no zone; `createdAt` / `updatedAt` are instants. The two are different
- * kinds of value and are typed differently here so neither engine's mapper can confuse them.
+ * `originalCreatedAt` is the camera's zoneless wall clock while `createdAt` / `updatedAt` are instants; they are typed
+ * differently so neither engine's mapper can confuse them. `folderId` is NULL for a triaged asset, whose model has an empty
+ * folder ID. `originalOwner` is the importer record's JSON text (`jsonb` on PostgreSQL, `TEXT` on SQLite).
  *
- * `folderId` is NULL for an asset in no folder (a triaged one), whose model has an empty folder ID, as the raw path reads it.
- *
- * `originalOwner` is the importer record's JSON: `jsonb` on PostgreSQL, which pgJDBC hands out as its JSON text, and `TEXT` on
- * SQLite.
- *
- * The Scene embeddings (`dinov2_embedding`, `siglip2_embedding`) are never carried back out of the database by a typed read, so
- * the row class does not even select them: they are bulky, and the one reader is the hand-written Sequence candidates' statement.
- * The statements that name the asset's columns build their list from these labels ([[AssetRow.columnList]]), so they leave them
- * out too.
+ * The bulky Scene embeddings (`dinov2_embedding`, `siglip2_embedding`) are not in this row, so [[AssetRow.columnList]] leaves
+ * them out too; only the hand-written Sequence candidates statements select them.
  */
 case class AssetRow[T[_]](
     id: T[String],
@@ -81,10 +71,8 @@ object AssetRow extends Table[AssetRow]:
   private val BULKY_METADATA = Set(FieldConst.Asset.USER_METADATA, FieldConst.Asset.EXTRACTED_METADATA)
 
   /**
-   * The asset's columns as a hand-written select lists them: this row's labels in the order it declares them, each as
-   * `asset.<column>`, so the typed row stays the one list of what a read of an asset selects. `bulkyMetadata` is what becomes of
-   * the two bulky metadata JSON columns, for the reads that show neither. `public_metadata` stays in every form: a cell shows it
-   * and the Sequence rule compares the device model.
+   * This row's columns as `asset.<column>` for a hand-written select, so the typed row stays the one list of what an asset read
+   * selects. `public_metadata` stays in every form: a cell shows it and the Sequence rule compares the device model.
    */
   def columnList(bulkyMetadata: BulkyMetadata = BulkyMetadata.Kept): String =
     Table

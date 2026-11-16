@@ -35,21 +35,17 @@ import altitude.core.routes.web.SessionController
 
 object ImportControllerTests {
 
-  /** An open WebSocket: the messages it was sent, in order, and the status code it is closed with, when it comes */
+  /** An open WebSocket: the messages it was sent, in order, and the status code it closes with */
   final case class OpenSocket(socket: WebSocket, messages: LinkedBlockingQueue[String], closedWith: CompletableFuture[Int]) {
 
-    /** The next message the socket was sent, waiting for it */
+    /** The next message, waiting up to a minute for it */
     def next(): String =
       Option(messages.poll(60, TimeUnit.SECONDS)).getOrElse(throw new AssertionError("The socket was sent no message"))
   }
 
-  /** The path of a Library's import status stream */
   def statusPath(repoId: String): String = s"/import/r/$repoId/status"
 
-  /**
-   * Opens the WebSocket at `path` (a Library's import status stream, [[statusPath]]) of the server at `host` with `cookies`, and
-   * `origin` as the handshake's Origin header when given: the open socket, or the response the handshake was refused with
-   */
+  /** Opens the WebSocket at `path` with `cookies` and an optional Origin: the open socket, or the response refusing it */
   def openImportStatus(
       host: String,
       cookies: Map[String, HttpCookie],
@@ -130,12 +126,12 @@ object ImportControllerTests {
      *
      * Assertions:
      *
-     * The handshake with the session cookie opens the Library's socket, whose first message says it is connected; one with no
-     * cookie is refused with a 401 that sets no cookie.
+     * A handshake with the session cookie opens the socket, whose first message says it is connected; one with no cookie is a 401
+     * that sets no cookie.
      *
      * Edge cases:
      *
-     * A handshake with a cookie that is no token is refused with a 401 that clears the session cookie.
+     * A cookie that is no token is a 401 that clears the session cookie.
      */
     val path = statusPath(loginAs(AccountType.User, Permissions.of(Permission.Import)))
 
@@ -165,7 +161,7 @@ object ImportControllerTests {
      *
      * Assertions:
      *
-     * The Guest's handshake is refused with a 403: a Guest imports nothing, so it has no import feed.
+     * The Guest's handshake is a 403: a Guest imports nothing, so it has no import feed.
      */
     val path = statusPath(loginAs(AccountType.Guest, Permissions.none))
 
@@ -182,8 +178,8 @@ object ImportControllerTests {
      *
      * Assertions:
      *
-     * The handshake of the User without Import is refused with a 403. The handshake of the User with no grant in the Library is
-     * refused with a 404, as one for a Library that does not exist is. The handshake of the User holding Import opens.
+     * The User without Import gets a 403, and the User with no grant a 404, as for an unknown Library. The User holding Import
+     * connects.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
     val library = testContext.repository
@@ -210,9 +206,8 @@ object ImportControllerTests {
      *
      * Assertions:
      *
-     * A handshake with the session cookie whose Origin is another site is refused with a 403; one whose Origin is the server's
-     * own (its scheme, host and port, as the Host header names them) opens, and so does one with no Origin, which only a client
-     * that is no browser sends.
+     * A handshake whose Origin is another site, another port or "null" is a 403. One from the server's own origin (scheme, host
+     * and port, as the Host header names them) opens, as does one with no Origin, which only a non-browser client sends.
      */
     val path = statusPath(loginAs(AccountType.User, Permissions.of(Permission.Import)))
 
@@ -231,13 +226,13 @@ object ImportControllerTests {
     /**
      * Setup:
      *
-     * A User logged in with Import in a Library, with two import status WebSockets open; the account's version is raised, then
-     * the User opens another, and its tokens are revoked.
+     * A User logged in with Import in a Library, with two import status WebSockets open. The account's version is raised, then
+     * the User opens a third and its tokens are revoked.
      *
      * Assertions:
      *
-     * The raise closes both sockets with 1013 (try again later), which the client reconnects on, its handshake checking the login
-     * again; the revocation closes the third with 1008 (policy violation), which it does not reconnect on.
+     * The raise closes both sockets with 1013 (try again later), which the client reconnects on, re-checking the login. The
+     * revocation closes the third with 1008 (policy violation), which it does not reconnect on.
      */
     val path = statusPath(loginAs(AccountType.User, Permissions.of(Permission.Import)))
     val accountId = testContext.user.persistedId
@@ -269,7 +264,7 @@ object ImportControllerTests {
      *
      * Assertions:
      *
-     * The Import page connects to the Library's import status stream with no query string: the server takes the account from the
+     * The Import page connects to the Library's status stream with no query string: the server takes the account from the
      * session.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
@@ -291,10 +286,8 @@ object ImportControllerTests {
      *
      * Assertions:
      *
-     * Both get the File upload and Folder upload sections, with the route that opens an Import and the names imports ignore on
-     * their root. The User with Organize gets each section's option, "Skip Triage" and "Keep folder structure", with its
-     * destination folder field; the User with Import alone gets neither option nor field, so every upload of theirs goes to
-     * Triage.
+     * Both get the file and folder upload sections, with the route that opens an Import and the names imports ignore. Only the
+     * User with Organize gets the sorting options and the destination folder field, so the other's uploads all go to Triage.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
     val organizer = testContext.persistUser()
@@ -325,7 +318,7 @@ object ImportControllerTests {
   /** The bytes of a random image, as a browser would send a file */
   private def imageBytes(): Array[Byte] = IntegrationTestUtil.generateRandomImagBytesBgr(dimensions = 150)
 
-  /** Opens an upload's Import over HTTP with the JSON body, and answers the response */
+  /** Opens an upload's Import with the JSON body */
   private def openImport(host: String, repoId: String, body: ujson.Obj = ujson.Obj()): requests.Response =
     requests.post(
       s"$host/import/r/$repoId/imports",
@@ -334,14 +327,13 @@ object ImportControllerTests {
       data = ujson.write(body),
       check = false)
 
-  /** The ID of an upload's Import opened over HTTP */
   private def openedImport(host: String, repoId: String, body: ujson.Obj = ujson.Obj()): String = {
     val response = openImport(host, repoId, body)
     response.statusCode shouldBe 200
     ujson.read(response.text())(Api.Field.ID).str
   }
 
-  /** Sends a file's bytes to an Import under a relative path, and answers the response */
+  /** Sends a file's bytes to an Import under a relative path */
   private def sendFile(host: String, repoId: String, importId: String, relPath: String, bytes: Array[Byte]): requests.Response =
     requests.post(
       s"$host/import/r/$repoId/imports/$importId/files",
@@ -360,14 +352,13 @@ object ImportControllerTests {
     /**
      * Setup:
      *
-     * A User logged in with Import alone in a Library. Over HTTP: an Import is opened under the name "Holiday" with no
-     * destination, two images are sent to it, one under the path Beach/sea.jpg and one under its bare name, and it is closed.
+     * A User logged in with Import alone in a Library. An Import named "Holiday", with no destination, is opened, sent images
+     * under Beach/sea.jpg and sand.jpg, and closed.
      *
      * Assertions:
      *
-     * Opening answers the Import's ID, each file is answered as a pending Import file, and closing answers 200. The Import is
-     * stored as an upload named "Holiday" with the two files under the paths they were sent with, and once the import queue has
-     * taken them it is closed with two imported: both assets are in Triage, in no folder, the first under the name sea.jpg.
+     * Each file is answered as pending. The Import is stored as an upload named "Holiday" with the files under their sent paths,
+     * and once the queue has taken them it is closed with two imported, both in Triage in no folder, the first named sea.jpg.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
 
@@ -405,14 +396,13 @@ object ImportControllerTests {
      *
      * Assertions:
      *
-     * An Import opened with 24 as its expected files is stored expecting 24, one opened with 0 expecting none, and one opened
-     * with no number, or with a null one, with none. The Import history titles the first "24 files" and counts 24 remaining,
-     * before any file is sent.
+     * Imports opened expecting 24, 0, no number and null are stored expecting 24, 0, unknown and unknown. Before any file is
+     * sent, the history titles the first by its 24 files and counts 24 remaining.
      *
      * Edge cases:
      *
-     * A negative number, a fraction, a number past what an Import counts, a number written as text and a flag are each refused
-     * with a 400 that names the field, and open nothing.
+     * A negative number, a fraction, a number past an Int, a number as text and a boolean are each a 400 naming the field, and
+     * open nothing.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
     def expecting(value: ujson.Value) = ujson.Obj(Api.Field.Import.EXPECTED_FILES -> value)
@@ -445,21 +435,19 @@ object ImportControllerTests {
     /**
      * Setup:
      *
-     * A Library with a folder Sorted and a folder Gone, recycled by a delete. A User holding Import alone in it, and a User
-     * holding Import and Organize.
+     * A Library with a folder Sorted and a deleted folder Gone. A User with Import alone, and a User with Import and Organize.
      *
      * Assertions:
      *
-     * The User with Import alone is answered 403 for an Import into Sorted, which opens nothing, and 200 for one with no
-     * destination. The User with Organize too opens one into Sorted, stored with that destination, and a file sent to it under
-     * the path Beach/sea.jpg is imported into Sorted/Beach, sorted.
+     * Import alone gets a 403 for an Import into Sorted, which opens nothing, and opens one with no destination. With Organize
+     * too, an Import into Sorted is stored with that destination, and a file sent as Beach/sea.jpg is imported, sorted, into
+     * Sorted/Beach.
      *
      * Edge cases:
      *
-     * For either User a destination that is no folder of the Library is a 404, and for the User with Organize the folder in the
-     * Trash is a 400 that says so; neither opens an Import. The User with Import alone is answered 403 for a file sent to the
-     * other User's Import, for a failed file recorded for it and for its close, and the Import holds the one file its opener
-     * sent.
+     * An unknown destination is a 404 for either User, and a destination in the Trash a 400 saying so; neither opens an Import.
+     * The User with Import alone gets a 403 for sending a file to, recording a failure for, or closing the other User's Import,
+     * which holds only its opener's file.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
     val importer = testContext.cookies
@@ -519,15 +507,13 @@ object ImportControllerTests {
     /**
      * Setup:
      *
-     * A User logged in with Import and Organize in a Library, and an Import opened over HTTP into the folder Sorted, which is
-     * then deleted, so it is in the Trash. Two images are sent to the Import.
+     * A User logged in with Import and Organize in a Library, and an Import into the folder Sorted, which is then deleted. Two
+     * images are sent to the Import.
      *
      * Assertions:
      *
-     * Each file is answered 200 as a failed Import file, saying that the destination folder is in the Trash, so the page goes on
-     * with the next and sends neither again. The Import holds both, failed with that reason and pointing at no asset, and nothing
-     * pending: closing it closes it at once, since no file went to the import queue. The server's staging directory holds no file
-     * more than before.
+     * Each file is answered 200 as failed, the destination being in the Trash, so the page goes on and does not resend it. The
+     * Import holds both as failed with no asset and nothing pending, so closing it closes it at once. Nothing new is staged.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import, Permission.Organize))
     val sorted = testApp.service.folder.add("Sorted")
@@ -569,10 +555,8 @@ object ImportControllerTests {
      *
      * Assertions:
      *
-     * A file sent under a path with a name starting with a dot, an operating system's own file, a download in progress, a "..",
-     * an empty name or no path at all is answered 400, and so is a file with no content under a fine name. Recording a file the
-     * page could not send is answered 400 for such a path too, and for a body with no path. The Import has no file after all of
-     * them.
+     * A file under a dot name, an OS's own file, a partial download, a "..", an empty name or no path is a 400, as is an empty
+     * file. Recording an unsent file is a 400 for such a path and for no path. The Import has no file after all of them.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
 
@@ -618,13 +602,12 @@ object ImportControllerTests {
      *
      * Assertions:
      *
-     * Recording a file the page could not send answers it as a failed Import file with its reason, and the Import holds it,
-     * failed, under its path and size. Once the Import is closed, a file sent to it and a failed file recorded for it are each
-     * answered 409, and the Import still holds the one file.
+     * Recording a file the page could not send answers it as failed with its reason, and the Import holds it under its path and
+     * size. Once the Import is closed, sending or recording a file is a 409, and the Import still holds the one file.
      *
      * Edge cases:
      *
-     * A file sent to, a failed file recorded for and a close of an Import that does not exist are each a 404.
+     * Sending, recording or closing on an unknown Import is a 404.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
 
@@ -660,14 +643,13 @@ object ImportControllerTests {
 
   private def imports = testApp.service.imports
 
-  /** An htmx partial of the Import history, as the logged-in account gets it */
+  /** An htmx partial of the Import history, as the logged-in account */
   private def partial(host: String, path: String, params: Map[String, String] = Map.empty): requests.Response =
     requests.get(s"$host/htmx/import/r/$path", params = params, cookies = testContext.cookies, check = false)
 
   // What opens a file's path in the files partial
   private val PATH = """<span class="path">"""
 
-  /** How many times `part` occurs in `text` */
   private def occurrences(text: String, part: String): Int = text.sliding(part.length).count(_ == part)
 
   test("The Import history lists the Library's Imports with who delivered each, where it went and its counts") {
@@ -675,22 +657,19 @@ object ImportControllerTests {
     /**
      * Setup:
      *
-     * A User logged in with Import in a Library with a folder Clients and its subfolder Wedding. The User's upload of the folder
-     * "Wedding 2026" into Wedding is closed with two files imported, one already in the Library and one failed; a Watch folder's
-     * scan "Phone sync", which no account delivers, is closed with one file imported; the User's upload of files is in progress
-     * with one file imported and one pending. Another Library has an Import "Theirs".
+     * A User logged in with Import in a Library with the folder Clients/Wedding. Closed: the User's upload "Wedding 2026" into
+     * Wedding (two imported, one duplicate, one failed) and a Watch folder's scan "Phone sync" (one imported, no account). In
+     * progress: the User's upload of files (one imported, one pending). Another Library has an Import "Theirs".
      *
      * Assertions:
      *
-     * The history partial holds the three Imports, the upload of files under "In progress" and the other two under "Earlier". The
-     * folder upload is titled by its name, with the User's name, its destination's path and its counts by outcome, the duplicate
-     * as "already in the Library"; the scan by its name, delivered by "Watch folder" into Triage; the upload of files by its
-     * number of files, with its files remaining. The Import page holds the same history.
+     * The history partial and the Import page list the in-progress upload first, then the other two under Earlier. The folder
+     * upload shows its name, the User, its destination path and its counts by outcome; the scan its name, delivered by the Watch
+     * folder into Triage; the files upload its file count and the files remaining.
      *
      * Edge cases:
      *
-     * The other Library's Import is in neither. A Library with no Import says that nothing was imported yet, in the partial and
-     * on the page.
+     * The other Library's Import is in neither. A Library with no Import says nothing was imported yet.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
     val clients = testApp.service.folder.add("Clients")
@@ -770,16 +749,16 @@ object ImportControllerTests {
     /**
      * Setup:
      *
-     * A User logged in with Import in a Library holding one Import more than the history shows at first.
+     * A User logged in with Import in a Library holding one Import more than the history's step.
      *
      * Assertions:
      *
-     * The history partial shows as many Imports as it shows at first, says how many there are, and offers the earlier ones by the
-     * route that shows one step more. Asked for that many, it shows every Import and offers nothing.
+     * The history shows one step of Imports, says how many there are, and links to one step more, which shows them all and offers
+     * nothing.
      *
      * Edge cases:
      *
-     * Asked for fewer Imports than it shows at first, it shows as many as it shows at first.
+     * Asked for fewer than a step, it still shows a step.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
     val step = Const.ImportHistory.IMPORTS_STEP
@@ -805,21 +784,19 @@ object ImportControllerTests {
     /**
      * Setup:
      *
-     * A User logged in with Import in a Library, whose Import holds a file of every outcome: a.jpg imported, with its asset;
-     * b.jpg already in the Library, in the folder Clients/Wedding; c.pdf unsupported; d.jpg failed, undecodable; e.jpg imported,
-     * its asset gone; and as many pending files as the list shows at first. Another Library has an Import.
+     * A User logged in with Import in a Library, whose Import holds a file of every outcome: a.jpg imported with its asset, b.jpg
+     * a duplicate in Clients/Wedding, c.pdf unsupported, d.jpg failed, e.jpg imported with no asset, and a step of pending files.
+     * Another Library has an Import.
      *
      * Assertions:
      *
-     * The files partial shows the first files in path order, as many as it shows at first, says how many the Import has and
-     * offers more by the route that shows one step more, which shows them all and offers nothing. Its filter offers every file
-     * and each outcome with its number of files. a.jpg links to its asset's page; e.jpg, whose asset is gone, links nowhere;
-     * b.jpg says where the Library has it; d.jpg says why it failed. Filtered by an outcome, it shows that outcome's files alone
-     * and their number.
+     * The files partial shows one step in path order, says how many there are, and links to one step more, which shows them all.
+     * Its filter offers all files and each outcome with its count. a.jpg links to its asset, e.jpg links nowhere, b.jpg says
+     * where the Library has it and d.jpg why it failed. Filtered by an outcome, it shows that outcome's files alone.
      *
      * Edge cases:
      *
-     * An outcome that is none is a 400. The other Library's Import and an unknown one are each a 404.
+     * An unknown outcome is a 400. The other Library's Import and an unknown one are each a 404.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
     val step = Const.ImportHistory.FILES_STEP
@@ -883,13 +860,12 @@ object ImportControllerTests {
     /**
      * Setup:
      *
-     * A User logged in with Import in a Library, whose Import is named by an uploaded folder whose name is a script element, and
-     * holds a file whose name is an image element with a handler, failed for a reason that holds markup too.
+     * A User logged in with Import in a Library, whose Import is named with a script element and holds a file named with an image
+     * element, failed for a reason with markup.
      *
      * Assertions:
      *
-     * The history partial and the Import page hold the Import's name with its markup escaped, and no script element of that name.
-     * The files partial holds the file's name and its reason escaped, and no image element.
+     * The history partial and the Import page escape the Import's name, and the files partial the file's name and reason.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
     val importId = imports.open(ImportSource.Upload, name = Some("<script>alert(1)</script>")).persistedId
@@ -920,15 +896,13 @@ object ImportControllerTests {
     /**
      * Setup:
      *
-     * A Library with two Users holding Import, each with an import status socket open, and a third User holding Import in another
-     * Library, with a socket open on that one. Over HTTP the first User opens an Import named by a folder whose name holds
-     * markup, sends it one image and closes it.
+     * A Library with two Users holding Import, each with a status socket open, and a third User with a socket open on another
+     * Library. The first User opens an Import named with markup, sends it one image and closes it.
      *
      * Assertions:
      *
-     * Both sockets of the upload's Library are sent the Import's status as `hx-ws` takes it: every message replaces the Import's
-     * status element, and the last one says the Import is closed, with its one file imported and none remaining. The Import's
-     * name comes escaped, in the title sent beside the status.
+     * Both sockets of the Library get messages that replace the Import's status element, the last saying it is closed with one
+     * file imported and none remaining. The Import's name comes escaped.
      *
      * Edge cases:
      *
@@ -957,7 +931,6 @@ object ImportControllerTests {
         closeImport(host, repoId, importId).statusCode shouldBe 200
 
         for (told <- List(mine, theirs)) {
-          // The socket's messages up to the one that says the Import is closed
           val statuses = scala.collection.mutable.ListBuffer(ujson.read(told.next()))
           while (!statuses.last(Api.Field.ImportStatus.IS_CLOSED).bool) statuses += ujson.read(told.next())
 

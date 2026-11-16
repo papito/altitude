@@ -1,10 +1,7 @@
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 
-/**
- * Asset events: single-asset drops escalate to a batch when the asset is among the selected ones;
- * the batch events act on the whole selection; a purge of the recycle bin refreshes the counts.
- */
+/** A single-asset drop escalates to a batch when the asset is among the selected ones */
 export function registerAssetListeners(app) {
     const selectedAssets = () => Alpine.store(Const.state.selectedAssets)
 
@@ -53,8 +50,8 @@ export function registerAssetListeners(app) {
         })
     })
 
-    // Purging only touches recycled assets, which the counts already exclude, but every asset
-    // mutation refreshes them so the rule has no exceptions to remember
+    // The counts exclude recycled assets, but every asset mutation refreshes them, so the rule has no
+    // exceptions
     document.body.addEventListener(Const.events.trashPurged, () => {
         app.reloadNav()
         app.reloadFolderCounts()

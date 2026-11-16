@@ -1,14 +1,10 @@
 @()
 
-@* The Edit's tools over Asset detail's stage (htmx/view_image_detail_modal, for a holder of Edit images), driven by
-   js/edit/edit-panel.js and js/edit/crop-tool.js rather than by the panel's Alpine component, since they sit outside it.
-   #editSplit is Before/after: it lies over the media box as the canvas does, with "Before" and "After" in its top corners
-   and its divider, a separator dragged with the pointer or stepped with the arrows. #cropLayer is the Crop tool: it covers
-   the stage, so a drag outside the crop turns the image (Straighten); #cropFrame is the whole warped frame the canvas draws
-   while the tool is open, #cropRect the crop in it (focusable: the arrows nudge it), with its guide and eight handles, and
-   the Level tool's line, which the layer also draws with the tool closed (`data-level-only`, no frame). #editBar is the
-   floating bar of the Edit panel's held changes, shown while changes are held or the Crop tool is open: the Crop tool's
-   guide and crop size while it is open (`data-crop`), Cancel, how many edits are pending and Done. *@
+@* The Edit's tools over Asset detail's stage, driven by js/edit/edit-panel.js and js/edit/crop-tool.js since they sit
+   outside the panel's Alpine component. #editSplit (Before/after) lies over the media box as the canvas does. #cropLayer
+   covers the stage, so a drag outside the crop turns the image (Straighten); #cropFrame is the whole warped frame and
+   #cropRect the crop in it. The layer also draws the Level tool's line with the Crop tool closed (`data-level-only`, no
+   frame). #editBar shows while changes are held or the Crop tool is open. *@
 
 <div id="editSplit" hidden>
     <span class="edit-split-label before">Before</span>

@@ -21,8 +21,8 @@ import altitude.core.models.Person
 import altitude.core.service.PersonService.FaceTarget
 
 /**
- * The Face corrections of Asset detail: `PersonService.removeFace` and `moveFace`, the name and the merge of a Face's Person as a
- * whole (`nameFacePerson`, `mergeFacePerson`), with the reads the Detail panel makes
+ * The Face corrections of Asset detail (`PersonService.removeFace`, `moveFace`, `nameFacePerson`, `mergeFacePerson`) and the
+ * reads behind them
  */
 @DoNotDiscover class FaceCorrectionTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -34,7 +34,7 @@ import altitude.core.service.PersonService.FaceTarget
 
   private def getPerson(id: String): Person = testApp.service.person.getById(id)
 
-  /** A Face of the person as stored, so the cover stays their first Face as an import leaves it, whatever model the test holds */
+  /** A Face of the person as stored, not the test's possibly stale model, so their cover stays their first Face, as on import */
   private def face(
       person: Person,
       asset: Asset,
@@ -79,8 +79,8 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Removing one Face of the shared asset deletes its row and leaves the count at two, since the other Face still finds the
-     * asset; removing that other Face lowers the count to one. The Person stays, with the Face on the second asset.
+     * Removing one Face of the shared asset leaves the count at two, since the other Face is still on it; removing the other
+     * lowers it to one. The Person stays.
      */
     val p = person()
     val a1 = testContext.persistAsset()
@@ -108,13 +108,11 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Person with three Faces on three assets, each with its files: the first (score 0.9) is the cover, the others score 0.5
-     * and 0.7.
+     * A Person with three Faces with their files, scored 0.9 (the cover), 0.5 and 0.7.
      *
      * Assertions:
      *
-     * Removing the cover makes the 0.7 Face the cover, deletes the removed Face's four files, and leaves the other two Faces'
-     * files in place.
+     * Removing the cover makes the 0.7 Face the cover and deletes only the removed Face's files.
      */
     val p = person()
     val cover = face(p, testContext.persistAsset(), detectionScore = 0.9, withFiles = true)
@@ -136,12 +134,11 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Person with Faces on three assets: the first, their cover, at a detection score of 0.5, the second at 0.9, its asset
-     * recycled and marked for purging, and the third at 0.3.
+     * A Person with a cover Face scored 0.5, one scored 0.9 on an asset marked for purging, and one scored 0.3.
      *
      * Assertions:
      *
-     * Removing the cover makes the Face on the third asset the cover, not the better one on the asset marked for purging.
+     * Removing the cover makes the 0.3 Face the cover.
      */
     val p = person()
     val purging = testContext.insertAsset()
@@ -165,8 +162,7 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Removing either Face deletes the Face, its files, cover though it is, and the Person, who is reported deleted with the name
-     * they had.
+     * Removing either Face deletes it, its files and the Person, who is reported deleted with the name they had.
      */
     val named = person(Some("Alice"))
     val unnamed = person()
@@ -195,8 +191,7 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Removing the live Face lowers the count to zero and keeps the Person: the Face on the trashed asset is a row, and becomes
-     * the cover.
+     * Removing the live Face lowers the count to zero but keeps the Person, whose Face in the trash becomes the cover.
      */
     val p = person()
     val live = face(p, testContext.persistAsset(), withFiles = true)
@@ -223,8 +218,7 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Removing the Face and moving it to the other Person are both refused as illegal operations; the Face, its files and the
-     * counts are as they were.
+     * Removing or moving the Face is an illegal operation; the Face, its files and the counts are unchanged.
      */
     val p = person()
     val other = person()
@@ -252,7 +246,7 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Removing the removed Face again, or moving it, is a `NotFoundException`.
+     * Removing it again, or moving it, is not found.
      */
     val p = person()
     val other = person()
@@ -269,15 +263,14 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A source Person with two Faces on one asset (the first, best-scored, is the cover) and one on a second asset, counting two;
-     * a target Person with one Face on an asset of their own, counting one.
+     * A source Person with two Faces on a shared asset (the best-scored one their cover) and one elsewhere; a target Person with
+     * one Face elsewhere.
      *
      * Assertions:
      *
-     * Moving the cover Face to the target makes it the target's, raises the target's count to two and leaves the source's at two,
-     * since the source's other Face still finds the asset; the source's cover becomes their best remaining Face and the target
-     * keeps their cover. Moving the other Face of that asset lowers the source's count to one and leaves the target's at two,
-     * since the target already had the asset.
+     * Moving the cover Face raises the target's count to two and leaves the source's at two, as their other Face is still on the
+     * asset; the source's cover becomes their best remaining Face and the target keeps theirs. Moving the other Face lowers the
+     * source's count to one and leaves the target's at two.
      */
     val source = person()
     val target = person()
@@ -312,8 +305,7 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * The move reports the source deleted; the source is gone, the Face is the target's with its files, and the target counts two
-     * assets.
+     * The move reports the source deleted, and the Face is the target's with its files; the target counts two assets.
      */
     val source = person(Some("Alice"))
     val target = person()
@@ -339,8 +331,7 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Moving one Face to the other Person leaves them with two Faces on the image, both read back, and their count at two: the
-     * image was already theirs.
+     * Moving one Face to the other Person gives them two Faces on the image, and their count stays at two.
      */
     val source = person()
     val target = person()
@@ -369,8 +360,7 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * The hidden Person gets the Face, counts two and is still hidden; the Detail panel's read of the asset marks the Face's
-     * person hidden.
+     * The hidden Person gets the Face, counts two and stays hidden; the asset's Detail read marks the Face's person hidden.
      */
     val source = person()
     val hidden = person()
@@ -395,15 +385,14 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * Two Videos. In the first, the target's Face (quality 18, their cover) and a better Face of the source (quality 25). In the
-     * second, the target's Face (quality 22) and a worse Face of the source (quality 15). The source has another Face elsewhere
-     * and both source Faces have their files.
+     * Two Videos with Faces of a target and a source: on the first the target's (quality 18, their cover) is worse than the
+     * source's (25), on the second better (22 against 15). The Faces have their files.
      *
      * Assertions:
      *
-     * First Video: the moved Face becomes the target's, the target's own Face is deleted with its files, the target's cover moves
-     * to the moved Face, and the target's count stays. Second Video: the moved Face is deleted with its files instead, the target
-     * keeps their Face and cover, and the source's count is lowered. Either way one Face per Person per Video.
+     * First Video: the moved Face is kept, the target's own is deleted with its files, and the cover moves to the moved Face.
+     * Second Video: the moved Face is deleted with its files instead, and the source's count drops. Either way each Video holds
+     * one Face of the target.
      */
     val source = person()
     val target = person()
@@ -448,13 +437,11 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A source Person with two Faces on one image and a target Person with a Face elsewhere. The two moves run at once: on
-     * PostgreSQL the second waits at the people's row locks until the first commits, on SQLite for the write connection.
+     * A source Person with two Faces on one image and a target Person with a Face elsewhere. Both Faces are moved at once.
      *
      * Assertions:
      *
-     * The target counts two assets, not three: the second move sees the first's Face already on the asset. The source, left with
-     * no Face, is deleted.
+     * The target counts two assets, not three, and the source, left with no Face, is deleted.
      *
      * Edge cases:
      *
@@ -484,8 +471,7 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Person with two Faces and a target Person. A removal of one Face holds its transaction until a move of the same Face
-     * waits for it.
+     * A Person with two Faces and a target Person. A removal of one Face holds its transaction until a move of it waits.
      *
      * Assertions:
      *
@@ -513,18 +499,17 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Person with a Face on each of two images. A removal of the Face on the first image holds its transaction, the Person's
-     * row locked, until a recycle of that image waits for it.
+     * A Person with a Face on each of two images. A removal of the first image's Face holds the Person's row lock until a recycle
+     * of that image waits for it.
      *
      * Assertions:
      *
-     * Once both are done the Person counts one asset: the removal took the first image from the count, and the recycle, finding
-     * no Face of theirs left on it, takes nothing more.
+     * The Person counts one asset: the recycle finds no Face of theirs left on the image and takes nothing more.
      *
      * Edge cases:
      *
-     * Were the recycle not to lock the asset's people before it counts, its count would read a snapshot in which the removed Face
-     * still exists, and the asset would leave the count twice.
+     * Without the recycle locking the asset's people before it counts, it would see the removed Face in its snapshot and take the
+     * asset from the count twice.
      */
     val p = person()
     val first = testContext.persistAsset()
@@ -550,8 +535,7 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Moving the Face to its own Person is a validation error; to the merged-away or the bad-match Person, not found. The Face
-     * stays where it was.
+     * Moving the Face to its own Person is a validation error, to either other Person not found. The Face stays where it was.
      */
     val owner = person()
     val mergedAway = person()
@@ -579,8 +563,8 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Moving a Face to "Alice" creates a live Person named Alice, with the name key as sort name, the moved Face as cover and one
-     * asset counted; the source counts one.
+     * Moving a Face to "Alice" creates a live, named Alice, found by name key, with the Face as cover and one asset; the source
+     * counts one.
      */
     val source = person()
     val f = face(source, testContext.persistAsset())
@@ -607,7 +591,7 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Moving a Face to "ALICE" gives it to Alice, who keeps her name and cover and counts two; no second Alice exists. Moving to
+     * Moving a Face to "ALICE" gives it to Alice, who keeps her name and cover and counts two; no second Alice is made. Moving to
      * "Unknown 7" is a validation error.
      */
     val alice = person(Some("Alice"))
@@ -633,8 +617,7 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * Two People with a Face each and nobody named "Alice". Both Faces are moved to the name at once: on PostgreSQL the second
-     * waits at the name's lock until the first commits, on SQLite for the write connection.
+     * Two People with a Face each and nobody named "Alice". Both Faces are moved to the name at once.
      *
      * Assertions:
      *
@@ -673,9 +656,8 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Naming them "Andreea" through one Face keeps their ID and names them: the name, the named flag and the name key as sort
-     * name are stored, and the Faces of all three assets are still theirs, counting three. The answer holds the Face, the Person
-     * with the name they had and the Person named.
+     * Naming them "Andreea" through one Face names the same Person, sort name included, and all three Faces stay theirs. The
+     * answer holds the Face and the Person before and after.
      */
     val p = person()
     val assets = List.fill(3)(testContext.persistAsset())
@@ -702,14 +684,12 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Person named "Andrei", and two People with no name, each with a Face. The first of them is named "Bob" after the panel
-     * was shown.
+     * Andrei, and two People with no name, each with a Face; the first is named "Bob" after the panel was shown.
      *
      * Assertions:
      *
-     * Naming the first through their Face is an illegal operation, the section being stale, and they keep "Bob". Naming the
-     * second "ANDREI", a name Andrei holds in another case, is a duplicate, and "Unknown 7" a validation error; the second keeps
-     * no name.
+     * Naming the first is an illegal operation, as the panel is stale, and they keep "Bob". Naming the second "ANDREI" is a
+     * duplicate and "Unknown 7" a validation error; the second keeps no name.
      */
     person(Some("Andrei"))
     val namedSince = person()
@@ -734,13 +714,13 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * Andrei, named, with a Face. A Person with no name and Faces on two assets: one Face is moved to a third Person after the
-     * panel was shown, and the other's asset is recycled.
+     * Andrei with a Face, and a Person with no name with two Faces: one moved to a third Person after the panel was shown, the
+     * other's asset recycled.
      *
      * Assertions:
      *
-     * Naming or merging the Person through the moved Face is not found, as the Face is no longer theirs; through the Face in the
-     * trash, an illegal operation. The Person keeps no name and stays live, and Andrei counts one asset.
+     * Naming or merging the Person through the moved Face is not found, through the Face in the trash an illegal operation.
+     * Nothing changes.
      */
     val andrei = person(Some("Andrei"))
     face(andrei, testContext.persistAsset())
@@ -773,9 +753,8 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Merging the Person into Andrei through one Face merges them away (soft-deleted, so no longer live), gives every Face of the
-     * three assets to Andrei and counts five assets for him; he keeps his name and stays hidden. The answer holds the Face, the
-     * Person with the name they had and Andrei as he is after.
+     * Merging the Person into Andrei through one Face merges them away and gives Andrei every Face, counting five; he keeps his
+     * name and stays hidden. The answer holds the Face, the Person before and Andrei after.
      */
     val source = person()
     val sourceAssets = List.fill(3)(testContext.persistAsset())
@@ -807,13 +786,12 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * Andrei, named, with a Face; two People with no name, each with a Face; and a Person with no name with a Face who is named
-     * "Bob" after the panel was shown.
+     * Andrei, two People with no name, and a third named "Bob" after the panel was shown, each with a Face.
      *
      * Assertions:
      *
-     * Merging Bob into Andrei is an illegal operation, the section being stale; one Person with no name into the other, or a
-     * Person into themselves, is each a validation error. Everyone stays live with their Faces, and Andrei counts one asset.
+     * Merging Bob into Andrei is an illegal operation, as the panel is stale; merging one nameless Person into the other, or a
+     * Person into themselves, is a validation error. Nothing changes.
      */
     val andrei = person(Some("Andrei"))
     face(andrei, testContext.persistAsset())
@@ -848,13 +826,11 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Person with no name with a Face; Tessa, named, merged into Andrei; Carl, named, discarded as a bad match; and Eve, named,
-     * in another Library of the same user.
+     * A Person with no name; Tessa, merged into Andrei; Carl, a bad match; and Eve, in another Library.
      *
      * Assertions:
      *
-     * Merging the Person into Tessa, Carl or Eve is not found, and so is an ID no Person has. The Person stays live with their
-     * Face.
+     * Merging the Person into Tessa, Carl, Eve or an unknown ID is not found, and the Person stays live with their Face.
      */
     val repo = testContext.repository
     val p = person()
@@ -885,13 +861,11 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Person with no name with Faces on two assets, marked as a bad match after the panel was shown, and Andrei, named, with a
-     * Face.
+     * A Person with no name, marked a bad match after the panel was shown, and Andrei with a Face.
      *
      * Assertions:
      *
-     * Naming the Person through their Face, or merging them into Andrei, is not found, as a Person no longer live is. The Person
-     * keeps no name and their Face, and Andrei counts one asset.
+     * Naming the Person or merging them into Andrei is not found, and nothing changes.
      */
     val p = person()
     val f = face(p, testContext.persistAsset())
@@ -917,8 +891,8 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Naming the first "Hedda" through a Face names them, still hidden and counting two. Merging the second into Andrei through a
-     * Face merges them away and gives Andrei their Faces, counting three; Andrei stays visible.
+     * Naming the first "Hedda" names them, still hidden. Merging the second into Andrei gives him their Faces, counting three,
+     * and he stays visible.
      */
     val first = person()
     val firstFace = face(first, testContext.persistAsset())
@@ -950,13 +924,12 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Person with no name with Faces on a shared image and on one of their own, and Andrei, named, with Faces on the shared
-     * image and on one of his own.
+     * A Person with no name and Andrei, each with a Face on a shared image and one on an image of their own.
      *
      * Assertions:
      *
-     * Merging the Person into Andrei counts three assets for him, the shared image once, and the shared image keeps both Faces,
-     * now both his: an image may hold two Faces of one Person.
+     * After the merge Andrei counts three assets, and the shared image keeps both Faces, now both his: an image may hold two
+     * Faces of one Person.
      */
     val source = person()
     val shared = testContext.persistAsset()
@@ -979,15 +952,15 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * Andrei, named, and a Person with no name, each with a Face on three Videos and on one image, every Face with its files.
-     * Andrei's Face on the first Video is his cover and the worse one there (quality 18 against 25); on the second Video his is
-     * the better (22 against 15), and on the third the two tie (20).
+     * Andrei and a Person with no name, each with a Face, with its files, on three Videos and one image. On the first Video
+     * Andrei's Face is his cover and the worse (quality 18 against 25), on the second the better (22 against 15), on the third
+     * they tie (20).
      *
      * Assertions:
      *
-     * Merging the Person into Andrei, as the People tab does, leaves each Video one Face of his: the source's on the first, his
-     * own on the second and on the third. Each Face that lost is deleted with its files, while the survivors keep theirs, and his
-     * cover moves to the source's Face on the first Video. The image keeps both Faces, and Andrei counts the four assets.
+     * After the merge each Video holds one Face of Andrei's: the source's on the first, his own on the others. The losing Faces
+     * are deleted with their files, his cover moves to the source's Face on the first Video, the image keeps both Faces, and he
+     * counts four assets.
      */
     val andrei = person(Some("Andrei"))
     val source = person()
@@ -1034,20 +1007,17 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Person with no name with Faces on three assets, Tom, named, and Andrei, named, each with a Face. A move of one of the
-     * Person's Faces to Tom holds its transaction until a name of the Person through that Face waits for it; then the same with
-     * another of their Faces and a merge of the Person into Andrei. On PostgreSQL the name and the merge wait at the Person's row
-     * lock, on SQLite for the write connection.
+     * A Person with no name with three Faces, and Tom and Andrei with a Face each. A move of one Face to Tom holds its
+     * transaction until a name of the Person through that Face waits; then the same with another Face and a merge into Andrei.
      *
      * Assertions:
      *
-     * The name and the merge are each not found once the move commits, as the Face is Tom's by then: the Person keeps no name,
-     * stays live with their last Face, and Andrei counts one asset.
+     * The name and the merge are not found, as the Face is Tom's by then: the Person keeps no name, stays live with their last
+     * Face, and Andrei counts one asset.
      *
      * Edge cases:
      *
-     * Without the people's lock before the Face is re-read, the name or the merge reads the Face as the Person's still, waits at
-     * the row the move holds, and then names the Person, or merges them away, through a Face that is no longer theirs.
+     * Without the people's lock before the Face is re-read, the name or merge would act through a Face no longer theirs.
      */
     val p = person()
     val named = face(p, testContext.persistAsset())
@@ -1083,20 +1053,19 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Person with no name with Faces on two assets, Andrei, named, and Tom, named, each with a Face. A merge of the Person into
-     * Andrei holds its transaction until a move of one of the Person's Faces to Tom waits for it.
+     * A Person with no name with two Faces, and Andrei and Tom with a Face each. A merge of the Person into Andrei holds its
+     * transaction until a move of one of the Person's Faces to Tom waits.
      *
      * Assertions:
      *
-     * On PostgreSQL the move reads the Face's Person, the merged one, before it waits at the people's row locks, so once the
-     * merge commits it is not found, the Face being Andrei's by then: Andrei keeps it, counting three assets, and Tom counts one.
-     * On SQLite the move waits for the write connection before it reads anything, so it finds the Face Andrei's and moves it from
-     * him to Tom: Andrei counts two, Tom two. Either way the counts follow the Face.
+     * On PostgreSQL the move read the merged Person before it waited at the row locks, so it is not found and Andrei keeps the
+     * Face, counting three. On SQLite the move waits before it reads anything, so it moves the Face from Andrei to Tom, two each.
+     * Either way the counts follow the Face.
      *
      * Edge cases:
      *
-     * Without the Face re-read under the lock, the move on PostgreSQL takes the Face from Andrei as if it were still the merged
-     * Person's, so Andrei goes on counting an asset he has no Face on.
+     * Without the Face re-read under the lock, the move on PostgreSQL would take the Face from Andrei as the merged Person's, and
+     * Andrei would count an asset he has no Face on.
      */
     val p = person()
     val f = face(p, testContext.persistAsset())
@@ -1131,19 +1100,17 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Person with no name with Faces on two assets, and Andrei and Bob, named, each with a Face. A merge of the Person into
-     * Andrei holds its transaction until a merge of the Person into Bob, through the same Face, waits for it: on PostgreSQL at
-     * the Person's row lock, on SQLite for the write connection.
+     * A Person with no name with two Faces, and Andrei and Bob with a Face each. A merge of the Person into Andrei holds its
+     * transaction until a merge into Bob through the same Face waits.
      *
      * Assertions:
      *
-     * The second merge is not found once the first commits, as the Person is merged away by then: every Face of theirs is
-     * Andrei's, who counts three assets, and Bob still counts one.
+     * The second merge is not found, as the Person is merged away by then: their Faces are Andrei's, who counts three, and Bob
+     * counts one.
      *
      * Edge cases:
      *
-     * Without the people's lock before the Person is checked, the second merge reads them as live and the Face as theirs, waits
-     * inside the merge itself, and then merges a Person already merged away, raising no error.
+     * Without the people's lock before the Person is checked, the second merge would silently merge a Person already merged away.
      */
     val p = person()
     val assets = List.fill(2)(testContext.persistAsset())
@@ -1171,19 +1138,16 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * Two People with no name, each with a Face, and nobody named "Andreea". A name of the first Person "Andreea" through their
-     * Face holds its transaction until a move of the second's Face to "andreea" waits for it: on PostgreSQL at the name's lock,
-     * on SQLite for the write connection.
+     * Two People with no name, each with a Face. Naming the first "Andreea" holds its transaction until a move of the second's
+     * Face to "andreea" waits.
      *
      * Assertions:
      *
-     * Neither fails: the move finds the first Person holding the name, so one live Andreea, the first Person, holds both Faces
-     * and counts two assets.
+     * Neither fails: the move finds the first Person holding the name, who then holds both Faces and counts two assets.
      *
      * Edge cases:
      *
-     * Without the name's lock in the name, the move finds no holder, creates a Person with the name and fails on `person_01` once
-     * the name commits.
+     * Without the name's lock in the naming, the move would create a second Person with the name and fail on `person_01`.
      */
     val first = person()
     val firstFace = face(first, testContext.persistAsset())
@@ -1206,13 +1170,12 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * An image with Faces of three People at x 300, 100 and 200, the third Person a bad match and the second hidden; a Video with
-     * two Faces at 5000 ms and 2000 ms.
+     * An image with Faces at x 300, 100 and 200, the second's Person hidden and the third's a bad match; a Video with Faces at
+     * 5000 and 2000 ms.
      *
      * Assertions:
      *
-     * The image's rows are the two live people's Faces by x, each with its person, the hidden one marked; the bad match is left
-     * out. The Video's rows are by Frame time.
+     * The image's rows are by x, the hidden person marked and the bad match left out. The Video's rows are by Frame time.
      */
     val a = person()
     val hidden = person()
@@ -1242,13 +1205,13 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * People named "Zoe", "adam" and a hidden "Mia", three unnamed People, one of them merged away and one a bad match, and an
-     * unnamed Person with every Face on a recycled asset.
+     * People named "Zoe", "adam" and a hidden "Mia"; four unnamed People, one merged away, one a bad match and one with every
+     * Face on a recycled asset.
      *
      * Assertions:
      *
-     * The list is adam, Mia, Zoe (named, by name key), then the unnamed people by sort name, the one with no live asset included;
-     * the merged-away and the bad-match people are left out.
+     * The list is adam, Mia, Zoe, then the unnamed people by sort name, the one with no live asset included; the merged-away and
+     * bad-match people are left out.
      */
     val zoe = person(Some("Zoe"))
     val adam = person(Some("adam"))
@@ -1279,14 +1242,13 @@ import altitude.core.service.PersonService.FaceTarget
     /**
      * Setup:
      *
-     * A Face of a Person at a synthetic embedding, and on another asset the enrolled Faces of four other people at known
-     * distances from it: A's two Faces about 0.02 and 0.11 away, B's about 0.03, C's about 0.05 and D's about 0.29; a Face of the
-     * Person's own about 0.02 away; and one more Person's Face about 1 away from every other, past the threshold.
+     * A Person's Face, and Faces at known distances from it: A's at about 0.02 and 0.11, B's at 0.03, C's at 0.05, D's at 0.29,
+     * another of the Person's own at 0.02, and a far Person's at about 1 from every other, past the threshold.
      *
      * Assertions:
      *
-     * The suggested people are A, B and C, closest first: A once although two of their Faces come before C's, D left out by the
-     * count of three and the Person's own Faces left out however close.
+     * The suggested people are A, B and C, closest first: A once, D left out by the count of three and the Person's own Faces
+     * left out however close.
      *
      * Edge cases:
      *

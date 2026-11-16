@@ -1,6 +1,5 @@
-/* The batch ops (includes/batch_ops), rendered twice: in the search toolbar's lead and in the footer. Both copies are
-   drawn alike, sizes set here rather than inherited from where they sit, so the footer's copy, placed at the toolbar
-   copy's left edge, holds each button directly below its twin */
+/* Rendered twice, in the search toolbar and in the footer. Sizes are set here rather than inherited, so the footer copy,
+   placed at the toolbar copy's left edge, holds each button directly below its twin */
 .batch-ops,
 .batch-ops .actions {
     display: flex;
@@ -18,7 +17,7 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* The small action button's size, as the trash view's Purge button has it, so the toolbar's height holds */
+/* The small action button's size, so the toolbar's height holds */
 .batch-ops .action-button {
     padding: var(--space-4) var(--space-5);
     font-size: var(--font-size-small);
@@ -49,11 +48,10 @@
     anchor-name: --batch-ops;
 }
 
-/* The footer copy is fixed over the footer's row, centered in its height, at the toolbar copy's left edge, so it follows
-   the toolbar copy wherever the explorer's size and dock side and the toolbar's own layout put it. Only the left edge is
-   read, so the results pane's scrolling does not move it. With no toolbar on screen it sits at the toolbar's side
-   padding. A fixed box's containing block is the viewport, which makes the toolbar copy an acceptable anchor although
-   it lies outside the footer */
+/* The footer copy is fixed in the footer's row at the toolbar copy's left edge, so it follows the toolbar wherever the
+   layout puts it. Only the left edge is read, so scrolling the results does not move it; with no toolbar on screen it
+   falls back to the side padding. A fixed box's containing block is the viewport, which makes the toolbar copy, outside
+   the footer, a valid anchor */
 footer .batch-ops {
     position: fixed;
     bottom: 0;

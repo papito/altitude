@@ -1,25 +1,11 @@
 /**
- * The style guide page (dev only, `views/style_guide.scala.html`).
- *
- * The server scans the source tree (`StyleGuideScan`) and embeds what it found as JSON: the tokens
- * and where they are declared and referenced, the color literals and the icons. The `styleGuide`
- * Alpine component holds what the page's templates render from it: each `:root` token resolved
- * against the stylesheets the browser actually loaded, sorted by the kind of value it holds (or,
- * for a typography token, by its name) and placed in a group, the icons and the token audit. It
- * is also the state of the theme switcher, of the font tester of the Typography section and of
- * the alpha slider of the `--scrim-color` card, the source of the Edit panel specimen's Histogram, and
- * what the page's buttons call. The live menu and dialog specimens are no template:
- * `initStyleGuide` builds them through the modules the explorer lists use.
- *
- * The kinds and the groups are `common/token-kinds.js`'s (the design tweaks panel's adapter,
- * `js/design-tweaks.js`, configures the same sections); the themes are `common/theme.js`'s. A
- * token whose declaration references other tokens is shown as declared, a recipe, with the tokens
- * it comes from; any other as it resolves. A color, border or shadow token outside
- * the theme, status and shadow colors that writes a color literal is flagged off
- * palette. Two tokens of one kind that
- * resolve to the same value (a color to the same color in both themes) are flagged as the same
- * value, unless both take their color from the same tokens: the aliases of one color share it by
- * design, while two recipes computing one color should be one token.
+ * The style guide page (dev only). The server embeds its source scan as JSON, and the `styleGuide`
+ * component resolves each `:root` token against the stylesheets the browser actually loaded. A token
+ * whose declaration references others is shown as declared (a recipe), any other as it resolves. A
+ * color, border or shadow token outside the theme, status and shadow colors that writes a color
+ * literal is off palette. Two tokens of one kind resolving to the same value (a color, in both
+ * themes) are duplicates unless both take their color from the same tokens: the aliases of one color
+ * share it by design, while two recipes computing one color should be one token.
  */
 import {
     buildChoiceMenuCtrl,
@@ -61,8 +47,8 @@ import { Alpine } from "./lib/alpine.esm.min.js"
 
 // Two lengths are equal by coincidence far more often than by design, so they are not duplicates
 const DUPLICATE_KINDS = ["color", "border", "shadow", "font"]
-// The kinds whose value carries a color, the only ones that can be off palette: a word of any
-// other value that the browser takes for a color (`background` in a transition) names none there
+// The only kinds that can be off palette: a word of another value that the browser takes for a
+// color (`background` in a transition) names none there
 const COLOR_KINDS = ["color", "border", "shadow"]
 
 // The color literals: a hex color (as the scan finds them), a color function with its channels
@@ -86,15 +72,13 @@ const COLOR_FUNCTION = new RegExp(
     "i",
 )
 
-// The token whose card has an alpha slider
 const SVG_NS = "http://www.w3.org/2000/svg"
 const ALPHA_SLIDER_TOKEN = "--scrim-color"
 // A color with its alpha replaced, as `withAlpha` writes it: the groups are the function, the
 // color and the channels
 const ALPHA_REPLACEMENT = /^(rgb|hsl)\(from (.+) (r g b|h s l) \/ [\d.]+\)$/
 
-// Referenced as `x-data="styleGuide"` by the style guide page, whose module script imports this
-// module, and so registers the component, before it starts the app
+// Registered on import, before the page starts the app
 Alpine.data("styleGuide", styleGuide)
 
 /** Builds the specimens no template renders, once the app has started and the repository is set */
@@ -106,11 +90,7 @@ export function initStyleGuide() {
     )
 }
 
-/**
- * The paths of a sample Histogram for the Edit panel's specimen, drawn by the module that draws the
- * real ones (`common/histogram.js`): each channel a bump or two across the bins, scaled as the server's
- * bytes are, the tallest bin of the four at the box's top
- */
+/** A sample Histogram's paths, scaled as the server's bytes are: the tallest bin of the four at the box's top */
 function sampleHistogramPaths() {
     const bins = HISTOGRAM_BOX.width
     const channel = (...bumps) =>
@@ -140,7 +120,6 @@ function sampleHistogramPaths() {
     )
 }
 
-/** The data and the actions of the page's templates */
 function styleGuide() {
     const scan = JSON.parse(
         document.getElementById("styleGuideScan").textContent,
@@ -154,7 +133,6 @@ function styleGuide() {
     )
 
     return {
-        // The theme the page is shown in
         theme,
         rootTokens,
         icons: Object.keys(scan.icons)
@@ -164,12 +142,9 @@ function styleGuide() {
         scopedTokens: scan.scopedTokens,
         runtimeTokens: scan.runtimeTokens,
         literals: groupLiterals(scan.literals, rootTokens),
-        // The px, rem and em literals of the sizing properties, each with its property and locations
         lengthLiterals: scan.lengthLiterals ?? [],
-        // What is typed into the font tester
         fontInput: "",
-        // The paths of the Edit panel specimen's Histogram, and its Clipping blink, which the specimen's click
-        // switches so that its pressed look shows; it blinks nothing
+        // The Edit panel specimen's Histogram; its Clipping blink only shows the pressed look
         editHistogram: sampleHistogramPaths(),
         clippingBlink: false,
 
@@ -184,7 +159,6 @@ function styleGuide() {
             )
         },
 
-        /** The Edit panel specimen's Histogram's click: its pressed look, on or off */
         toggleClippingBlink() {
             this.clippingBlink = !this.clippingBlink
         },
@@ -198,11 +172,8 @@ function styleGuide() {
         },
 
         /**
-         * Follows the theme chosen here or in the nav. The tokens are resolved again, since the
-         * color a token holds depends on the theme, and the new tokens are the one change the cards
-         * follow: a card reads nothing but its token. An alpha a slider was dragged to is by then
-         * part of its token's declaration, inline on the root element, so the new tokens' sliders
-         * start from what they resolve to, with no dragged alpha.
+         * The tokens are resolved again, since a token's color depends on the theme. A dragged alpha
+         * is by then part of its token's inline declaration, so the new sliders start from it.
          */
         followTheme(theme) {
             this.theme = theme
@@ -210,11 +181,7 @@ function styleGuide() {
             this.literals = groupLiterals(scan.literals, this.rootTokens)
         },
 
-        /**
-         * The `:root` tokens of `kinds` (space-separated) in `group` (`groupOf`), or in every group
-         * when none is given, one kind after another and in source order within a kind, so kinds
-         * sharing a grid are not interleaved
-         */
+        /** One kind after another, in source order within a kind, so kinds sharing a grid are not interleaved */
         tokensOf(kinds, group = "") {
             return kinds
                 .split(" ")
@@ -246,24 +213,17 @@ function styleGuide() {
             copy(this.currentValue(token))
         },
 
-        /**
-         * Where a token's alpha slider stands: at the alpha of the token's color in the theme
-         * shown, until it is dragged
-         */
         alphaOf(token) {
             return token.draggedAlpha ?? token.alpha
         },
 
-        /** A token's value as its card shows it: with the alpha its slider was dragged to, if any */
         currentValue(token) {
             return token.draggedValue ?? token.value
         },
 
         /**
-         * Gives the token `alpha` on its color of the theme shown, for as long as the page is
-         * open: the value is declared inline on the root element, where it wins over the
-         * stylesheet's. The alpha and the value are kept on the token, so its card depends on the
-         * token alone.
+         * Declared inline on the root element, where it wins over the stylesheet's, while the page is
+         * open. Kept on the token too, so its card depends on the token alone.
          */
         setAlpha(token, alpha) {
             token.draggedAlpha = alpha
@@ -277,13 +237,12 @@ function styleGuide() {
             )
         },
 
-        /** The typed value as the specimen's `font-family`, empty while nothing is typed */
         get fontFamily() {
             const value = this.fontInput.trim()
             return value === "" ? "" : asFontFamily(value)
         },
 
-        /** Whether the browser shows the specimen in a fallback font of its own choosing */
+        /** Whether the browser shows the specimen in a fallback font of its own */
         get isFontMissing() {
             return this.fontFamily !== "" && !isFontAvailable(this.fontFamily)
         },
@@ -317,20 +276,13 @@ function usageLabel(references) {
     return references === 1 ? "1 reference" : `${references} references`
 }
 
-/**
- * The alpha of a color in the browser's serialization (`resolveColor`): the fourth component of
- * `rgba(r, g, b, a)`, or what follows the slash of `color(srgb r g b / a)`. A color serialized
- * without an alpha is opaque.
- */
+/** The fourth component of `rgba(r, g, b, a)`, or what follows the slash of `color(srgb r g b / a)` */
 function alphaOfColor(color) {
     const [, alpha = 1] = color.match(/(?:\/|^rgba\(.*,)\s*([\d.]+)\)$/) ?? []
     return Number(alpha)
 }
 
-/**
- * `value` with the alpha of its color replaced. Of a `light-dark()` pair only the color of `theme`
- * changes, so the value stays one declaration for both themes.
- */
+/** Of a `light-dark()` pair only the color of `theme` changes, so the value stays one declaration */
 function withAlpha(value, alpha, theme) {
     const colors = themeColorsOf(value)
     const color = colors ? colors[THEMES.indexOf(theme)] : value
@@ -338,10 +290,8 @@ function withAlpha(value, alpha, theme) {
 }
 
 /**
- * `color` with its alpha replaced, in HSL relative color syntax as the veils of `core.css` write
- * it, so the color itself stays as it is written. A color that already is such a replacement, in
- * HSL or RGB (a veil, or a slider's value pasted into the stylesheet), gets the new alpha in place
- * of its own, in its own syntax, rather than a second wrapper.
+ * In HSL relative color syntax, so the color itself stays as written. A color that already is such a
+ * replacement gets the new alpha in place of its own rather than a second wrapper.
  */
 function withColorAlpha(color, alpha) {
     const [, fn = "hsl", base = color, channels = "h s l"] =
@@ -350,15 +300,9 @@ function withColorAlpha(color, alpha) {
 }
 
 /**
- * The `:root` tokens of the scan with the value the loaded stylesheets give them, their kind, group
- * and sample, the tokens they reference, their reference count, whether they are off palette, the
- * names of the other tokens of that kind with the same value, and for a color its alpha. A token
- * the scan found in the source but the served stylesheet does not have yet resolves to nothing
- * (`value` is empty, `kind` is "other").
- *
- * A token's declaration is the source's, or the one an alpha slider declared inline on the root
- * element, which wins over it. Two colors are the same value when they are in both themes; a color
- * has its alpha, and names the literals of its color, in the theme the page is shown in.
+ * The scan's `:root` tokens as the loaded stylesheets resolve them. A token the served stylesheet
+ * does not have yet resolves to nothing. A declaration an alpha slider set inline on the root
+ * element wins over the source's.
  */
 function resolveRootTokens(scan) {
     const rootEl = document.documentElement
@@ -403,12 +347,10 @@ function resolveRootTokens(scan) {
                 holdsColorLiteral(ownPartOf(declaration)),
             // What two tokens must share to be duplicates of each other; a color's is set below
             identity: resolved,
-            // The tokens it takes its color from, in one string
             colorSources: colorSources.get(name).toSorted().join(" "),
             color,
             alpha: isColor ? alphaOfColor(color) : undefined,
             hasAlphaSlider: isColor && name === ALPHA_SLIDER_TOKEN,
-            // The alpha its slider was dragged to in the theme shown, and the value that gives it
             draggedAlpha: undefined,
             draggedValue: undefined,
             references,
@@ -453,11 +395,8 @@ function resolveRootTokens(scan) {
 }
 
 /**
- * The names of the tokens each token takes its color from, by token name. A token whose
- * declaration writes a color of its own, a literal or one computed in place (`color-mix()`,
- * `light-dark()`, the relative form), is its own source, even when it computes it from other
- * tokens. Any other is an alias, whose sources are those of the tokens it references. A token that
- * carries no color, such as a length, has none.
+ * The tokens each token takes its color from. A token writing a color of its own, a literal or one
+ * computed in place, is its own source; an alias has the sources of the tokens it references.
  */
 function colorSourcesOf(declarations) {
     const sources = new Map()
@@ -485,11 +424,7 @@ function ownPartOf(declaration) {
     return declaration.replace(TOKEN_REFERENCE, " ")
 }
 
-/**
- * Whether `text` writes a color literal: a hex color, a color function with its channels written
- * out, or a named color. A word is a named color when the browser takes it for a color, as it does
- * `transparent`, unless it is `currentcolor` or a CSS-wide keyword.
- */
+/** A named color is a word the browser takes for a color, as it does `transparent` */
 function holdsColorLiteral(text) {
     const unquoted = text.replace(QUOTED_TEXT, " ")
 
@@ -509,9 +444,8 @@ function holdsColor(text) {
 }
 
 /**
- * The color literals, one entry per color: the spellings of a color (`#fff`, `#FFF`, `#FFFFFF`)
- * are grouped by what they resolve to, most used first. A color a `:root` token already holds in
- * the theme shown names that token as the replacement.
+ * One entry per color, its spellings grouped by what they resolve to, most used first. A color a
+ * `:root` token already holds in the theme shown names that token as the replacement.
  */
 function groupLiterals(literals, rootTokens) {
     const colorTokens = rootTokens.filter(({ kind }) => kind === "color")
@@ -537,11 +471,7 @@ function groupLiterals(literals, rootTokens) {
     )
 }
 
-/**
- * The live specimens: an Add button and a row's ⋯ menu, built by the functions the explorer lists
- * build theirs with, each opening the sample dialog as a popover dialog below it, and a choice
- * menu whose options run nothing.
- */
+/** The live menu specimens, built by the functions the explorer lists build theirs with */
 function mountMenuSpecimens() {
     const hostEl = document.getElementById("styleGuideMenuSpecimens")
     const url = `/htmx/style-guide/r/${window.ctx.getRepoId()}/dialogs/sample`
@@ -563,7 +493,7 @@ function mountMenuSpecimens() {
             ariaLabel: "Actions for the sample row",
             entityAttr: "data-style-guide-specimen",
             entityId: "sample",
-            // A folder's shape: Search here, which opens the nav's advanced search panel, a rule, then the dialogs
+            // A folder's shape: Search here, a rule, then the dialogs
             actions: [
                 { label: "Search here", run: () => openSearchPanel() },
                 { separator: true },
@@ -591,8 +521,7 @@ function mountMenuSpecimens() {
     hostEl.appendChild(choiceHostEl)
     buildChoiceMenuCtrl(choiceHostEl)
 
-    // A compact choice menu, as the explorer's Dock side menu is rendered: an option is its glyph
-    // (the symbols of includes/dock_glyphs, included by the page) and its label
+    // A compact choice menu, as the explorer's Dock side menu is rendered: each option a glyph and a label
     const compactHostEl = document.createElement("div")
     compactHostEl.id = "styleGuideCompactChoiceHost"
     compactHostEl.dataset.choiceMenu = "Dock side"

@@ -6,20 +6,9 @@
 
 @(cards: List[WatchFolderCard], isAdmin: Boolean)
 
-@* The Watch folders of the Import page (pipeline.scala.html, and GET /htmx/watch-folders/r/:repoId/list, a holder of
-   Import's): cards in a grid, one per Watch folder of the Library, by name. A card is the Watch folder's name, its path
-   on the server, where its files go (Triage, or the destination folder's path) and when it was last scanned (a `<time>`
-   the page shows in the viewer's zone, `localTime`; "scanning now" while a scan of it runs), its status as a tinted chip
-   with the reason beside it, and the imported and failed files of its Imports in the Import history, with whether it
-   deletes imported files.
-
-   An Admin's card carries its actions: "Scan now", an inline button (disabled for a paused one), and a ⋯ menu
-   (includes/menu_ctrl) of Pause or Resume, Retry failed, Edit… (the Watch folder dialog, in the general modal host) and
-   Remove… (a popover dialog below the trigger). Scan now, Pause, Resume and Retry failed are direct requests that
-   declare `WATCH_FOLDERS_CHANGED_EVENT` with what the snackbar says. Anyone else reads the cards alone.
-
-   The page reads the list again, by the root's `data-app-view-url`, after each of those and whenever the status feed
-   says the Library's Watch folders changed (js/import/watch-folders.js). *@
+@* The Watch folders of the Import page: a card per Watch folder, by name; an Admin's card carries its actions. The page
+   reads the list again by the root's `data-app-view-url` after a direct action (`WATCH_FOLDERS_CHANGED_EVENT`) and
+   whenever the status feed says the Library's Watch folders changed. *@
 
 @repoId = @{ RequestContext.getRepository.persistedId }
 @route = @{ s"/htmx/watch-folders/r/$repoId" }
@@ -28,7 +17,7 @@
 @idOf(card: WatchFolderCard) = @{ card.watchFolder.persistedId }
 @named(card: WatchFolderCard) = @{ ujson.write(ujson.Obj(Api.Field.WatchFolder.WATCH_FOLDER_ID -> card.watchFolder.persistedId)) }
 
-@* A direct action of a card: a PUT naming the Watch folder, which says `done` through the snackbar once it succeeds *@
+@* A direct action of a card: a PUT naming the Watch folder; the snackbar says `done` once it succeeds *@
 @action(card: WatchFolderCard, path: String, label: String, done: String, attributes: Html = Html("")) = {
 <button type="button"
         hx-put="@route/@path"
@@ -40,8 +29,7 @@
         @attributes>@label</button>
 }
 
-@* What a direct action in the ⋯ menu carries: it closes the menu; and what "Scan now" on the card carries: a paused
-   Watch folder is not scanned *@
+@* A direct action in the ⋯ menu closes the menu; "Scan now" is disabled for a paused Watch folder *@
 @inMenu = @{ Html("x-on:click=\"handleActionClick\"") }
 @scanButton(card: WatchFolderCard) = @{ Html("class=\"action-button small\"" + (if (card.watchFolder.isPaused) " disabled" else "")) }
 

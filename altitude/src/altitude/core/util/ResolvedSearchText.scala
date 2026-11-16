@@ -13,18 +13,16 @@ enum SearchSource(val relevance: Int):
 
 object SearchSource:
 
-  /** The sources that are names of the repository, read and matched before a search runs: every one but the Search document */
+  /** The repository's names, read and matched before a search runs */
   val names: Set[SearchSource] = values.toSet - Document
 
 /** A candidate of a name source: `parentId` is a folder's parent, or the Category of a Location that has one */
 case class SearchName(id: String, name: String, parentId: Option[String] = None)
 
 /**
- * A term with what it matched among the names: for each name source with a match, the IDs the search filters that source's
- * relation by. They are person IDs for [[SearchSource.Person]], Location IDs for [[SearchSource.Location]] and for
- * [[SearchSource.Category]] (the Locations of the Categories the term matched), folder IDs for [[SearchSource.Folder]] (the
- * folders the term matched and every folder below them) and album IDs for [[SearchSource.Album]]. A source without a match has no
- * entry, and [[SearchSource.Document]] never has one: the engine matches the document itself.
+ * For each name source with a match, the IDs the search filters that source's relation by: a Category gives its Locations' IDs,
+ * and a folder adds every folder below it. A source without a match has no entry, and [[SearchSource.Document]] never has one:
+ * the engine matches the document itself.
  */
 case class ResolvedSearchTerm(term: SearchTerm, ids: Map[SearchSource, Set[String]])
 
@@ -38,11 +36,9 @@ case class ResolvedSearchGroup(alternatives: Seq[ResolvedSearchTerm], isComplete
   def isPositive: Boolean = alternatives.forall(!_.term.isExcluded)
 
 /**
- * A [[SearchExpression]] with its terms resolved against the names of the repository as they were when it was read. It is what a
- * search matches text by, and is resolved afresh for every search and every page of one.
+ * A [[SearchExpression]] resolved against the repository's names as they were when read, afresh for every search and every page.
  *
- * `candidates` are what the probe found the text can match, the intersection of its complete groups' matches: the search reads
- * those assets alone (the selective path), and an empty set answers it with nothing. Without them, when no positive group is
- * complete or the text has none, the text is matched over the whole library (the broad path).
+ * `candidates`, the intersection of the complete groups' matches, are the only assets the search reads (the selective path), and
+ * an empty set answers it with nothing. Without them, the text is matched over the whole library (the broad path).
  */
 case class ResolvedSearchText(groups: Seq[ResolvedSearchGroup], candidates: Option[Set[String]] = None)

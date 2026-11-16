@@ -1,12 +1,8 @@
 /**
- * The results title (`.results-title`, includes/results_title.scala.html) and the toolbar
- * (`#searchControl`) stick to the top of the scrolling pane, one under the other, and the group
- * headers of a grouped grid stick under both rather than sliding beneath them. Neither height is
- * fixed - a folder path wraps, the person's name editor swaps in, the toolbar reflows - so the
- * rendered heights are written on the fragment as `--results-title-height` (the toolbar's offset; 0
- * without a title) and `--results-sticky-height` (the title and the toolbar together, the headers'
- * offset; static/css/includes/search_results.css reads both), and kept current for as long as the
- * fragment lives.
+ * The results title and the toolbar stick to the top of the pane, one under the other, and group
+ * headers stick under both. Neither height is fixed (a folder path wraps, the toolbar reflows), so the
+ * rendered heights are written on the fragment and kept current: `--results-title-height` (the
+ * toolbar's offset, 0 without a title) and `--results-sticky-height` (both together, the headers').
  */
 const TITLE_HEIGHT_PROPERTY = "--results-title-height"
 const STICKY_HEIGHT_PROPERTY = "--results-sticky-height"

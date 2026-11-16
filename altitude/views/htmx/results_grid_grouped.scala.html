@@ -6,29 +6,16 @@
 @import altitude.core.util.Util
 @import altitude.core.FieldConst
 
-@* The grouped grid: each group's header (a capture day, a Location as `Category › Location`, or a Sequence as its first capture's
-   day and time), then its cells; the page's last cell - by position, since a Location grouping can hold the last asset in an earlier
-   cell too - carries the cursor of the next page
-   when there is one. The header is skipped for the first group when it continues the previous page's group (`continuesGroup`), so the
-   new cells land after that page's last cell and read as the same group.
+@* The grouped grid. The cursor goes on the page's last cell by position, since a Location grouping can hold the last asset
+   in an earlier cell too, and an asset in two Locations is a cell under each. The first group's header is skipped when it
+   continues the previous page's group (`continuesGroup`). A Describe search's weaker matches' groups come last, so a group
+   with matches in both parts has a header in each.
 
-   An asset in two Locations is a cell under each, so a Location group's cell IDs carry the Location as well
-   (`asset-<id>-in-<locationId>`); every client-side lookup of an asset's cells goes by `data-asset-id`, which finds them all.
+   The header's checkbox acts on `change` and repaints itself rather than cancelling the click: the browser reverts a
+   cancelled checkbox click after Alpine has run its effects. `data-count` is what the client decrements as cells leave.
 
-   The header's checkbox selects the group's loaded cells as a set (js/alpine/components/date-group-selectable.js). It acts on
-   `change` and repaints itself afterwards rather than cancelling the click: the browser reverts a cancelled checkbox click
-   once it is dispatched, after Alpine has run its effects (see `paint` there). The count is rendered as text and kept as a
-   number in `data-count`, which is what the client decrements as cells leave the grid.
-
-   A Describe search's groups are in two parts, the weaker matches' groups last, so a group with matches in both parts has a
-   header in each: before the first group of the weaker matches, on the page that holds it (`results.weaker`), their own header
-   stands (includes/weaker_matches_header).
-
-   A Sequence's header with two frames or more has a Curate button, opening Curation on that one Sequence: all its frames still out
-   of the trash, even under a search showing only some of them. With Curate own alone, `curatable` counts the frames of each
-   Sequence Curation would show the account, its own (`CurationService.curatableFrameCounts`), and the button needs two of them
-   too; None counts every account's. The client removes it when its count falls under two, or when
-   Curation clears the Sequence (js/search-results/date-groups.js), finding it by `data-app-sequence-id`. *@
+   A Sequence's Curate button needs two frames Curation would show the account: with Curate own alone, `curatable` counts
+   its own (`CurationService.curatableFrameCounts`); None counts every account's. *@
 @(results: GroupedSearchResult, isContinuousScroll: Boolean = false, curatable: Option[Map[String, Int]] = None)
 
 @* The position (group, cell) of the page's last cell, found once: a List's size is a walk of the list *@

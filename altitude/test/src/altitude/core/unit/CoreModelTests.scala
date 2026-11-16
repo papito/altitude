@@ -66,14 +66,14 @@ import altitude.core.models.UserMetadataValue
     /**
      * Setup:
      *
-     * A still image with an Image quality of five metrics, a perceptual hash with the high bit set and a Sequence id, a copy of
-     * it with a small hash, and a copy with none of the three.
+     * A still image with an Image quality, a perceptual hash with the high bit set and a Sequence id, a copy with a small hash,
+     * and a copy with none of the three.
      *
      * Assertions:
      *
-     * The three are written under their snake_case names, the metrics nested under `image_quality` and the hash as 16 zero-padded
-     * lowercase hex digits whatever its value (upickle would write a Long as a number up to 2^53 and as a string beyond), and
-     * read back as given; the copy's JSON has none of the three keys and reads back with none.
+     * The three are written under their snake_case names, the metrics nested under `image_quality` and the hash always as 16
+     * lowercase hex digits (upickle would write a Long past 2^53 as a string), and read back as given; the last copy's JSON has
+     * none of the three keys.
      */
     val quality = ImageQuality(sharpness = 123.5, luminance = 0.45, clippedHighlights = 0.01, crushedShadows = 0.002, score = 87)
     val highBit = PerceptualHash(Long.MinValue + 42)
@@ -119,9 +119,8 @@ import altitude.core.models.UserMetadataValue
      *
      * Assertions:
      *
-     * The embedding is written under `scene_embeddings` as the float array of its model's key, the other model's key is absent,
-     * and it reads back value for value; the copy's JSON has no `scene_embeddings` key, which is what every general read of an
-     * asset emits, and reads back with neither.
+     * The embedding is written under `scene_embeddings` as a float array keyed by its model, with no key for the other, and reads
+     * back value for value; the copy's JSON, as every general read of an asset emits it, has no `scene_embeddings` key.
      */
     val embedding = SceneEmbedding(IArray(0.6f, 0.8f))
     val embedded = Asset(
@@ -159,8 +158,7 @@ import altitude.core.models.UserMetadataValue
      * Assertions:
      *
      * Its bytes are four channels of 64 little-endian float32 values, luminance first, and read back equal, as does the image's
-     * JSON; the copy's JSON has no `histogram` key, which is what every general read of an asset emits. A channel of another
-     * length and bytes of another length are refused.
+     * JSON; the copy's JSON has no `histogram` key. A channel or bytes of another length are refused.
      */
     val histogram = histogramOf(scale = 1000f)
     val bytes = histogram.toBytes
@@ -198,8 +196,8 @@ import altitude.core.models.UserMetadataValue
      *
      * Assertions:
      *
-     * The relative bytes are a byte per bin, the four channels in the order of the stored bytes: the tallest bin is 255, an empty
-     * bin 0, and every other bin its share of the tallest, rounded, whichever channel it is in.
+     * The relative bytes are a byte per bin, channels in stored order: the tallest bin is 255, an empty bin 0, and every other
+     * bin its rounded share of the tallest, whichever channel it is in.
      */
     val relative = histogramOf(scale = 1000f).relativeBytes.map(_ & 0xff)
     relative.length should be(4 * Histogram.BINS)
@@ -216,13 +214,13 @@ import altitude.core.models.UserMetadataValue
     /**
      * Setup:
      *
-     * A video asset with a 90.5 s duration and a copy of it as an image with none, plus a Face from a video Frame at 1.5 s with a
-     * quality and an enrollment flag, and a copy of the Face with no Frame time.
+     * A video asset with a duration and a copy of it as an image with none, plus a Face from a video Frame with a quality and an
+     * enrollment flag, and a copy of the Face with no Frame time.
      *
      * Assertions:
      *
-     * The duration and the Frame time are written to JSON under their snake_case names and read back, and the image's JSON has no
-     * duration key at all. The Face's quality and enrollment flag also travel through JSON.
+     * The duration, the Frame time, the quality and the enrollment flag are written under their snake_case names and read back;
+     * the image's JSON has no duration key.
      */
     val video = Asset(
       ownerUserId = "u",

@@ -35,13 +35,11 @@ object SqliteSearchDialect extends SearchDialect:
   override val dayWrapper: (String, String) = ("date(", ")")
 
   /**
-   * The full-text index is `search_document_fts`, whose `rowid` is the document's declared `id`. `id` is not part of the row
-   * class (PostgreSQL's table has no such column), so it is named directly: the subquery this lands in reads `search_document` as
-   * its innermost table, so the name is the document's, and inside the index subquery `rowid` is the index's own.
+   * `search_document_fts`'s `rowid` is the document's declared `id`, which is not in the row class (PostgreSQL's table has no
+   * such column), so it is named directly: in the enclosing subquery it resolves to `search_document`'s.
    *
-   * The term's words are letters and digits only, so they are safe to join into one quoted FTS5 string, which matches as the
-   * phrase of its words; a `*` after the string makes its last word a prefix (`"img 12" *`). The readings of a term are
-   * alternatives joined by `OR` (`"mc donald" * OR "mcdonald" *`).
+   * The term's words are letters and digits only, so they are safe to join into one quoted FTS5 phrase; a trailing `*` makes the
+   * last word a prefix, and a term's readings are joined by `OR` (`"mc donald" * OR "mcdonald" *`).
    */
   override def textMatch(document: SearchDocumentRow[Expr], term: SearchTerm): Expr[Boolean] =
     val ftsQuery = term.variants.map(_.mkString("\"", " ", "\"") + (if term.isPhrase then "" else " *")).mkString(" OR ")
@@ -49,8 +47,8 @@ object SqliteSearchDialect extends SearchDialect:
 
   /**
    * A sort term SQLite can match against an index tempts its planner away from the grouping day index, which then has to sort
-   * every matching row; the unary plus keeps any term other than the grouping date from being matched, leaving the day index in
-   * charge. A Location or a Sequence grouping has no such index, and every sort term of one gets the plus.
+   * every matching row; the unary plus keeps any term but the grouping date from being matched. A Location or Sequence grouping
+   * has no such index, so every sort term of one gets the plus.
    */
   override def secondarySort(column: Expr[?], sort: SearchSort, grouping: SearchGrouping): Expr[?] =
     if grouping.by.dateField.contains(sort.field) then column else Expr[Any](implicit ctx => sql"+$column")
@@ -60,12 +58,10 @@ object SqliteSearchDialect extends SearchDialect:
     Expr[Boolean](implicit ctx => sql"($assetId NOT IN (SELECT asset_id FROM ${SqlStr.raw(relation)}))")
 
   /**
-   * `vector_full_scan` is sqlite-vector's exact scan of the SigLIP 2 Scene embeddings of the `asset` table, every repository's
-   * rows, each handed out with its rowid and its cosine distance; a row with no embedding is not among them. It is the `scanned`
-   * CTE ([[ScannedRow]]), which the matching assets are joined to by their rowid, so the filters of the search, the cutoff, the
-   * order and the limit are applied to what the scan hands out. The column is registered with the extension on every connection
-   * as it is opened (`TransactionManager.setUpSqliteConnection`), and the description's vector is bound as the column stores one,
-   * its raw float32 values. SQLite has no vector index, so this is the one way it ranks, and the scan reads every embedding
+   * `vector_full_scan` is sqlite-vector's exact scan of every repository's SigLIP 2 embeddings in `asset`, yielding rowid and
+   * cosine distance (rows without an embedding are absent). The matching assets join this `scanned` CTE by rowid, so the search's
+   * filters, cutoff, order and limit apply to the scan's output. The column is registered with the extension on every new
+   * connection (`TransactionManager.setUpSqliteConnection`). SQLite has no vector index, so the scan reads every embedding
    * whatever the filters leave.
    */
   override def ranked(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows =
@@ -111,7 +107,7 @@ object SqliteSearchDialect extends SearchDialect:
       case SortValue.Text(text) => r.setString(idx, text)
       case SortValue.Num(number) => r.setLong(idx, number)
       case SortValue.Real(number) => r.setDouble(idx, number)
-      // A SQLite cursor never carries a typed timestamp - the engine hands them back as text - but bind one as stored anyway
+      // A SQLite cursor never carries a typed timestamp (the engine hands them back as text), but bind one as stored anyway
       case SortValue.LocalTimestamp(dateTime) => r.setString(idx, dateTime.format(SqliteOverrides.DATETIME_FORMATTER))
       case SortValue.UtcInstant(instant) =>
         r.setString(idx, instant.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER))

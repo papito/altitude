@@ -24,15 +24,12 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.EditRenderer
 
 /**
- * An asset's Edit (`CONTEXT.md`): the one Edit the server keeps for the asset, replaced by each save. The original is never
- * written. Every save is built on the edit version the client saw (`base`) and is a conflict carrying the current state when the
- * edit version has moved since; it moves the edit version on by one, so a client's earlier Edit (its Undo) is saved as any other.
- * Only a still image outside the trash is edited ([[AssetEditService.whyNotEditable]]). A save has the Edit rendered once it
- * commits (`EditRenderService`), and is logged then.
+ * One Edit per asset, replaced by each save; the original is never written. A save names the edit version it was built on
+ * (`base`) and conflicts if that has moved, so a client's Undo is simply another save.
  */
 object AssetEditService:
 
-  /** What a request for an asset's edited image under a revision is answered ([[AssetEditService.editedImage]]) */
+  /** The answer to a request for an edited image at a revision */
   enum EditedImage:
     /** The image stored now, under the asset's revision */
     case Current(image: MimedPreviewData)
@@ -40,7 +37,7 @@ object AssetEditService:
     /** An earlier revision: the asset's edited images are under `rev` now */
     case Moved(rev: Int)
 
-  /** Why an Edit may not change the asset, None when it may: it is a still image outside the trash */
+  /** Why the asset cannot be edited, None when it can */
   def whyNotEditable(asset: Asset): Option[String] =
     if !asset.isStillImage then Some(C.Msg.Err.EDIT_NOT_STILL)
     else if asset.isRecycled then Some(C.Msg.Err.EDIT_RECYCLED)
@@ -52,54 +49,41 @@ class AssetEditService(val app: Altitude):
   private val assetDao: AssetDao = app.DAO.asset
   protected val txManager: TransactionManager = app.txManager
 
-  /**
-   * The auto-straightens that may run at once, each on its request's thread: as many as renders run at once, bounded apart from
-   * them, so a request for one never waits behind the render queue, and one asked for while every slot is taken is refused at
-   * once ([[autoStraighten]]). A test takes them all to see the refusal.
-   */
+  /** As many as renders but apart from them, so an auto-straighten never waits behind the render queue; tests take them all */
   private[core] val autoStraightenSlots = Semaphore(app.editRenderParallelism)
 
-  /**
-   * The asset's Edit, with the size of its upright original; version 0 and the identity for an asset never edited, and
-   * `NotFoundException` for no such asset
-   */
+  /** The asset's Edit with its upright original's size; version 0 and the identity for an asset never edited */
   def get(assetId: String): EditState =
     val upright = uprightSizeIfKnown(app.service.asset.getById(assetId))
     txManager.asReadOnly {
       stateOf(assetDao.getById(assetId), dao.get(assetId), upright = upright)
     }
 
-  /**
-   * The asset's Edit read in one snapshot, without the upright size: version 0 for an asset never edited, and `NotFoundException`
-   * for no such asset. What a client polls until the version is rendered.
-   */
+  /** [[get]] without the upright size: what a client polls until its version is rendered */
   def status(assetId: String): EditState =
     txManager.asReadOnly {
       stateOf(assetDao.getById(assetId), dao.get(assetId))
     }
 
   /**
-   * The Edit of an asset read in the context repository, with the size of its upright original, or None for an asset never
-   * edited: what the asset's detail carries. The asset's revision and the Edit's versions are read again in one snapshot, not
-   * taken from `asset`, which its caller read earlier: a render committing in between would otherwise pair the rendered edit
-   * version with the revision before it.
+   * The Edit for the asset's detail, None if never edited. The asset is re-read with the Edit in one snapshot: a render
+   * committing since `asset` was read would otherwise pair the new rendered version with the old revision.
    */
   def editOf(asset: Asset): Option[EditState] =
     val (current, edit) = txManager.asReadOnly((assetDao.getById(asset.persistedId), dao.get(asset.persistedId)))
     edit.map(edit => stateOf(current, Some(edit), upright = uprightSizeIfKnown(current)))
 
   /**
-   * Saves `recipe` as the asset's Edit, built on the version `base` the client saw, and answers the new state: the version one
-   * on, whether the Edit is edited and its edited size. A recipe equal to the current Edit is no change: the current state,
-   * nothing written. Revert to original is a save of the identity, which the client's Undo takes back as another save.
+   * Saves `recipe` on top of version `base`. A recipe equal to the current Edit writes nothing; Revert to original saves the
+   * identity.
    *
    * @throws IllegalOperationException
    *   for an asset that is not a still image, is in the trash, or whose original is missing
    * @throws EditConflictException
-   *   when the version is not `base`, with the current state
+   *   when the version is not `base`, carrying the current state
    */
   def save(assetId: String, base: Int, recipe: EditRecipe, account: User): EditState =
-    // Normalized, as a client's is, so the stored Edit and the one compared with the current one are the one answered
+    // Normalized as a client's is, so the Edit compared, stored and answered is the same one
     val normalized = EditRecipe.parse(recipe.toJson)
     val upright = uprightSizeOf(assetId)
 
@@ -115,8 +99,8 @@ class AssetEditService(val app: Altitude):
         val isEdited = !normalized.isIdentity
         edit match
           case Some(_) => dao.save(assetId, editVersion, normalized, isEdited, width, height, account.persistedId)
-          // An asset never edited has no Edit row to lock; the asset's lock, which every save takes first, keeps another first
-          // save out until this one ends, and that one then finds the row at a later edit version: a conflict
+          // No Edit row to lock yet: the asset lock every save takes first holds off a concurrent first save, which then finds
+          // a later version and conflicts
           case None =>
             dao.insert(
               AssetEdit(assetId, normalized, editVersion, isEdited = isEdited, width = width, height = height),
@@ -129,14 +113,11 @@ class AssetEditService(val app: Altitude):
     }
 
   /**
-   * The asset's edited image of `kind` (`Const.DataStore.PREVIEW` or `DISPLAY`) asked for under the revision `rev`: the one
-   * stored, when `rev` is the asset's revision (`asset.edit_rev`). The asset has one edited image of each kind, replaced by each
-   * render under the next revision, so a revision below the current one, which only a page built before that render still holds,
-   * is `Moved` to the current one: its bytes are not the ones it named, so they are never answered under it.
+   * Only the current revision's edited image is stored, so an earlier `rev` (a page built before the latest render) is `Moved`
+   * rather than answered with bytes it did not name.
    *
    * @throws NotFoundException
-   *   for a revision above the asset's, which may name other bytes later, for 0, for an asset with no edited images (its Edit is
-   *   the identity, or cannot be rendered), and for an asset that is not the Library's
+   *   for revision 0, one above the asset's (it may name other bytes later), or an asset with no edited images
    */
   def editedImage(assetId: String, rev: Int, kind: String): AssetEditService.EditedImage =
     val current = txManager.asReadOnly(assetDao.getById(assetId).editRev)
@@ -148,10 +129,8 @@ class AssetEditService(val app: Altitude):
     else AssetEditService.EditedImage.Current(app.service.fileStore.getEditedImage(assetId, kind))
 
   /**
-   * Auto-straighten: the Straighten that levels the lines of the asset's original as `recipe` turns and mirrors it, in tenths of
-   * a degree, or nothing when no level or plumb lines agree on one (`EditRenderer.autoStraightenAngle`). Nothing is stored. The
-   * original is read on the caller's thread, in one of [[autoStraightenSlots]], which bounds how many are decoded at once apart
-   * from the renders; with none free the request is refused at once rather than queued, and a read never outlives its request.
+   * The Straighten that levels the original's lines as `recipe` turns and mirrors it, if they agree on one. Nothing is stored.
+   * Runs on the request's thread in one of [[autoStraightenSlots]]; with none free it is refused rather than queued.
    *
    * @throws IllegalOperationException
    *   for an asset that is not a still image, is in the trash, or whose original is missing or no image reader decodes
@@ -177,18 +156,15 @@ class AssetEditService(val app: Altitude):
     finally autoStraightenSlots.release()
 
   /**
-   * The size of the asset's upright original, read before a save's transaction opens, so that reading the original's metadata
-   * holds no lock (on SQLite, the one write connection). The asset must be editable now; the save checks it again under its lock.
+   * Read before a save's transaction opens, so reading the original's metadata holds no lock (on SQLite, the one write
+   * connection). The save checks editability again under its lock.
    */
   private def uprightSizeOf(assetId: String): (Int, Int) =
     val asset = app.service.asset.getById(assetId)
     AssetEditService.whyNotEditable(asset).foreach(why => throw IllegalOperationException(why))
     app.service.asset.uprightSize(asset)
 
-  /**
-   * The size of the asset's upright original for a state's answer, read outside any transaction as [[uprightSizeOf]] reads it;
-   * None for an asset that is no still image or whose original is missing, which the answer can do without
-   */
+  /** None for no still image or a missing original: a state's answer can do without it */
   private def uprightSizeIfKnown(asset: Asset): Option[(Int, Int)] =
     if !asset.isStillImage then None
     else
@@ -199,10 +175,8 @@ class AssetEditService(val app: Altitude):
           None
 
   /**
-   * The asset's Edit locked for the transaction (None for an asset never edited, which locks nothing) and the asset, read after
-   * the lock so that its revision goes with the Edit's rendered version, when the asset is editable and the Edit is at `base`; a
-   * conflict carrying the current state, with the `upright` size, when it is not. The asset is locked first, as a render's write
-   * and a delete of the asset lock the two, so no two of them wait for each other.
+   * Reads the asset after the lock so its revision matches the Edit's rendered version. The asset is locked before the Edit, the
+   * order a render's write and an asset delete use, so none of them deadlock.
    */
   private def lockAt(assetId: String, base: Int, upright: (Int, Int)): (Asset, Option[AssetEdit]) =
     assetDao.lockUnpurged(assetId): Unit

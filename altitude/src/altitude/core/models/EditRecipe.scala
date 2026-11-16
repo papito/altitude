@@ -5,7 +5,7 @@ import scala.util.Try
 import altitude.core.ValidationException
 import altitude.core.util.JsonCodec
 
-/** A crop rectangle as fractions of the frame (the turned and mirrored image): its left and top edges, its width and height */
+/** A crop rectangle as fractions of the frame (the turned and mirrored image) */
 final case class EditCrop(x: Double, y: Double, w: Double, h: Double)
 
 object EditRecipe:
@@ -14,7 +14,7 @@ object EditRecipe:
   // Before `Identity`, whose curve it is
   val IDENTITY_CURVE: List[(Double, Double)] = List((0.0, 0.0), (1.0, 1.0))
 
-  /** The Edit that changes nothing, with the Crop tool's default settings: the original's, which Revert to original saves */
+  /** The Edit that changes nothing, with the Crop tool's default settings; reverting to the original saves it */
   val Identity: EditRecipe = EditRecipe()
 
   /** The Crop tool's aspect locks, as the Edit stores them; a ratio is written landscape, `portrait` turns it */
@@ -63,19 +63,14 @@ object EditRecipe:
 
   given JsonCodec.ReadWriter[EditRecipe] = JsonCodec.readwriter[ujson.Value].bimap(_.toJson, json => parse(json))
 
-  /** An Edit stored as JSON text ([[parse]] of the text) */
   def parse(text: String): EditRecipe =
     val json = Try(ujson.read(text)).getOrElse(invalid("The Edit is not JSON"))
     parse(json)
 
   /**
-   * The Edit a client sent, normalized: every number rounded to its step. Refused with a `ValidationException` saying why: a
-   * `version` other than 1, an unknown or missing key (no default is filled in), a value of the wrong type or outside its range,
-   * a crop outside the frame or narrower or shorter than [[MIN_CROP]], and a curve of fewer than 2 or more than 16 points, or
-   * whose x does not increase by at least [[MIN_CURVE_SPACING]] from point to point, or with a point outside [0, 1]. A crop's
-   * left and top edges and its right and bottom edges (x + w, y + h) are rounded to 4 decimals, its width and height being the
-   * differences. The ranges are checked on the rounded values. Whether a crop stays inside the image's outline is the client's
-   * concern: the renderer draws what lies outside as transparent.
+   * The Edit a client sent, normalized: every number rounded to its step, ranges checked on the rounded values. A missing key is
+   * refused, never defaulted. Whether a crop stays inside the image's outline is the client's concern: the renderer draws what
+   * lies outside as transparent.
    */
   def parse(json: ujson.Value): EditRecipe =
     val obj = json.objOpt.getOrElse(invalid("The Edit is not a JSON object"))
@@ -174,9 +169,8 @@ object EditRecipe:
     points
 
 /**
- * An asset's Edit (`CONTEXT.md`): every control's value, as `asset_edit.recipe` stores it (`version` 1, every key present) and
- * the client sends it. Built by [[EditRecipe.parse]], which normalizes and checks every value, or as the default with changes.
- * Its geometry is in the upright original: the original turned by its EXIF orientation.
+ * An asset's Edit: every control's value, as `asset_edit.recipe` stores it and the client sends it, every key present. Its
+ * geometry is in the upright original: the original turned by its EXIF orientation.
  */
 final case class EditRecipe(
     rotate: Int = 0,
@@ -205,18 +199,11 @@ final case class EditRecipe(
     vignette: Int = 0,
     grain: Int = 0):
 
-  /**
-   * Whether the Edit changes no pixel: no turn, flip, Straighten or crop, every slider at 0 and the curve the diagonal. The Crop
-   * tool's settings (the aspect, its orientation, keeping the crop inside and whether it was fitted) do not count. An asset is
-   * edited when its Edit is not the identity.
-   */
+  /** Whether the Edit changes no pixel; the Crop tool's settings (aspect, orientation, keep inside, fitted) do not count */
   def isIdentity: Boolean =
     copy(aspect = "original", portrait = None, keepInside = true, cropFitted = true) == EditRecipe.Identity
 
-  /**
-   * The size of the edited image, from the upright original's: the frame (swapped for a quarter turn) and then the crop's share
-   * of it, rounded to whole pixels and never less than one
-   */
+  /** The edited image's size: the upright frame (swapped for a quarter turn), then the crop's share, rounded and at least 1 px */
   def editedSize(uprightWidth: Int, uprightHeight: Int): (Int, Int) =
     val (frameWidth, frameHeight) =
       if rotate == 90 || rotate == 270 then (uprightHeight, uprightWidth) else (uprightWidth, uprightHeight)
@@ -224,7 +211,6 @@ final case class EditRecipe(
       c => (Math.max(1, Math.round(c.w * frameWidth).toInt), Math.max(1, Math.round(c.h * frameHeight).toInt))
     }
 
-  /** The Edit as stored and sent: every key, `version` first */
   def toJson: ujson.Obj = ujson.Obj(
     "version" -> EditRecipe.VERSION,
     "rotate" -> rotate,

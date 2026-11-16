@@ -30,10 +30,7 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
         answer.copy(cookies = answer.cookies ++ renewedCookies(login))
       case Left(noLogin) => Response("", 302, Seq("Location" -> "/login"), noLogin.cookies)
 
-  /**
-   * To the Library `user` lands in (`RepositoryService.landingRepositoryOf`). A user who can see none is told so in plain text,
-   * the way a foreign Library is not found, rather than sent anywhere.
-   */
+  /** Redirects to the Library `user` lands in; a user who can see none gets a plain-text 404, as for a foreign Library */
   private def landing(user: User): cask.Response[String] =
     App.altitude.service.repository.landingRepositoryOf(user) match
       case Some(repo) => Response("", 302, Seq("Location" -> s"/r/${repo.persistedId}"), Nil)
@@ -55,16 +52,13 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
       Response("", 302, Seq("Location" -> "/setup"), Nil)
     else
       val shown = view.getOrElse(Const.Search.View.DEFAULT)
-      // The client seeds its search from the address, so a view the account does not see is refused here. A Guest sees Browse
-      // alone, without the triaged assets; the nav offers it nothing else
+      // The client seeds its search from the address, so a view the account may not see is refused here
       val triaged = params.value.get(Api.Field.Search.TRIAGED).flatMap(_.headOption).flatMap(_.toBooleanOption)
       refusedView(shown, triaged).getOrElse(mainPage(shown))
 
   /**
-   * The address of one asset: the main page, over whose default results the client opens Asset detail on the asset named by the
-   * path (js/search-results/detail-url.js, which also reads the Detail panel's `panel` parameter). An unknown asset, or another
-   * repository's, is a 404 here, before any page is rendered around it, and so is a triaged asset or one in the trash for a
-   * Guest, who sees Browse alone (`visibleOnly`).
+   * The address of one asset: the main page, on which the client opens Asset detail for the asset in the path
+   * (js/search-results/detail-url.js). An asset the account may not open is a 404 before any page is rendered.
    */
   @requireLogin()
   @rememberRepository()
@@ -78,7 +72,6 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
     if visible then mainPage(Const.Search.View.DEFAULT)
     else cask.Response("Asset not found", 404, Seq(("Content-Type", "text/plain")))
 
-  /** The nav marks the view asked for; the client reads the same parameter to seed its search */
   private def mainPage(view: String): cask.Response[String] =
     val payload = "<!doctype html>" + html.index(stats = App.altitude.service.stats.getStats, current = view)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))

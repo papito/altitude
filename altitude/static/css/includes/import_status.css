@@ -1,5 +1,4 @@
-/* An Import's status in the Import history (includes/import_status): its progress bar and its counts. Scoped by the
-   history's section, the only place it is rendered; an outcome's colors are pages/pipeline.css's */
+/* Scoped by the Import history, the only place it renders; an outcome's colors are pages/pipeline.css's */
 
 #importHistory .status {
   display: grid;
@@ -7,8 +6,7 @@
   min-width: 0;
 }
 
-/* The bar: a track with a segment per outcome, each as wide as its share of the Import's files (--files, set by the
-   template, is its number of them, and so its share of the room), the pending ones the rest of the track */
+/* A segment per outcome, its flex grow its number of files (--files), so its width is its share of the Import */
 #importHistory .bar {
   position: relative;
   display: flex;
@@ -23,18 +21,17 @@
   background-color: var(--outcome-color);
 }
 
-/* What is imported is the accent's, as the node of an Import in progress is; the count beside it keeps the success color */
+/* The imported segment takes the accent, as an Import in progress does; its count keeps the success color */
 #importHistory .bar .imported {
   background-color: var(--theme-accent);
 }
 
-/* The files still pending are the bare track */
 #importHistory .bar .pending {
   background: none;
 }
 
-/* While the Import is in progress, diagonal stripes lie over the whole bar, a stripe as wide as the gap after it; they
-   move, by one period a turn, unless the system asks for reduced motion */
+/* While the Import is in progress, diagonal stripes move over the bar, one period per cycle, unless reduced motion is
+   asked for */
 #importHistory .status.in-progress .bar::after {
   --stripe: var(--space-3);
   /* A period of the 45 degree gradient measured along the bar: two stripe widths times the square root of two */
@@ -58,7 +55,6 @@
   }
 }
 
-/* The counts: a chip per outcome in its colors, and the files remaining as an outlined one */
 #importHistory .counts {
   display: flex;
   flex-wrap: wrap;

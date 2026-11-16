@@ -26,16 +26,13 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
   def showPeopleTab(repoId: String)(using request: Request): Response[String] =
-    // The shell only: the browser's `peopleTab` component asks `listPeople` for each pane's list
+    // The shell only; each pane's list comes from `listPeople`
     val payload = "<!doctype html>" + htmx.html.people()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   /**
-   * The list of the people in the People buckets named, comma-separated, by `buckets`, each with the number the tab shows; a name
-   * that is no bucket is a 400. Only `triaged=true` shows triaged items, the repository view's rule (`SearchRequestParser`),
-   * which a Guest, who sees Browse alone, is refused with a 403 (`refusedView`), and a value that is no boolean is a 400. `pane`
-   * names the pane of the People tab the list is for (`Const.PeoplePane`, the Main pane when left out), which each rename
-   * pencil's ID carries, since a Person can be listed in both panes; a name that is no pane is a 400.
+   * The people in the comma-separated People `buckets`. Only `triaged=true` shows triaged items, as in the repository view.
+   * `pane` goes into each rename pencil's ID, since a Person can be listed in both panes.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/list")
@@ -59,10 +56,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   private def unknownPane(pane: String): Response[String] = textError(s"Unknown People pane: $pane", 400)
 
   /**
-   * The options of the Change combobox of Asset detail's People section: the people a Face can be given to
-   * (`PersonService.assignablePeople`). Given the Face (`faceId`), the Suggested group of the people nearest it comes first, and
-   * those people and the Face's own Person are left out of the list after it, so each is one option and the Face's Person none;
-   * an unknown Face, or another repository's, is a 404
+   * The people a Face can be given to, for the Change combobox. Given `faceId`, the people nearest the Face come first as
+   * Suggested, and the list after it leaves out them and the Face's own Person.
    */
   @requireLogin()
   @requirePermission(Permission.EditMetadata)
@@ -74,10 +69,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
     }
 
-  /**
-   * A person's results title on its own, read again after a Face correction because the title's Hide and Discard links depend on
-   * the count; an unknown person, or another repository's, is a 404
-   */
+  /** A person's results title, read again after a Face correction because its Hide and Discard links depend on the count */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/p/:personId/title")
   def showPersonTitle(repoId: String, personId: String)(using request: Request): Response[String] =
@@ -87,10 +79,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
     }
 
-  /**
-   * The Faces a Person's cover can be chosen from, best first: none on an asset marked for purging, which `setFaceAsCover`
-   * refuses. An unknown person, or another repository's, is a 404
-   */
+  /** The Faces a cover can be chosen from, best first, leaving out those on an asset marked for purging */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/modals/choose-person-cover-face")
@@ -106,10 +95,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
         ))
     }
 
-  /**
-   * Sets the Person's cover to the Face. An unknown person or Face, or another repository's, is a 404; a Face of another Person,
-   * or one on an asset marked for purging, is a plain-text 400 saying why
-   */
+  /** A Face of another Person, or on an asset marked for purging, is a plain-text 400 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/p/:personId/cover-image")
@@ -121,7 +107,6 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       htmlResponse(htmx.html.person_inner(person = updatedPerson))
     }
 
-  /** The inline name editor; an unknown person, or another repository's, is a 404 */
   @requireLogin()
   @requirePermission(Permission.EditMetadata)
   @cask.get(f"/$prefix/r/:repoId/p/:personId/name/edit")
@@ -131,11 +116,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       htmlResponse(htmx.html.edit_person_name(person = person))
     }
 
-  /**
-   * The name editor's save, for the Person the path names; an ID in the body is ignored. A saved name answers the name view, and
-   * a name that cannot be saved answers the editor again with its error or the offer to merge. A Person who is not live in the
-   * context repository (unknown, another repository's, merged away or a bad match) is a 404.
-   */
+  /** The inline name editor's save, for the Person in the path (an ID in the body is ignored); a merged-away Person is a 404 */
   @requireLogin()
   @requirePermission(Permission.EditMetadata)
   @cask.put(f"/$prefix/r/:repoId/p/:personId/name/edit")
@@ -149,10 +130,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     }
 
   /**
-   * The rename dialog the People tab's pencil opens for a Person, its field holding the current name. `pane` is the pane of the
-   * pencil (`Const.PeoplePane`, the Main pane when left out), the control focus goes back to when the dialog closes; a name that
-   * is no pane is a 400. A Person who is not live in the context repository (unknown, another repository's, merged away or a bad
-   * match) is a 404.
+   * The People tab's rename dialog. `pane` names the pencil that focus returns to on close. A Person merged away or discarded as
+   * a bad match is a 404.
    */
   @requireLogin()
   @requirePermission(Permission.EditMetadata)
@@ -167,12 +146,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
     }
 
-  /**
-   * The rename dialog's save. A saved name, the name the Person already has included, is an empty success, which completes the
-   * dialog; a name that cannot be saved answers the dialog's form again, in place of the submitted one
-   * (`dialogFormValidationResponse`), with its error or, for a name another live Person holds, the offer to merge into them. A
-   * Person who is not live in the context repository is a 404, as for the dialog.
-   */
+  /** A refused name answers the form again, with its error or the offer to merge into the Person holding the name */
   @requireLogin()
   @requirePermission(Permission.EditMetadata)
   @cask.put(f"/$prefix/r/:repoId/p/:personId/rename")
@@ -182,8 +156,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
         case RenameOutcome.Saved(_) => cask.Response("", 200, Seq(("Content-Type", "text/html")))
         case RenameOutcome.Refused(person, form, errors, holder) =>
           logger.debug(s"Rename dialog refused a name for person [${person.persistedId}]")
-          // The form sends its pane back so that the form replacing it names the same pencil; a missing or unknown one is the
-          // Main pane's, as for the dialog itself
+          // The form sends its pane back so the replacement form names the same pencil
           val pane = form.obj
             .get(Api.Field.Person.PANE)
             .flatMap(_.strOpt)
@@ -199,11 +172,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
               conflictingPerson = holder))
     }
 
-  /**
-   * How a rename ended: `Saved` with the Person as stored, which is also the answer for the name they already had, or `Refused`
-   * with the submitted form, its field errors and, when another live Person holds the name, that Person (`holder`), whom the form
-   * offers to merge into.
-   */
+  /** `Saved` covers an unchanged name too; `holder` is the live Person who holds the name, whom the form offers to merge into */
   private enum RenameOutcome:
     case Saved(person: Person)
     case Refused(person: Person, form: ujson.Obj, errors: Map[String, String], holder: Option[Person])
@@ -216,10 +185,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     minLengths = Map(Api.Field.Person.NAME -> Api.Constraints.MIN_NAME_LENGTH)
   )
 
-  /**
-   * Renames the Person to the name in the request's scrubbed JSON: the one rename of the inline name editor and of the rename
-   * dialog, each of which finds the Person by its path and renders the outcome its own way.
-   */
+  /** The one rename behind the inline name editor and the rename dialog, which each render the outcome their own way */
   private def renamePerson(person: Person)(using request: Request): RenameOutcome =
     val jsonIn: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
 
@@ -241,8 +207,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     try App.altitude.service.person.updateName(person, newName = newName)
     catch
       case _: DuplicateException =>
-        // The form offers to merge into the person holding the name. No one holds it when the holder was merged away meanwhile,
-        // or when the constraint was not the name's: the plain error then, with nothing to merge into
+        // No live holder when it was merged away meanwhile, or the constraint was not the name's: the plain error then
         App.altitude.service.person.getLiveByNameKey(newName) match
           case Some(holder) =>
             logger.debug(s"Name [$newName] is held by person [${holder.persistedId}], offering to merge into them")
@@ -254,7 +219,6 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
     RenameOutcome.Saved(App.altitude.service.person.getById(person.persistedId))
 
-  /** The name view; an unknown person, or another repository's, is a 404 */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/p/:personId/name")
   def viewPersonName(repoId: String, personId: String)(using request: Request): Response[String] =
@@ -264,11 +228,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     }
 
   /**
-   * The Merge people modal for the two people asked for. `pane` is sent by the rename dialog's offer to merge alone
-   * (`includes/person_name_taken`): the pane of the People tab (`Const.PeoplePane`) whose pencil opened that dialog. The merge
-   * modal takes the rename dialog's place, so the modal names that pencil, the requested source's in that pane, as the control
-   * focus goes back to when it closes; a name that is no pane is a 400. Without `pane` focus goes back to the control that asked
-   * for the modal. An unknown person, or another repository's, either of the two, is a 404.
+   * `pane` comes only from the rename dialog's offer to merge: the modal takes that dialog's place, so focus returns to the
+   * source's pencil in that pane. Without it, focus returns to the control that opened the modal.
    */
   @requireLogin()
   @requirePermission(Permission.Organize)
@@ -301,7 +262,6 @@ class PeopleActionController(using logger: Logger) extends BaseController:
         ))
     }
 
-  /** Merges the source into the destination; an unknown person, or another repository's, either of the two, is a 404 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/src/:srcPersonId/dest/:destPersonId")
@@ -316,7 +276,6 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       noContentResponse
     }
 
-  /** An unknown person, or another repository's, is a 404 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/p/:personId/hide")
@@ -330,7 +289,6 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       htmlResponse(htmx.html.person_inner(person = updatedPerson))
     }
 
-  /** An unknown person, or another repository's, is a 404 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.delete(f"/$prefix/r/:repoId/p/:personId")
@@ -344,7 +302,6 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       htmlResponse(htmx.html.person_inner(person = updatedPerson))
     }
 
-  /** An unknown person, or another repository's, is a 404 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/p/:personId/show")

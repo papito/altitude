@@ -1,5 +1,5 @@
-/* The tree's spacing is the explorer lists' shared one (core.css): one row gap between sibling rows and between a
-   folder's own row and its children, so nesting never tightens the spacing */
+/* One row gap between sibling rows and between a folder's own row and its children, so nesting never tightens the
+   spacing */
 #rootFolderList .folder.root, .folder-list .children {
     display: grid;
     grid-auto-rows: auto;
@@ -32,28 +32,25 @@
 }
 
 #rootFolderList .folder:not(.root) > .controls {
-    /* ⋯ menu button | dotted trace (= indent) | icon | folder-name | asset count. The name track
-       sizes to its content and wraps when it must; the count track takes the remaining width, so
-       the count follows the name directly and a row without a count ends at its name */
+    /* ⋯ menu button | dotted trace (= indent) | icon | folder-name | asset count. The count track
+       takes the remaining width, so the count follows the name directly */
     grid-template-columns: max-content max-content max-content auto 1fr;
 }
 
-/* An expanded branch and its visible descendants form a group, set off from the rows around it
-   by twice the row gap: the grid's own gap plus this margin, present only while expanded. Grid
-   items do not collapse margins, so the cases below cancel the margin where the neighbouring
-   group's margin already doubles the gap. Root is always expanded and is not a group */
+/* An expanded branch and its visible descendants form a group, set off by twice the row gap: the
+   grid's gap plus this margin. Grid items do not collapse margins, so the rules below cancel it
+   where a neighbouring group's margin already doubles the gap. Root is not a group */
 #rootFolderList .folder:not(.root)[data-expanded] {
     margin-block: var(--list-row-gap);
 }
 
-/* An expanded folder directly after an expanded sibling: the sibling's bottom margin already
-   doubles the gap between them */
+/* After an expanded sibling, whose bottom margin already doubles the gap */
 #rootFolderList .folder[data-expanded] + .folder:not(.root)[data-expanded] {
     margin-top: 0;
 }
 
-/* An expanded folder that ends its parent's children: the parent's own bottom margin, or the end
-   of the tree under root, takes the place of its margin, so groups ending together add one gap */
+/* Last among its siblings: the parent's bottom margin, or the tree's end, takes its place, so
+   groups ending together add one gap */
 #rootFolderList .folder:not(.root)[data-expanded]:last-child {
     margin-bottom: 0;
 }
@@ -77,9 +74,9 @@
     color: var(--theme-neutral-4);
 }
 
-/* The icon control is a real button (Enter/Space work, no page jump) that keeps only the icon's look and
-   place in the grid. Unlike the ⋯ trigger it keeps the default focus ring: focus lands here from the
-   keyboard, and from a collapse that hid the focused control */
+/* A real button (Enter/Space work, no page jump) that looks like the bare icon. Unlike the ⋯ trigger
+   it keeps the focus ring: focus lands here from the keyboard and after a collapse hides the focused
+   control */
 #rootFolderList .folder .expand-ctrl {
     display: grid;
     place-items: center;
@@ -91,11 +88,9 @@
     cursor: pointer;
 }
 
-/* Green marks the viewed scope: the folder whose results are displayed and every descendant, since the
-   results include the whole subtree. Expansion plays no part. The marker sits on the viewed folder's
-   node alone (see js/common/viewed-folder-scope.js); its descendants are DOM descendants, so this one
-   rule covers branches and leaves in the subtree, and never an icon in a menu or dialog. Root is
-   never marked: its results are the whole repository, and nothing turns green for that */
+/* Green marks the viewed scope: the folder whose results are displayed and its descendants, since the
+   results include the subtree. The marker sits on the viewed folder's node alone, so this rule covers
+   its subtree and never an icon in a menu or dialog. Root is never marked */
 #rootFolderList .folder[data-viewed-scope] .folder-icon {
     color: var(--success-color);
 }
@@ -104,8 +99,7 @@
     cursor: pointer;
 }
 
-/* The add button sits centered above the tree; the control is built by js/common/folder-tree.js.
-   Scoped to the shown state like the album hosts */
+/* Scoped to the shown state, since a display of its own would override the `hidden` attribute */
 #folderActions:not([hidden]) {
     display: grid;
     justify-items: center;
@@ -116,8 +110,7 @@
     margin-left: var(--space-3);
 }
 
-/* The Delete confirmation's warning of the Watch folders that sort their files into the folder
-   (htmx/delete_folder_dialog): as wide as a popover form, above the button */
+/* The Delete confirmation's warning about Watch folders that sort files into the folder */
 #deleteFolder .notice {
     max-width: var(--popover-form-width);
     margin-bottom: var(--space-5);

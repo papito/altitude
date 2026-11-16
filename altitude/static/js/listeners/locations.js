@@ -9,12 +9,9 @@ import { showSuccessSnackBar } from "../common/snackbar.js"
 import { runSearch } from "../search-results/search.js"
 
 /**
- * Location events: the dialogs' outcomes (add, add category, rename, move and delete reload the
- * list, and a delete the Triage summary; the Add to location dialog announces its memberships) and
- * membership changes from drag/drop and the batch footer. A single-asset drop escalates to a batch when that asset is
- * among the selected ones, as folder moves and album drops do. The reload restores the expanded
- * categories; an add also reveals the category the new Location went into, while a move leaves a
- * collapsed category collapsed, as moving a folder under a collapsed parent does.
+ * A single-asset drop escalates to a batch when that asset is among the selected ones. A list reload
+ * restores the expanded categories; an add also reveals the new Location's category, while a move
+ * leaves a collapsed category collapsed.
  */
 export function registerLocationListeners(app) {
     const selectedAssets = () => Alpine.store(Const.state.selectedAssets)
@@ -58,9 +55,7 @@ export function registerLocationListeners(app) {
             focusAddLocationControlIfFocusLost()
             showSuccessSnackBar(`"${name}" deleted`)
 
-            // The displayed results were searched in the deleted Location: the search goes on without
-            // it, back to the whole repository when it was the search's one place, with every other
-            // filter of a filtered search
+            // The search goes on without the deleted Location, keeping its other filters
             const searchParams = Alpine.store(Const.state.searchParams)
             if (searchParams.names("locationId", id)) {
                 searchParams.replaceId("locationId", id, null)
@@ -108,8 +103,7 @@ export function registerLocationListeners(app) {
         },
     )
 
-    // The footer's "Add to location" opens the dialog for the selection in the modal host; the
-    // hidden selection field is filled when the dialog is hydrated (js/fragments/add-to-location.js)
+    // The dialog's selection field is filled when it is hydrated (fragments/add-to-location.js)
     document.body.addEventListener(
         Const.events.batchAddToLocationRequested,
         () => {
@@ -121,13 +115,10 @@ export function registerLocationListeners(app) {
         },
     )
 
-    // The dialog's success: the server added the selection to the chosen Location (already
-    // present assets skipped), so the selection is done with and the counts move on
     document.body.addEventListener(
         Const.events.assetsAddedToLocation,
         (event) => {
-            // `added` is the server's count (the dialog operation merges it into the detail); a
-            // detail that did not arrive falls back to the selection the dialog submitted
+            // `added` is the server's count; without it, the selection the dialog submitted
             app.assetActions.reportAddedToLocation({
                 ...event.detail,
                 added: event.detail.added ?? selectedAssets().size,
@@ -138,7 +129,7 @@ export function registerLocationListeners(app) {
     )
 }
 
-/** The rendered name of a row, when the Locations tab is displayed; the ID is the fallback */
+/** Falls back to the ID when the Locations tab is not shown */
 function locationName(id) {
     return document.getElementById(`locationName-${id}`)?.textContent ?? id
 }

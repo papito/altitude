@@ -5,8 +5,7 @@ import scalasql.Table
 
 /**
  * The `account` table, behind the `User` model. `passwordHash` is never part of the model and is read on its own. `emailKey` and
- * `usernameKey` are the name keys `account_01` and `account_02` keep unique, written by `UserDao.addUser` and compared by a
- * login; the model derives them from the email address and the username.
+ * `usernameKey` are the name keys `account_01` and `account_02` keep unique; the model derives them from the email and username.
  */
 case class AccountRow[T[_]](
     id: T[String],

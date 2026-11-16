@@ -112,7 +112,6 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
     val sql = s"UPDATE account SET ${FieldConst.User.PASSWORD_HASH} = ?, ${FieldConst.UPDATED_AT} = ? WHERE ${FieldConst.ID} = ?"
     updateByBySql(sql, List(passwordHash, now, id))
 
-  // The bind value of the current moment, for `updated_at` and `last_login_at`
   private def now: Any = nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC))
 
   override def recordLogin(id: String): Unit =

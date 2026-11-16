@@ -3,7 +3,7 @@ package altitude.core.dao.sql.tables
 import java.time.OffsetDateTime
 import scalasql.Table
 
-/** The `import` table. The five counters are named by the outcome they count. */
+/** The `import` table. Each of the five counters is named by the `ImportOutcome` it counts. */
 case class ImportRow[T[_]](
     id: T[String],
     repositoryId: T[String],

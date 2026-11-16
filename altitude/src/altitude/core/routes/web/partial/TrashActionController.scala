@@ -19,13 +19,9 @@ class TrashActionController(using logger: Logger) extends BaseController:
   def purgeRecycleBin(repoId: String)(using request: Request): Response[String] =
     logger.debug("Purging the recycle bin")
 
-    // Call the Sanitation Dept
     App.altitude.service.library.purgeRecycleBin()
 
-    /**
-     * The purge action is async, there is no point in reloading the recycle bin page right away as the user will not see any
-     * changes until the next reload, so the only thing we can do is supply a happy message
-     */
+    // The purge queue deletes the files in the background, so the answer is a message rather than a reloaded trash
     val payload = "<!doctype html>" + htmx.html.trashbin_purged()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 

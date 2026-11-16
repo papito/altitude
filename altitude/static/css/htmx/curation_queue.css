@@ -1,6 +1,5 @@
-/* The rows of Curation's Sequence rail (htmx/curation_queue), under the rail's header in the shell: each Sequence's cover
-   Preview, the Bundle rail's, with its frame count and its first capture's day beneath; the current row wears the accent's edge
-   the focused frame does, and a done row is dimmed and wears its mark, the rail's check, which no other row shows */
+/* Curation's Sequence rail rows: each Sequence's cover Preview with its frame count and first day beneath. The current row
+   takes the focused frame's accent edge; a done row is dimmed and shows its check */
 #curationQueue {
   display: grid;
   row-gap: var(--space-5);

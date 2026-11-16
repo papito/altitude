@@ -1,22 +1,9 @@
 /**
- * The Face highlights of Asset detail (the glossary's term): a Face's box drawn on the media, with
- * its Person's name in a badge under it. The layer (`#faceHighlights`, `htmx/view_image_detail_modal`)
- * shares the media's box in the stage, so a highlight is placed by fractions of the shown media,
- * which `detail-panel.js` works out: the box the detector found in the upright image's pixels over
- * the size the browser shows (`naturalWidth`, `videoWidth`), the same space, since OpenCV decodes an
- * image upright by its EXIF orientation as a browser does, and a Video's frames are turned as its
- * player turns them; or, while the stage shows an Edit, the box pushed through the Edit's geometry
- * (`edit/geometry.js`, `mapBox`).
- *
- * The layer takes no pointer events; each highlight's box does, as a toggle button of its People
- * row's selection (`aria-pressed`). Its badge, anchored to it (CSS anchor positioning, each highlight
- * named by its index), sits under the box and is kept inside the media: above the box when there is
- * no room below, and inside the box's bottom edge when there is none above either; it is cut with
- * an ellipsis at the layer's width and takes no pointer events either, so the player's control bar
- * under it stays usable.
- *
- * `detail-panel.js` owns which Faces show (the `p` setting, the selection, a Video's Frame time) and
- * calls `show` with them; `clear` empties the layer, as soon as another asset starts loading.
+ * The Face highlights of Asset detail: each Face's box drawn on the media, its Person's name in a
+ * badge under it. The layer shares the media's box, so a highlight is placed by fractions of the shown
+ * media. Detector boxes and shown pixels are one space, since the detector decodes an image upright by
+ * its EXIF orientation as a browser does. The layer and the badges take no pointer events, so the
+ * player's control bar under them stays usable; each box is a toggle button of its row's selection.
  */
 import { Const } from "../constants.js"
 
@@ -30,11 +17,7 @@ export function createFaceHighlights() {
         return document.getElementById(LAYER_ID)
     }
 
-    /**
-     * Draws `faces` (`{ faceId, name, hidden, box: { x, y, width, height } }`, the box as fractions
-     * of the shown media) over it, the selected one emphasised. The layer is rebuilt whole: a
-     * handful of boxes at most.
-     */
+    /** Draws `faces`, boxes as fractions of the shown media; rebuilt whole, a handful of boxes at most */
     function show({ faces, selectedFaceId }) {
         layerEl()?.replaceChildren(
             ...faces.flatMap((face, index) =>
@@ -50,7 +33,6 @@ export function createFaceHighlights() {
     return { show, clear }
 }
 
-/** The box, then its badge, which anchors to the box by the name the index gives it */
 function highlightOf({ face, index, selectedFaceId }) {
     const anchorName = `--face-highlight-${index}`
     const selected = face.faceId === selectedFaceId

@@ -5,21 +5,13 @@ import { thumbnailsOf } from "./cells.js"
 /**
  * SELECTION
  *
- * What is selected in the results grid is a reactive `Set` of asset IDs in the `selectedAssets`
- * store, and nothing else: no per-cell component, no map of component proxies. The store is the
- * one place a selection changes, and each change paints the cells it concerns (`.selected` on the
- * thumbnail box, every `.drag-drop[data-asset-id]` of the asset - a Location grouping holds an
- * asset once per Location), so the DOM never has to be asked what is selected.
+ * The selection is a reactive `Set` of asset IDs in the `selectedAssets` store, the one place it
+ * changes. Each change paints every thumbnail of the asset (a Location grouping holds an asset once
+ * per Location), so the DOM never has to be asked what is selected. The DOM is not reactive, so cells
+ * entering or leaving the grid bump a counter (`noteGridChange`) for group headers to recount.
  *
- * The footer binds to the set (`x-show="!$store.selectedAssets.isEmpty"`, `x-text` of its size),
- * and a group header counts its group's cells against it (js/alpine/components/date-group-selectable.js).
- * Cells that enter or leave the grid are announced with `noteGridChange()`, which bumps a reactive
- * counter those headers read: the DOM is not reactive, and this is the one signal that stands in
- * for it.
- *
- * Every displayed grid gets one delegated click listener (`bindAssetSelection`): a click on a
- * thumbnail's checkmark toggles its asset, and a Shift-click on the thumbnail image does the same
- * (a plain click on the image opens its detail through htmx, `click[!event.shiftKey]`).
+ * A click on a thumbnail's checkmark, or a Shift-click on its image, toggles its asset; a plain click
+ * on the image opens its detail.
  */
 
 const SELECTED_CLASS = "selected"
@@ -89,7 +81,7 @@ export function createSelectedAssetsStore() {
     }
 }
 
-/** Paints every cell of the asset: the thumbnail box is the `.drag-drop` div carrying the asset ID (htmx/result_cell.scala.html) */
+/** Paints every thumbnail box of the asset */
 function paint(id, className, on) {
     thumbnailsOf(id).forEach((thumbnailEl) =>
         thumbnailEl.classList.toggle(className, on),

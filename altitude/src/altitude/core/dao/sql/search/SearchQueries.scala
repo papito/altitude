@@ -54,30 +54,25 @@ import altitude.core.util.TriageSubset
 /**
  * A search as typed relations, rendered into hand-written statements.
  *
- * Every shape of search - the flat page, each slice of a grouped page, each of its counts, the map's aggregates - starts from the
- * same [[matching]] relation, so a count can never disagree with the rows it is counting. Each is a hand-written shell over that
- * typed relation, and every shell is built through [[statement]], which puts the Search text's CTEs at its head: the relation
- * tests membership in them, so a shell cannot leave them out.
+ * Every shape of search (the flat page, each slice and count of a grouped page, the map's aggregates) starts from the same
+ * [[matching]] relation, so a count can never disagree with its rows. Every shell is built through [[statement]], which puts the
+ * Search text's CTEs at its head, so a shell cannot leave them out. Joined-in filters are semi-joins on `asset.id`, so a search
+ * reads `FROM asset` alone, with no `GROUP BY` on the outer query and no duplicate rows.
  *
- * Each of the joined-in filters is a semi-join on `asset.id` rather than a comma join: a search then reads `FROM asset` alone,
- * with no `GROUP BY`/`HAVING` on the outer query and no duplicate rows to deduplicate.
- *
- * These are pure functions of their arguments; the repository is passed in rather than read from `RequestContext`. The one thing
- * read from the JVM is its time zone, the server's, in which the days of a Date Imported range begin ([[matching]]).
+ * These are pure functions of their arguments; the one thing read from the JVM is its time zone, in which the days of a Date
+ * Imported range begin.
  */
 object SearchQueries:
 
   /**
-   * Separates a category's name from its Location's in a path key: the control character U+0001. It sorts below every printable
-   * character, so the composite key orders exactly as the pair (category name, Location name) would, and a Location's key cannot
-   * collide with a top-level one.
+   * Separates a category's name from its Location's in a path key. U+0001 sorts below every printable character, so the key
+   * orders as the pair (category, Location) would, and a Location's key cannot collide with a top-level one.
    */
   private val PATH_SEPARATOR: String = 1.toChar.toString
 
   /**
-   * Every asset a search matches, unordered and unpaged; with Search text it refers to the text's CTEs and, among a part of a
-   * description's ranked matches (`SearchQuery.described`), to the `described` CTE ([[statement]]). The days of a Date Imported
-   * range are those of the server's time zone as the relation is built.
+   * Every asset a search matches, unordered and unpaged. It may refer to the Search text's CTEs and to the `described` CTE, which
+   * only [[statement]] supplies.
    */
   def matching(engine: SearchDialect, query: SearchQuery, repositoryId: String): Select[AssetRow[Expr], AssetRow[Sc]] =
     import engine.dialect.*
@@ -113,9 +108,8 @@ object SearchQueries:
       .map(person => (person.id, person.name))
 
   /**
-   * How many assets each folder of the repository holds itself, as (folder ID, count): the default view's matches grouped by
-   * folder, so a folder's count is what clicking it shows; an asset in no folder (a triaged one) counts under none. It reads the
-   * capture-day index alone, which carries the folder.
+   * How many assets each folder holds itself: the default view's matches grouped by folder, so a count is what clicking the
+   * folder shows. It reads the capture-day index alone, which carries the folder.
    */
   def folderCounts(
       engine: SearchDialect,
@@ -125,7 +119,7 @@ object SearchQueries:
     val defaultView = new SearchQuery(params = Map(FieldConst.Asset.IS_RECYCLED -> false))
     matching(engine, defaultView, repositoryId).groupBy(_.folderId)(_.size)
 
-  /** The count of every match, exact however many there are: what merging people recounts a person's assets by */
+  /** The exact count of every match, uncapped */
   def count(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
     statement(
       engine,
@@ -134,10 +128,7 @@ object SearchQueries:
       Nil,
       sql"SELECT count(*) FROM (${matchingIds(engine, matching(engine, query, repositoryId), None)}) AS m")
 
-  /**
-   * The count of the matches up to the query's cap, for a total the results UI shows: a result one past the cap means more than
-   * the cap, and no more of them is read
-   */
+  /** The count of the matches up to one past the query's cap, which means more than the cap; no more rows are read */
   def cappedCount(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
     statement(
       engine,
@@ -147,31 +138,24 @@ object SearchQueries:
       sql"SELECT count(*) FROM (${cappedIds(engine, matching(engine, query, repositoryId), query.totalCap)}) AS m")
 
   /**
-   * How many of the matches carry a SigLIP 2 Scene embedding, counted up to one past `cap`, as [[cappedCount]] counts the
-   * matches: the assets a Describe search would rank, which says whether they are few enough to rank one by one
-   * (`postgres.SearchDao`). A result one past the cap means more than it.
+   * How many matches carry a SigLIP 2 embedding, capped as [[cappedCount]] is: whether a Describe search's candidates are few
+   * enough to rank one by one
    */
   def embeddedCount(engine: SearchDialect, query: SearchQuery, repositoryId: String, cap: Int): SqlStr =
     val matches = embedded(matching(engine, query, repositoryId))
     statement(engine, query, repositoryId, Nil, sql"SELECT count(*) FROM (${cappedIds(engine, matches, cap)}) AS m")
 
   /**
-   * One page of a flat search: which assets are on it is decided over narrow rows, then only those are read in full.
+   * One page of a flat search: the page's assets are picked over narrow rows, then only those are read in full.
    *
-   * The `candidates` slice selects each match's ID, sort value and second sort value (the capture time under the Relevance sort,
-   * which orders by it next), ordered by the sort, then the ID, as a grouped page is within a group: a missing capture time
-   * creates a large tie group, and without the ID a page is not deterministic. It fetches one row past the page to say whether
-   * another page follows, and a page past the first starts after its cursor's anchor ([[afterBySort]]), so no page reads the rows
-   * of the pages before it. A first page also counts the matches, up to the cap, unless its search counts no total
-   * (`SearchQuery.withoutTotal`).
+   * The candidates are ordered by the sort, then the ID: a missing capture time makes a large tie group, and without the ID a
+   * page is not deterministic. They fetch one row past the page to tell whether another follows, and start after the cursor's
+   * anchor ([[afterBySort]]), so no page reads the rows of the pages before it.
    *
-   * Sorted by capture time, the candidates are the day-ordered ones of a page grouped by day ([[dayCandidates]]), the days in the
-   * sort's direction: the capture day followed by the capture time is the order of the capture time alone, and it is the order of
-   * the capture-day index, which the engines would not read in order for the time alone. Under the Relevance sort the candidates
-   * read `scored` ([[scoredCte]]), so the cursor compares a Relevance computed once.
-   *
-   * A range of sort values never reaches NULL, so a sort that puts the rows without a value last reads them in a second slice
-   * ([[candidatesCte]]), as a page ordered by day does.
+   * Sorted by capture time, the candidates are a day-grouped page's ([[dayCandidates]]): day then time is the order of the time
+   * alone, and the engines read the capture-day index in order where they would not for the time alone. Under a scored sort they
+   * read `scored` ([[scoredCte]]), so the cursor compares a score computed once. Rows without a sort value, sorted last, come
+   * from a second slice ([[candidatesCte]]).
    */
   def flat(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
     import engine.dialect.*
@@ -251,9 +235,8 @@ object SearchQueries:
     )
 
   /**
-   * The candidates of a page ordered by day, as its CTEs: the narrow rows (ID, day, sort key) of the matches after the cursor's
-   * anchor, in day order and then in the sort's, one row past the page. Under the Relevance sort they read `scored`. Where the
-   * days' direction puts the rows without a day last, a continuation reads them in a second slice ([[candidatesCte]]).
+   * The candidates of a page ordered by day, as its CTEs: narrow rows after the cursor's anchor, in day order then the sort's,
+   * one row past the page
    */
   private def dayCandidates(
       engine: SearchDialect,
@@ -302,14 +285,14 @@ object SearchQueries:
           guardedLimit(LEADING_SLICE, query.rpp)))
     )
 
-  /** The slice of the rows that have a value for what orders them, which a slice of the rows that have none may follow */
+  /** The name of the slice of rows that have an ordering value, which a slice of those that have none may follow */
   private val LEADING_SLICE = "dated"
 
   /**
-   * The candidates of a page as its CTEs: the leading slice alone or, with a slice of the rows whose ordering value is NULL, the
-   * two in turn. A range of values never reaches NULL, so where NULL sorts last a continuation needs the second slice, which
-   * fills the page only once the leading one has run out. Its guard is in LIMIT ([[guardedLimit]]): SQLite short-circuits a zero
-   * limit, but would scan the null block for a WHERE guard.
+   * The candidates as CTEs: the leading slice, then optionally a slice of the rows whose ordering value is NULL. A range never
+   * reaches NULL, so where NULL sorts last a continuation needs that second slice, which fills the page only once the leading one
+   * runs out. Its guard is in LIMIT ([[guardedLimit]]): SQLite short-circuits a zero limit, but would scan the null block for a
+   * WHERE guard.
    */
   private def candidatesCte(leading: SqlStr, trailingNulls: Option[SqlStr]): SqlStr =
     trailingNulls.fold(sql"candidates $narrowColumns AS MATERIALIZED ($leading)") {
@@ -320,24 +303,16 @@ object SearchQueries:
     }
 
   /**
-   * One statement for a page grouped by day: the ordered page slice joined back to its asset rows, the full-day count of each day
-   * on the page and, on a first page, the count of every match. Every branch renders from the same [[matching]] relation, so
-   * counts can never drift from the rows and every bind value travels with the fragment that needs it. The candidate slices are
-   * narrow (ID, day, sort key) and fetch one row past the page to detect continuation; only the page's rows are joined to the
-   * asset table. Every branch is materialized: the candidates because they are read twice, the counts so a day count runs once
-   * per distinct day, not once per page row.
+   * One statement for a page grouped by day: the page slice joined back to its asset rows, the full-day count of each day on the
+   * page and, on a first page, the count of every match. Every CTE is materialized: the candidates because they are read twice,
+   * the counts so a day count runs once per distinct day, not per row. Under a scored sort `scored` ([[scoredCte]]) comes first;
+   * no index orders a computed value, so reading every match first loses nothing.
    *
-   * Under the Relevance sort the statement first materializes `scored` ([[scoredCte]]): every match with its day and its
-   * Relevance, computed once, which the slices, the cursor comparison and the order then read. No index orders a computed value,
-   * so nothing is lost by reading every match first.
+   * Ordering is day, then the sort, then the ID. Nulls fall where the engine puts them natively, since an explicit NULLS clause
+   * would forfeit index-ordered reads on both engines; a scored sort places them itself ([[orderWithinGroup]]).
    *
-   * A page reached by cursor skips the overall count, the footer total having been set by the first page, as does a search
-   * without a total (`SearchQuery.withoutTotal`). Ordering is day, then the sort, then the ID as a deterministic tiebreaker.
-   * Nulls fall where the engine puts them natively; an explicit NULLS clause would forfeit index-ordered reads on both engines.
-   * The Relevance sort is the exception ([[orderWithinGroup]]): its capture-time tiebreaker places them itself.
-   *
-   * The shell is hand-written on purpose: `MATERIALIZED`, the guarded `LIMIT CASE`, SQLite's planner hint and native null
-   * placement are all tuned against the two engines' plans, and none of them can be expressed through a typed query.
+   * The shell is hand-written because `MATERIALIZED`, the guarded `LIMIT CASE`, SQLite's planner hint and native null placement
+   * are tuned against both engines' plans and cannot be expressed through a typed query.
    */
   def grouped(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
     given TypeMapper[SortValue] = engine.sortValueMapper
@@ -401,18 +376,13 @@ object SearchQueries:
     )
 
   /**
-   * One statement for a page grouped by Location: the shell of [[grouped]] over two relations instead of one. `located` is the
-   * matches joined to their Locations - an asset once per Location it is in, so an asset in two Locations appears under both -
-   * and `unlocated` is the matches in no Location, which always come last as the "No location" group. Under the Relevance sort
-   * both read `scored`, the matches with their Relevance computed once, as the day statement does.
+   * One statement for a page grouped by Location: [[grouped]]'s shell over two relations. `located` is the matches joined to
+   * their Locations (an asset in two Locations appears under both); `unlocated` is the matches in no Location, always the last
+   * group.
    *
-   * Locations are in path order: the key is the category's name key and the Location's own joined by [[PATH_SEPARATOR]], or the
-   * Location's name alone at the top level - the order the sidebar lists them in - then the Location's ID as a deterministic
-   * tiebreaker, then the sort within the group, then the asset ID. A cursor whose anchor was in a Location slices `located` after
-   * it and lets `unlocated` fill the page only once `located` has run out, through the same guarded `LIMIT CASE` as the day
-   * statement's null slice; a cursor without a group key is already in the trailing group and slices `unlocated` alone. A group's
-   * count is the matching assets in that Location (or in none); the overall total on a first page is the number of matching
-   * assets, so the group counts may sum to more than it.
+   * Locations are in the sidebar's path order (the path key, see [[PATH_SEPARATOR]]), then by ID, then the sort, then the asset
+   * ID. A cursor in a Location slices `located` after it and lets `unlocated` fill the page only once `located` runs out, through
+   * the same guarded `LIMIT CASE`. A group's count is its matching assets, so the group counts may sum to more than the total.
    */
   def groupedByLocation(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
     import engine.dialect.*
@@ -509,9 +479,8 @@ object SearchQueries:
             SELECT $locationColumnList FROM located UNION ALL SELECT $locationColumnList FROM unlocated)"""
       else sql"candidates $locationColumns AS MATERIALIZED ($unlocated)"
 
-    // One count per distinct Location on the page, read from that Location's own memberships under the search's predicates, so
-    // its cost is the size of the page's Locations and not of the library. The no-location count, a count of the matches in no
-    // Location, runs only when the page reaches that group.
+    // One count per distinct Location on the page, over that Location's own memberships, so it costs the page's Locations and
+    // not the library. The no-location count runs only when the page reaches that group.
     val pageLocationMembers = Db
       .render(
         base
@@ -566,20 +535,14 @@ object SearchQueries:
     )
 
   /**
-   * One statement for a page grouped by Sequence: the shell of [[groupedByLocation]] over its two relations. `sequenced` is the
-   * matches with a Sequence, `unsequenced` the rest, which always come last as the "No sequence" group, and a frame is in one
-   * group. Under the Relevance sort both read `scored`, the matches with their Relevance computed once.
+   * One statement for a page grouped by Sequence: [[groupedByLocation]]'s shell, over `sequenced` (the matches in a Sequence) and
+   * `unsequenced` (the rest, always the last group).
    *
-   * Groups are in the queue's order and it is fixed: the first capture of the group's matching frames, oldest first, then the
-   * Sequence's ID, then the sort within the group, then the asset ID. The first capture is a window over the matching frames, so
-   * a search showing some of a Sequence's frames orders it by those; `sequence_frames` ([[SequenceFrameRow]]) materializes it for
-   * the cursor to compare, and costs the frames that carry a Sequence, through `asset_sequence`, and not the library. A Sequence
-   * with no capture time follows those with one on both engines.
-   *
-   * A cursor whose anchor was in a Sequence slices `sequenced` after it and lets `unsequenced` fill the page only once
-   * `sequenced` has run out, through the same guarded `LIMIT CASE`; a cursor without a Sequence is already in the trailing group
-   * and slices `unsequenced` alone. A group's count is its matching frames, one correlated count per distinct Sequence on the
-   * page, so it costs the size of the page's groups; the "No sequence" count runs only on the pages that reach that group.
+   * Groups are in the queue's order: the first capture of the group's matching frames, oldest first, then the Sequence's ID, then
+   * the sort, then the asset ID. That first capture is a window over the matching frames, which `sequence_frames`
+   * ([[SequenceFrameRow]]) materializes for the cursor to compare; it costs the frames in a Sequence (through `asset_sequence`),
+   * not the library. A Sequence with no capture time follows those with one on both engines. Continuation and the per-group
+   * counts work as [[groupedByLocation]]'s.
    */
   def groupedBySequence(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
     import engine.dialect.*
@@ -604,9 +567,9 @@ object SearchQueries:
       Db.render(projected, engine.dialect).withCompleteQuery(false)
 
     /**
-     * Rows strictly after the anchor: the anchor's own Sequence's rows after it by sort, or a later group. A Sequence is told by
-     * its ID before its first capture, which moves when the frame that set it leaves: the frames of the anchor's Sequence already
-     * shown must not count as a later group, and those still to come must not be lost.
+     * Rows strictly after the anchor: its own Sequence's rows after it by sort, or a later group. A Sequence is told by its ID
+     * before its first capture, which moves when the frame that set it leaves: the anchor's Sequence's frames already shown must
+     * not count as a later group, and those still to come must not be lost.
      */
     def afterSequence(cursor: SearchCursor): Expr[Boolean] =
       val sequenceId = cursor.groupId.get
@@ -725,24 +688,15 @@ object SearchQueries:
     )
 
   /**
-   * One page of a Describe search in its own order: the matches ranked by how much they look like a description, most alike
-   * first.
+   * One page of a Describe search: the matches ranked by how much they look like a description, most alike first.
    *
-   * `ranked (id, distance)` is the engine's own, materialized once ([[rankedCtes]]): what the engine makes of the [[matching]]
-   * relation, the matches whose SigLIP 2 Scene embedding is within the ranking's cutoff of a description's, the nearest of them
-   * up to its limit, read exactly or, where the engine has a vector index and the ranking says so, through it
-   * (`SearchDialect.ranked`). Either way it is the relation of the search's matches that is ranked, so a Describe search cannot
-   * disagree with the search of its filters about the assets they leave, and the filters decide nothing of the order.
+   * `ranked (id, distance)` ([[rankedCtes]]) is the engine's ranking of the [[matching]] relation: the matches whose SigLIP 2
+   * embedding is within the cutoff, nearest first up to the limit. Since it ranks the search's own matches, a Describe search
+   * cannot disagree with the search of its filters about which assets they leave. The page is the rows after the cursor by
+   * (distance, ID), one more than the page holds; every page ranks again, so a cursor continues among the rows as they are then.
    *
-   * Around it, the shell of every page: the rows after the cursor's position in the order of the ranking, their distance and then
-   * their ID, one more than the page holds to tell whether another follows; those rows' assets
-   * ([[assetColumnsWithoutBulkyMetadata]]), each with its distance; and, on a page that counts the total, the count of the ranked
-   * rows, which the limit bounds. Every page ranks again, so a cursor continues from its position among the rows as they are
-   * then. A cursor whose position is not a distance is no Describe search's (`SearchCursorException`).
-   *
-   * Every row also carries where the weaker matches of the search begin (`WeakerMatches`), the same on each: `weaker_under`, the
-   * cosine under which a ranked row is one (`weaker_line`, read off the ranked rows, so it is the line of the whole ranking
-   * whatever the page), and `weaker_count`, how many ranked rows are weaker ([[IS_WEAKER]]).
+   * Every row also carries where the weaker matches begin, the same on each: `weaker_under`, the cosine line read off the whole
+   * ranking, and `weaker_count`, how many ranked rows are under it ([[IS_WEAKER]]).
    */
   def described(engine: SearchDialect, query: SearchQuery, repositoryId: String, ranking: DescribeRanking): SqlStr =
     import engine.dialect.*
@@ -779,12 +733,9 @@ object SearchQueries:
     )
 
   /**
-   * Every point the map plots for a search, one row per plotted point, with the asset's ID and capture time: a matching asset
-   * with a point of its own is plotted there, and only there; one without is plotted at the pin of each Location it is in, so an
-   * asset in two Locations is two points, as it is two cells in the Location grid. With a box, only the points inside it.
-   *
-   * Rendered as a `UNION ALL` of the two typed relations; each carries every filter of the search, so the points can never
-   * disagree with the grid.
+   * Every point the map plots for a search: a matching asset with a point of its own is plotted there only; one without is
+   * plotted at the pin of each Location it is in, so an asset in two Locations is two points. Both branches carry every filter of
+   * the search, so the points can never disagree with the grid.
    */
   private def plottedPoints(engine: SearchDialect, query: SearchQuery, repositoryId: String, bbox: Option[BoundingBox]): SqlStr =
     import engine.dialect.*
@@ -805,16 +756,13 @@ object SearchQueries:
 
     sql"${Db.render(own, engine.dialect).withCompleteQuery(false)} UNION ALL ${Db.render(pinned, engine.dialect).withCompleteQuery(false)}"
 
-  /** The plotted points as a named CTE, for the statements that aggregate them */
   private def pointsCte(engine: SearchDialect, query: SearchQuery, repositoryId: String, bbox: Option[BoundingBox]): SqlStr =
     sql"points (asset_id, latitude, longitude, taken) AS (${plottedPoints(engine, query, repositoryId, bbox)})"
 
   /**
-   * One statement for the map's cells in a viewport: the plotted points in the box, each assigned to a square cell of
-   * `cellDegrees` a side by flooring its coordinates, then one window pass per cell for the count, the centroid and the rank of
-   * each point by newest capture time (nulls last, whatever the engine's native placement) and then ID; the rank-one row of each
-   * cell is the cell, and its asset represents it, read with the revision of its edited images. `floor` is built into both
-   * engines.
+   * The map's cells in a viewport: each plotted point in the box floored into a square cell `cellDegrees` a side, then one window
+   * pass per cell for the count, the centroid and the representative asset (newest capture time, nulls last on either engine,
+   * then ID)
    */
   def mapCells(engine: SearchDialect, query: SearchQuery, repositoryId: String, bbox: BoundingBox, cellDegrees: Double): SqlStr =
     import engine.dialect.*
@@ -844,10 +792,9 @@ object SearchQueries:
     )
 
   /**
-   * The Locations pinned inside the box that hold at least one matching asset, with that count and their category's name, in one
-   * statement: the matches among the members of the Locations in the box are read once into `matched`, so it is as large as those
-   * memberships and not as the library, then the repository's Locations in the box are joined to their memberships among them and
-   * grouped. The count agrees with the grid scoped to the Location.
+   * The Locations pinned inside the box that hold at least one matching asset, with that count. The matches among the members of
+   * the box's Locations are read once into `matched`, so it is as large as those memberships and not the library. The count
+   * agrees with the grid scoped to the Location.
    */
   def mapLocations(engine: SearchDialect, query: SearchQuery, repositoryId: String, bbox: BoundingBox): SqlStr =
     import engine.dialect.*
@@ -872,10 +819,7 @@ object SearchQueries:
       """
     )
 
-  /**
-   * One aggregate over every plotted point of the search: the box around them and their count, for fitting the map to a result.
-   * With nothing plotted the extremes are NULL and the count is zero.
-   */
+  /** The box around every plotted point of the search and their count; with nothing plotted the extremes are NULL */
   def mapBounds(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
     statement(
       engine,
@@ -886,10 +830,9 @@ object SearchQueries:
     )
 
   /**
-   * One statement reading the hits of the Search text's positive groups, those none of whose alternatives is excluded: for each,
-   * the union of its sources' asset IDs, each source within the repository ([[sourceRelation]]), limited to one row past the
-   * limit, so that a group with more hits than the limit costs no more than one with as many. Rows are (group index, asset ID),
-   * an asset once per source it is a hit in. Nothing when no group is positive.
+   * The hits of the Search text's positive groups (none of whose alternatives is excluded) as (group index, asset ID), an asset
+   * once per source it is a hit in. Each group stops one row past `limit`, so a group with more hits costs no more than one with
+   * as many.
    */
   def textProbe(engine: SearchDialect, text: ResolvedSearchText, repositoryId: String, limit: Int): Option[SqlStr] =
     val branches = text.groups.zipWithIndex.filter(_._1.isPositive).map {
@@ -901,9 +844,8 @@ object SearchQueries:
     Option.when(branches.nonEmpty)(SqlStr.join(branches, sql" UNION ALL "))
 
   /**
-   * The one way a statement over a search is built: the Search text's CTEs, then those of the description the search is among a
-   * part of, then the shell's own, then the shell's body. The [[matching]] relation tests membership in the text's CTEs and in
-   * `described` by name, so a statement built any other way would not run.
+   * The one way a statement over a search is built: the Search text's CTEs, the description's, the shell's own, then the body.
+   * [[matching]] names the text's CTEs and `described`, so a statement built any other way would not run.
    */
   private def statement(
       engine: SearchDialect,
@@ -916,10 +858,8 @@ object SearchQueries:
       case all => sql"WITH " + SqlStr.join(all, SqlStr.raw(", ")) + sql" " + body
 
   /**
-   * The CTEs of a description's ranking of a search's matches: the engine's own sources, then `ranked (id, distance)`, the
-   * matches of `filters`, a search with no description of its own, ranked by the engine as the ranking says
-   * (`SearchDialect.ranked`), materialized once; then `weaker_line (cosine)`, the cosine under which a ranked row is a weaker
-   * match, the ranking's `weakerRatio` of the nearest ranked row's ([[IS_WEAKER]]).
+   * The CTEs of a description's ranking: the engine's sources, `ranked (id, distance)` (the matches of `filters` as the engine
+   * ranks them, materialized once), and `weaker_line (cosine)`, the ranking's `weakerRatio` of the nearest row's cosine
    */
   private def rankedCtes(
       engine: SearchDialect,
@@ -935,18 +875,16 @@ object SearchQueries:
     )
 
   /**
-   * Whether a row of `ranked` is a weaker match: its cosine, 1 less its distance, is under the line, where there is one. A line
-   * that is not positive is none: under a ratio of 0, which asks for no weaker matches, and where the nearest row has no positive
-   * cosine to take a fraction of, so the nearest row is never a weaker match. Wherever a row is compared with the line it is
-   * compared this way, so it is on one side of it everywhere.
+   * Whether a row of `ranked` is a weaker match: its cosine (1 - distance) is under the line. A line that is not positive is none
+   * (a ratio of 0, or a nearest row with no positive cosine), so the nearest row is never weaker. Every comparison with the line
+   * goes through this, so a row is on the same side of it everywhere.
    */
   private val IS_WEAKER: SqlStr =
     SqlStr.raw("((SELECT cosine FROM weaker_line) > 0 AND 1 - distance < (SELECT cosine FROM weaker_line))")
 
   /**
-   * The CTEs of the description a search is among a part of (`SearchQuery.described`), none for any other search: the ranking of
-   * the search's own filters ([[rankedCtes]]), then `described (id, similarity)` ([[DescribedRow]]), the ranked rows of the part,
-   * those above the line of the weaker matches or the weaker ones, each with its cosine to the description.
+   * For a search among a part of a description's matches (`SearchQuery.described`): the ranking of its filters, then
+   * `described (id, similarity)`, the ranked rows of that part (above the weaker line or under it) with their cosine
    */
   private def describedCtes(engine: SearchDialect, query: SearchQuery, repositoryId: String): Seq[SqlStr] =
     query.described.fold(Seq.empty[SqlStr]) {
@@ -960,24 +898,21 @@ object SearchQueries:
     }
 
   /**
-   * Where a row stands in a page's order, as the relation it is sliced from has it: its ID, its day under a day grouping, what it
-   * is sorted by, and its capture time, which orders it next under the Relevance sort. A column sort reads them from the asset; a
-   * grouped statement under the Relevance sort reads them from `scored`.
+   * Where a row stands in a page's order, as the relation it is sliced from has it: the asset under a column sort, `scored` under
+   * a scored one. `taken` is the capture time, which orders it next under a scored sort.
    */
   private case class Position(id: Expr[String], day: Expr[Option[LocalDate]], sortValue: Expr[?], taken: Expr[?])
 
   private def scoredPosition(row: ScoredRow[Expr]): Position = Position(row.id, row.day, row.sortValue, row.secondSortValue)
 
-  /** The position of an asset in a statement with no days and no `scored`: what a Location or a Sequence grouping slices */
+  /** The position of an asset in a statement with no days and no `scored` */
   private def assetPositionIn(engine: SearchDialect, query: SearchQuery, row: AssetRow[Expr]): Position =
     Position(row.id, nullDay, sortColumn(engine, query, row), row.originalCreatedAt)
 
   /**
-   * The matches with what a scored sort orders them by, computed once: what a statement's slices, its cursor comparison and its
-   * order read instead of computing it again ([[ScoredRow]]). Under the Relevance sort it is the Relevance, computed from the
-   * Search text; under the similarity sort, of a search among a part of a description's ranked matches, the similarity each match
-   * has in `described` ([[DescribedRow]]), which the matches are joined to. The capture time is the next term of either order,
-   * and a day grouping's day rides along.
+   * The matches with what a scored sort orders them by, computed once for the slices, the cursor and the order to read: the
+   * Relevance of the Search text, or the similarity from `described`. The capture time (the next order term) and a day grouping's
+   * day ride along.
    */
   private def scoredCte(
       engine: SearchDialect,
@@ -1002,9 +937,8 @@ object SearchQueries:
     sql"scored (id, day, sort_value, second_sort_value) AS MATERIALIZED (${scores.withCompleteQuery(false)})"
 
   /**
-   * Rows strictly after the cursor's anchor in day order, as lexicographic comparisons with independent directions: an earlier
-   * day, or the same day and a later sort value, or the same sort value and a greater ID. A redundant inclusive bound on the day
-   * lets the day index seek straight to the boundary.
+   * Rows strictly after the cursor's anchor in day order, compared lexicographically with independent directions (day, sort
+   * value, ID). A redundant inclusive bound on the day lets the day index seek straight to the boundary.
    */
   private def afterDay(
       engine: SearchDialect,
@@ -1023,7 +957,7 @@ object SearchQueries:
 
     cursorDay match
       case Some(anchor) =>
-        // The redundant inclusive bound seeks to the cursor day; a trailing null block is supplied by the guarded slice.
+        // A trailing null block comes from the guarded slice
         Expr[Boolean](implicit ctx => sql"$day $dayOp= $anchor AND ($day $dayOp $anchor OR $after)")
       case None if engine.nullsFirst(direction) =>
         // All dated days follow the leading null group, regardless of the secondary sort.
@@ -1032,16 +966,13 @@ object SearchQueries:
         Expr[Boolean](implicit ctx => sql"$day IS NULL AND $after")
 
   /**
-   * Rows of the anchor's own group strictly after it: a later sort value, or the same sort value and a greater ID. Where the sort
-   * column can be null, nulls sit where the engine natively orders them and the comparison honors that placement. With `idOnly`
-   * the comparison is the ID alone: every sort value in the group is known to be null, or the search has no sort.
+   * Rows of the anchor's own group strictly after it: a later sort value, or the same one and a greater ID. Nulls sit where the
+   * engine natively orders them, and the comparison honors that. With `idOnly` it compares the ID alone: every sort value in the
+   * group is null, or there is no sort. Under a scored sort the capture time comes between the score and the ID
+   * ([[afterByCaptureTime]]).
    *
-   * Under the Relevance sort the position is a triple: between the Relevance and the ID comes the capture time
-   * ([[afterByCaptureTime]]). The Relevance is read from `scored`, where it was computed once, and it is never null.
-   *
-   * With `seeks` the sort is the leading order of the slice: a redundant inclusive bound on the sort value lets an index on it
-   * seek straight to the anchor, which the alternatives alone would not, and the rows without a value that follow an anchor with
-   * one are left to the caller's second slice, since no range reaches them.
+   * With `seeks` the sort leads the slice's order: a redundant inclusive bound lets an index seek straight to the anchor, and the
+   * rows without a value that follow an anchor with one are left to the caller's second slice, since no range reaches them.
    */
   private def afterBySort(
       engine: SearchDialect,
@@ -1081,9 +1012,8 @@ object SearchQueries:
           }
 
   /**
-   * Rows of the anchor's own Relevance strictly after it, newest capture first: an older capture time, or the anchor's own and a
-   * greater ID. Rows without a capture time are last on both engines, as [[orderWithinGroup]] places them: they all follow an
-   * anchor that has one, and an anchor without one is followed only by those of them with a greater ID.
+   * Rows of the anchor's own score strictly after it, newest capture first, then by ID. Rows without a capture time are last on
+   * both engines, as [[orderWithinGroup]] places them.
    */
   private def afterByCaptureTime(
       engine: SearchDialect,
@@ -1115,14 +1045,13 @@ object SearchQueries:
       limit: SqlStr): SqlStr =
     Db.render(orderedBy(projected, order + limit), engine.dialect).withCompleteQuery(false)
 
-  /** A trailing slice that fills the page only once the leading one has run out, which is when it fetched no more than a page */
+  /** A trailing slice's limit: it fills the page only once the leading slice ran out, i.e. fetched no more than a page */
   private def guardedLimit(leading: String, rpp: Int): SqlStr =
     SqlStr.raw(s" LIMIT CASE WHEN (SELECT count(*) FROM $leading) > $rpp THEN 0 ELSE ${rpp + 1} END")
 
   /**
-   * A column of the asset table that [[AssetRow]] does not map (a Scene embedding, which no typed read selects, or SQLite's
-   * rowid), under the name `relation` gives its asset, so a hand-written fragment over it can sit among the relation's typed
-   * predicates. The relation is [[matching]] or a filter or a join of it, which reads `FROM asset` alone.
+   * An asset column [[AssetRow]] does not map (a Scene embedding, SQLite's rowid), under the name `relation` gives its asset, so
+   * a hand-written fragment can sit among the relation's typed predicates. The relation must read `FROM asset` alone.
    */
   private[search] def assetColumn(relation: Select[AssetRow[Expr], AssetRow[Sc]], name: String): Expr[?] =
     Select.toSimpleFrom(relation).from match
@@ -1134,7 +1063,7 @@ object SearchQueries:
         }
       case other => throw IllegalStateException(s"A search reads the asset table alone, not $other")
 
-  /** The assets of a relation of matches that carry a SigLIP 2 Scene embedding: the ones a Describe search can rank */
+  /** The matches that carry a SigLIP 2 embedding: the ones a Describe search can rank */
   private[search] def embedded(relation: Select[AssetRow[Expr], AssetRow[Sc]]): Select[AssetRow[Expr], AssetRow[Sc]] =
     val embedding = assetColumn(relation, SceneModel.Siglip2.column)
     relation.filter(_ => Expr[Boolean](implicit ctx => sql"$embedding IS NOT NULL"))
@@ -1147,17 +1076,13 @@ object SearchQueries:
     import engine.dialect.*
     Db.render(extra.fold(base)(base.filter).map(_.id), engine.dialect).withCompleteQuery(false)
 
-  /** The matching IDs up to one past the cap: whether there are more than the cap is all a capped count needs to know */
+  /** The matching IDs up to one past the cap: all a capped count needs */
   private def cappedIds(engine: SearchDialect, base: Select[AssetRow[Expr], AssetRow[Sc]], cap: Int): SqlStr =
     matchingIds(engine, base, None) + SqlStr.raw(s" LIMIT ${cap + 1}")
 
-  /**
-   * A first page's overall count: its CTE, the column that reads it and the join that brings it in; nothing on a continuation or
-   * for a search without a total
-   */
+  /** A page's overall count as its CTE, column and join; all empty for a page that counts no total */
   private case class TotalFragments(cte: Option[SqlStr], column: SqlStr, join: SqlStr)
 
-  /** The overall count of a page that counts one (`SearchQuery.isTotalCounted`), counted up to one past the cap */
   private def totalFragments(
       engine: SearchDialect,
       base: Select[AssetRow[Expr], AssetRow[Sc]],
@@ -1172,9 +1097,8 @@ object SearchQueries:
     else TotalFragments(None, SqlStr.empty, SqlStr.empty)
 
   /**
-   * What a search sorts by: the sort's column or, under the Relevance sort, the Relevance computed from the Search text. The
-   * similarity is no expression of the asset's own row: it is read from `scored` ([[scoredCte]]), as every statement reads a
-   * scored sort.
+   * What a search sorts by: the sort's column or the Relevance. The similarity is not an expression of the asset's row and is
+   * read from `scored` ([[scoredCte]]).
    */
   private def sortColumn(engine: SearchDialect, query: SearchQuery, row: AssetRow[Expr]): Expr[?] =
     val sort = query.searchSort.head
@@ -1187,8 +1111,8 @@ object SearchQueries:
     Expr[SortValue](implicit ctx => sql"${position.sortValue}")
 
   /**
-   * What a candidate carries for the term after the sort: under the Relevance sort the capture time as stored, for the page's
-   * order and the cursor; NULL under a column sort, whose next term is the ID, so every candidate relation has the same columns.
+   * The order term after the sort: the capture time as stored under a scored sort; NULL under a column sort, whose next term is
+   * the ID, so every candidate relation has the same columns
    */
   private def secondSortValueOf(sort: SearchSort, position: Position)(using TypeMapper[SortValue]): Expr[SortValue] =
     if sort.isScored then Expr[SortValue](implicit ctx => sql"${position.taken}") else nullSortValue
@@ -1200,9 +1124,8 @@ object SearchQueries:
   private def nullDay: Expr[Option[LocalDate]] = Expr[Option[LocalDate]](implicit ctx => sql"NULL")
 
   /**
-   * The ORDER BY terms within a group, over the position the slice reads: the sort, then the ID as a deterministic tiebreaker.
-   * Under the Relevance sort the newest capture time comes between them, and the assets with none read last on both engines: no
-   * index orders a computed value, so there is no index-ordered read for an explicit null placement to forfeit. The engine may
+   * The ORDER BY terms within a group: the sort, then the ID. Under a scored sort the newest capture time comes between them,
+   * nulls last on both engines: no index orders a computed value, so an explicit null placement forfeits nothing. The engine may
    * decorate a column sort's term to steer its planner.
    */
   private def orderWithinGroup(engine: SearchDialect, query: SearchQuery, position: Position)(using Context): SqlStr =
@@ -1219,10 +1142,9 @@ object SearchQueries:
 
   private def towards(direction: SortDirection): SqlStr = SqlStr.raw(direction.toString)
 
-  /** The flat page's columns, named on its CTE like the candidates' */
   private val flatColumns: SqlStr = SqlStr.raw("(id, sort_value, second_sort_value)")
 
-  /** The day candidates' columns. Naming them on the CTE keeps the projection free to alias its own columns however. */
+  /** The flat and day candidates' columns. Naming them on the CTE leaves the projection free to alias its own columns. */
   private val narrowColumnList: SqlStr = SqlStr.raw("id, day, sort_value, second_sort_value")
   private val narrowColumns: SqlStr = sql"($narrowColumnList)"
 
@@ -1235,19 +1157,15 @@ object SearchQueries:
   private val sequenceColumnList: SqlStr = SqlStr.raw("id, sequence_id, first_captured_at, sort_value, second_sort_value")
   private val sequenceColumns: SqlStr = sql"($sequenceColumnList)"
 
-  /** The asset columns the grouped statements select, in the order [[AssetRow]] declares them, so a row reads back positionally */
+  /** The asset columns a page selects, in [[AssetRow]]'s order, so a row reads back positionally */
   private val assetColumns: SqlStr = SqlStr.raw(AssetRow.columnList())
 
-  /**
-   * The asset columns of a page whose cells show none of the bulky metadata JSON (a Describe search's): [[assetColumns]] with
-   * `user_metadata` and `extracted_metadata` read as NULL in their places, so a row still reads back positionally and its model's
-   * two are empty
-   */
+  /** [[assetColumns]] with the bulky metadata JSON read as NULL, for a page that shows neither (a Describe search's) */
   private val assetColumnsWithoutBulkyMetadata: SqlStr = SqlStr.raw(AssetRow.columnList(BulkyMetadata.AsNull))
 
   /**
-   * One source of one alternative of one group of the Search text: where the term can match, with the IDs it resolved to there
-   * (none for the Search document, which the engine matches by the term's words). Its name is its position in the text.
+   * One source of one alternative of one group of the Search text, with the IDs the term resolved to there (none for the Search
+   * document, matched by the term's words). Its name is its position in the text.
    */
   private case class TextSource(group: Int, alternative: Int, term: ResolvedSearchTerm, source: SearchSource, ids: Set[String]):
     val name: String = s"text_${group}_${alternative}_${source.toString.toLowerCase}"
@@ -1255,10 +1173,7 @@ object SearchQueries:
     /** A folder is the asset's own column, which a statement tests directly; every other source is a relation of asset IDs */
     val isAssetColumn: Boolean = source == SearchSource.Folder
 
-  /**
-   * The sources of each alternative of a group, in the order they are declared: the name sources the term resolved to any IDs in,
-   * then always its Search document
-   */
+  /** The sources of each alternative of a group: the name sources the term resolved any IDs in, then always the Search document */
   private def textSources(group: ResolvedSearchGroup, groupIndex: Int): Seq[Seq[TextSource]] =
     group.alternatives.zipWithIndex.map {
       (term, alternative) =>
@@ -1268,15 +1183,13 @@ object SearchQueries:
           TextSource(groupIndex, alternative, term, SearchSource.Document, Set())
     }
 
-  /** Every source of the Search text */
   private def allTextSources(text: ResolvedSearchText): Seq[TextSource] =
     text.groups.zipWithIndex.flatMap((group, groupIndex) => textSources(group, groupIndex).flatten)
 
   /**
-   * The asset IDs a source matches, as a relation. The person, Location, album and folder IDs were resolved from the repository's
-   * names, so those sources are within it by what they are asked for, and each reads the index that leads with its ID and carries
-   * the asset, alone. The document is scoped by the asset that tests membership, so only a caller reading the relation on its own
-   * (`repositoryId`) scopes it to the repository.
+   * The asset IDs a source matches. The ID sources are within the repository by construction (their IDs were resolved from its
+   * names), each read from an index alone. The document is scoped by the asset testing membership, so only a caller reading the
+   * relation on its own passes `repositoryId`.
    */
   private def sourceRelation(engine: SearchDialect, source: TextSource, repositoryId: Option[String]): SqlStr =
     import engine.dialect.*
@@ -1299,9 +1212,8 @@ object SearchQueries:
     Db.render(relation, engine.dialect).withCompleteQuery(false)
 
   /**
-   * The Search text's CTEs on the broad path: each source of each term built once, materialized, at the head of the statement, so
-   * that every predicate, the Relevance and the counts beside the rows test membership in the same set. A folder is the asset's
-   * own column and needs none, and the selective path tests the asset's own row instead.
+   * The Search text's CTEs on the broad path: each source built once and materialized, so every predicate, the Relevance and the
+   * counts test membership in the same set. A folder needs none; the selective path tests the asset's own row instead.
    */
   private def textCtes(engine: SearchDialect, query: SearchQuery): Seq[SqlStr] =
     if !query.isText || query.requireResolvedText.candidates.isDefined then Nil
@@ -1311,9 +1223,8 @@ object SearchQueries:
         .map(source => sql"${SqlStr.raw(source.name)} (asset_id) AS MATERIALIZED (${sourceRelation(engine, source, None)})")
 
   /**
-   * Whether the asset is among a source's matches: in one of its folders, or on the broad path in the source's CTE. On the
-   * selective path it is a probe on the asset's own row, through an index that leads with the asset, for no more than the
-   * candidates.
+   * Whether the asset is among a source's matches: by its own column for a folder, through the source's CTE on the broad path, or
+   * on the selective path by a probe through an index that leads with the asset, run for no more than the candidates
    */
   private def isIn(engine: SearchDialect, asset: AssetRow[Expr], text: ResolvedSearchText, source: TextSource): Expr[Boolean] =
     import engine.dialect.*
@@ -1339,13 +1250,10 @@ object SearchQueries:
         case SearchSource.Folder => throw IllegalStateException("A folder is the asset's own column")
 
   /**
-   * Assets that satisfy the Search text: every group, by any of its alternatives. A term is satisfied by any of its sources and
-   * an excluded term by none of them, so an asset without the term's words anywhere (or without a document) satisfies an
-   * exclusion. On the broad path a group of one excluded term is an anti-join on each of its sources, which the engine plans as
-   * such; an excluded alternative among others negates its sources' memberships.
-   *
-   * On the selective path the asset is one of the candidates, which are already within every complete group's matches; the other
-   * groups are tested on the asset's own row ([[isIn]]).
+   * Assets that satisfy every group of the Search text by any of its alternatives. An excluded term is satisfied by none of its
+   * sources, so an asset without a document satisfies an exclusion. On the broad path a group of one excluded term is an
+   * anti-join, which the engine plans as such. On the selective path the candidates already satisfy every complete group, and
+   * only the other groups are tested.
    */
   private def textFilter(engine: SearchDialect, asset: AssetRow[Expr], text: ResolvedSearchText): Expr[Boolean] =
     import engine.dialect.*
@@ -1373,10 +1281,8 @@ object SearchQueries:
     (candidates.toSeq ++ untested.map(groupFilter)).reduce(_ && _)
 
   /**
-   * The Relevance of an asset to the Search text: the sum of what each group of the text scores, a group scoring as the best
-   * source any of its alternatives matched the asset in. The alternatives' sources are the branches of one `CASE`, the highest
-   * score first, so alternatives joined by `OR` count once, as the best of them. An excluded term scores nothing, and neither
-   * does text made of exclusions alone: every asset it matches is as relevant as the next.
+   * The Relevance of an asset to the Search text: the sum over groups of the best source any alternative matched in. The sources
+   * are one `CASE`, highest score first, so alternatives joined by `OR` count once. Excluded terms score nothing.
    */
   private def relevance(engine: SearchDialect, asset: AssetRow[Expr], text: ResolvedSearchText): Expr[Int] =
     import engine.dialect.*
@@ -1396,10 +1302,8 @@ object SearchQueries:
     text.groups.zipWithIndex.flatMap(score).reduceOption(_ + _).getOrElse(Expr(0))
 
   /**
-   * Assets carrying every one of the requested metadata values.
-   *
-   * One row of `metadata_parameter` holds one value, so an asset matching `n` filters has `n` matching rows: the filters are
-   * OR-ed and the count of what survives has to reach the number of filters.
+   * Assets carrying every requested metadata value. A `metadata_parameter` row holds one value, so the filters are OR-ed and an
+   * asset's surviving rows must number as many as the filters.
    */
   private def metadataFilter(
       engine: SearchDialect,
@@ -1420,8 +1324,8 @@ object SearchQueries:
       .contains(asset.id)
 
   /**
-   * One metadata filter: the value goes into the column of its type, so searching a keyword field by number matches nothing. A
-   * keyword is compared under its name key, as `field_value_kw` holds it, so it matches in any case or Unicode form.
+   * One metadata filter, against the column of the value's type (a keyword field searched by number matches nothing). A keyword
+   * is compared under its name key, as `field_value_kw` holds it, so it matches in any case or Unicode form.
    */
   private def valueMatch(
       engine: SearchDialect,
@@ -1448,10 +1352,9 @@ object SearchQueries:
     Columns.isInSet(asset.folderId, folderIds, engine.dialect)
 
   /**
-   * Assets captured on a day of the range, by the camera's wall clock. The day is the engine's capture-day expression, the one
-   * `asset_search_date_taken` is built on, so a range is a seek in that index; `asset_search_created` carries the capture time,
-   * so a page read in Date Imported order tests the range on that index and not the table. An asset with no capture time has no
-   * day: NULL fails either comparison, so it is in no range, not even one open at an end.
+   * Assets captured on a day of the range, by the camera's wall clock. The day is the expression `asset_search_date_taken` is
+   * built on, so a range is a seek in that index, and `asset_search_created` carries the capture time, so a Date Imported page
+   * tests the range on its index. An asset with no capture time is in no range, not even one open at an end.
    */
   private def takenFilter(engine: SearchDialect, asset: AssetRow[Expr], range: DateRange): Expr[Boolean] =
     import engine.dialect.*
@@ -1463,16 +1366,12 @@ object SearchQueries:
     withinBoth(engine, fromFirst, toLast)
 
   /**
-   * Assets imported on a day of the range, the days being those of `zone`: from the instant the first day begins there to just
-   * before the instant the day after the last does, so a day the clocks change is as long as the zone makes it. The import time
-   * is compared as the column stores it, with no day expression around it, so a range is a seek in `asset_search_created`, and
-   * `asset_search_date_taken` carries it, so a page read in Date Taken order tests the range on that index and not the table. The
-   * dialect binds each instant the way its engine stores one (a `timestamptz` on PostgreSQL, the UTC wall clock as text on
-   * SQLite, which orders as the instants do). A legacy SQLite row with no import time is in no range.
+   * Assets imported on a day of the range, the days being those of `zone`, so a day the clocks change is as long as the zone
+   * makes it. The import time is compared bare, so a range is a seek in `asset_search_created`, and `asset_search_date_taken`
+   * carries it, so a Date Taken page tests the range on its index. A legacy SQLite row with no import time is in no range.
    *
-   * A range that ends on the last day of year 9999 is open at that end: the day after begins, by UTC, in a year of five digits,
-   * which SQLite's text writes with a sign and so orders before every other, and no import is that late. With no first day
-   * either, it holds every asset with an import time.
+   * A range ending on the last day of year 9999 is open at that end: the next day begins in a five-digit year, which SQLite's
+   * text writes with a sign and so orders before every other, and no import is that late.
    */
   private def importedFilter(engine: SearchDialect, asset: AssetRow[Expr], range: DateRange, zone: ZoneId): Expr[Boolean] =
     import engine.dialect.*
@@ -1490,17 +1389,16 @@ object SearchQueries:
   // The last year an instant is stored in on both engines in one form: four digits
   private val MAX_STORED_YEAR = 9999
 
-  /** The bounds of a date range AND-ed: both, or the one it has, a range having at least one end ([[DateRange]]) */
+  /** The bounds of a date range AND-ed; a range has at least one end */
   private def withinBoth(engine: SearchDialect, lower: Option[Expr[Boolean]], upper: Option[Expr[Boolean]]): Expr[Boolean] =
     import engine.dialect.*
 
     (lower ++ upper).reduce(_ && _)
 
   /**
-   * Assets the given people appear in: any of them in one semi-join over the set, or all of them in one semi-join per person,
-   * AND-ed. A person's faces are read from an index alone: `face_02`, which leads with the person and carries the asset, or
-   * `face_01` where PostgreSQL probes by the asset instead. The cost follows the chosen people's Face sets and not the library.
-   * With one person the two are the same statement.
+   * Assets the given people appear in: any of them in one semi-join, or all of them in one semi-join per person. A person's faces
+   * are read from an index alone (`face_02`, or `face_01` where PostgreSQL probes by the asset), so the cost follows the chosen
+   * people's Faces and not the library.
    */
   private def peopleFilter(
       engine: SearchDialect,
@@ -1514,7 +1412,7 @@ object SearchQueries:
       // In ID order, so one search always renders one statement
       case PeopleMatch.All => personIds.toList.sorted.map(id => personFilter(engine, asset, Set(id))).reduce(_ && _)
 
-  /** Assets any of the given people appear in: the face's own person ID is all it reads */
+  /** Assets any of the given people appear in; it reads the face's own person ID alone */
   private def personFilter(engine: SearchDialect, asset: AssetRow[Expr], personIds: Set[String]): Expr[Boolean] =
     import engine.dialect.*
 
@@ -1523,7 +1421,6 @@ object SearchQueries:
       .map(_.assetId)
       .contains(asset.id)
 
-  /** Assets any of the given albums point at */
   private def albumFilter(engine: SearchDialect, asset: AssetRow[Expr], albumIds: Set[String]): Expr[Boolean] =
     import engine.dialect.*
 
@@ -1532,7 +1429,6 @@ object SearchQueries:
       .map(_.assetId)
       .contains(asset.id)
 
-  /** Assets in any of the given Locations */
   private def locationFilter(engine: SearchDialect, asset: AssetRow[Expr], locationIds: Set[String]): Expr[Boolean] =
     import engine.dialect.*
 
@@ -1541,10 +1437,7 @@ object SearchQueries:
       .map(_.assetId)
       .contains(asset.id)
 
-  /**
-   * Assets with a Face of an Unknown person: one with no name who is neither hidden, merged away (`is_deleted`) nor discarded as
-   * a bad match, whatever their bucket
-   */
+  /** Assets with a Face of an Unknown person: unnamed, and not hidden, merged away (`is_deleted`) or a bad match */
   private def unknownPeopleFilter(engine: SearchDialect, asset: AssetRow[Expr]): Expr[Boolean] =
     import engine.dialect.*
 
@@ -1565,12 +1458,9 @@ object SearchQueries:
     LocationAssetRow.select.filter(link => link.assetId `=` id).map(_.assetId).isEmpty
 
   /**
-   * Assets plotted inside the box: by their own point or, without one of their own, by the pin of a Location they are in - the
-   * rule the map plots by.
-   *
-   * The two are one set of IDs, the union of the view's assets with a point in the box and of the members of the Locations pinned
-   * in it that have no point of their own. Each branch is bounded by an index (the located assets' and the Locations'), where the
-   * two rules as alternatives on the asset's own row would leave every matching asset to be tested.
+   * Assets plotted inside the box, by the map's rule: by their own point or, without one, by the pin of a Location they are in.
+   * The two are a union of IDs so each branch is bounded by an index, where alternatives on the asset's row would test every
+   * match.
    */
   private def bboxFilter(
       engine: SearchDialect,
@@ -1606,7 +1496,7 @@ object SearchQueries:
       .filter((_, location) => inBox(engine, bbox, location.latitude, location.longitude))
       .map((link, _) => link.assetId)
 
-  /** A point inside the box; a box across the antimeridian covers both sides of it. Plain arithmetic, no dialect hook. */
+  /** A point inside the box; a box across the antimeridian covers both sides of it */
   private def inBox(
       engine: SearchDialect,
       bbox: BoundingBox,

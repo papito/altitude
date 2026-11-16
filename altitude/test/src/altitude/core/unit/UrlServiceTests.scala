@@ -32,12 +32,11 @@ import altitude.core.service.UrlService
     /**
      * Setup:
      *
-     * The suite's own repository "1" in the request context, a person ID and a sort as the search parameters, and a browser URL
-     * that ends in an "#albums" tab fragment.
+     * A person ID and a sort as the search parameters, and a browser URL ending in an "#albums" fragment.
      *
      * Assertions:
      *
-     * The URL is the repository path with the parameters in the order given, followed by the browser URL's fragment.
+     * The URL is the repository path with the parameters in the order given, then the browser URL's fragment.
      */
     val tabSelected = "albums"
     val sortValue = "sort_field0"
@@ -60,7 +59,7 @@ import altitude.core.service.UrlService
      *
      * Assertions:
      *
-     * The URL carries only the search parameters - none of the browser URL's query - and no fragment.
+     * The URL carries only the search parameters, none of the browser URL's query, and no fragment.
      */
     val url = urlService.getBrowserViewUrl(
       queryParams = Seq(Api.Field.Search.PERSON_ID -> personId),

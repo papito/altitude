@@ -21,11 +21,11 @@ import altitude.core.service.VideoService
     /**
      * Setup:
      *
-     * The synthesized three-second, 640x480, 10 fps clip of one person (affleck.jpg), with no audio track.
+     * The three-second, 640x480, 10 fps clip of one person, with no audio track.
      *
      * Assertions:
      *
-     * The probe reports the clip as it was encoded: its duration, size and frame rate, and that it has no audio.
+     * The probe reports the duration, size and frame rate it was encoded with, and no audio.
      */
     val info = service.probe(TestVideos.oneFace)
 
@@ -41,11 +41,11 @@ import altitude.core.service.VideoService
     /**
      * Setup:
      *
-     * A landscape 640x480 clip whose container asks for it to be shown rotated to portrait, as a phone held upright records.
+     * A landscape clip whose container says to show it as portrait.
      *
      * Assertions:
      *
-     * The probe reports the display size, with width and height swapped from the encoded ones.
+     * The probe reports the display size, width and height swapped from the encoded ones.
      */
     val info = service.probe(TestVideos.portrait)
 
@@ -58,18 +58,17 @@ import altitude.core.service.VideoService
     /**
      * Setup:
      *
-     * Durations from zero to two hours, given to the schedule both with an explicit one-second interval and 120-frame maximum and
-     * through a service that reads the same values from the seeded Settings.
+     * Durations from zero to two hours, scheduled with an explicit one-second interval and 120-frame maximum, and through a
+     * service reading the same values from the seeded Settings.
      *
      * Assertions:
      *
-     * A short clip is sampled once a second from the start, and no clip, however long, yields more than the maximum number of
-     * Sampled frames.
+     * A short clip is sampled once a second from the start, and no clip yields more than the maximum number of Sampled frames.
      *
      * Edge cases:
      *
-     * A duration that exactly fills the maximum at one-second spacing, one a millisecond longer (which must not yield an extra
-     * frame), and a zero duration, which still yields the first frame.
+     * A duration that exactly fills the maximum and one a millisecond longer yield the same count, and a zero duration still
+     * yields the first frame.
      */
     VideoService.sampleTimes(3000, 1000, 120) shouldEqual Seq(0L, 1000L, 2000L)
     VideoService.sampleTimes(20 * 60 * 1000, 1000, 120) should have size 120
@@ -90,7 +89,7 @@ import altitude.core.service.VideoService
      *
      * Assertions:
      *
-     * One full-size frame comes back per requested time, in order, each carrying a decode time close to the time requested.
+     * One full-size frame comes back per requested time, in order, each with a decode time close to the one requested.
      */
     val times = service.sampledFrames(TestVideos.oneFace, Seq(0L, 1000L, 2000L)) {
       frames =>
@@ -113,11 +112,11 @@ import altitude.core.service.VideoService
     /**
      * Setup:
      *
-     * The three-second clip of one person opened once, then decoded at 2 seconds and, in a second pass, at 0 and 1 seconds.
+     * The three-second clip of one person opened once, decoded at 2 seconds, then in a second pass at 0 and 1 seconds.
      *
      * Assertions:
      *
-     * Both passes decode their frames from the one open clip, the second one seeking back before the first pass's position.
+     * Both passes decode from the one open clip, the second seeking back before the first pass's position.
      */
     val times = service.withFrames(TestVideos.oneFace) {
       decode =>
@@ -141,7 +140,7 @@ import altitude.core.service.VideoService
      *
      * Assertions:
      *
-     * Only the frame at the start comes back - the time past the end yields nothing rather than failing.
+     * Only the frame at the start comes back: the time past the end yields nothing rather than failing.
      */
     service.sampledFrames(TestVideos.oneFace, Seq(0L, 60_000L))(_.map(_.image.release()).size) shouldBe 1
   }
@@ -151,13 +150,11 @@ import altitude.core.service.VideoService
     /**
      * Setup:
      *
-     * A one-second clip of a black landscape frame with a white band along its top, which the container says to show as portrait
-     * (a phone held upright).
+     * A one-second clip of a black landscape frame with a white band along its top, which the container says to show as portrait.
      *
      * Assertions:
      *
-     * The decoded frame is portrait-sized and turned clockwise, so the band lands on the right edge of the portrait frame and the
-     * left edge stays dark.
+     * The decoded frame is portrait-sized and turned clockwise: the band lands on the right edge and the left edge stays dark.
      */
     val frame = TestVideos.blackFrame()
     frame.rowRange(0, 40).setTo(new Scalar(255, 255, 255))
@@ -180,11 +177,11 @@ import altitude.core.service.VideoService
     /**
      * Setup:
      *
-     * A clip of two seconds of black followed by three seconds of one person, with the shipped brightness floor.
+     * Two seconds of black followed by three seconds of one person, with the seeded brightness floor.
      *
      * Assertions:
      *
-     * The Preview skips the black leader: it is the first Sampled frame bright enough to clear the floor.
+     * The Preview is the first Sampled frame bright enough to clear the floor.
      */
     val preview = service.previewFrame(TestVideos.blackLeader, service.probe(TestVideos.blackLeader).durationMs)
 
@@ -240,11 +237,11 @@ import altitude.core.service.VideoService
     /**
      * Setup:
      *
-     * An MP3 file from the import fixtures, which FFmpeg opens but has no video stream, and an empty file named like an MP4.
+     * An MP3 file, which FFmpeg opens but has no video stream, and an empty file named like an MP4.
      *
      * Assertions:
      *
-     * Probing either one fails with a video error.
+     * Probing either fails with a `VideoException`.
      */
     intercept[VideoException] {
       service.probe(TestVideos.audio("all.mp3"))

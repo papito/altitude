@@ -63,18 +63,17 @@ import altitude.core.util.StyleGuideScan
     /**
      * Setup:
      *
-     * A stylesheet whose `:root` rule declares six tokens: one under a two-line comment, one directly after that one, one under a
-     * comment separated from it by a blank line, and one whose value spans two lines and ends the rule without a semicolon.
+     * A stylesheet whose `:root` declares six tokens, among them one under a two-line comment, one under a comment a blank line
+     * away, and one spanning two lines with no closing semicolon.
      *
      * Assertions:
      *
-     * The tokens are listed in source order with their declared values (whitespace collapsed) and their file and line. Only the
-     * token directly under a comment carries it as its note.
+     * The tokens are listed in source order with their values (whitespace collapsed) and locations; only the token directly under
+     * a comment takes it as its note.
      *
      * Edge cases:
      *
-     * `color-scheme` is a plain property, not a token. A blank line or another declaration between a comment and a token leaves
-     * the token without a note.
+     * `color-scheme` is not a token. A blank line or another declaration between a comment and a token leaves it without a note.
      */
     val result = scan("css/core.css" -> coreCss)
 
@@ -98,9 +97,8 @@ import altitude.core.util.StyleGuideScan
      *
      * Assertions:
      *
-     * The three declarations outside `:root` are scoped tokens with their values and locations; the redeclared root token is
-     * among them, which is what makes it an override. The token declared nowhere is the only runtime token, located at its
-     * `setProperty`.
+     * The three declarations outside `:root` are scoped tokens with their values and locations, the redeclared root token among
+     * them as an override. The token declared nowhere is the only runtime token, located at its `setProperty`.
      */
     val result = scan(
       "css/core.css" -> coreCss,
@@ -132,13 +130,12 @@ import altitude.core.util.StyleGuideScan
     /**
      * Setup:
      *
-     * The stylesheet, where tokens are referenced plainly, with a fallback, and from another token's declaration, and where one
-     * token's name is the prefix of another's; a script that reads one token by name and sets another; and a comment in each file
-     * naming a token.
+     * The stylesheet, referencing tokens plainly, with a fallback and from another token's declaration, one token's name the
+     * prefix of another's; a script that reads one token by name and sets another; and comments naming a token.
      *
      * Assertions:
      *
-     * Each token counts its plain, fallback, in-declaration and by-name references. A token referenced nowhere counts none.
+     * Each token counts its plain, fallback, in-declaration and by-name references.
      *
      * Edge cases:
      *
@@ -169,13 +166,12 @@ import altitude.core.util.StyleGuideScan
     /**
      * Setup:
      *
-     * The stylesheet, with a literal in two spellings in ordinary rules, literals inside token declarations and inside a comment,
-     * and two ID selectors made of hexadecimal letters; and a template with an `rgb()` literal in its style block and a fragment
-     * link.
+     * The stylesheet, with a literal in two spellings in ordinary rules, literals in token declarations and a comment, and ID
+     * selectors of hexadecimal letters; a template with an `rgb()` literal and a fragment link.
      *
      * Assertions:
      *
-     * The literals are the ones in ordinary declarations, each spelling with its count and locations.
+     * The literals are those in ordinary declarations, each spelling with its locations.
      *
      * Edge cases:
      *
@@ -204,19 +200,17 @@ import altitude.core.util.StyleGuideScan
     /**
      * Setup:
      *
-     * A stylesheet with lengths in a font size, a width inside `calc()`, a min-width, a grid's tracks and an inset; lengths in
-     * properties that are not sizing ones (a padding, a border width, a letter spacing, a line height); a token declaration
-     * holding a length; a zero and a viewport unit; a commented-out size; and a template with an inline width.
+     * A stylesheet with lengths in sizing properties (inside `calc()` and grid tracks too) and in other properties, a token
+     * holding a length, a zero, a viewport unit and a commented-out size; a template with an inline width.
      *
      * Assertions:
      *
-     * The literals are those of the sizing properties, grouped by property and value, each with its locations, in property and
-     * value order.
+     * The literals are those of the sizing properties, grouped by property and value with their locations, in that order.
      *
      * Edge cases:
      *
-     * `--snackbar-width` is a token declaration and `border-width` is not `width`, so neither counts. A unitless zero, a `vh`
-     * length, a number inside a decimal or a name, and a length in a comment are not literals.
+     * A token declaration and `border-width` do not count. A unitless zero, a `vh` length, a number inside a decimal or a name,
+     * and a length in a comment are not literals.
      */
     val result = scan(
       "css/core.css" ->
@@ -267,11 +261,11 @@ import altitude.core.util.StyleGuideScan
      * Setup:
      *
      * A script under a `lib` directory, the excluded Font Awesome stylesheet and the excluded style guide template, each using a
-     * token and an icon; no `js` or `views` roots beyond those.
+     * token and an icon.
      *
      * Assertions:
      *
-     * Nothing is found and no file is counted as scanned. Scanning roots that do not exist finds nothing either.
+     * Nothing is found and no file is scanned. Roots that do not exist find nothing either.
      */
     val result = scan(
       "js/lib/vendor.js" -> """el.style.setProperty("--vendor", 1); x = "fas fa-vendor"""",
@@ -295,12 +289,11 @@ import altitude.core.util.StyleGuideScan
     /**
      * Setup:
      *
-     * The application's own source tree, scanned from the style guide's roots with its exclusions, as the page scans it.
+     * The application's source tree, scanned as the style guide page scans it.
      *
      * Assertions:
      *
-     * The vendored stylesheets in `static/css` (Font Awesome's and Leaflet's) are present, and none of their color literals or
-     * tokens is in the scan.
+     * The vendored stylesheets (Font Awesome's and Leaflet's) exist, and none of their color literals or tokens is in the scan.
      */
     // Tests run in a sandbox: the sources are found through the directory build.mill hands them
     val moduleDir = Path.of(sys.env("ALTITUDE_SOURCE_DIR")).getParent

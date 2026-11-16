@@ -36,23 +36,17 @@ case class MetadataExtractorException(asset: Asset, ex: Throwable) extends Excep
 
 case class NotFoundException(msg: String) extends Exception(msg)
 
-/**
- * The account holds no Permission for what it asked of an asset (a rule a route's decorators cannot decide): a 403 through
- * `BaseController.answering` and `answeringJson`
- */
+/** The account may not do what it asked, by a rule a route's decorators cannot decide: a 403 (`BaseController.answering`) */
 case class ForbiddenException(msg: String) extends Exception(msg)
 
 case class StorageException(msg: String) extends Exception(msg)
 
-/**
- * The account an imported file is inserted for is gone or deactivated by then (`LibraryService.persistAndIndex`), so nobody can
- * own the asset: the file fails with this, saying which
- */
+/** The account an imported file is inserted for is gone or deactivated by then, so nobody can own the asset: the file fails */
 case class ImporterUnavailableException(msg: String) extends Exception(msg)
 
 /**
- * A file of an Import cannot be sorted into the folder it lands in (`FolderService.ensurePath`): the Import's destination is in
- * the Trash, or a folder of the file's path has a name the folder rule refuses. The file fails with this, saying which.
+ * A file of an Import cannot be sorted into its folder: the Import's destination is in the Trash, or a folder of the file's path
+ * has a name the folder rule refuses. The file fails with this, saying which.
  */
 case class ImportDestinationException(msg: String) extends Exception(msg)
 
@@ -61,28 +55,24 @@ case class GeocoderException(msg: String) extends Exception(msg)
 
 case class SamePersonDetectedTwiceException(msg: String) extends Exception(msg)
 
-/** A Video FFmpeg could not open, a file it opened that has no video stream, or one no frame of which decodes */
+/** A video FFmpeg cannot open, that has no video stream, or of which no frame decodes */
 case class VideoException(msg: String) extends Exception(msg)
 
 /** An image no image reader can decode */
 case class ImageException(msg: String) extends Exception(msg)
 
 /**
- * The model files could not be put in place (`ModelDownloader`): too little free space, a download that failed, or a file whose
- * size or SHA-256 is not its pin. The message names the files missing, their URLs and the directory to put them in by hand; the
- * cause, when there is one, is the I/O error that failed the download.
+ * The model files could not be put in place: too little free space, a failed download, or a size or SHA-256 off its pin. The
+ * message names the missing files, their URLs and the directory to put them in by hand; the cause is the download's I/O error.
  */
 case class ModelFilesException(msg: String, cause: Option[Throwable] = None) extends Exception(msg, cause.orNull)
 
-/** Work bounded to a few at once has no slot free now (auto-straighten): the request is answered 503, to be asked again */
+/** Work bounded to a few at once has no free slot: a 503, to be asked again */
 case class BusyException(msg: String) extends Exception(msg)
 
 /** A queue did not take an element: it was full, closed, or its stream had stopped */
 case class QueueRefusedException(msg: String) extends Exception(msg)
 
-/**
- * A save of an asset's Edit built on an edit version the Edit has moved on from (`AssetEditService`): the state the Edit is in
- * now, which `EditController` answers with a 409 for the client to adopt
- */
+/** A save built on an edit version the Edit has moved on from: carries the current state, answered with a 409 to adopt */
 case class EditConflictException(state: EditState)
   extends Exception(s"The Edit's edit version is ${state.editVersion}, not the one the save was built on")

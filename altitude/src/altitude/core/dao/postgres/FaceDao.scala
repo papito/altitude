@@ -15,23 +15,18 @@ import altitude.core.service.FaceDetectionService
 object FaceDao:
 
   /**
-   * How many of the nearest Faces the vector index is asked for, as a multiple of the matches wanted: the index is approximate
-   * and orders by half-precision vectors, so the exact distances are taken over a few more than the answer needs
+   * Candidates asked of the vector index per match wanted: the index is approximate and orders by half-precision vectors, so
+   * exact distances are taken over a few more than the answer needs
    */
   private val CANDIDATES_PER_MATCH = 4
 
   /**
-   * The stored Faces nearest a query vector, nearest first, with their exact cosine distance, no further than a threshold.
+   * The stored Faces within a threshold of a query vector, nearest first, with their exact cosine distance.
    *
-   * The candidates come from the HNSW index over the enrolled Faces' vectors at half precision, which the inner order and
-   * `is_enrolled = TRUE` are written to match. The repository, the bad matches and, with `excludingPerson`, one Person's Faces
-   * are filtered as the index is read (`TransactionManager.withFaceVector` has the scan go on until the limit is met, past the
-   * excluded Faces however many). The threshold is applied outside, on the full-precision distance: inside, a query with nothing
-   * near enough would send the index looking for rows that are not there.
-   *
-   * Binds: the vector, the repository, the excluded Person when there is one, the vector, the number of candidates, the vector,
-   * the threshold, the number of matches. `nearest.*` rather than `*`: the join would put the person's ID and dates into the row
-   * map under the same keys.
+   * The inner order and `is_enrolled = TRUE` match the half-precision HNSW index, and its filters apply as the index is read
+   * (`TransactionManager.withFaceVector` keeps the scan going until the limit is met). The threshold is applied outside, on the
+   * full-precision distance: inside, a query with nothing near enough would send the index looking for rows that are not there.
+   * `nearest.*` rather than `*`: the join would put the person's ID and dates into the row map under the same keys.
    */
   private def closestMatchesSql(excludingPerson: Boolean): String =
     val personFilter = if excludingPerson then "AND face.person_id <> ?" else ""
@@ -51,10 +46,8 @@ object FaceDao:
        LIMIT ?
     """
 
-  /** Recognition's statement: the nearest Faces of everyone */
   val CLOSEST_MATCHES_SQL: String = closestMatchesSql(excludingPerson = false)
 
-  /** The Suggested group's statement: the nearest Faces of everyone but one Person */
   val CLOSEST_OF_OTHERS_SQL: String = closestMatchesSql(excludingPerson = true)
 
 class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with PostgresOverrides:

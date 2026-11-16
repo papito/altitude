@@ -180,7 +180,6 @@ import altitude.core.util.*
       }
     }
 
-    // Every position becomes an anchor, including both boundaries and every tie inside the null group.
     for (direction <- SortDirection.values.toList; field <- sortFields; sortDirection <- SortDirection.values.toList) {
       val grouping = SearchGrouping(GroupBy.DateTaken, direction)
       val sort = SearchSort(field, sortDirection)
@@ -222,9 +221,7 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * The fixture: 12 assets captured over four days, three a day and each imported an hour after capture, with repeated capture
-     * times and file names, plus 4 undated assets sharing one import time. It is walked ungrouped, page by page through encoded
-     * cursors, five assets a page and then one.
+     * The fixture, walked ungrouped page by page through encoded cursors, five assets a page and then one.
      *
      * Assertions:
      *
@@ -382,7 +379,6 @@ import altitude.core.util.*
     ids(page4) shouldEqual expected.drop(15)
     page4.nextCursor shouldBe None
 
-    // Exactly a full last page still needs one more request to learn that it was the last
     val exact = firstPage(grouping, sort, rpp = 16)
     ids(exact) shouldEqual expected
     exact.nextCursor shouldBe None
@@ -413,13 +409,11 @@ import altitude.core.util.*
     val page1 = firstPage(grouping, sort, rpp = 5)
     val cursor = page1.nextCursor.get
 
-    // The anchor leaves the result set
     testApp.service.library.recycleAssets(Set(cursor.id))
     val afterDelete = continue(cursor, grouping, sort, 5)
     ids(afterDelete) shouldEqual expected.slice(5, 10)
     firstPage(grouping, sort, rpp = 5).total shouldBe Some(15)
 
-    // An image sorting before the anchor appears; the remaining pages are unchanged and the counts are live
     persistDated("2026-09-06T09:00:00", "img00.jpg")
     val afterInsert = continue(cursor, grouping, sort, 5)
     ids(afterInsert) shouldEqual expected.slice(5, 10)
@@ -457,7 +451,6 @@ import altitude.core.util.*
     intercept[SearchCursorException](continue(cursor, grouping, SearchSort(FieldConst.CREATED_AT, SortDirection.ASC), rpp = 5))
     intercept[SearchCursorException](continue(cursor, SearchGrouping(GroupBy.DateTaken, SortDirection.ASC), sort, rpp = 5))
 
-    // The page size is not part of the position: a continuation may ask for another one
     ids(continue(cursor, grouping, sort, rpp = 6)).length shouldBe 6
 
     val folder = testApp.service.folder.add("scoped")
@@ -510,7 +503,6 @@ import altitude.core.util.*
     intercept[SearchCursorException](SearchCursor.decode("e30")) // {}
     intercept[SearchCursorException](SearchCursor.decode(""))
 
-    // The same search continues
     ids(continue(cursor, grouping, sort, rpp = 5)).length shouldBe 5
   }
 
@@ -520,8 +512,7 @@ import altitude.core.util.*
       /**
        * Setup:
        *
-       * SQLite only: the fixture without its undated assets, with one asset's import time cleared to NULL, as a legacy row may
-       * have it. Only SQLite's legacy rows can hold a NULL import time, so the test is registered on SQLite only.
+       * The fixture without its undated assets, one asset's import time cleared to NULL, which only a legacy SQLite row can hold.
        *
        * Assertions:
        *
@@ -536,7 +527,6 @@ import altitude.core.util.*
       }
       val grouping = SearchGrouping(GroupBy.DateTaken)
 
-      // Grouped by capture day, the image keeps its day; sorted by import time it sits where SQLite puts nulls
       List(SortDirection.ASC, SortDirection.DESC).foreach {
         direction =>
           val sort = SearchSort(FieldConst.CREATED_AT, direction)
@@ -601,7 +591,6 @@ import altitude.core.util.*
       val expected = expectedLocationOrder(blocks, sort)
       withClue(s"$sort: ") {
         traverse(grouping, sort, rpp = 5) shouldEqual expected
-        // Every position becomes an anchor, including each group boundary
         traverse(grouping, sort, rpp = 1) shouldEqual expected
         traverse(grouping, sort, rpp = 6) shouldEqual expected
       }
@@ -621,7 +610,6 @@ import altitude.core.util.*
     }
     cursorInRome.key shouldBe Some("italy" + 1.toChar + "rome")
 
-    // Deleting the anchor's Location moves on to the trailing group, which its now unlocated members have joined
     testApp.service.location.deleteById(rome.persistedId)
     val afterRome = expectedLocationOrder(List(inNone ++ assets.slice(0, 3)), sort)
     var cursor = Option(cursorInRome)
@@ -704,10 +692,9 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * The 16-asset fixture (12 assets over four capture days, 4 undated). The text "img" matches every file name, an album holds
-     * every third asset and a person is on every fourth, so an asset's Relevance is its best source: 5 for the person, 2 for the
-     * album, 1 for the file name alone. The assets are spread over Rome and Berlin with overlapping memberships, both Locations
-     * and the trailing group mixing dated and undated assets of every Relevance.
+     * The 16-asset fixture, with "img" matching in three sources (`rankByImg`): Relevance 5 for the person, 2 for the album, 1
+     * for the file name alone. The assets are spread over Rome and Berlin with overlapping memberships, both Locations and the
+     * trailing group mixing dated and undated assets of every Relevance.
      *
      * Assertions:
      *
@@ -718,7 +705,6 @@ import altitude.core.util.*
     val relevance = rankByImg(assets)
     val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, None)
     val berlin = testApp.service.location.addLocation("Berlin", 52.5, 13.4, None)
-    // Both Locations and the trailing group mix dated and undated assets of every Relevance
     val inRome = assets.slice(0, 6) ++ assets.slice(12, 13)
     val inBerlin = assets.slice(3, 9) ++ assets.slice(13, 15)
     val inNone = assets.slice(9, 12) ++ assets.slice(15, 16)
@@ -736,10 +722,8 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * The 16-asset fixture (12 assets over four capture days, 4 undated). The text "img" matches every file name, an album holds
-     * every third asset and a person is on every fourth, so an asset's Relevance is its best source: 5 for the person, 2 for the
-     * album, 1 for the file name alone. Grouped by Location with no Location defined, first pages of 1 and 15 are read under the
-     * Relevance sort and of 1 under a file name sort.
+     * The 16-asset fixture, with "img" matching in three sources (`rankByImg`). Grouped by Location with no Location defined,
+     * first pages of 1 and 15 are read under the Relevance sort and of 1 under a file name sort.
      *
      * Assertions:
      *
@@ -762,16 +746,13 @@ import altitude.core.util.*
     cursor.secondSortValue.isDefined shouldBe true
     SearchCursor.decode(cursor.encode) shouldBe cursor
 
-    // The last asset has no capture time: its cursor says so, rather than saying nothing
     val last = firstPage(grouping, SearchSort.Relevance, 15, img).nextCursor.get
     last.id shouldBe expected(14).id
     last.secondSortValue shouldBe Some(SortValue.Null)
     SearchCursor.decode(last.encode) shouldBe last
     ids(continue(last, grouping, SearchSort.Relevance, 5, img)) shouldEqual List(expected(15).id)
 
-    // Without its capture time a Relevance cursor is no position
     intercept[SearchCursorException](continue(cursor.copy(secondSortValue = None), grouping, SearchSort.Relevance, 1, img))
-    // It belongs to its sort like any other cursor
     val byFilename = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
     intercept[SearchCursorException](continue(cursor, grouping, byFilename, 1, img))
 
@@ -932,7 +913,6 @@ import altitude.core.util.*
     rest.assets.size shouldBe 3
     rest.nextCursor shouldBe None
 
-    // A cursor continues only the grouping it was issued for
     intercept[SearchCursorException](continue(first.nextCursor.get, SearchGrouping(GroupBy.Location), sort, rpp = 2))
   }
 
@@ -942,8 +922,7 @@ import altitude.core.util.*
      * Setup:
      *
      * A Sequence of three frames, 10:00 to 12:00, one in another Sequence at 10:30 and one more Sequence of three, read one to
-     * two a page by capture time. The first frame of the anchor's group is recycled before the page is continued, as the grid's
-     * own Recycle and Curation closing both do.
+     * two a page by capture time. The first frame of the anchor's group is recycled before the page is continued.
      *
      * Assertions:
      *

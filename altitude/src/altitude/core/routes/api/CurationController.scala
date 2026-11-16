@@ -14,12 +14,11 @@ import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.decorators.requirePermission
 
-/** Curation's JSON API: the count of the queue the modal walks, and a Curation set's outcome and the Undo of it */
 class CurationController(using logger: Logger) extends BaseController:
   private val prefix = "api/curation"
   private val fields = Api.Field.Curation
 
-  /** The number of Sequences in the queue, read from the database: the client never adds or subtracts */
+  /** The number of Sequences in the queue; the client never adds or subtracts */
   @requireLogin()
   @requirePermission(Permission.CurateOwn, Permission.CurateAll)
   @cask.get(f"/$prefix/r/:repoId/count")

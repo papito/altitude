@@ -33,19 +33,15 @@ import altitude.core.routes.decorators.requireMember
 import altitude.core.routes.decorators.requirePermission
 
 /**
- * One table over every route of `App.allRoutes`: who may call it, and how it answers another repository's IDs. A route the table
- * does not list fails the first test, so a new route has to be added to it, with its ID parameters probed and who may call it,
- * which must be what the route's decorators declare.
+ * One table over every route of `App.allRoutes`: who may call it, and how it answers another repository's IDs. A new route fails
+ * the first test until it has a row, with its ID parameters probed and the access its decorators declare.
  */
 @DoNotDiscover class RouteTableTests extends ControllerTestCore {
 
   /**
-   * Who may call a route: anyone, for the reason given; any account logged in, and with access to the Library of the path when it
-   * names one, as `requireLogin` checks it, or as the route checks it itself, for the reason given (`LoginInRoute`); a member, an
-   * account that is no Guest (`requireMember`); the holder of any one of `anyOf` in the path's Library (`requirePermission`), or
-   * as the route checks it itself, for the reason given (`HolderInRoute`); an Admin or the holder of Create Users or Create
-   * Guests in any Library (`requireAccountCreator`); an Admin or an account with the Create Libraries flag
-   * (`requireLibraryCreator`); an Admin alone (`requireAdmin`).
+   * Who may call a route. `Login` is any account with access to the path's Library (`requireLogin`), `Holder` the holder of any
+   * one of `anyOf` there (`requirePermission`), and the others but `Public` mirror their decorators. The `InRoute` cases are
+   * routes that make the same check themselves, with the reason.
    */
   private enum Access:
     case Public(reason: String)
@@ -59,8 +55,8 @@ import altitude.core.routes.decorators.requirePermission
     case Admin
 
     /**
-     * Whether an account of `accountType` holding `permissions` in the Library, with the Create Libraries flag or not, may call;
-     * the account holds no grant elsewhere, so a create Permission held in any Library is one held in this one
+     * Whether such an account may call. It holds no grant elsewhere, so a create Permission held in any Library is one held in
+     * this one.
      */
     def allows(accountType: AccountType, permissions: Permissions, canCreateLibraries: Boolean): Boolean = this match {
       case Public(_) | Login | LoginInRoute(_) => true
@@ -83,18 +79,15 @@ import altitude.core.routes.decorators.requirePermission
     // The Permissions any one of which, in any Library, opens the Users page (`requireAccountCreator`)
     val creates: Set[Permission] = Set(Permission.CreateUsers, Permission.CreateGuests)
 
-  /**
-   * What a route takes: no entity ID at all, a parameter that names no row of a repository (with the reason), or entity IDs,
-   * which the probes send
-   */
+  /** What a route takes: no entity ID, parameters that name no row of a repository (with the reason), or probed entity IDs */
   private enum Ids:
     case NoEntity
     case NotEntity(params: Set[String], reason: String)
     case Probed(probes: Fixtures => List[Probe])
 
   /**
-   * A request to a route with IDs of the other repository, and its answer: `path` fills the path parameters other than `:repoId`,
-   * `query` and `body` the rest, `json` asks for JSON. An answer other than a 404 says why in `why`.
+   * A request to a route with IDs of the other repository, and the status it expects. `path` fills the path parameters other than
+   * `:repoId`. A status other than 404 says why in `why`.
    */
   private case class Probe(
       status: Int,
@@ -107,9 +100,8 @@ import altitude.core.routes.decorators.requirePermission
   }
 
   /**
-   * A route: its method, its path, the IDs it takes and who may call it. `ignored` names the ID fields the route's code names
-   * through `Api.Field` but does not act on (one it writes into its answer, or one a helper it shares with other routes handles),
-   * each with why.
+   * A route: its method, path, IDs and who may call it. `ignored` names the ID fields its code names through `Api.Field` but does
+   * not act on, each with why.
    */
   private case class Row(
       method: String,
@@ -218,8 +210,8 @@ import altitude.core.routes.decorators.requirePermission
 
   private val publicRoute = Access.Public
 
-  // The probes are a User's with every Permission, whom an Admin's route refuses before it reads an ID: what such a route
-  // answers an Admin who names another Library's Watch folder, a 404 that changes nothing, is WatchFolderControllerTests'
+  // An Admin's route refuses the probes' User before it reads an ID. An Admin naming another Library's Watch folder is
+  // WatchFolderControllerTests'
   private val ADMIN_ROUTE = "an Admin's route, which refuses the probes' User before it reads an ID"
 
   /** A probe of a route that only an Admin calls, which answers the probes' User a 403 whatever IDs it is sent */
@@ -783,9 +775,8 @@ import altitude.core.routes.decorators.requirePermission
     def key: (String, String) = (method, path)
 
     /**
-     * Who the route's decorators let call it, read off the instances cask builds from its annotations (so the table and the route
-     * cannot disagree unseen): the gate applied after `requireLogin`, or `requireLogin` itself (as `requireLoginOrSignature`
-     * applies it); nothing for a route with neither
+     * Who the route's decorators let call it, read off the instances cask builds from its annotations: the gate past the login,
+     * else `requireLogin` (or `requireLoginOrSignature`), else nothing
      */
     def declared: Option[Access] =
       decorators
@@ -798,19 +789,13 @@ import altitude.core.routes.decorators.requirePermission
         }
         .orElse(decorators.collectFirst { case _: requireLogin | _: requireLoginOrSignature => Access.Login })
 
-    /**
-     * A route that changes something in a Library: any method under `/r/:repoId` but GET and a WebSocket's handshake, which only
-     * opens a feed
-     */
+    /** Any method under `/r/:repoId` but GET and a WebSocket's handshake, which only opens a feed */
     def changesLibrary: Boolean = method != GET && method != WEBSOCKET && path.contains(LIBRARY_PATH)
 
     /** The parameters that name a row: `id`, or any `...Id` but the repository's, which the path's own check covers */
     def idParams: Set[String] = params.filter(RouteTableTests.isIdName).toSet - "repoId"
 
-    /**
-     * The ID fields the route reads from its body: those its code names through `Api.Field` (see [[RouteTableTests.idFieldsOf]])
-     * that are no parameter of the endpoint, which reads its parameters from the path or the query
-     */
+    /** The ID fields the route reads from its body: those its code names through `Api.Field` that are no parameter */
     def bodyIdFields: Set[String] = RouteTableTests.idFieldsOf(controller, handler) -- params
   }
 
@@ -841,10 +826,7 @@ import altitude.core.routes.decorators.requirePermission
       path,
       m => Regex.quoteReplacement(if m.group(1) == "repoId" then repoId else values(m.group(1))))
 
-  /**
-   * The status a route answers a request with no body and `values` as its path parameters: a WebSocket's handshake is answered
-   * what it is refused with, or 101 when it opens
-   */
+  /** The status a route answers a request with no body and `values` as its path parameters; 101 for an opened WebSocket */
   private def statusOf(
       host: String,
       row: Row,
@@ -921,12 +903,10 @@ import altitude.core.routes.decorators.requirePermission
      *
      * Assertions:
      *
-     * Every route is a row of the table and every row is a route. A route with an ID parameter (`id` or a name ending in `Id`,
-     * the repository's left out), in its path or its query, has a probe that sends each of them, or says why the parameter names
-     * no row. A route whose code names an ID field (`id`, or a name ending in `Id` or `Ids`) through `Api.Field`, in its method
-     * or in a member it reaches (the controller's, `BaseController`'s or an object's under `routes`), reads it from the body: a
-     * probe sends it in the body, or the row says why it names no row, or why the route does not act on it. A row that says the
-     * route takes no entity ID has no such parameter or field. Every probe that expects an answer other than a 404 says why.
+     * Every route is a row and every row a route. Each ID parameter of a route, in its path or query, is sent by a probe or the
+     * row says why it names no row. Each ID field the route's code names through `Api.Field` and does not take as a parameter is
+     * sent in a probe's body, or the row says why it names no row or why the route ignores it. A row taking no entity ID has none
+     * of these. Every probe that expects other than a 404 says why.
      *
      * Edge cases:
      *
@@ -973,8 +953,8 @@ import altitude.core.routes.decorators.requirePermission
      *
      * Edge cases:
      *
-     * The public routes, each with the reason it is public, are the login, logout, setup, the health check and the app's own
-     * static files. The import status WebSocket refuses an anonymous handshake with a 401.
+     * The public routes are the login, logout, setup, the health check and the app's own static files. The import status
+     * WebSocket refuses an anonymous handshake.
      */
     val repoId = testContext.persistRepository().persistedId
 
@@ -997,11 +977,8 @@ import altitude.core.routes.decorators.requirePermission
      *
      * Assertions:
      *
-     * The access of every row is what its route's decorators declare: `requireAdmin` an Admin, `requireLibraryCreator` the Create
-     * Libraries flag, `requireAccountCreator` the holder of Create Users or Create Guests in any Library, `requirePermission` the
-     * holder of any one of its Permissions, `requireMember` a member, and `requireLogin` alone (or `requireLoginOrSignature`) any
-     * account with access to the Library. A route that changes something in a Library (any method but GET under `/r/:repoId`)
-     * declares a member, a Permission, the Create Libraries flag or an Admin.
+     * The access of every row is what its route's decorators declare. A route that changes something in a Library (any method but
+     * GET under `/r/:repoId`) declares a gate past the login.
      *
      * Edge cases:
      *
@@ -1024,22 +1001,20 @@ import altitude.core.routes.decorators.requirePermission
     /**
      * Setup:
      *
-     * A Library and, logged in to it, an Admin, a Guest, a User holding no Permission, a User holding every Permission, a User
-     * holding every Permission with the Create Libraries flag, and, for each row that needs a Permission, a User holding every
-     * Permission but the row's and a User holding each of the row's alone.
+     * A Library and, logged in to it, an Admin, a Guest, a User holding no Permission, a User holding every Permission with and
+     * without the Create Libraries flag, and, for each row that needs a Permission, a User holding all but the row's and a User
+     * holding each of the row's alone.
      *
      * Assertions:
      *
-     * Each account's request to each route is answered 403 exactly when the row refuses the account: a route for members refuses
-     * the Guest, a route that needs any of several Permissions refuses the Guest and the User holding none of them and lets each
-     * of them through alone, a route for an Admin refuses every User and the Guest, the Users page and its Add User refuse every
-     * account but an Admin and a holder of Create Users or Create Guests, and creating a Library refuses every account but an
-     * Admin and the User with the flag. A route any account with access calls refuses no one.
+     * Each account's request to each route is a 403 exactly when the row refuses the account. A route that needs any of several
+     * Permissions lets each of them through alone and refuses the User holding none of them. A route any account with access
+     * calls refuses no one.
      *
      * Edge cases:
      *
-     * The requests carry no body and random IDs, so an account let through is answered whatever the route answers such a request,
-     * a 400 or a 404 among them, but never 403. The import status WebSocket's handshake is refused with a 403 or opens.
+     * The requests carry no body and random IDs, so an account let through may get a 400 or a 404, but never a 403. The import
+     * status WebSocket's handshake is refused with a 403 or opens.
      */
     val library = testContext.persistRepository()
     val repoId = library.persistedId
@@ -1098,8 +1073,8 @@ import altitude.core.routes.decorators.requirePermission
      *
      * Assertions:
      *
-     * Every route whose path names a Library answers the User's request to it in this Library with a 404, as it would a Library
-     * that does not exist, whatever Permission the route needs.
+     * Every route whose path names a Library answers the User's request in this Library with a 404, as for a Library that does
+     * not exist, whatever Permission the route needs.
      */
     val library = testContext.persistRepository()
     val elsewhere = testContext.persistRepository()
@@ -1117,10 +1092,8 @@ import altitude.core.routes.decorators.requirePermission
   }
 
   /**
-   * The user's repository with an asset, a folder, an album, a Location and an unnamed Person with a Face, and their other
-   * repository with an imported asset (with a Preview, a point, a Face with its files, a saved Edit, rendered, a folder, an album
-   * and a Location in a category holding it), a Person with that Face, two triaged assets in one Sequence, a recycled asset, an
-   * Import in progress and a Watch folder. The context is the user's repository again when it returns.
+   * The `my*` rows in the user's repository, and a row of every kind a route takes an ID of in their other repository, each named
+   * with `MARK`. The context is the user's repository again when it returns.
    */
   private def fixtures(mine: Repository): Fixtures = {
     val myAsset = testContext.insertAsset(testContext.makeAsset(repository = Some(mine)))
@@ -1195,25 +1168,20 @@ import altitude.core.routes.decorators.requirePermission
     /**
      * Setup:
      *
-     * A logged-in User's repository with an asset, a folder, an album, a Location and a Person with a Face, and a second
-     * repository of theirs (the User holds every Permission in both) holding a row of every kind a route takes an ID of, each
-     * named with a mark: an asset with a Preview, a point, a Face with its files and an Edit, a folder, an album and a Location
-     * in a category, a Person with that Face, two triaged assets in a Sequence, a recycled asset and an Import in progress.
+     * A logged-in User holding every Permission in their repository, with an asset, a folder, an album, a Location and a Person
+     * with a Face, and in a second repository holding a row of every kind a route takes an ID of, each named with a mark.
      *
      * Assertions:
      *
-     * Through the first repository, every probe of the table answers the second repository's IDs with the status the table gives,
-     * a 404 unless the row says why, and answers IDs that do not exist the same way. No answer carries the mark, the imported
-     * asset's file name, or an ID of the second repository that the request did not send. No row of either repository changes.
+     * Through the first repository, every probe answers the second repository's IDs with the table's status, a 404 unless the row
+     * says why, and answers IDs that do not exist the same way. No answer carries the mark, the imported asset's file name, or an
+     * ID of the second repository the request did not send. No row of either repository changes.
      *
      * Edge cases:
      *
-     * The routes that do not answer 404 by design: a dialog's form that shows a field error (adding a folder under the parent, an
-     * album or Location chosen in the batch dialogs, a category chosen for a Location), the empty add-folder dialog, Curation's
-     * set of a Sequence (204), moving a folder under the parent (400), the batch operations and Curation's selection, which leave
-     * out assets that are not the repository's, the map, which is empty for a scope the repository does not hold, the advanced
-     * search panel, which drops an ID the repository does not hold from its form, a filtered search, whose title has no chip for
-     * it and whose results are empty, and the library page, which reads neither ID it is given.
+     * The rows that expect another status by design: a dialog's form with a field error, a batch operation or Curation's
+     * selection that leaves out the foreign assets, a search, map, panel or Sequence where a foreign ID matches nothing, a folder
+     * move to a foreign parent (400), and pages that do not read the ID.
      */
     val mine = testApp.service.repository.getById(loginAs(AccountType.User, Permissions.all))
 
@@ -1292,7 +1260,7 @@ object RouteTableTests {
     }.flatten
   }
 
-  /** Every member of the sources under `routes`: the controllers', `BaseController`'s and the objects', any controller's reach */
+  /** Every member of the sources under `routes`, which a controller's method may reach */
   private lazy val routeMembers: List[Member] = {
     val walk = Files.walk(sourceRoot.resolve("routes"))
     try
@@ -1311,11 +1279,10 @@ object RouteTableTests {
   }
 
   /**
-   * The ID-shaped `Api.Field` values that the controller's method names (`id`, or a name ending in `Id` or `Ids`): in its own
-   * body and in every member of the controller, of `BaseController` or of an object under `routes` (a companion among them) that
-   * it reaches by name, transitively. A field aliasing part of `Api` (`private val fields = Api.Field.Curation`) is followed.
-   * Reading by name over-approximates what the method reaches, so a field the route names without acting on it is one its row
-   * says it ignores.
+   * The ID-shaped `Api.Field` values the controller's method names, in its body and in every member of the controller,
+   * `BaseController` or an object under `routes` that it reaches by name, transitively. A field aliasing part of `Api` (`private
+   * val fields = Api.Field.Curation`) is followed. Reading by name over-approximates, so a field the route names without acting
+   * on it is one its row says it ignores.
    */
   def idFieldsOf(controller: String, method: String): Set[String] = {
     val members = routeMembers.filter(member => member.owner.forall(Set(controller, "BaseController").contains))

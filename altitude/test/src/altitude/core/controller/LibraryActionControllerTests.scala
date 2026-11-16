@@ -14,11 +14,7 @@ import altitude.core.models.Permissions
 import altitude.core.service.RepositoryService
 import altitude.core.util.Util
 
-/**
- * The New library dialog: an Admin's dialog and create, the redirect to the new Library's Import page, a User with the Create
- * Libraries flag creating a Library and holding every Permission there, a creator already at its bound of grants, the Library
- * name rule's errors under the field, and the refusals of a User and a Guest without the flag and of an anonymous request.
- */
+/** The New library dialog and create: who may create, the redirect to the new Library, and the name rule's errors */
 @DoNotDiscover class LibraryActionControllerTests extends ControllerTestCore {
 
   private def dialogUrl(host: String, repoId: String) = s"$host/htmx/library/r/$repoId/dialogs/new"
@@ -45,7 +41,6 @@ import altitude.core.util.Util
       response.text() should include(s"""value="$typed"""")
     }
 
-  /** The names of every Library of the instance */
   private def allLibraryNames: List[String] = testApp.service.repository.getAll.map(_.name).sorted
 
   test("An Admin opens the New library dialog") {
@@ -57,8 +52,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The dialog answers 200 with an empty name field in a popover dialog form titled "New library", which posts to the create
-     * route of the Library it was opened from, and holds Create and Cancel.
+     * The dialog is a modal form with an empty name field, posting to the create route of the Library it was opened from, with
+     * Create and Cancel.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
 
@@ -114,7 +109,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The create, asked as a client asking for JSON, answers 401, and no Library is added.
+     * The create, from a client accepting JSON, answers 401, and no Library is added.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -132,14 +127,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin, logged in, and a Library the login recorded as the last active one; the Admin creates a Library named with spaces
-     * around it and a tab between its words.
+     * An Admin logged in to a Library, recorded as the last active one, creates a Library whose name has spaces around it and a
+     * tab inside.
      *
      * Assertions:
      *
-     * The create answers with an `HX-Redirect` to the new Library's Import page. The new Library is among the Admin's, stored
-     * with the name normalized. The last active Library is still the one the dialog was opened from, until the Import page of the
-     * new one loads and records it.
+     * The create answers an `HX-Redirect` to the new Library's Import page, and the Library is stored with the name normalized.
+     * The last active Library stays the first until the new one's Import page loads.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val admin = testContext.user
@@ -171,8 +165,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The create sends the browser to the new Library's Import page, which answers 200 with the same session: the creator holds
-     * every Permission in the Library it created, and its session picks the grant up at its next request.
+     * The new Library's Import page answers 200 with the same session: the creator holds every Permission there, and the session
+     * picks the grant up at its next request.
      */
     val account = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
     val repoId = testContext.persistRepository().persistedId
@@ -200,8 +194,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Its create answers with the dialog's form in place of the submitted one, `TOO_MANY_GRANTS` under the field and the typed
-     * name kept, posting again to the Library it was opened from; no Library is added.
+     * The create answers the form with `TOO_MANY_GRANTS` under the field and the typed name kept, still posting to the Library it
+     * was opened from; no Library is added.
      */
     val account = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
     val repoId = testContext.persistRepository().persistedId
@@ -224,13 +218,12 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin, logged in to a Library, who submits an empty name, a one-character name, an 81-character name, a name with a
-     * control character between its words and one with a control character at its end.
+     * An Admin, logged in to a Library, who submits names empty, of one character, of 81, and with a control character inside or
+     * at the end.
      *
      * Assertions:
      *
-     * Each submission answers with the dialog's form in place of the submitted one, the rule's error under the field and the
-     * typed name kept in it; no Library is added.
+     * Each answers the form with the rule's error under the field and the typed name kept; no Library is added.
      *
      * Edge cases:
      *
@@ -260,12 +253,11 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Each submission answers with the dialog's form in place of the submitted one, saying a library by the normalized name
-     * already exists, with the typed name kept in the field; no Library is added.
+     * Each answers the form saying a library by the normalized name exists, with the typed name kept; no Library is added.
      *
      * Edge cases:
      *
-     * The name differs from the held one only in case or only in spacing, and either held name is taken.
+     * Names differing from a held one only in case or spacing, against either held name.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     addLibrary("Client Smith", testContext.user)

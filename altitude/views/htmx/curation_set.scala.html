@@ -9,16 +9,10 @@
 @import altitude.core.util.ImageMeasurement
 @import altitude.core.util.Util
 
-@* A Curation set, as CurationRule sorted it: the Bundle rail in a column of its own, what holds for every frame, then the Contenders,
-   then each Bundle with what is wrong with its frames, how much, and compared to what; and to its right the stage above the face
-   strip and the set's footer. The `curation` component on the shell (js/alpine/components/curation.js) holds the state every
-   binding here reads, and reads this fragment's frames, in the rail's order, from `data-frame-id`: `data-asset-id` is how the
-   client finds the cells of the grid beneath. A face strip's column names its frame in `data-column-frame-id` for the same reason.
-   The root carries the measurement's levels and box (`data-clipped-level`, `data-crushed-level`, `data-measurement-box`) for the
-   stage's Clipping blink, which the component reads so the client restates no constant of `ImageMeasurement`.
-   With no set, too few frames were left to compare. Curation is a Curate Permission's, so every outcome control is offered to
-   whoever sees the set, which holds only the frames the account may curate (`AssetRules.curatedOwner`: its own with Curate own
-   alone). *@
+@* A Curation set, as CurationRule sorted it; with none, too few frames were left to compare. Frames are named in
+   `data-frame-id` and face strip columns in `data-column-frame-id`, since `data-asset-id` finds the grid's cells beneath. The
+   root carries `ImageMeasurement`'s levels and box so the client restates none of its constants. Every outcome control is
+   offered: Curation needs Curate, and the set holds only the frames the account may curate (`AssetRules.curatedOwner`). *@
 @(set: Option[CurationSet])
 
 @bundleName(kind: BundleKind) = @{
@@ -57,17 +51,15 @@
   }
 }
 
-@* What a Bundle's header says, the first frame's first reason standing for the others: each frame gives its own below *@
+@* A Bundle's header reason: the first one, with a count of the others; each frame gives its own below *@
 @bundleReason(bundle: CurationBundle) = @{
   val reasons = bundle.frames.flatMap(_.reasons.map(reasonText)).distinct
   reasons.headOption.getOrElse("") + (if (reasons.size > 1) s", and ${reasons.size - 1} more" else "")
 }
 
-@* A frame in the rail. A click focuses it. `data-bundle-kind` is the Bundle it sits under, and `data-problems` what the stage's tag
-   says is wrong with it, its Bundle first and then its chips; a Contender has neither. `data-histogram` is what the stage's strip
-   draws of the frame, its Histogram's relative bytes in Base64 (a byte per bin, luminance then red, green and blue, on one scale),
-   and `data-crushed-shadows` and `data-clipped-highlights` the fractions the strip's corners read, as the import measured them; a
-   frame not measured has none of the three. Its reasons show while its Bundle's details do (`showsDetails`) *@
+@* `data-problems` lists what the stage's tag says, the frame's Bundle first; a Contender has none. `data-histogram` is the
+   Histogram's relative bytes in Base64 (a byte per bin: luminance, then red, green and blue, on one scale). A frame not
+   measured has no histogram and no clipping fractions. *@
 @railFrame(frame: CurationFrame, bundleKind: Option[BundleKind], isSole: Boolean, reasons: List[CurationReason], chips: List[CurationProblem]) = {
   @defining(frame.asset.persistedId) { frameId =>
   <li class="curation-frame"
@@ -104,27 +96,11 @@
   }
 }
 
-@* One of the stage's two panes, for the frame the component's `frame` property names. The image fills the pane, hidden behind the
-   spinner while its frame loads (`isPaneLoading`), and a click on a crop zooms it with a transform (`applyZoom`). The tag over the
-   pane's corner says what the rail says of the frame: kept, and its problems. It is the pane's and not the image's, so a
-   zoom leaves it in place, and it stays while the frame loads, as the caption does. The focused frame's pane wears the accent's edge.
-   The clipping canvas, right after the image, is the Clipping blink: the component draws the mask of the frame's blown highlights
-   and crushed shadows into it at the sampled size and writes the image's transform to it (`applyZoom`), so it lies over the picture
-   pixel for pixel and follows the zoom. It sits under the spinner, the tag and the lens, and is `hidden` unless the blink is on and
-   the image is shown (`showsClippingBlink`).
-   The Loupe, last in the pane so it paints above all of them, is a lens that rides with the pointer over the pane showing the spot
-   under it at the original's pixels, on that pane alone; js/common/loupe.js places and draws it through the component,
-   writing its inline styles, its level in `data-level` and `hidden`, and the pointer is hidden (`cursor: none`) while it shows.
-   The Histogram strip is the figure's row between the image and its caption: the Histogram's markup (includes/histogram), a button
-   holding the frame's Histogram as the import measured it (`histogramOf`, its paths by channel) and in its top corners the
-   fractions of the frame's pixels crushed (left) and blown (right) (`crushedLabel`, `blownLabel`); it is the Clipping blink's
-   switch for the whole stage, `aria-pressed` while the blink is on and disabled on a failed image (`isImageUnreadable`). The shapes
-   and the labels are the frame's, so they show while its image loads, and are empty for a frame not measured. A click bubbles to
-   the shell's root, which hands focus back to it (`refocusAfterPointer`), as every button's does. The H key shows or hides both
-   panes' strips (`showsHistogram`), and a hidden strip leaves its row to the pane.
-   The component words the Keep button by where the frame stands on the stage. The pinned frame's caption says so, centered below its image.
-   Any other frame's has the Pin button, and that other frame is always the focused one. Recycle sends the pane's frame to the
-   trash at once (`recycleFrame`), its key the Keep button's with Shift held (`recycleKey`) *@
+@* One of the stage's two panes. The tag is the pane's, not the image's, so a zoom leaves it in place. The clipping canvas gets
+   the image's transform (`applyZoom`), so its mask lies over the picture pixel for pixel. The Loupe comes last so it paints
+   above the rest. The Histogram strip is the Clipping blink's switch for the whole stage; its shapes and labels are the
+   frame's, so they show while the image loads. A pane other than the pinned one always shows the focused frame, so its Pin
+   pins the focused frame. *@
 @stagePane(imageId: String, loupeId: String, histogramId: String, clippingId: String, frame: String, shows: String) = {
   <figure x-show="@shows">
     <div class="pane" :class="{ loading: isPaneLoading('@imageId', @frame), focused: @frame === focusedId }">
@@ -199,8 +175,7 @@
             <header>
               <h3>@bundleName(bundle.kind) <span class="count">(@{bundle.frames.size})</span>
                 <i class="fas fa-check-circle" aria-label="Holds a frame to keep" x-show="bundleHoldsPick('@{bundle.kind}')"></i></h3>
-              @* The switch of the Bundle's details, its reason line here and its frames' reasons, which start hidden; it holds no
-                 text, so its `aria-label` names it *@
+              @* Shows the Bundle's reason line and its frames' reasons, which start hidden *@
               <button type="button"
                       class="action-button small"
                       title="Show or hide what is wrong with each frame"
@@ -225,9 +200,8 @@
           @stagePane("curationStageFocused", "curationLoupeFocused", "curationHistogramFocused", "curationClippingFocused", "focusedId", "focusedId")
         </div>
 
-        @* One row per Person (no name: a Face carries none, and its crop identifies the row) and one column per frame in the rail's
-           order. A click on a crop zooms the stage to that Person's box, in the pixels `data-face-box` gives: x, y, width and
-           height *@
+        @* One row per Person, unnamed (the crop identifies it), one column per frame in the rail's order. `data-face-box` is the
+           crop's x, y, width and height in pixels *@
         @if(curationSet.faceRows.nonEmpty) {
           <div id="curationFaces">
             <table>
@@ -283,20 +257,18 @@
         }
 
         <footer>
-          @* The note's row is there from the set's opening when any frame is in an album or a Location, and holds its line while the
-             note is empty, so a frame's Pick does not shrink the panes mid-comparison *@
+          @* Shown from the set's opening when any frame is in an album or a Location, and holding its line while empty, so a Pick
+             does not shrink the panes mid-comparison *@
           <p class="note" x-show="hasFrameInAlbumOrLocation" x-text="recycledInAlbumOrLocationNote"></p>
           <small class="keys"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> move, <kbd>R</kbd> recycle the frame's Bundle, <kbd>H</kbd> Histogram</small>
-          @* With no frame to keep the hint stands in for Resolve, and Enter does nothing. Resolve's label is two spans so that only
-             the kept frame's name truncates, and its title gives the label whole *@
+          @* Resolve's label is two spans so only the kept frame's name truncates; its title gives the label whole *@
           <div class="resolve">
             <span class="keep-hint" x-show="keepIds.length === 0">Press 1 or 2 to keep a frame</span>
             <button type="button" class="action-button primary" x-show="keepIds.length > 0" :title="keptLabel + recycleLabel" x-on:click="resolve()"><span class="kept" x-text="keptLabel"></span><span x-text="recycleLabel"></span> <kbd>Enter</kbd></button>
           </div>
           <div class="actions">
             <button type="button" class="action-button" x-on:click="keepAll()">Keep all <kbd>A</kbd></button>
-            @* The moves of the queue's walk, to the nearest open row of the Sequence rail above or below; each is disabled with
-               none left on its side. A selection or a Sequence opened alone has no rows to move between: Exit closes it *@
+            @* Each moves to the nearest open row of the Sequence rail on its side *@
             <button type="button" class="action-button" x-show="isQueue" :disabled="!hasPreviousSequence" x-on:click="movePrevious()">Previous <kbd>P</kbd></button>
             <button type="button" class="action-button" x-show="isQueue" :disabled="!hasNextSequence" x-on:click="moveNext()">Next <kbd>N</kbd></button>
           </div>

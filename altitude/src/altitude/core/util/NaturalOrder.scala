@@ -6,12 +6,11 @@ import java.util.Locale
 import scala.annotation.tailrec
 
 /**
- * Names in the order a person reads them: case-insensitively, with an accented letter beside its base letter, and with each run
- * of ASCII digits compared as a number, so "Client 2" comes before "client 10" and "Client 100", and "Émile" before "Zoo". Text
- * is compared by the root locale's collation at secondary strength: case is ignored, and of two names that differ only in an
- * accent, the unaccented one comes first. Numbers sort, against text, where the collation puts "0": after the punctuation, before
- * the letters. The order is total: numbers equal in value put the one with fewer leading zeros first ("7" before "07"), and names
- * the collation finds equal (equal but for case) fall back to their plain order.
+ * Names in the order a person reads them. Text compares by the root locale's collation at secondary strength: case is ignored, an
+ * accented letter sits beside its base letter ("Émile" before "Zoo"), and of two names differing only in an accent the unaccented
+ * one comes first. Each run of ASCII digits compares as a number ("Client 2" before "client 10"), and sorts against text where
+ * the collation puts "0": after the punctuation, before the letters. The order is total: equal numbers put fewer leading zeros
+ * first ("7" before "07"), and names the collation finds equal fall back to their plain order.
  */
 object NaturalOrder extends Ordering[String]:
   // A run of digits, or a run of anything else; `\d` is ASCII only without the UNICODE_CHARACTER_CLASS flag
@@ -44,7 +43,7 @@ object NaturalOrder extends Ordering[String]:
 
   private def compareChunk(a: String, b: String): Int = (isNumber(a), isNumber(b)) match
     case (true, true) =>
-      // Compared as text without the leading zeros, a number of any length: the one with more digits is the larger
+      // Compared as text without the leading zeros, so a number of any length compares: more digits is larger
       val (x, y) = (a.dropWhile(_ == '0'), b.dropWhile(_ == '0'))
       if x.length != y.length then x.length.compare(y.length)
       else if x != y then x.compareTo(y)

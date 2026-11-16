@@ -23,25 +23,20 @@ import {
 import { curveLut } from "../../edit/tone.js"
 
 /**
- * The Edit panel's controls (`includes/edit_panel`, `x-data="editPanel"`): the tabs, the sliders, the aspect chips, the
- * curve editor, the section resets, Undo and Redo, and the Histogram and its Clipping blink. The Edit, its session and
- * the stage live in the coordinator (`edit/edit-panel.js`), which this component connects to as it starts: the
- * coordinator syncs a snapshot into it (`sync`), and the component asks it for every change, worked out from the Edit
- * shown (`edit/adjust.js`). The component's state is what its bindings read: a copy of the Edit shown, the save status,
- * whether changes are held for Done or Cancel (the stage's bar, the coordinator's), whether there is anything to undo or
- * redo, the Histogram's paths and the tools' states.
+ * The Edit panel's controls: tabs, sliders, aspect chips, the curve editor, section resets, Undo and Redo,
+ * and the Histogram. The Edit, its session and the stage live in the coordinator (`edit/edit-panel.js`),
+ * which syncs a snapshot into this component; every change is asked of the coordinator, and the
+ * component holds only what its bindings read.
  *
- * A slider counts as one change on release, or on Enter in its number field (a value left unentered goes back as the
- * field loses focus or on Escape); a double-click on its label or its track resets it. A curve point counts as one
- * change on release; a click adds one, a drag moves it, a drag well off the box or a double-click removes it.
+ * A slider counts as one change on release or on Enter in its number field, a curve point on release.
  */
 
 // The tab shown, kept for the page's life so each asset's panel opens on the last one
 let shownTab = SECTIONS[0].id
 
-// How near a point of the curve a press is to take it, in CSS pixels
+// How near a curve point a press must be to take it, in CSS pixels
 const CURVE_HIT_RADIUS = 12
-// The curve's points, drawn as dots of this radius, in CSS pixels
+// In CSS pixels
 const CURVE_POINT_RADIUS = 4.5
 
 const STATUS_TEXT = {
@@ -52,7 +47,7 @@ const STATUS_TEXT = {
     conflict: "Changed elsewhere · showing its latest Edit",
 }
 
-// The keys that step a range (`input[type=range]`), whose changes are saved once the key rests (`commitSoon`)
+// The keys that step an `input[type=range]`; their changes are saved once the key rests
 const RANGE_KEYS = [
     "ArrowLeft",
     "ArrowRight",
@@ -64,22 +59,22 @@ const RANGE_KEYS = [
     "End",
 ]
 
-// A tone curve point moved with the arrows: a step of x or y, and with Shift
+// An arrow key's step of a curve point, plain and with Shift
 const CURVE_KEY_STEP = 0.01
 const CURVE_KEY_STEP_LARGE = 0.05
 
 export function editPanel() {
     // The coordinator's actions, out of the reactive object
     let panel = null
-    // The last Histogram's luminance bins, which the curve's backdrop draws, and the curve's drag in progress
+    // The luminance bins the curve's backdrop draws, and the curve's drag in progress
     let luminanceBins = null
     let curveDrag = null
     let themeListener = null
-    // Paints the curve as its canvas gets a size: Alpine shows a tab on the next frame, after the change that shows it
+    // Paints the curve once its canvas gets a size: Alpine shows a tab a frame after the change that selects it
     let curveObserver = null
     // The last Histogram synced, so a sync that brings the same one redraws nothing
     let lastHistogram = null
-    // A slider's drag (`dragOf`: each value from the Edit it started on) and how it is being moved: "pointer" or "key"
+    // A slider's drag (each value applied to the Edit it started on) and whether it moves by "pointer" or "key"
     let slideDrag = null
     let slideVia = "pointer"
     let slideKeyTimer = 0
@@ -98,12 +93,11 @@ export function editPanel() {
         splitOn: false,
         clippingBlink: false,
         autoBusy: false,
-        // The paths of the edited image's Histogram by channel, which its strip draws (`includes/histogram`), and the
-        // labels of its corners
+        // The edited image's Histogram paths by channel, and its corner labels
         histogram: NO_PATHS,
         crushedLabel: "",
         blownLabel: "",
-        // Bumped as the curve's backdrop changes, so the curve is drawn again
+        // Bumped as the curve's backdrop changes, to redraw the curve
         histogramVersion: 0,
         // The curve point the keys act on, and whether the curve editor has focus, which rings that point
         curveIndex: 0,
@@ -140,7 +134,7 @@ export function editPanel() {
             )
         },
 
-        /** The coordinator's snapshot: each field written only when it changed, so a field being typed in keeps its text */
+        /** Writes each field only when it changed, so a field being typed in keeps its text */
         sync(snapshot) {
             const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
             for (const key of [
@@ -193,7 +187,7 @@ export function editPanel() {
             shownTab = id
         },
 
-        /** The arrows move between the tabs, Home and End to the first and the last, as the ARIA tabs pattern has it */
+        /** Arrows, Home and End move between the tabs, per the ARIA tabs pattern */
         tabKey(event) {
             const ids = this.sections.map((section) => section.id)
             const index = ids.indexOf(this.tab)
@@ -241,7 +235,7 @@ export function editPanel() {
 
         // The sliders
 
-        /** The specs of the sliders whose keys are listed, space-separated, in their order */
+        /** The specs of the space-separated slider keys, in order */
         slidersOf(keys) {
             return keys.split(" ").map((key) => SLIDERS[key])
         },
@@ -250,7 +244,6 @@ export function editPanel() {
             return this.recipe[key]
         },
 
-        /** The number field's value: the slider's, as `formatSlider` writes it */
         fieldValue(key) {
             return formatSlider(key, this.recipe[key])
         },
@@ -259,15 +252,11 @@ export function editPanel() {
             return this.recipe[key] !== 0
         },
 
-        /** A changed slider's class, which bolds its label */
         sliderClass(key) {
             return this.isChanged(key) ? "changed" : ""
         },
 
-        /**
-         * The track's fill to the thumb (`--edit-slider-fill`) and, for a slider with a gradient track (its `track` in
-         * `SLIDERS`), the track itself (`--edit-slider-track`, its `--edit-track-*` token), written inline
-         */
+        /** The track's fill to the thumb and, for a slider with a gradient track, the track's token */
         sliderStyle(key) {
             const { min, max, track } = SLIDERS[key]
             const fill = ((this.recipe[key] - min) / (max - min)) * 100
@@ -277,10 +266,7 @@ export function editPanel() {
             return `--edit-slider-fill: ${fill}%;${gradient}`
         },
 
-        /**
-         * A slider dragged: shown at once, one change on release; the coordinator works the change out
-         * (`adjust.withSlider`), keeping the crop true to Straighten
-         */
+        /** Previews each value applied to the Edit the drag started from, so a crop shrunk on the way grows back */
         slide(key, event) {
             if (!panel?.recipe()) {
                 return
@@ -293,13 +279,11 @@ export function editPanel() {
             }
         },
 
-        /** A press on the track or the thumb: the slider moves by the pointer */
         slidePointer() {
             slideVia = "pointer"
             slideDrag = null
         },
 
-        /** A key that steps the range: the slider moves by the keys, whose changes are saved once they rest */
         slideKey(event) {
             if (RANGE_KEYS.includes(event.key)) {
                 slideVia = "key"
@@ -307,8 +291,8 @@ export function editPanel() {
         },
 
         /**
-         * The range's change: saved a moment later, once the keys rest (a held key is one step) or, from the pointer, past
-         * a double-click's reset; a drag by the keys keeps its start Edit until they rest
+         * Saved a moment later: once the keys rest, so a held key is one step, or, from the pointer, past a double-click's
+         * reset. A drag by the keys keeps its start Edit until they rest.
          */
         endSlide() {
             const recipe = panel?.recipe()
@@ -328,7 +312,6 @@ export function editPanel() {
             panel?.change("slider", key, 0)
         },
 
-        /** Enter in a slider's number field sets it, as one step */
         setFromField(key, event) {
             const value = Number(event.target.value)
             if (event.target.value.trim() === "" || Number.isNaN(value)) {
@@ -339,7 +322,7 @@ export function editPanel() {
             event.target.value = this.fieldValue(key)
         },
 
-        /** A number field's value not entered goes back to the slider's */
+        /** A value left unentered goes back to the slider's, on blur or Escape */
         revertField(key, event) {
             event.target.value = this.fieldValue(key)
             if (event.type === "keydown") {
@@ -454,12 +437,11 @@ export function editPanel() {
         },
 
         /**
-         * Draws the curve over the luminance Histogram of the Edit shown, in the colors its stylesheet gives the canvas
-         * (`color` the curve and its points, `border-color` the grid, `outline-color` the Histogram), so the script holds
-         * no literal; nothing while the canvas is not laid out (another tab is shown)
+         * Draws the curve over the luminance Histogram. Colors come from the canvas's stylesheet (`color` the curve,
+         * `border-color` the grid, `outline-color` the Histogram), so the script holds no literal.
          */
         drawCurve() {
-            // Read here, so the effect follows them; a tab not shown yet is painted as it is (`curveObserver`)
+            // Read here so the effect follows them; a tab not shown yet is painted by `curveObserver`
             const points = this.recipe.curve
             void this.histogramVersion
             void this.curveIndex
@@ -549,12 +531,11 @@ export function editPanel() {
             })
         },
 
-        /** The point the keys act on, within the curve's points */
         selectedCurvePoint() {
             return Math.min(this.curveIndex, this.recipe.curve.length - 1)
         },
 
-        /** The curve editor's name for a screen reader: the point the keys act on, where it is, and the keys */
+        /** The curve editor's screen reader name: the point the keys act on, where it is, and the keys */
         curveLabel() {
             const index = this.selectedCurvePoint()
             const [x, y] = this.recipe.curve[index]
@@ -564,11 +545,7 @@ export function editPanel() {
             )
         },
 
-        /**
-         * The curve editor's keys: the arrows move the point the keys act on (Shift, further), within its neighbours,
-         * saved once they rest; [ and ] pick the point before or after; + (or Insert) adds one halfway to the next, on
-         * the curve; Delete or Backspace removes an inner one
-         */
+        /** Arrows move the point, saved once they rest; + (or Insert) adds one on the curve, halfway to the next */
         curveKey(event) {
             const recipe = panel?.recipe()
             if (
@@ -629,7 +606,7 @@ export function editPanel() {
             event.preventDefault()
         },
 
-        /** The pointer's place over the curve's box, x right and y up, in fractions of it, and the box's width */
+        /** The pointer over the curve's box, x right and y up, in fractions of it, and the box's width */
         curvePoint(event) {
             const box = this.$refs.curve.getBoundingClientRect()
             return {
@@ -653,7 +630,6 @@ export function editPanel() {
             return nearest
         },
 
-        /** A press takes the point within reach, or adds one, and drags it */
         curveDown(event) {
             const recipe = panel?.recipe()
             if (!recipe || event.button !== 0 || !this.ready) {
@@ -676,7 +652,7 @@ export function editPanel() {
             event.target.setPointerCapture(event.pointerId)
         },
 
-        /** A drag moves its point between its neighbors; well off the box, an inner point is marked to go */
+        /** Well off the box, an inner point being dragged is marked to go on release */
         curveMove(event) {
             const recipe = panel?.recipe()
             if (!curveDrag || !recipe) {
@@ -694,7 +670,6 @@ export function editPanel() {
             )
         },
 
-        /** The release makes the curve one change, without the point dragged off the box */
         curveUp() {
             const recipe = panel?.recipe()
             if (!curveDrag || !recipe) {
@@ -710,7 +685,6 @@ export function editPanel() {
             )
         },
 
-        /** A double-click on an inner point removes it */
         curveDoubleClick(event) {
             const recipe = panel?.recipe()
             if (!recipe) {

@@ -23,9 +23,7 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
     // from the login token
     RequestContext.permissions.value = Permissions.all
 
-    // The database is dirtied by the separate process (test server)
-    // so we need to reset it before each test.
-    // This also sets the test instance as "initialized"
+    // The server's requests write to the shared database, so it is reset before each test; this also marks it initialized
     SqliteSuiteBundle.setup()
     // The server's own instance shares the database; its snapshot must see the reseeded rows, not an earlier test's saves
     App.altitude.settings.load()
@@ -39,9 +37,8 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
   }
 
   /**
-   * Logs the test context's account in. A User or a Guest that holds no grant in the context's first Library is given access to
-   * it first, with every Permission for a User, as an Admin has by type; a test that wants fewer grants them before it logs in,
-   * or uses [[loginAs]].
+   * Logs the test context's account in. A User or Guest with no grant in the context's first Library is granted it first, every
+   * Permission for a User and none for a Guest; a test that wants fewer grants them before logging in, or uses [[loginAs]].
    */
   def login(): Unit = {
     val account = testContext.user
@@ -71,9 +68,8 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
   }
 
   /**
-   * An account of `accountType`, logged in, and a Library it can see: an Admin by type, holding every Permission with no grant,
-   * so `permissions` must be all of them; a User by a grant of `permissions`; a Guest by a grant of none, so `permissions` must
-   * be none. The Library's ID.
+   * Logs in a new account of `accountType` holding `permissions` in a new Library, and answers the Library's ID. An Admin holds
+   * every Permission by type and a Guest none, so for them `permissions` must be all or none.
    */
   def loginAs(accountType: AccountType, permissions: Permissions): String = {
     require(accountType != AccountType.Admin || permissions == Permissions.all, "An Admin holds every Permission")
@@ -85,10 +81,7 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
     repository.persistedId
   }
 
-  /**
-   * A Library under `name` that `account` can see: an Admin by type, a User by a grant of every Permission, a Guest by a grant of
-   * none
-   */
+  /** A new Library under `name` that `account` can see: a User with every Permission, a Guest with none */
   def addLibrary(name: String, account: User): Repository = {
     val library = testApp.service.repository.addRepository(name = name, fileStoreType = C.StorageEngineName.FS)
     account.accountType match {

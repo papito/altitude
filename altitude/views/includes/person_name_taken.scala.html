@@ -5,15 +5,10 @@
 
 @(person: Person, holder: Person, errorId: String, pane: Option[String] = None)
 
-@* The error row of a rename to a name another live person, the holder, has: shared by the inline name editor
-   (htmx/edit_person_name) and the rename dialog (htmx/rename_person_dialog). It names the holder as stored, says so when the
-   holder is hidden, and offers to merge the renamed person into them through the Merge people dialog with the direction
-   kept, so the holder's ID survives. The button is Alpine's, so the caller renders the row inside an `x-data` scope, and
-   names the row (`errorId`) so its field can be described by it. The rename dialog passes its `pane`, which the offer
-   sends on to the Merge people modal: that modal replaces the dialog, button included, and returns focus to the pane's
-   pencil of the renamed person instead (htmx/merge_people_modal). The inline editor passes none: its button stays in the
-   page and takes the focus back. The offer is Organize's, as merging People is: without it the row says the name is taken
-   and offers nothing. *@
+@* The error row of a rename to a name another live person, the holder, has. Its offer merges the renamed person into
+   the holder with the direction kept, so the holder's ID survives; it is Organize's, as merging People is. The button is
+   Alpine's, so the caller renders the row inside an `x-data` scope. A `pane` (the rename dialog's) goes on to the Merge
+   people modal, which replaces the dialog and returns focus to that pane's pencil of the renamed person instead. *@
 <div id="@{ errorId }" class="error">
     @{ (if (holder.isHidden) Const.Msg.Err.PERSON_NAME_TAKEN_BY_HIDDEN else Const.Msg.Err.PERSON_NAME_TAKEN).format(holder.name.get) }
     @if(RequestContext.holds(Permission.Organize)) {

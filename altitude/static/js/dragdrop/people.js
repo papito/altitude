@@ -18,9 +18,8 @@ export function bindPeopleDragDrop({ dispatch }) {
             move: dragMoveListener,
             start: (event) => {
                 // Scroll the pane the cell was lifted from (interact.js reads the container on every
-                // move); the `#person` cover in the results title has none, so the panel scrolls.
-                // `draggable()` extends the autoScroll options in place and touches no other
-                // option, so the listeners and `inertia` stay
+                // move), or the panel for the `#person` cover, which has none. `draggable()` merges the
+                // options, so the listeners and `inertia` stay
                 event.interactable.draggable({
                     autoScroll: {
                         container:
@@ -30,9 +29,8 @@ export function bindPeopleDragDrop({ dispatch }) {
                 })
                 setFixedPositionWhileDragging(event)
 
-                // The release's click lands on the Person's link, moved under the pointer, and
-                // would search (or open a dialog in Triage) as if the tile had been clicked. Armed at
-                // start rather than in `end`: with inertia, a flick's `end` fires after the
+                // The release's click lands on the Person's link, now under the pointer, and would act
+                // as a click on the tile. Armed at start: with inertia, a flick's `end` fires after the
                 // browser's click.
                 suppressClickAfterRelease()
             },

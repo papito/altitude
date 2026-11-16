@@ -13,34 +13,27 @@ import scala.jdk.CollectionConverters._
 import scala.util.Using
 
 /**
- * The tokenizer of SigLIP 2's text tower: a description as the 64 token IDs the checkpoint's reference processor gives it
+ * SigLIP 2's text tokenizer: a description as the 64 token IDs the checkpoint's reference processor gives it
  * (`padding="max_length"`, `max_length=64`, `truncation=True`) after lowercasing, which the model was trained on and the
- * checkpoint's tokenizer, a `GemmaTokenizer`, leaves to its caller. `Siglip2TokenizerTests` holds it to the reference, token for
- * token, over the golden descriptions of `scripts/siglip2-golden.py`.
+ * reference `GemmaTokenizer` leaves to its caller. The steps of its byte-fallback BPE of 256,000 pieces:
  *
- * The steps are the reference's, a byte-fallback BPE of 256,000 pieces converted from Gemma's SentencePiece model:
- *
- *   1. Lowercase, as the reference's Python does (`lowercase`).
- *   1. Take out the pieces the vocabulary marks whole (the reference's added tokens: the special tokens, runs of line feeds, a
- *      few HTML tags) wherever the text holds one as written, the leftmost first and the longest of those that start there. Each
- *      is its own token, and the stretches of text between them are tokenized apart, so no merge crosses one.
+ *   1. Lowercase, as Python does (`lowercase`).
+ *   1. Take out the pieces matched whole (the special tokens, runs of line feeds, a few HTML tags), the leftmost first and the
+ *      longest there. Each is its own token, and the stretches between them are tokenized apart, so no merge crosses one.
  *   1. In a stretch, replace every space with U+2581. There is no dummy prefix and no other normalization.
  *   1. Split the stretch into code points; one that is no piece becomes the pieces of its UTF-8 bytes (`<0xNN>`).
- *   1. Merge: while two adjacent pieces concatenate to a piece, merge the pair that comes first by `Candidate`'s order.
- *   1. Keep the first 63 tokens, add the EOS, and pad to 64 with the pad ID. The reference adds no BOS.
+ *   1. While two adjacent pieces concatenate to a piece, merge the pair that comes first by `Candidate`'s order.
+ *   1. Keep the first 63 tokens, add the EOS, and pad to 64. The reference adds no BOS.
  *
- * The vocabulary is one of the model files (`ModelFile.Siglip2Tokenizer`), which the export script of `altitude-models` writes
- * from the checkpoint's tokenizer: a line per piece with its ID, its score and whether it is matched whole. A tokenizer is built
- * from it by [[Siglip2Tokenizer.load]] and holds it, about 30 MB of heap; `tokenize` only reads it, so any number of threads
- * tokenize at once.
+ * The loaded vocabulary takes about 30 MB of heap; `tokenize` only reads it, so any number of threads tokenize at once.
  */
 object Siglip2Tokenizer:
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  /** The length of the text tower's input: a description's tokens, the EOS, and the pad ID to the end */
+  /** The length of the text tower's input */
   val MAX_TOKENS = 64
 
-  /** What a space is written as in a piece, U+2581 */
+  /** What a space is written as in a piece */
   private val SPACE_MARK = '\u2581'
 
   private val EOS = "<eos>"
@@ -62,10 +55,9 @@ object Siglip2Tokenizer:
   private case class Piece(id: Int, score: Float)
 
   /**
-   * A merge that can be made: the two symbols starting at `position` concatenate to `piece`. The order is the rank of the merge
-   * in the reference tokenizer's merge list, which the export script proves is rebuilt by it: the merged piece's score, the
-   * higher first, then the left and the right symbol's length in code points, the longer first, then the merged piece's ID, the
-   * lower first; of two places the same merge can be made at, the leftmost.
+   * The two symbols starting at `position` concatenate to `piece`. The order rebuilds the reference's merge list, as the export
+   * script proves: the piece's score, higher first; then the left and the right symbol's length in code points, longer first;
+   * then the piece's ID, lower first; then the leftmost position.
    */
   private case class Candidate(position: Int, piece: Piece, leftPoints: Int, rightPoints: Int)
 
@@ -79,10 +71,7 @@ object Siglip2Tokenizer:
       if order == 0 then order = Integer.compare(b.position, a.position)
       order
 
-  /**
-   * A tokenizer over the vocabulary file at the path: a line per piece, `<id> <score> <whole> <piece>` between tabs, the piece's
-   * text escaped. Reading it takes about a second.
-   */
+  /** A line per piece, `<id> <score> <whole> <piece>` between tabs, the piece escaped. Reading it takes about a second. */
   def load(path: Path): Siglip2Tokenizer =
     // The model files are put in place at the start, so a file missing now was taken away since
     if !Files.isRegularFile(path) then
@@ -106,7 +95,7 @@ object Siglip2Tokenizer:
     logger.info(s"Loaded SigLIP 2's vocabulary from $path: ${tokenizer.pieceCount} pieces, ${whole.size} matched whole")
     tokenizer
 
-  /** A piece's text from the file, where a backslash, a tab, a line feed and a carriage return are written `\\`, `\t`, `\n`, `\r` */
+  /** A backslash, a tab, a line feed and a carriage return are written `\\`, `\t`, `\n`, `\r` */
   private def unescaped(escaped: String): String =
     if escaped.indexOf('\\') < 0 then escaped
     else
@@ -126,12 +115,10 @@ object Siglip2Tokenizer:
       text.toString
 
   /**
-   * The text in lowercase by Unicode's default conversion, which is what the reference's `str.lower` does. It is
-   * `toLowerCase(Locale.ROOT)` but for a capital sigma, which lowercases to the final form at the end of a word: Unicode reads
-   * the nearest character that is not case-ignorable on each side of it, where the JDK looks for a cased letter anywhere in the
-   * word its break iterator finds, so the two disagree on a sigma beside a digit ("ΣΑΣ1a" ends in a final sigma by Unicode and
-   * not by the JDK). Each capital sigma is therefore lowercased here, by Unicode's rule, before the JDK lowercases the rest.
-   * Lowercasing a text already in lowercase changes nothing, so a caller that keys by the lowercase text
+   * Unicode's default lowercasing, as the reference's `str.lower`. That is `toLowerCase(Locale.ROOT)` but for a capital sigma at
+   * the end of a word: Unicode reads the nearest character that is not case-ignorable on each side, where the JDK looks for a
+   * cased letter anywhere in the word, so the two disagree beside a digit ("ΣΑΣ1a" ends in a final sigma by Unicode only). Each
+   * capital sigma is therefore lowercased here first. Idempotent, so a caller that keys by the lowercase text
    * (`OnnxDescribeEmbedder.normalized`) can hand that text to [[tokenize]].
    */
   private[util] def lowercase(text: String): String =
@@ -168,9 +155,8 @@ object Siglip2Tokenizer:
       case _ => CASE_IGNORABLE_PUNCTUATION.contains(point)
 
 /**
- * SigLIP 2's tokenizer over its vocabulary, built by [[Siglip2Tokenizer.load]]: the checkpoint's pieces by their text, and the
- * ones matched whole, by their first character with the longest first, so the first of a character's that the text continues with
- * is the longest match there
+ * `whole` holds the pieces matched whole by their first character, the longest first, so the first one the text continues with is
+ * the longest match there
  */
 final class Siglip2Tokenizer private (pieces: HashMap[String, Siglip2Tokenizer.Piece], whole: Map[Char, Seq[String]]):
   import Siglip2Tokenizer.*
@@ -178,17 +164,15 @@ final class Siglip2Tokenizer private (pieces: HashMap[String, Siglip2Tokenizer.P
   private val eos: Int = id(EOS)
   private val pad: Int = id(PAD)
 
-  /** How many pieces the vocabulary holds */
   private def pieceCount: Int = pieces.size
 
   private def id(piece: String): Int =
     pieces.getOrElse(piece, throw IllegalStateException(s"The SigLIP 2 vocabulary has no piece $piece")).id
 
-  /** The longest whole piece the text holds at the index, if it holds one */
+  /** The longest whole piece the text holds at the index */
   private def wholeAt(text: String, index: Int): Option[String] =
     whole.get(text.charAt(index)).flatMap(_.find(text.startsWith(_, index)))
 
-  /** The description's 64 token IDs: its tokens, at most 63, then the EOS, then the pad ID to the end */
   def tokenize(description: String): IArray[Int] =
     val text = lowercase(description)
     val tokens = mutable.ArrayBuffer.empty[Int]
@@ -212,9 +196,8 @@ final class Siglip2Tokenizer private (pieces: HashMap[String, Siglip2Tokenizer.P
     IArray.unsafeFromArray(ids)
 
   /**
-   * The tokens of a stretch of text that holds no whole piece, added to `tokens`: its code points as pieces, merged while any two
-   * adjacent ones concatenate to a piece, the best candidate first. The symbols are a linked list over arrays, so a merge is
-   * constant work, and the candidates wait in a priority queue, so a stretch of n symbols takes about n log n steps.
+   * The symbols are a linked list over arrays, so a merge is constant work, and the candidates wait in a priority queue, so a
+   * stretch of n symbols takes about n log n steps.
    */
   private def merge(stretch: String, tokens: mutable.ArrayBuffer[Int]): Unit =
     val symbols = mutable.ArrayBuffer.empty[String]
@@ -236,7 +219,6 @@ final class Siglip2Tokenizer private (pieces: HashMap[String, Siglip2Tokenizer.P
 
     val candidates = mutable.PriorityQueue.empty[Candidate]
 
-    /** Queues the merge of the symbol at the position with the one after it, if the two concatenate to a piece */
     def offer(position: Int): Unit =
       val right = next(position)
       if right >= 0 then

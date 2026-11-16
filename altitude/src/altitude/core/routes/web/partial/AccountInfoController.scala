@@ -10,18 +10,10 @@ import altitude.core.models.AccountType
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 
-/**
- * Every account's info dialog, which the nav's account trigger opens: who the account is, its type, its Permissions in the
- * Library of the page it opens on and in every Library it sees, and its times, with the account's actions, Change password and
- * Log out. The path names that Library, so any account with access to it reaches the dialog.
- */
+/** The account info dialog, open to every account with access to the Library in the path */
 class AccountInfoController(using logger: Logger) extends BaseController:
 
-  /**
-   * The dialog, from the login token (the account, its grants and the session's expiry) and from the database: the names of the
-   * Libraries the account sees, and when it was added and last logged in (`UserService.accountTimes`). An Admin's Libraries are
-   * all of them, which the dialog says without listing them.
-   */
+  /** Built from the login token and the account's Libraries and times. An Admin sees every Library, so none are listed. */
   @requireLogin()
   @cask.get("/htmx/account/r/:repoId/dialogs/info")
   def showDialog(repoId: String)(using request: Request): Response[String] =

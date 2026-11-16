@@ -21,37 +21,19 @@ import altitude.core.util.SearchText
 import altitude.core.util.TriageSubset
 
 /**
- * The grid, map cells, map bounds and the counts of the Triage routes (`TriageController`) interpret search scope identically;
- * each caller owns its presentation and paging.
+ * Reads a search scope the same way for the grid, the map's cells and bounds and the Triage counts; each caller owns its
+ * presentation and paging.
  *
- * A scope has Search text only when `q` has a usable term: text that parses to nothing (blank, a lone `-`, a dangling `OR`) is no
- * text, for the filter, for the default sort and for the rules below alike. Text searches the repository outside the trash, so
- * text with the trash view is refused.
+ * `q` is Search text only when it has a usable term: text that parses to nothing (blank, a lone `-`, a dangling `OR`) is no text,
+ * for the filter and the default sort alike. The repository view holds the sorted assets and `triaged=true` adds the triaged
+ * ones; in the trash `triaged` tells the assets recycled from Triage from the rest. `subset` narrows any view to one of the
+ * Triage summary's counts, though only Triage offers it.
  *
- * The repository view holds the sorted assets, whatever the folder, person, album, Location, text or map area, and `triaged=true`
- * adds the triaged ones to them. In the trash `triaged` tells the assets recycled from triage (`true`) from the rest (`false`).
- * The triage view holds nothing but triaged assets, so `triaged=false` with it is refused.
+ * Search text, a date range and several people or Locations never search the trash. What only the advanced search panel combines
+ * (a date range, several people or Locations, or more than one of the text, a folder, a person and a Location) replaces the album
+ * and the subset, so it is refused beside either. An ID that names nothing matches nothing.
  *
- * `subset` narrows any view to a Triage subset, the assets one of the Triage summary's counts shows (`TriageSubset`):
- * `unknownPeople`, those with a Face of an Unknown person, or `noLocation`, those no Location points at, whatever their own GPS
- * position. Only Triage offers it, but every view takes it. Any other value, empty included, is refused.
- *
- * An advanced search names several people or several Locations, comma-separated in `personId` or `locationId` and at most
- * [[SearchRequestParser.MAX_IDS]] in each, and narrows by a Date Taken range (`takenFrom`, `takenTo`) and a Date Imported range
- * (`importedFrom`, `importedTo`), each end an ISO date and either left out. `peopleMatch` says whether several people match `all`
- * of them, as they do when it is left out, or `any`. An ID that names nothing in the repository matches nothing. An advanced
- * search searches outside the trash, as text does: a date range, several people or several Locations with the trash view are
- * refused. It searches by the panel's filters alone, so what only the panel combines (a date range, several people, several
- * Locations, or more than one of the Search text, a folder, a person and a Location) is refused with an album or a subset.
- *
- * A description (`describe`) is the words that say what a photo shows: at most
- * [[altitude.core.Const.Search.MAX_DESCRIPTION_LENGTH]] characters once the white space around it is dropped, and not blank. A
- * search with one finds the still images that look most like it, most alike first, on the grid, among the assets its other
- * filters match: the Search text, a folder, people with their match, Locations and the two date ranges, each read and refused as
- * it is without a description, in the repository view, with the triaged assets when `triaged=true`, or in the Triage view, among
- * the triaged assets alone. It is sorted and grouped as any search of the grid is, in its own order, likeness, when it names no
- * sort; it takes no map layout, and no album, Triage subset or map area either, and it does not search the trash. The results
- * route and the advanced search panel's form read a description; the other routes that parse a scope never hand one in.
+ * A description (`describe`) ranks by likeness the still images its other filters match, in the repository or the Triage view.
  */
 object SearchRequestParser:
 
@@ -59,8 +41,8 @@ object SearchRequestParser:
   val MAX_IDS = 10
 
   /**
-   * A search's own parameters as a request spells them, each under its name: what [[parse]] reads into a [[Scope]]. A route
-   * builds one from its query parameters, by name, and hands it on whole, so no two of them can change places on the way.
+   * A search's parameters as the request spells them. A route builds one by name and hands it on whole, so no two parameters can
+   * change places on the way.
    */
   case class Params(
       view: String = Const.Search.View.DEFAULT,
@@ -77,16 +59,13 @@ object SearchRequestParser:
       bbox: Option[String] = None,
       triaged: Option[Boolean] = None,
       subset: Option[String] = None,
-      // The description the search ranks its matches by
       describe: Option[String] = None,
-      // How the request lays out the results, as it spells it: a route that takes a description hands it on, since a search
-      // with one is laid out on the grid
+      // Handed on by a route that takes a description, which refuses the map layout
       layout: Option[String] = None)
 
   /**
-   * A search's scope as read: the people and the Locations are in the order the request names them, each once. A `description` is
-   * as written but for the white space around it, and stands beside the filters the search ranks within: it is no part of the
-   * query the scope builds, which is the filters' own.
+   * The people and the Locations are in request order, each once. `description` stands beside the filters it ranks within: it is
+   * no part of the query the scope builds.
    */
   case class Scope(
       params: Map[String, Any],
@@ -97,7 +76,6 @@ object SearchRequestParser:
       locationIds: List[String],
       bbox: Option[BoundingBox],
       subset: Option[TriageSubset],
-      // How several people combine, all of them unless the request says any, and the Date Taken and Date Imported ranges
       peopleMatch: PeopleMatch = PeopleMatch.All,
       takenRange: Option[DateRange] = None,
       importedRange: Option[DateRange] = None,
@@ -182,8 +160,8 @@ object SearchRequestParser:
       case Some(None) => return Left(s"Unknown ${Api.Field.Search.SUBSET} value")
       case Some(found) => found
 
-    // What only the advanced search panel combines, which replaces the album and the subset of the search before it. A folder
-    // counts whichever it is: the root is told apart where a repository is at hand (`SearchResultsController.isFiltered`)
+    // A folder counts whichever it is: the root is told apart where a repository is at hand
+    // (`SearchResultsController.isFiltered`)
     val places = Seq(text.isDefined, request.folderId.isDefined, personIds.nonEmpty, locationIds.nonEmpty).count(identity)
     if (dates || names || places > 1) && (request.albumId.isDefined || triageSubset.isDefined) then
       return Left("A search by several filters takes no album and no subset")
@@ -205,13 +183,9 @@ object SearchRequestParser:
       ))
 
   /**
-   * The description of a search as its scope holds it, as written but for the white space around it, or the message of a 400: a
-   * description is not blank, has at most `Const.Search.MAX_DESCRIPTION_LENGTH` characters, as a form counts them, and searches
-   * the repository view or the Triage view, never the trash. Beside it a search takes its filters (the Search text, a folder,
-   * people and their match, Locations, the four dates and the triage filter) and the grid layout; any other parameter is refused,
-   * whatever its value, and named by the message: an album, a Triage subset, a map area or the map layout. What is taken is what
-   * is left out of the request below, so a parameter `Params` gains is refused beside a description until it is left out too. The
-   * sort and the grouping are no parameters of a scope: the results route reads them, beside a description as without one.
+   * The stripped description, or a 400's message; its length is counted in UTF-16 units, as a form counts it. Beside a
+   * description a search takes its filters and the grid layout, and any other parameter is refused by name. What is taken is what
+   * `notTaken` clears below, so a new `Params` field is refused beside a description until it is cleared there too.
    */
   private def descriptionOf(request: Params, written: String): Either[String, String] =
     val description = written.strip
@@ -221,8 +195,7 @@ object SearchRequestParser:
 
     if request.view == Const.Search.View.TRASHBIN then return Left("A description does not search the trash")
 
-    // Every parameter is a field of `Params` under the name the request spells it with. The layout is always handed in, and
-    // only the map is refused
+    // Every parameter is a `Params` field named as the request spells it. The layout is always handed in; only the map is refused
     val notTaken = request.copy(
       q = None,
       folderId = None,
@@ -241,17 +214,13 @@ object SearchRequestParser:
       request.layout.filter(_ == Const.Search.Layout.MAP).map(layout => s"${Api.Field.Search.LAYOUT}=$layout")
     Either.cond(refused.isEmpty, description, s"A description takes no ${refused.mkString(", ")}")
 
-  /**
-   * The IDs a comma-separated parameter names, each once, in the order given. An empty segment is no ID, so a parameter left out,
-   * an empty one and one of commas alone name nothing, as the browser's store reads them (`idsOf` in js/stores/search-params.js).
-   */
+  /** An empty segment is no ID, as the browser's store reads it (`idsOf` in js/stores/search-params.js) */
   private def idsOf(value: Option[String]): List[String] =
     value.toList.flatMap(_.split(",")).filter(_.nonEmpty).distinct
 
   /**
-   * A day as a search parameter spells it, `2024-06-01`: four digits of year, two of month and two of day, of a day the calendar
-   * has. `LocalDate.parse` would also read a longer, signed year (`+10000-01-01`), whose instants SQLite's text does not order
-   * with the others.
+   * Exactly `2024-06-01`, a day the calendar has. `LocalDate.parse` would also read a longer, signed year (`+10000-01-01`), whose
+   * instants SQLite's text does not order with the others.
    */
   private val ISO_DAY = new DateTimeFormatterBuilder()
     .appendValue(ChronoField.YEAR, 4)
@@ -263,10 +232,7 @@ object SearchRequestParser:
     .withChronology(IsoChronology.INSTANCE)
     .withResolverStyle(ResolverStyle.STRICT)
 
-  /**
-   * The range of days two date parameters make, none when both are left out. A date that is not an ISO day ([[ISO_DAY]]), and a
-   * range whose first day is after its last, is the message of a 400 naming the parameters.
-   */
+  /** None when both ends are left out; a bad day or a reversed range is a 400's message naming the parameters */
   private def rangeOf(
       fromName: String,
       from: Option[String],

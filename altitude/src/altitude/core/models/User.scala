@@ -20,10 +20,8 @@ object User:
   private val USERNAME = s"[A-Za-z0-9._-]{${Api.Constraints.MIN_USERNAME_LENGTH},${Api.Constraints.MAX_USERNAME_LENGTH}}".r
 
   /**
-   * `account` held to the rules of what it stores: its username's (`validUsername`), its name's (2 to 80 characters once
-   * normalized, `Validators.validName`) and its email address's (3 to 80 ASCII characters of an address, `Validators.isEmail`).
-   * The longest name and address these allow bound the login token's length (`RepositoryService.MAX_GRANTS_PER_ACCOUNT`). The
-   * account with its name normalized, or a `ValidationException` with the error of every field that fails.
+   * The account with its name normalized, or a `ValidationException` with the error of every field that fails. The longest name
+   * and address these rules allow bound the login token's length (`RepositoryService.MAX_GRANTS_PER_ACCOUNT`).
    */
   def valid(account: User): User =
     val errors = scala.collection.mutable.LinkedHashMap[String, String]()
@@ -63,10 +61,6 @@ object User:
         throw ex
     }
 
-  /**
-   * The username rule: 3 to 32 ASCII letters, digits, `.`, `_` and `-`. A username outside it is a `ValidationException` whose
-   * error, under `FieldConst.User.USERNAME`, is `VALUE_REQUIRED` for an empty one and `USERNAME_RULE` otherwise.
-   */
   def validUsername(username: String): Unit =
     val error =
       if username.isEmpty then Some(C.Msg.Err.VALUE_REQUIRED)
@@ -81,11 +75,8 @@ object User:
     }
 
 /**
- * An account (`CONTEXT.md`). The email address and the username each name one account under their name keys ([[emailKey]] and
- * [[usernameKey]], `NameKey.of`), which `account_01` and `account_02` keep unique and a login compares; the username keeps to
- * [[User.validUsername]]. `canCreateLibraries` is the Create Libraries flag; `grantsNewLibraries` and `newLibraryPermissions` are
- * the new-Library grant: with the switch on, a Library created later grants the account those Permissions. `createdAt` is when
- * the account was added, as stored; a model about to be added has none.
+ * An account. `grantsNewLibraries` and `newLibraryPermissions` are the new-Library grant: with the switch on, a Library created
+ * later grants the account those Permissions.
  */
 case class User(
     id: Option[String] = None,

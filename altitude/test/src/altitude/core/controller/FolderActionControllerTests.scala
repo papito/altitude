@@ -107,11 +107,11 @@ import altitude.core.models.Repository
     /**
      * Setup:
      *
-     * A logged-in user's repository, and a blank folder name posted to the add endpoint under the root folder.
+     * A logged-in user's repository, and a blank folder name added under the root folder.
      *
      * Assertions:
      *
-     * The response is the add dialog's form carrying the error, retargeted to replace the submitted form in place.
+     * The answer is the add form carrying the error, in place of the submitted one.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -145,11 +145,11 @@ import altitude.core.models.Repository
     /**
      * Setup:
      *
-     * A logged-in user's repository with one folder, "to-rename", and a blank name put to the rename endpoint for it.
+     * A logged-in user's repository with one folder, "to-rename", renamed to a blank name.
      *
      * Assertions:
      *
-     * The response is the rename dialog's form carrying the error, retargeted to replace the submitted form in place.
+     * The answer is the rename form carrying the error, in place of the submitted one.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -184,13 +184,13 @@ import altitude.core.models.Repository
     /**
      * Setup:
      *
-     * A logged-in user's repository with one folder, "to-rename", and a name of 250 U+FB2C posted to the add endpoint and put to
-     * the rename endpoint: 250 characters as typed, which the form's length check passes, and 750 in NFC.
+     * A logged-in user's repository with one folder, "to-rename". A name of 250 U+FB2C is added and renamed to: 250 characters as
+     * typed, which passes the form's length check, and 750 in NFC.
      *
      * Assertions:
      *
-     * Each response is its dialog's form carrying the too-long error, retargeted to replace the submitted form in place, and no
-     * folder is added or renamed.
+     * Each answer is its dialog's form carrying the too-long error, in place of the submitted one, and no folder is added or
+     * renamed.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -228,7 +228,7 @@ import altitude.core.models.Repository
     }
   }
 
-  /** A request of a folder route, through the first repository, with the folder route's JSON body when it has one */
+  /** A request of a folder route, with a JSON body when given */
   private def folderRoute(
       method: requests.Requester,
       host: String,
@@ -268,14 +268,13 @@ import altitude.core.models.Repository
      *
      * Assertions:
      *
-     * Asked through the first repository, the rename and delete dialogs, the rename, the move of the folder into "Mine" and the
-     * delete answer 404 for a folder ID that does not exist and for "Eve's folder", and so does the move of the second
-     * repository's root folder. No answer carries the other repository's folder name, and no row of either repository changes.
+     * Through the first repository, the rename and delete dialogs and actions, and a move into "Mine", answer 404 for an unknown
+     * folder ID and for "Eve's folder", as does moving the second repository's root. No answer carries the other repository's
+     * folder name, and no row of either repository changes.
      *
      * Edge cases:
      *
-     * Moving "Mine" into "Eve's folder" is a 400, the answer to a destination that does not exist, which moving it into an
-     * unknown folder also gets.
+     * Moving "Mine" into "Eve's folder" is a 400, as for an unknown destination.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -340,9 +339,8 @@ import altitude.core.models.Repository
      *
      * Assertions:
      *
-     * Adding the folder "New" through the first repository under "Eve's folder", or under a folder ID that does not exist,
-     * answers the add dialog's form again in place of the submitted one, saying the parent folder does not exist, and naming
-     * nothing of the other repository. No row of either repository changes.
+     * Adding "New" through the first repository under "Eve's folder" or an unknown folder ID answers the add form saying the
+     * parent does not exist, naming nothing of the other repository. No row of either repository changes.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId

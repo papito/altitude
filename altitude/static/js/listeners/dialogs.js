@@ -12,14 +12,9 @@ import {
 import { runTriggerSearch } from "../search-results/search-triggers.js"
 
 /**
- * HTMX lifecycle wiring for dialogs: requests that open a modal, and operations submitted from any
- * dialog. Also binds the popover dialog host's own dismissals (`common/modal.js`). An open answered
- * with no content leaves the next step to the element that issued it: a search trigger searches
- * (`search-results/search-triggers.js`).
- *
- * Registered on `document` rather than `document.body`: htmx dispatches lifecycle events on the
- * document when the element that issued the request has already left the DOM, which is exactly
- * the case for a dialog that was closed or replaced while its operation was in flight.
+ * htmx lifecycle wiring for requests that open a modal and for operations submitted from a dialog.
+ * Registered on `document`, not `document.body`: htmx dispatches on the document once the issuing
+ * element has left the DOM, as a dialog closed or replaced mid-operation has.
  */
 export function registerDialogListeners(app) {
     bindPopoverHost()
@@ -39,14 +34,14 @@ export function registerDialogListeners(app) {
 
     document.addEventListener("htmx:after:request", (event) => {
         const handledAsOpen = settleModalOpenRequest(event, {
-            // A refusal the server words (a 403 for a Permission not held) is shown as its text
+            // A refusal the server words (a 403 for a Permission not held) shows as its text
             onFailure: () => {
                 reportRequestFailure(event)
-                // Asset detail's URL, on the main page alone (`nav-page.js` has none)
+                // Asset detail's URL exists on the main page alone
                 app.detailUrl?.openFailed()
             },
-            // The Triage scope route's answer for a Person or a Location with triaged assets: no
-            // dialog, the trigger searches
+            // The Triage scope route's answer for a Person or a Location with triaged assets: the
+            // trigger searches instead
             onNoContent: (ctx) => runTriggerSearch(ctx.sourceElement),
         })
 

@@ -1,9 +1,9 @@
 package altitude.core.util
 
 /**
- * A Triage subset, the assets one of the Triage summary's counts shows, as a search scope (`subset`): those with a Face of an
- * Unknown person, or those no Location points at. Only Triage offers it, but it narrows any view, and it is a place like a
- * folder, Person, album or Location. `static/js/constants.js` (`Const.search.subsets`) repeats the API values for the client.
+ * A Triage subset as a search scope (`subset`): the assets with a Face of an Unknown person, or those no Location points at. Only
+ * Triage offers it, but it narrows any view like a folder, Person, album or Location does. `Const.search.subsets` in
+ * `static/js/constants.js` repeats the API values.
  */
 enum TriageSubset(val apiValue: String):
   case UnknownPeople extends TriageSubset("unknownPeople")

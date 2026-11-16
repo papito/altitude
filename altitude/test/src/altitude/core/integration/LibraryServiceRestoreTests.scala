@@ -81,13 +81,10 @@ import altitude.core.util.Query
     val secondCopy = dataAsset.copy(path = testApp.service.staging.stageCopy(dataAsset.path))
     val persistedAsset: Asset = testApp.service.library.addAsset(dataAsset)
 
-    // recycle the asset
     testApp.service.library.recycleAssets(Set(persistedAsset.persistedId))
 
-    // import a new copy of it (should be allowed)
     testApp.service.library.addAsset(secondCopy)
 
-    // now restore the previously deleted copy: its content is live again, so it is skipped and reported
     val result = testApp.service.library.restoreRecycledAssets(Set(persistedAsset.persistedId))
     result.restored shouldBe Set.empty
     result.duplicates shouldBe Set(persistedAsset.persistedId)
@@ -193,13 +190,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * One asset in a folder, recycled; then, in one transaction, so the purge queue cannot delete its row in between, it is
-     * purged and restored.
+     * One recycled asset in a folder, purged and restored in one transaction so the purge queue cannot delete its row in between.
      *
      * Assertions:
      *
-     * The restore reports nothing restored and no duplicate, the row stays recycled, and the stats only lose the purged asset:
-     * nothing is sorted and nothing recycled.
+     * The restore reports nothing restored and no duplicate, the row stays recycled, and every stat is back to zero.
      */
     val folder1: Folder = testApp.service.folder.add("folder1")
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
@@ -260,7 +255,6 @@ import altitude.core.util.Query
 
     val asset: Asset = testContext.persistAsset(folder = Some(folderC))
 
-    // Delete the top-level folder — cascades recycled flag to B, C and the asset
     testApp.service.library.deleteFolderById(folderA.persistedId)
 
     (testApp.service.folder.getById(folderA.persistedId): Folder).isRecycled shouldBe true
@@ -269,7 +263,6 @@ import altitude.core.util.Query
 
     testApp.service.library.restoreRecycledAssets(Set(asset.persistedId))
 
-    // All ancestors plus the immediate folder should be unrecycled
     (testApp.service.folder.getById(folderA.persistedId): Folder).isRecycled shouldBe false
     (testApp.service.folder.getById(folderB.persistedId): Folder).isRecycled shouldBe false
     (testApp.service.folder.getById(folderC.persistedId): Folder).isRecycled shouldBe false

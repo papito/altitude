@@ -1,10 +1,8 @@
-/* The advanced search panel (views/AGENTS.md, **Advanced search panel**): the panel the nav hosts (includes/nav) and the
-   form it loads (htmx/search_panel), with the options of its comboboxes (htmx/search_options_*). The rules are scoped by
-   the panel's class, which the style guide's specimen wears too */
+/* The advanced search panel and the form it loads, scoped by `.search-panel` so the style guide's specimen gets the
+   same rules */
 
-/* The surface: frosted glass of its own, clearer and more blurred than the popover dialog's, on its hairline and the
-   floating shadow. Its comboboxes' listboxes and its calendars are popovers of their own, in the top layer, so nothing
-   it holds is clipped */
+/* Frosted glass of its own, clearer and more blurred than the popover dialog's. Its listboxes and calendars are
+   top-layer popovers of their own, so nothing it holds is clipped */
 .search-panel {
     width: var(--search-panel-width);
     padding: var(--space-5);
@@ -16,7 +14,7 @@
     box-shadow: var(--float-shadow);
 }
 
-/* The nav's panel: under the quick search form and centered on it, its inset and margins replacing the UA popover's */
+/* The nav's panel: under the quick search form and centered on it; the inset and margins replace the UA popover's */
 .search-panel[popover] {
     inset: auto;
     position-anchor: --search-form;
@@ -32,19 +30,18 @@
     visibility: hidden;
 }
 
-/* One column of fields, each label above its field, the two date ranges side by side */
 .search-panel .fields {
     display: grid;
     gap: var(--space-7);
 }
 
-/* The "Search in" row, the form's first: the toggle group across the form, its three segments of equal width */
+/* The Search in segments share the form's width equally */
 .search-panel .search-in button {
     flex: 1;
 }
 
-/* Two equal halves while both ranges fit them. A range wider than its half, one across two years, takes the room it
-   needs from the other field, and when the two do not fit one row the second goes under the first */
+/* Two equal halves while both ranges fit. A wider range (one across two years) takes room from the other, and when
+   the two do not fit one row the second wraps */
 .search-panel .dates {
     display: flex;
     flex-wrap: wrap;
@@ -56,8 +53,8 @@
     min-width: min-content;
 }
 
-/* A date range's box is as wide as its range at the least, on one line; a range that still does not fit is cut with an
-   ellipsis, and the input's tooltip says it whole */
+/* A date range's box is at least as wide as its range on one line; a range that still does not fit is cut with an
+   ellipsis, and the input's tooltip shows it whole */
 .search-panel .dates .box {
     flex-wrap: nowrap;
     min-width: auto;
@@ -69,7 +66,7 @@
     text-overflow: ellipsis;
 }
 
-/* A field names its box for the listbox or the calendar it opens, each field its own */
+/* The anchor name is scoped per field, so a listbox or calendar anchors to its own field's box */
 .search-panel .field {
     display: grid;
     align-content: start;
@@ -84,9 +81,8 @@
     font-weight: var(--font-weight-medium);
 }
 
-/* The People label and, once two people are chosen, the match beside it: Any, the switch, All, the word in force in
-   the text color. The row is as tall as the switch with or without it, so the fields below stay where they are when the
-   second person is chosen */
+/* The People label and, once two people are chosen, the Any / All match beside it, the word in force in the text
+   color. The row is as tall as the switch either way, so the fields below do not move when the match appears */
 .search-panel .label-row {
     display: flex;
     align-items: center;
@@ -109,9 +105,8 @@
     font-weight: var(--font-weight-semibold);
 }
 
-/* A field's box wears the field style in place of the input inside it (the Describe field's textarea): the sunken fill
-   and the hairline, and with focus anywhere in it the accent edge and ring. It holds the field's icon, the chips of what
-   is chosen and the input, which wrap */
+/* The box wears the field style in place of the input or textarea inside it, with the accent edge and ring while
+   focus is anywhere in it. Its icon, chips and input wrap */
 .search-panel .box {
     display: flex;
     flex-wrap: wrap;
@@ -156,7 +151,7 @@
     color: var(--theme-neutral-3);
 }
 
-/* The Describe field is as tall as its text, one line while it is empty, as the other fields are */
+/* The Describe textarea grows with its text, one line while empty like the other fields */
 .search-panel .box textarea {
     field-sizing: content;
     resize: none;
@@ -181,14 +176,12 @@
     color: var(--theme-neutral-4);
 }
 
-/* The chips sit in the box beside the input: the list itself takes no box */
+/* The chip list takes no box, so the chips wrap beside the input */
 .search-panel .chips {
     display: contents;
 }
 
-/* A chosen name is the chip of a chosen filter that core.css draws for the panel and a filtered search's results title */
-
-/* A Person's cover Face in the options, or the placeholder of a Person with none: a circle, larger than on a chip */
+/* A Person's cover, or the no-cover placeholder, in the options: a circle, larger than on a chip */
 .search-panel .cover {
     flex: none;
     width: var(--search-panel-option-cover-size);
@@ -198,9 +191,8 @@
     font-size: var(--font-size-small);
 }
 
-/* A combobox's listbox: a manual popover in the top layer, anchored under its field's box and as wide as it, flipped
-   above when there is no room below; its height is capped and its rows scroll. It wears the frosted surface of every
-   floating panel */
+/* A combobox's listbox: a manual top-layer popover under its field's box and as wide as it, flipped above when there
+   is no room below */
 .search-panel .listbox {
     margin: 0;
     padding: var(--space-2);
@@ -224,8 +216,7 @@
     margin: var(--space-1) 0;
 }
 
-/* An option: a Person's cover Face, the name, which wraps, and a Person's number of assets. The active one, which Enter
-   picks, is tinted as a checked option is */
+/* The active option, the one Enter picks, is tinted */
 .search-panel .listbox [role="option"] {
     display: flex;
     align-items: center;
@@ -245,7 +236,7 @@
     overflow-wrap: anywhere;
 }
 
-/* The names above a folder's or a Location's own are set back */
+/* The ancestors before a folder's or a Location's own name are set back */
 .search-panel .listbox .ancestors {
     color: var(--theme-neutral-3);
 }
@@ -269,18 +260,16 @@
     color: var(--theme-neutral-3);
 }
 
-/* Clear at the left, Search at the right */
 .search-panel .actions {
     display: flex;
     justify-content: space-between;
     margin-top: var(--space-7);
 }
 
-/* The calendar of a date range field: Flatpickr's (static/css/flatpickr.css, loaded in a cascade layer of its own, so
-   every rule here outranks it whatever its selector), in the theme's tokens. It is a manual popover in the top layer,
-   anchored under its field's box and starting at the box's left edge, flipped to end at its right edge or to sit above
-   when the viewport has no room. Flatpickr sizes it for its months from the width of one month's days, which the token
-   sets; the width it writes is the content's, so the padding and the edge are outside it */
+/* Flatpickr's calendar in the theme's tokens. flatpickr.css sits in a cascade layer of its own, so every rule here
+   outranks it whatever its selector. A manual top-layer popover from the left edge of its field's box, flipped to end at
+   its right edge or to sit above when there is no room. Flatpickr writes the width of its months (from the month width
+   token) as the content's, hence content-box */
 .search-panel .flatpickr-calendar {
     position: fixed;
     inset: auto;
@@ -301,7 +290,7 @@
     overflow: visible;
 }
 
-/* The pointers Flatpickr draws toward its field */
+/* Flatpickr's arrows pointing toward its field */
 .search-panel .flatpickr-calendar::before,
 .search-panel .flatpickr-calendar::after {
     display: none;
@@ -366,8 +355,7 @@
     fill: currentColor;
 }
 
-/* The months side by side, each inset from the next by its own padding, since Flatpickr sizes the calendar from the
-   width of a month */
+/* Each month carries its own inset, since Flatpickr sizes the calendar from a month's width */
 .search-panel .flatpickr-weekdays .flatpickr-weekdaycontainer,
 .search-panel .dayContainer {
     padding: 0 var(--space-4);
@@ -389,7 +377,7 @@
     font-weight: var(--font-weight-medium);
 }
 
-/* A day: a seventh of its month, a pill under the pointer or with focus, as a menu's hovered option is tinted */
+/* A day: a seventh of its month, a tinted pill under the pointer or with focus */
 .search-panel .flatpickr-day {
     max-width: none;
     height: auto;
@@ -410,8 +398,8 @@
     border-color: hsl(from var(--theme-neutral-3) h s l / 0.45);
 }
 
-/* The days of the range: a band of the accent between its two ends, which are the accent itself, rounded outward; a day
-   picked alone is the accent too */
+/* The range: a tinted accent band between its two ends, which are solid accent and rounded outward; a day picked alone
+   is solid accent too */
 .search-panel .flatpickr-day.inRange {
     border-color: hsl(from var(--theme-accent) h s l / 0);
     border-radius: 0;

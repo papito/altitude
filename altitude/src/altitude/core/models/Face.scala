@@ -6,7 +6,7 @@ import altitude.core.util.JsonCodec
 import altitude.core.util.JsonCodec.given
 
 object Face:
-  // For sorting faces by detection score automatically, highest score first
+  // Highest detection score first
   given faceOrdering: Ordering[Face] = Ordering.by(-_.detectionScore)
   given JsonCodec.ReadWriter[Face] = JsonCodec.macroRW
   given Conversion[ujson.Value, Face] = json => JsonCodec.read[Face](json)

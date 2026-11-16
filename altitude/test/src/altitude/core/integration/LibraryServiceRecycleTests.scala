@@ -18,8 +18,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Only the five are in the recycle bin and the other three stay live, and the recycled and sorted stats count exactly those
-     * assets and their bytes.
+     * Only the five are recycled, and the recycled and sorted stats count exactly the right assets and bytes.
      *
      * Edge cases:
      *
@@ -27,13 +26,10 @@ import altitude.core.util.Query
      */
     val assetsToRecycle = (1 to 5).map(_ => testContext.persistAsset())
 
-    // not recycled and should stay that way
     val otherAssets = (1 to 3).map(_ => testContext.persistAsset())
 
     val idsToRecycle = assetsToRecycle.map(_.persistedId).toSet
-    // recycle all assets
     testApp.service.library.recycleAssets(idsToRecycle)
-    // recycling again should be a no-op
     testApp.service.library.recycleAssets(idsToRecycle)
 
     testApp.service.asset.queryRecycled(new Query()).records.length shouldBe assetsToRecycle.size
@@ -56,7 +52,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The new name shows on the returned asset and on a fresh read, and renaming the asset once it is recycled is refused.
+     * The new name shows on the returned asset and on a fresh read.
      *
      * Edge cases:
      *
@@ -66,11 +62,9 @@ import altitude.core.util.Query
     var updatedAsset: Asset = testApp.service.asset.rename(asset.persistedId, "newName")
     updatedAsset.fileName shouldBe "newName"
 
-    // get the asset again to make sure it has been updated
     updatedAsset = testApp.service.asset.getById(asset.persistedId)
     updatedAsset.fileName shouldBe "newName"
 
-    // attempt to rename a recycled asset
     testApp.service.library.recycleAssets(Set(asset.persistedId))
 
     intercept[IllegalOperationException] {
@@ -83,23 +77,20 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two users each add an asset to the same repository, and the first user recycles one of them; then a second repository is
-     * switched to.
+     * Two users each add an asset to the same repository, and the first recycles one of them.
      *
      * Assertions:
      *
-     * Assets belong to the repository, not to the user: the first user sees both, recycling moves one of them from the live
-     * assets to the recycle bin, and the second repository's recycle bin is empty.
+     * Assets belong to the repository, not the user: the first user sees both, recycling moves one to the recycle bin, and
+     * another repository's recycle bin is empty.
      */
     testContext.persistAsset()
 
-    // SECOND USER
     val user2 = testContext.persistUser()
     testApp.service.user.switchContextToUser(user2)
 
     testContext.persistAsset(user = Some(user2))
 
-    // FIRST USER
     switchContextUser(testContext.users.head)
     testApp.service.asset.query(new Query()).records.length shouldBe 2
 
@@ -109,7 +100,6 @@ import altitude.core.util.Query
     testApp.service.asset.query(new Query()).records.length shouldBe 1
     testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 1
 
-    // SECOND REPO
     val repo2 = testContext.persistRepository()
     switchContextRepo(repo2)
 
@@ -125,7 +115,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Just because an asset is recycled doesn't mean it can't be retrieved: it is still read by its ID.
+     * A recycled asset is still read by its ID.
      */
     val asset: Asset = testContext.persistAsset()
     testApp.service.library.recycleAssets(Set(asset.persistedId))
@@ -141,7 +131,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Deleting a folder recycles its assets and those of its descendants, so all three assets end up recycled.
+     * Deleting a folder recycles its assets and those of its descendants: all three are recycled.
      */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
@@ -174,8 +164,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The second recycle counts only the second asset: the recycled stats hold the two assets and their bytes, and the person's
-     * face count drops to zero rather than below it.
+     * The second recycle counts only the second asset: the recycled stats hold two assets, and the person's face count drops to
+     * zero, not below it.
      */
     val person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(person, assetCount = 2)
@@ -195,14 +185,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A Person with a Face on each of two assets, and a selection of the two among 70,000 unknown IDs, more than a PostgreSQL
-     * statement takes parameters for. The selection is recycled, then moved into a new folder; the person's face counts are then
-     * recycled and restored for the selection directly.
+     * A Person with a Face on each of two assets, selected among 70,000 unknown IDs, more parameters than a PostgreSQL statement
+     * takes. The selection is recycled, moved into a folder, then its face counts recycled and restored directly.
      *
      * Assertions:
      *
-     * Recycling takes both Faces from the person and the move gives them back; the direct recycle and restore of the face counts
-     * do the same.
+     * Recycling takes both Faces from the person and the move gives them back; the direct recycle and restore do the same.
      */
     val person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(person, assetCount = 2)
@@ -228,13 +216,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A Person with a Face on each of two assets in the root folder. The first asset is recycled, then both are moved into a new
-     * folder.
+     * A Person with a Face on each of two assets. The first asset is recycled, then both are moved into a new folder.
      *
      * Assertions:
      *
-     * The move takes the recycled asset out of the recycle bin and gives its Face back to the person, who counts both Faces
-     * again, and the recycled stats are back to zero.
+     * The move restores the recycled asset, the person counts both Faces again, and the recycled stats are back to zero.
      */
     val person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(person, assetCount = 2)
@@ -259,8 +245,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Recycling moved it from the triage stats to the recycled ones, so the move takes it out of the recycled stats and into the
-     * sorted ones, and the triage stats stay at zero.
+     * Recycling moved it from the triage stats to the recycled ones, so the move counts it as sorted and the triage stats stay at
+     * zero.
      */
     val asset = testContext.persistAsset(isTriaged = true)
     val folder: Folder = testApp.service.folder.add("folder1")
@@ -282,13 +268,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * One asset in the root folder, recycled; then, in one transaction, so the purge queue cannot delete its row in between, it
-     * is purged and moved into a new folder.
+     * A recycled asset, purged and moved into a new folder in one transaction, so the purge queue cannot delete its row in
+     * between.
      *
      * Assertions:
      *
-     * The move leaves the row as the purge marked it, still recycled in the root folder, and the stats only lose the purged
-     * asset: nothing is sorted and nothing recycled.
+     * The row stays as the purge marked it, recycled in the root folder, and every stat is zero.
      */
     val asset = testContext.persistAsset()
     val folder: Folder = testApp.service.folder.add("folder1")
@@ -311,12 +296,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two assets persisted by the import's index stage and never completed, so never counted: one in the root folder and one in
-     * triage. The first is recycled and the second moved into a new folder.
+     * Two assets persisted by the import's index stage and never completed, so never counted: one in the root folder, recycled,
+     * and one in triage, moved into a new folder.
      *
      * Assertions:
      *
-     * Neither row changes, the first still live and the second still in triage with no folder, and every stat stays at zero.
+     * Neither row changes and every stat stays at zero.
      */
     val unfinished = testApp.service.library.persistAndIndex(testContext.makeAsset())
     val unfinishedTriaged = testApp.service.library.persistAndIndex(testContext.makeAsset(isTriaged = true))
@@ -337,13 +322,13 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A folder in the first repository; a live and a recycled asset in a second one. In the first repository's context, the live
-     * asset is recycled, the recycled one moved into the folder, then restored.
+     * A live and a recycled asset in a second repository. In the first repository's context, the live one is recycled and the
+     * recycled one moved into a folder, then restored.
      *
      * Assertions:
      *
-     * Recycling and moving skip the foreign IDs and restoring fails as for an unknown ID. Neither repository's stats change, the
-     * live asset stays live and the recycled one stays recycled where it was.
+     * Recycling and moving skip the foreign IDs and restoring fails as for an unknown ID. Neither repository's stats or assets
+     * change.
      */
     val firstRepo: Repository = testContext.repository
     val folder: Folder = testApp.service.folder.add("folder1")

@@ -36,7 +36,7 @@ import altitude.core.models.Asset
     ujson.read(response.text())
   }
 
-  /** The Sequence IDs of the queue, as the rows of its fragment (`htmx/curation_queue`) carry them, in order */
+  /** The Sequence IDs the queue fragment's rows carry, in order */
   private def queueOf(host: String, repoId: String): List[String] = {
     val response = requests.get(s"$host/htmx/curation/r/$repoId/queue", cookies = testContext.cookies, check = false)
     response.statusCode shouldBe 200
@@ -55,13 +55,12 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * The queue's rows name the Sequence captured first, then the other, and no other, and the count says two, the one field of
-     * its object.
+     * The queue's rows name the Sequence captured first, then the other, and the count, the object's one field, is two.
      *
      * Edge cases:
      *
-     * Recycling a frame takes its Sequence out of both at once, with nothing cached, and a repository with no Sequence answers an
-     * empty queue and a zero.
+     * Recycling a frame takes its Sequence out of both at once, and a repository with no Sequence answers an empty queue and a
+     * zero.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -104,9 +103,9 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * Resolving with the first frame kept recycles the others, takes the kept frame out of the Sequence and answers with that
-     * frame and its Sequence, and the queue and the count fall to none. Posting the answer back to reopen, with the same lists,
-     * restores the two, answers as the restore endpoint does, and puts the frame back, so the Sequence is in the queue again.
+     * Resolving with the first frame kept recycles the others, takes the kept frame out of the Sequence, answers with that frame
+     * and its Sequence, and empties the queue. Posting the answer back to reopen restores the two, answers as the restore
+     * endpoint does, and puts the frame back, so the Sequence is queued again.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -181,12 +180,11 @@ import altitude.core.models.Asset
     /**
      * Setup:
      *
-     * A set resolved with one frame kept and two recycled, then a second copy of the file of one of the two imported.
+     * A set resolved with one frame kept and two recycled, then a second copy of one recycled frame's file imported.
      *
      * Assertions:
      *
-     * Reopen answers with the frame it restored and, apart from it, the one it left in the trash because its content is live
-     * again.
+     * Reopen answers the frame it restored, and apart from it the one it left in the trash because its content is live again.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -222,13 +220,12 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * Each of these is a 400 with the reason in `error`, and the frames stay as they were: resolve and reopen with no Pick, or
-     * with a Pick also to recycle; resolve with the recycled frame as a Pick; reopen putting a frame that is no Pick back in a
-     * Sequence.
+     * Each of these is a 400 with the reason in `error`, and the frames stay as they were: no Pick, a Pick also to recycle, a
+     * recycled frame as a resolve's Pick, and a reopen putting a non-Pick back in a Sequence.
      *
      * Edge cases:
      *
-     * A list missing, a list of no strings and a `sequenceOf` of no strings are 400s too, before anything is read.
+     * A missing list, a list of non-strings and a `sequenceOf` of non-strings are 400s too, before anything is read.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -282,10 +279,9 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * Resolve and reopen each answer a JSON 400 with the reason in `error`, and the frames stay as they were, for: an ID that is
-     * not a UUID among the Picks or among the frames to recycle; on reopen, a key or a value of `sequenceOf` that is not a UUID,
-     * among them the 40 characters that overflow `CHAR(36)` on PostgreSQL and that SQLite would store; a body that is an array, a
-     * string, a number, a null or no JSON at all.
+     * Resolve and reopen each answer a JSON 400 with the reason in `error`, and the frames stay as they were, for a non-UUID
+     * among the Picks, the frames to recycle, or a reopen's `sequenceOf` keys and values, and for a body that is no JSON object.
+     * The non-UUIDs include 40 characters, which overflow `CHAR(36)` on PostgreSQL and which SQLite would store.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -353,8 +349,8 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * Reopen with an unknown ID among those to restore is a 404 with the reason in `error`, as for any entity not found. The
-     * recycled frame stays in the trash and the kept frame out of the Sequence.
+     * Reopen with an unknown ID among those to restore is a 404 with the reason in `error`. The recycled frame stays in the trash
+     * and the kept frame out of the Sequence.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId

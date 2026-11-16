@@ -5,15 +5,10 @@
 @(person: Person, title: String, pane: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), conflictingPerson: Option[Person] = None)
 @defining(formJson.obj.get(Api.Field.Person.NAME).flatMap(_.strOpt)) { newName =>
 
-@* The rename dialog of a Person's pencil on the People tab (htmx/people_list), a popover dialog anchored to that pencil.
-   `pane` is the pencil's pane: focus goes back to that pencil when the dialog closes, found by its ID so that the copy the
-   list renders again after the rename takes it, and the form sends the pane back so the form replacing it on an error names
-   the same pencil. Its success announces PERSON_NAME_EDITED_EVENT with the Person's ID (js/listeners/people.js). With a
-   conflictingPerson, the live person holding the name typed, the error row offers to merge the renamed person into them
-   (includes/person_name_taken); the Merge people modal then takes this dialog's place, since one dialog is open at a time,
-   and is told the pane so that it returns focus to the same pencil.
-   The bare x-data is the scope that row's Alpine button needs: the popover host has none.
-   hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
+@* `pane` is the pencil's: focus returns to the pencil by its ID, so the copy the list renders after the rename takes it, and
+   the form sends `pane` back so an error's form names the same pencil; the Merge people modal that may take this dialog's
+   place gets it too. The bare x-data is the scope the name-taken row's Alpine button needs: the popover host has none.
+   hx-target="this" lets the server's "HX-Retarget: this" on a validation error replace this form in place *@
 <form action="#"
       id="renamePerson"
       x-data

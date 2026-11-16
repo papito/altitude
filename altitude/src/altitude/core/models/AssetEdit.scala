@@ -9,10 +9,9 @@ object AssetEdit:
   given JsonCodec.ReadWriter[AssetEdit] = JsonCodec.macroRW
 
 /**
- * An asset's Edit as `asset_edit` stores it: the Edit itself (the identity once reverted to the original), its edit version (1 at
- * the first save, one more at each), the edit version whose edited images are stored (`renderedVersion`, None before the first
- * render), the highest revision of edited images the asset has used (`lastRev`), whether the Edit changes a pixel, and its edited
- * size. An asset never edited has no row.
+ * An asset's Edit as `asset_edit` stores it; an asset never edited has no row. `editVersion` is 1 at the first save and one more
+ * at each, `renderedVersion` the edit version whose edited images are stored (None before the first render), `lastRev` the
+ * highest revision of edited images the asset has used, and `isEdited` whether the Edit changes a pixel.
  */
 case class AssetEdit(
     assetId: String,

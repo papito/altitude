@@ -2,22 +2,16 @@
 @import altitude.core.RequestContext
 @import altitude.core.models.Permission
 
-@* The batch ops: what the selection can do, shown while assets are selected. Rendered twice: in the search toolbar
-   (includes/search_results), between the total and the layout and View controls, and in the footer (index), where CSS
-   anchor positioning keeps each button directly below its twin in the toolbar (static/css/includes/batch_ops.css).
-   The count shows once; the buttons carry no count of their own.
-   Move is a drag handle (js/dragdrop/batch-ops.js); a click on it explains that in a tooltip. A button shows only where the
-   account holds the Permission its action needs in the page's `view` (`RequestContext.holds`): Organize for Move and the album
-   and Location buttons, a Curate Permission for Curate Selected (and Recycle with it outside Triage: the frames not picked are
-   recycled, and a sorted one takes Recycle), Purge for Purge, Recycle by the view
-   (`RequestContext.recyclesIn`: Recycle in Browse, a Curate Permission in Triage), and Restore for Recycle or a Curate
-   Permission (`RequestContext.restores`), the server checking each asset. *@
+@* The batch ops, shown while assets are selected. Rendered twice, in the search toolbar and in the footer, where CSS
+   anchor positioning keeps each button directly below its toolbar twin. Move is a drag handle; a click on it explains that.
+   Each button follows the Permission its action needs in the page's `view`, the server checking each asset: Organize for
+   Move and the album and Location buttons; a Curate Permission for Curate Selected, with Recycle outside Triage, since the
+   frames not picked are recycled; Purge for Purge; Recycle by the view (`RequestContext.recyclesIn`); Restore by
+   `RequestContext.restores`. *@
 @(view: String)
 
 @organizes = @{ RequestContext.holds(Permission.Organize) }
 <div class="batch-ops" x-show="!$store.selectedAssets.isEmpty">
-    @* Default view: Move, Recycle, Add to album, Remove from album (in an album), Add to location, Remove from location
-       (in a Location), Curate Selected (two assets or more) *@
     <template x-if="!$store.currentView.isTrashBinView()">
         <div class="actions">
             @if(organizes) {
@@ -27,27 +21,22 @@
             <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRecycled)"><i class="fas fa-trash"></i>Recycle</button>
             }
             @if(organizes) {
-            @* Opens the Add to album dialog for the selection (js/listeners/albums.js), which can also create the album *@
             <button type="button" class="action-button" @@click="$dispatch(window.Const.events.batchAddToAlbumRequested)"><i class="fas fa-images"></i>Add to album</button>
-            @* While an album's results are displayed: drop the selected assets from that album (the assets themselves are untouched) *@
+            @* Takes the selection out of the viewed album; the assets themselves are untouched *@
             <template x-if="$store.searchParams.albumId">
                 <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromAlbum)"><i class="fas fa-minus-circle"></i>Remove from album</button>
             </template>
-            @* Opens the Add to location dialog for the selection (js/listeners/locations.js); Locations are pointers like albums *@
             <button type="button" class="action-button" @@click="$dispatch(window.Const.events.batchAddToLocationRequested)"><i class="fas fa-map-marker-alt"></i>Add to location</button>
-            @* While one Location's results are displayed, not an advanced search's several: drop the selected assets from that
-               Location *@
+            @* Only while one Location is viewed, not an advanced search's several *@
             <template x-if="$store.searchParams.viewedLocationId()">
                 <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromLocation)"><i class="fas fa-minus-circle"></i>Remove from location</button>
             </template>
             }
             @if(RequestContext.holds(Permission.CurateOwn, Permission.CurateAll) && (view == Const.Search.View.TRIAGE || RequestContext.holds(Permission.Recycle))) {
-            @* Opens Curation on the selection, up to the cap it carries (js/listeners/curation.js) *@
             <button type="button" class="action-button curate" x-show="$store.selectedAssets.size > 1" data-max-selection="@{Const.Curation.MAX_SELECTION}" @@click="$dispatch(window.Const.events.batchCurateRequested)"><i class="fas fa-check-double"></i>Curate Selected</button>
             }
         </div>
     </template>
-    @* Trash bin view: Purge, Restore *@
     <template x-if="$store.currentView.isTrashBinView()">
         <div class="actions">
             @if(RequestContext.holds(Permission.Purge)) {
@@ -58,7 +47,6 @@
             }
         </div>
     </template>
-    @* Every view ends with the count and Deselect all *@
     <span class="selected-count"><span x-text="$store.selectedAssets.size"></span> selected</span>
     <button type="button" class="action-button deselect" title="Deselect all" aria-label="Deselect all" @@click="$store.selectedAssets.reset()"><i class="fas fa-times"></i></button>
 </div>

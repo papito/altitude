@@ -17,17 +17,12 @@ import altitude.core.models.Import
 import altitude.core.service.AccountVersions
 
 /**
- * The import status feed: the sockets the Import pages hold open (`ImportController.pipelineStatus`), kept by Library and
- * account, and the Imports' statuses pushed to them. `ImportService` tells of an Import after each commit that changes it
- * (`Altitude` wires `ImportService.onChange` to [[ImportStatusWsActor.ImportChanged]]); the actor keeps each Import as it last
- * heard of it and sends its status (includes/import_status, as `hx-ws` takes it) to every socket of the Import's Library, at most
- * once an interval while the Import is in progress, and once more when it closes. A change to what a Library's Watch folders show
- * ([[ImportStatusWsActor.WatchFoldersChanged]]) is told to the Library's sockets at once, as a message that swaps nothing.
+ * The import status feed: the Import pages' sockets, by Library and account. An Import's status goes to every socket of its
+ * Library at most once an interval while it is in progress, and once more when it closes. A Watch folder change is told at once.
  */
 object ImportStatusWsActor:
   sealed trait Command
 
-  /** A socket of the account, opened on the Library's Import page, to tell of that Library's Imports from now on */
   final case class AddClient(repositoryId: String, userId: String, client: castor.Actor[cask.Ws.Event])
     extends AltitudeActorSystem.Command
     with Command
@@ -36,24 +31,19 @@ object ImportStatusWsActor:
     extends AltitudeActorSystem.Command
     with Command
 
-  /** An Import of the Library as a change committed it (`ImportService.onChange`) */
+  /** An Import as a commit left it */
   final case class ImportChanged(repositoryId: String, anImport: Import) extends AltitudeActorSystem.Command with Command
 
-  /**
-   * What the Library's Watch folders show changed (`WatchFolderService.onChange`): every socket of the Library is told, at once,
-   * and its page reads the Watch folders again
-   */
   final case class WatchFoldersChanged(repositoryId: String) extends AltitudeActorSystem.Command with Command
 
   /**
-   * Closes every socket of the account, in every Library, and forgets them: its versions changed (`AccountVersions`), so what
-   * opened them may hold no more. A change closes them with 1013 (try again later), which the page's client reconnects on, its
-   * handshake checking the login and the Permission again (refused for an account deactivated or deleted, or one that lost Import
-   * there); a revocation with 1008 (policy violation), which it does not.
+   * Closes and forgets the account's sockets in every Library: its versions changed, so what opened them may no longer hold. A
+   * bump closes with 1013, which the client reconnects on (the handshake checks login and Permission again); a revocation with
+   * 1008, which it does not.
    */
   final case class CloseAllFor(userId: String, change: AccountVersions.Change) extends AltitudeActorSystem.Command with Command
 
-  // The Import's interval has passed: its status is pushed again if it changed meanwhile
+  // The Import's interval has passed: push it again if it changed meanwhile
   final private case class PushDue(importId: String) extends Command
 
   // A closed Import has been remembered long enough
@@ -62,23 +52,17 @@ object ImportStatusWsActor:
   private val TRY_AGAIN_LATER = 1013
   private val POLICY_VIOLATION = 1008
 
-  // An Import's status is pushed at most once in this long, and once more at its close
   val PUSH_INTERVAL: FiniteDuration = 1.second
 
-  // How long a closed Import is remembered, so a change told late, after the close it came before, is not pushed
+  // How long a closed Import is remembered, so a change told after the close it preceded is not pushed
   private val FORGET_AFTER: FiniteDuration = 1.minute
 
-  /** What a socket is sent once it is added: from then on it is told of its Library's Imports */
   val CONNECTED: String = ujson.write(ujson.Obj(Api.Field.ImportStatus.CONNECTED -> true))
 
-  /** What a socket is sent when its Library's Watch folders are to be read again; it swaps nothing */
+  /** Tells the page to read its Watch folders again; it swaps nothing */
   val WATCH_FOLDERS_CHANGED: String = ujson.write(ujson.Obj(Api.Field.ImportStatus.WATCH_FOLDERS -> true))
 
-  /**
-   * The message of an Import's status, as `hx-ws` takes it: the Import's status element (includes/import_status), which replaces
-   * the one of its ID on the page, with the Import's ID and whether it is closed for the page's script (js/import-status.js).
-   * Rendered by Twirl, which escapes the Import's name.
-   */
+  /** An Import's status element for `hx-ws` to swap in. Rendered by Twirl, which escapes the Import's name. */
   def statusMessage(anImport: Import): String =
     ujson.write(
       ujson.Obj(
@@ -90,14 +74,14 @@ object ImportStatusWsActor:
       ))
 
   /**
-   * How far along an Import is: a number that every change to it raises, since a file added, a file settled, the mark that it is
-   * complete and its close each only ever add to one of its parts. Of two states of one Import the later has the greater.
+   * A number every change to an Import raises, since a file added, a file settled, completion and close each only add to one of
+   * its parts: of two states of one Import, the later has the greater
    */
   private def progress(anImport: Import): Int =
     anImport.total + (anImport.total - anImport.pending) + (if anImport.isComplete then 1 else 0) +
       (if anImport.isInProgress then 0 else 1)
 
-  /** `render` is the message of an Import's status and `pushInterval` the least time between two of one Import */
+  /** `pushInterval` is the least time between two pushes of one Import */
   def apply(render: Import => String = statusMessage, pushInterval: FiniteDuration = PUSH_INTERVAL): Behavior[Command] =
     Behaviors.setup(context => Behaviors.withTimers(timers => new ImportStatusWsActor(context, timers, render, pushInterval)))
 
@@ -112,10 +96,7 @@ class ImportStatusWsActor(
 
   private type Client = castor.Actor[cask.Ws.Event]
 
-  /**
-   * An Import as the actor last heard of it, in its Library. `isWaiting` says its interval is running, so a change is held until
-   * the interval ends, and `isUnsent` that one was held.
-   */
+  /** An Import as last heard of. `isWaiting`: its interval is running, so a change is held; `isUnsent`: one was held. */
   final private class Feed(val repositoryId: String, var latest: Import, var isWaiting: Boolean, var isUnsent: Boolean)
 
   // The open sockets: Library, then account
@@ -177,10 +158,8 @@ class ImportStatusWsActor(
     if ofRepository.isEmpty then sockets.remove(repositoryId): Unit else sockets.update(repositoryId, ofRepository)
 
   /**
-   * An Import changed. Its first change, and one after an interval with none, is pushed at once and starts an interval; one
-   * inside an interval is held, and the interval's end pushes the Import as it stands then. Its close is pushed at once, whatever
-   * the interval, and is the last message of the Import: the changes of one Import can be told out of order
-   * (`ImportService.changed`), so one that is not further along than what the actor has is dropped, as is any after the close.
+   * A change outside an interval is pushed at once and starts one; one inside is held for the interval's end. The close is pushed
+   * at once and is the last message: changes can arrive out of order, so one no further along than what is known is dropped.
    */
   private def importChanged(repositoryId: String, anImport: Import): Unit =
     val importId = anImport.persistedId
@@ -206,10 +185,7 @@ class ImportStatusWsActor(
       feed.isWaiting = true
       timers.startSingleTimer(importId, PushDue(importId), pushInterval)
 
-  /**
-   * Sends the Import's status to every socket of its Library, rendered once and only when there is a socket to send it to. A
-   * status that cannot be rendered is logged and not sent: the next change tries again.
-   */
+  /** Renders only when there is a socket to send to. A failed render is logged and skipped: the next change tries again. */
   private def push(feed: Feed): Unit =
     feed.isUnsent = false
     val clients = sockets.getOrElse(feed.repositoryId, Map.empty).values.flatten

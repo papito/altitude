@@ -105,9 +105,8 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     recs.map(makeModel).map(p => p.persistedId -> p).toMap
 
   /**
-   * One query whatever the buckets: the clauses every bucket shares, then an OR of the chosen buckets' own. Hidden takes
-   * precedence, so a hidden person is in Hidden alone whatever its count or name: the Matched and Unmatched clauses both require
-   * `is_hidden = FALSE`, and the three buckets are disjoint.
+   * One query for any buckets: the shared clauses, then an OR of the chosen buckets' own. Hidden takes precedence (Matched and
+   * Unmatched require `is_hidden = FALSE`), so the buckets are disjoint.
    */
   def getInBuckets(buckets: Set[String]): List[Person] =
     val unknown = buckets -- C.PeopleBucket.ALL
@@ -141,7 +140,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
 
     recs.map(makeModel)
 
-  // The count column of `triagedAssetCountsStatement`; a Long on PostgreSQL and an Int on SQLite, so it is read through `Number`
+  // A Long on PostgreSQL and an Int on SQLite, so it is read through `Number`
   private val TRIAGED_ASSETS = "triaged_assets"
 
   override def getTriagedAssetCounts: Map[String, Int] =
@@ -151,10 +150,9 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
       .toMap
 
   /**
-   * The statement behind [[getTriagedAssetCounts]] with its bind values, which the plan test explains. The flags are literals:
-   * SQLite uses the partial `asset_triage_*` indexes only for a predicate matching theirs, which a flag bound as text does not.
-   * `is_pipeline_processed` is not filtered: the Faces of an import still in flight are in `num_of_faces`, and its assets are
-   * triaged.
+   * Exposed for the plan test. The flags are literals: SQLite uses the partial `asset_triage_*` indexes only for a matching
+   * predicate, which a flag bound as text is not. `is_pipeline_processed` is not filtered: an in-flight import's Faces are in
+   * `num_of_faces`, and its assets are triaged.
    */
   def triagedAssetCountsStatement: (String, List[Any]) =
     val sql = s"""
@@ -168,7 +166,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     """
     (sql, List(RequestContext.getRepository.persistedId))
 
-  // Reads `person_01`, the unique index the name key is kept unique by
+  // By `person_01`
   override def getLiveByNameKey(nameKey: String): Option[Person] =
     val live = PersonDao.liveByNameKey(dialect, RequestContext.getRepository.persistedId, nameKey)
     Db.read(dialect)(_.run(live)).headOption.map(toModel)
@@ -176,7 +174,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
   override def lockName(nameKey: String): Unit =
     advisoryLock(s"person-name:${RequestContext.getRepository.persistedId}:$nameKey")
 
-  // Reads the partial index over the live people
+  // By `person_03`, the partial index over the live people
   override def getAssignable: List[Person] =
     val sql = """SELECT *
                    FROM person
@@ -192,10 +190,9 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
   def restoreFacesForAssets(assetIds: Set[String]): Unit = addFacesOfAssets(assetIds, sign = "+")
 
   /**
-   * Adds to (or with `-`, takes from) each person's face count the assets, among the given ones, they have a Face on: the count
-   * is of assets, so an asset holding two Faces of one person counts once. The people are found from the assets' faces, an
-   * uncorrelated set read once through the index that leads with the asset, rather than by testing every person for a face on one
-   * of them.
+   * Adds to (or with `-`, takes from) each person's face count the given assets they have a Face on; an asset with two of their
+   * Faces counts once. The people come from one uncorrelated read of the assets' Faces by the asset index, rather than testing
+   * every person.
    */
   private def addFacesOfAssets(assetIds: Set[String], sign: String): Unit =
     val sql = s"""
@@ -209,7 +206,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     """
     updateByBySql(sql, List(idSet(assetIds), idSet(assetIds)))
 
-  // On PostgreSQL; SQLite's one write connection serializes the writers
+  // Locks on PostgreSQL only; SQLite's one write connection serializes the writers
   override def lockAssetPeople(assetIds: Set[String]): Unit =
     if assetIds.isEmpty then return
 
@@ -223,8 +220,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     """
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(assetIds)))
 
-  // The dead are locked too, and left out afterwards, so that a caller waits for whatever is changing them.
-  // On PostgreSQL; SQLite's one write connection serializes the writers
+  // The dead are locked too and left out afterwards, so a caller waits for whatever is changing them
   override def lockAndGetLive(personIds: Set[String]): Set[String] =
     val sql = s"""
       SELECT id, is_deleted, is_bad_match
@@ -260,9 +256,9 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
 object PersonDao:
 
   /**
-   * The live person of a repository whose sort name is the name key. The predicate is `person_01`'s, typed, so ScalaSql binds the
-   * flags as numbers: SQLite uses a partial index only for a query whose own terms imply the index's, which a flag bound as the
-   * text `nativeBool` binds on SQLite does not.
+   * The live person with that name key. The predicate is `person_01`'s, typed so ScalaSql binds the flags as numbers: SQLite uses
+   * a partial index only when the query's terms imply its predicate, which a flag bound as text (`nativeBool` on SQLite) does
+   * not.
    */
   def liveByNameKey(dialect: Dialect, repositoryId: String, nameKey: String): Select[PersonRow[Expr], PersonRow[Sc]] =
     import dialect.*

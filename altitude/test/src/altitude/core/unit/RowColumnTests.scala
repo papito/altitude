@@ -16,15 +16,13 @@ import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
 import altitude.core.dao.sql.tables._
 
 /**
- * What the row classes select, checked against both schemas.
- *
- * Column names are never spelled out in a row class: they come from the field name through the configured name mapper. A renamed
- * field, or a column that exists on only one engine, would otherwise surface as a SQL error deep inside an integration run - or,
- * for the update and filter paths, as a silently unresolvable column name.
+ * What the row classes select, checked against both schemas. Row classes take column names from their field names through the
+ * name mapper, so a renamed field or a column on one engine only would otherwise surface deep in an integration run, or as an
+ * unresolvable name on the update and filter paths.
  */
 @DoNotDiscover class RowColumnTests extends funsuite.AnyFunSuite with TestFocus {
 
-  /** Every table with a rendered `SELECT` per engine. The rendering is the point: it is what the database actually sees. */
+  /** Every table with its rendered `SELECT`, which is what the database actually sees */
   private def rendered(dialect: Dialect): List[(Table.Base, String)] = {
     import dialect._
 
@@ -89,12 +87,11 @@ import altitude.core.dao.sql.tables._
     /**
      * Setup:
      *
-     * Each row class's field labels, mapped through the configured column name mapper, beside its rendered `SELECT` on both
-     * engines.
+     * Each row class's field labels through the column name mapper, beside its rendered `SELECT` on both engines.
      *
      * Assertions:
      *
-     * The mapped names are exactly the set of columns the rendered statement selects.
+     * The mapped names are exactly the columns the statement selects.
      */
     for {
       (engine, dialect) <- engines
@@ -122,7 +119,7 @@ import altitude.core.dao.sql.tables._
      */
     val selected = selectedColumns(rendered(AltitudeSqliteDialect).toMap.apply(AssetRow)).toSet
 
-    // The columns `makeModel` reads, and which `toModel` therefore has to read too
+    // The columns `makeModel` reads, so `toModel` has to read them too
     val modelColumns = Set(
       "id",
       "owner_user_id",
@@ -167,19 +164,17 @@ import altitude.core.dao.sql.tables._
     /**
      * Setup:
      *
-     * The asset row's column list as a hand-written select writes it, in its three forms: with the two bulky metadata JSON
-     * columns kept, left out, and read as NULL in their places.
+     * The asset row's column list for a hand-written select, with the two bulky metadata columns kept, left out, and read as
+     * NULL.
      *
      * Assertions:
      *
-     * Kept, the list is every label of the row in the order it declares them, each as `asset.<column>`. Left out, it is the same
-     * list without `user_metadata` and `extracted_metadata`. As NULL, it has as many entries as the row has labels, in the same
-     * order, with `NULL AS user_metadata` and `NULL AS extracted_metadata` where the two stood, so a typed read still reads the
-     * row back by position.
+     * Kept, it is every label of the row in declared order as `asset.<column>`. Left out, it lacks the two. As NULL, it keeps
+     * every position with `NULL AS <column>` for the two, so a typed read still reads the row back by position.
      *
      * Edge cases:
      *
-     * `public_metadata` is in all three, and no Scene embedding is in any: the row declares none.
+     * `public_metadata` is in all three, and no Scene embedding is in any, since the row declares none.
      */
     val labels = Table.labels(AssetRow).map(Db.config.columnNameMapper)
     val bulky = Set("user_metadata", "extracted_metadata")

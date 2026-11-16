@@ -23,8 +23,7 @@ import altitude.core.service.UserService
      *
      * Assertions:
      *
-     * The switch is on only for the true key in dev. In test and prod it is off whatever the key says, and a false key is off
-     * everywhere.
+     * The switch is on only for the true key in dev; everywhere else it is off.
      */
     Environment.devSwitch(on, "dev.switch", Environment.Name.DEV) shouldBe true
 
@@ -45,9 +44,8 @@ import altitude.core.service.UserService
      *
      * Assertions:
      *
-     * The setting is its value only in dev, and empty in test and prod, where it is ignored. The dev login's credentials are the
-     * two values in dev and none anywhere else, so an app outside dev ignores them; with the values empty there are none in dev
-     * either.
+     * The setting reads its value only in dev and is empty in test and prod. The dev login has credentials only in dev, and none
+     * there either when the values are empty.
      */
     val set = ConfigFactory.parseString("""dev.user = "chief", dev.password = "password123"""")
     val empty = ConfigFactory.parseString("""dev.user = "", dev.password = """"")

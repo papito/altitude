@@ -26,7 +26,7 @@ import altitude.core.models.Person
       check = false
     )
 
-  /** The People tab's list for the buckets, with the query parameters given */
+  /** The People tab's list for the buckets */
   private def listPeople(
       host: String,
       repoId: String,
@@ -38,7 +38,7 @@ import altitude.core.models.Person
       cookies = testContext.cookies,
       check = false)
 
-  /** The rename dialog the People tab's pencil opens for the Person with this ID, with the query parameters given */
+  /** The rename dialog the People tab's pencil opens for the Person with this ID */
   private def renameDialog(
       host: String,
       repoId: String,
@@ -50,7 +50,7 @@ import altitude.core.models.Person
       cookies = testContext.cookies,
       check = false)
 
-  /** Renames the Person with this ID through the rename dialog's route, as its form submits, from `pane` when one is given */
+  /** Renames the Person with this ID through the rename dialog's route, from `pane` when one is given */
   private def renameInDialog(
       host: String,
       repoId: String,
@@ -100,9 +100,9 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * The assignable list answers 200 with one option per person in the order adam, Mia, Zoe, then the unnamed people by sort
-     * name, Mia's marked hidden, the named people's marked named and the unnamed people's not, and each carrying its cover; the
-     * merged-away and the bad-match people are absent.
+     * The assignable list holds one option per person, each with its cover, in the order adam, Mia, Zoe, then the unnamed people
+     * by sort name. Mia's is marked hidden, and only the named people's are marked named. The merged-away and the bad-match
+     * people are absent.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -130,7 +130,7 @@ import altitude.core.models.Person
         optionIds shouldBe List(adam, mia, zoe, unknown1, unknown2).map(_.persistedId)
         html should include(s"""data-person-id="${mia.persistedId}"""")
         """data-person-id="[^"]+"\s+data-person-name="Mia"\s+data-person-hidden""".r.findFirstIn(html).isDefined shouldBe true
-        // An option's opening tag, which carries whether its Person is named: the combobox's merge or move
+        // Whether its Person is named decides the combobox's merge or move
         def optionTag(person: Person): String =
           s"""<li role="option"\\s+data-person-id="${person.persistedId}"[^>]*>""".r.findFirstIn(html).get
         List(adam, mia, zoe).foreach(named => optionTag(named) should include("""data-person-named="true""""))
@@ -144,16 +144,15 @@ import altitude.core.models.Person
     /**
      * Setup:
      *
-     * A logged-in user's repository with a Face of an unnamed Person at a synthetic embedding, Faces of "Zoe" about 0.29 away and
-     * of "adam" about 0.05 away, the Face of a hidden "Mia" about 1 away, past the threshold, and an unnamed Person with a Face
-     * at a random embedding.
+     * A logged-in user's repository with a Face of an unnamed Person, Faces of "Zoe" about 0.29 away and of "adam" about 0.05
+     * away, the Face of a hidden "Mia" about 1 away, past the threshold, and another unnamed Person.
      *
      * Assertions:
      *
-     * Asked with the Face, the list answers 200 with the Suggested group first, adam then Zoe, each option marked suggested and
-     * under the group's heading, and then the list of the rest in its order, Mia and the other unnamed Person, so no Person is
-     * listed twice and the Face's own Person, who is no target, is no option. Asked without a Face, the list holds every live
-     * Person, the Face's own among them, with no group and no suggested mark; asked with an unknown Face, it is a 404.
+     * Asked with the Face, the list opens with the Suggested group, adam then Zoe, marked suggested under the group's heading,
+     * then the rest in their order: Mia and the other unnamed Person. No Person is listed twice, and the Face's own Person is no
+     * option. Asked without a Face, the list holds every live Person, the Face's own among them, with no group and no suggested
+     * mark. An unknown Face is a 404.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -211,9 +210,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * The title route answers 200 with the person's results title inner, naming Bob with no subtitle and no face count, which the
-     * toolbar's Total says; an unknown person is a 404, and so is the other repository's Eve, asked for through the first
-     * repository, whose name the answer does not carry.
+     * The title route answers with the person's results title, naming Bob with no subtitle and no face count. An unknown person
+     * is a 404, and so is the other repository's Eve, whose name the answer does not carry.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -257,8 +255,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * With no `triaged` parameter Bob reads (1), and with `triaged=true` he reads (3). Mia's name link is named by its content:
-     * her name, the number, (1) by default and (2) with `triaged=true`, and then a visually hidden ", hidden".
+     * With no `triaged` parameter Bob reads (1), and with `triaged=true` (3). Mia reads (1) and (2), followed by a visually
+     * hidden ", hidden".
      *
      * Edge cases:
      *
@@ -339,12 +337,12 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * With no people the list says no one is in the buckets. With Eve, the list by default says everyone is only in triaged
-     * items, and not that no one is there; with `triaged=true` it lists Eve and says neither.
+     * With no people the list says no one is in the buckets. With Eve, the list by default says everyone is only in triaged items
+     * instead; with `triaged=true` it lists Eve and says neither.
      *
      * Edge cases:
      *
-     * The Hidden bucket, which Eve is not in, holds no one with her there, so it says no one is there and nothing of triage.
+     * The Hidden bucket, which Eve is not in, says no one is there and nothing of triage.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -386,8 +384,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * The list answers `triaged=nope` with a 400 for the value, not for a parameter it does not know, and the same request
-     * without it with a 200.
+     * The list answers `triaged=nope` with a 400 for the value, not for an unknown parameter, and the request without it with a
+     * 200.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -412,16 +410,13 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * Listed with `pane=main`, Bob's cell holds a pencil named "Rename Bob" that requests the rename dialog and names itself as
-     * the dialog's anchor by an ID carrying the pane and Bob's ID. Its name link is the anchor of the scope dialog a click on the
-     * face or the name opens in Triage: an ID carrying the pane and Bob's ID, with that anchor name, which both links name as
-     * their dialog's anchor. Listed with `pane=duplicate`, both IDs carry that pane instead, so the two panes' copies of one
-     * Person never share an ID.
+     * Listed with `pane=main`, Bob's cell holds a "Rename Bob" pencil that requests the rename dialog and anchors it by an ID
+     * carrying the pane and Bob's ID. His name link, the anchor of the scope dialog that the face and the name open, has such an
+     * ID too. With `pane=duplicate` both IDs carry that pane, so the two panes' copies of one Person never share an ID.
      *
      * Edge cases:
      *
-     * A list asked for with no `pane` is the Main pane's. A `pane` that is no pane is a 400 for the value, not for a parameter
-     * the route does not know.
+     * No `pane` means the Main pane. A `pane` that is no pane is a 400 for the value, not for an unknown parameter.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -473,11 +468,11 @@ import altitude.core.models.Person
     /**
      * Setup:
      *
-     * A logged-in user's repository with one Person, who has one test Face on an asset.
+     * A logged-in user's repository with one Person with one test Face.
      *
      * Assertions:
      *
-     * The choose-cover-face modal, requested with only the person's ID, renders with its face selector.
+     * The choose-cover-face modal, requested with only the person's ID, renders its face selector.
      *
      * Edge cases:
      *
@@ -508,13 +503,13 @@ import altitude.core.models.Person
     /**
      * Setup:
      *
-     * A logged-in user's repository with a Person named "Alice", with Faces on three assets and no cover, as a cover's Face
-     * deleted under it would leave her, and a Person named "Bob" with a Face and his cover.
+     * A logged-in user's repository with a Person named "Alice" with Faces on three assets and no cover, as a deleted cover Face
+     * would leave her, and a Person named "Bob" with a cover.
      *
      * Assertions:
      *
-     * The People list, Alice's results title and the merge modal of the two each render the no-cover placeholder in place of
-     * Alice's face, and no face URL with no Face ID at its end; Bob's cover is still his face's URL.
+     * The People list, Alice's results title and the merge modal of the two render the no-cover placeholder for Alice and no face
+     * URL missing its Face ID. Bob's cover is still his face's URL.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -564,8 +559,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * Renaming him "Unknown 42" answers 200 with the name editor, the reserved-name error under its field and the name typed kept
-     * in it; Bob keeps his name.
+     * Renaming him "Unknown 42" answers the name editor with the reserved-name error under the field and the typed name kept. Bob
+     * keeps his name.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -596,9 +591,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * Renaming Bob "tessa" answers 200 with the name editor, the error naming Tessa as she is stored, and a button that
-     * dispatches the merge confirmation with Bob as the source, Tessa as the destination and the direction kept. Bob keeps his
-     * name.
+     * Renaming Bob "tessa" answers the name editor with the error naming Tessa as stored, and a button that asks to merge Bob
+     * into Tessa, the direction kept. Bob keeps his name.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -662,7 +656,7 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * Renaming her "TESSA" answers the name view, with no editor, showing "TESSA", and the stored name is "TESSA".
+     * Renaming her "TESSA" answers the name view, not the editor, and stores "TESSA".
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -691,14 +685,13 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * The rename dialog asked for with Bob's ID answers 200 with an HTML document holding the dialog's form: a modal fragment
-     * titled "Rename person", its name field holding "Bob", submitting to Bob's rename route, and announcing the name edit with
-     * Bob's ID as its detail once it succeeds. Asked for with `pane=duplicate`, it returns focus to Bob's pencil in that pane and
-     * its form sends the pane back.
+     * The rename dialog for Bob is an HTML document holding a titled modal form with "Bob" in its field, submitting to Bob's
+     * rename route and announcing the name edit with his ID on success. With `pane=duplicate`, it returns focus to Bob's pencil
+     * in that pane and its form sends the pane back.
      *
      * Edge cases:
      *
-     * Asked for with no `pane`, the dialog is the Main pane's. A `pane` that is no pane is a 400.
+     * No `pane` means the Main pane. A `pane` that is no pane is a 400.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -741,8 +734,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * Renaming him "Robert" through the dialog's route answers 200 with an empty body that replaces nothing, which completes the
-     * dialog, and the stored name is "Robert".
+     * Renaming him "Robert" through the dialog's route answers an empty body that replaces nothing, completing the dialog, and
+     * stores "Robert".
      *
      * Edge cases:
      *
@@ -773,12 +766,12 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * Renaming him "Unknown 42" through the dialog's route answers with the dialog's form again, sent to replace the submitted
-     * one, with the reserved-name error and the name typed kept in its field; Bob keeps his name.
+     * Renaming him "Unknown 42" through the dialog's route swaps the dialog's form back with the reserved-name error and the
+     * typed name kept. Bob keeps his name.
      *
      * Edge cases:
      *
-     * An empty name is refused the same way. A refusal of a form sent from the Duplicate pane names that pane's pencil again.
+     * An empty name is refused the same way. A refused form from the Duplicate pane still returns focus to that pane's pencil.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -813,10 +806,9 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * Renaming Bob "tessa" through the dialog's route answers with the dialog's form again, sent to replace the submitted one,
-     * the name typed kept, the error naming Tessa as she is stored, and a button that dispatches the merge confirmation with Bob
-     * as the source, Tessa as the destination, the direction kept and the Main pane, the pane of a form that sends none. With
-     * Tessa hidden, the same rename says she exists and is hidden, and still offers the merge. Bob keeps his name throughout.
+     * Renaming Bob "tessa" through the dialog's route swaps the dialog's form back with the typed name, the error naming Tessa as
+     * stored, and a button that asks to merge Bob into Tessa, the direction kept, from the Main pane when the form sends none.
+     * With Tessa hidden, the error says so and the merge is still offered. Bob keeps his name.
      *
      * Edge cases:
      *
@@ -866,12 +858,12 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * Renaming her "TESSA" through the dialog's route answers the empty success, with no offer to merge her into herself, and the
-     * stored name is "TESSA".
+     * Renaming her "TESSA" through the dialog's route is the empty success, with no offer to merge her into herself, and stores
+     * "TESSA".
      *
      * Edge cases:
      *
-     * Saving the exact name she already has, "TESSA" again, is the empty success too, and the name stays.
+     * Saving the exact name she already has is the empty success too.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -898,8 +890,7 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * Asked through the first repository, the rename dialog and the rename itself answer 404 for a Person ID that does not exist
-     * and for Eve's, the answers do not carry her name, and Eve keeps it.
+     * The rename dialog and the rename answer 404 for an unknown Person ID and for Eve's, without her name, and Eve keeps it.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -938,9 +929,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * A body holding the name alone, sent to Bob's name editor route, answers the name view and stores the name: the route needs
-     * no ID in the body. Sent through the first repository to a Person ID that does not exist, and to Eve's, the rename answers
-     * 404, the answer does not carry her name, and Eve keeps it.
+     * A body holding only the name, sent to Bob's name editor route, answers the name view and stores the name. The rename is a
+     * 404 for an unknown Person ID and for Eve's, without her name, and Eve keeps it.
      *
      * Edge cases:
      *
@@ -996,8 +986,7 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * The rename dialog asked for with Bob's ID, and with Carl's, answers 404 and not the dialog's form. A rename of either
-     * through the dialog's route answers 404 too, and each keeps the name stored on their row.
+     * The rename dialog and the rename through its route are 404s for Bob and for Carl, and each keeps the stored name.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1033,7 +1022,7 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * A rename of Bob, and of Carl, through the name editor's route answers 404, and each keeps the name stored on their row.
+     * A rename of Bob or Carl through the name editor's route is a 404, and each keeps the stored name.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1064,8 +1053,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * The merge modal requested with the two-face person as the source and `keepDirection=true` merges that person into the
-     * other. Requested the same way without `keepDirection`, it swaps them, merging the one-face person into the two-face one.
+     * With the two-face person as the source and `keepDirection=true`, the merge modal merges that person into the other. Without
+     * `keepDirection` it swaps them, merging the one-face person into the two-face one.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1103,12 +1092,12 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * The merge modal requested with Bob as the source, the direction kept and `pane=duplicate` answers 200 and names Bob's
-     * rename pencil of the Duplicate pane as the control focus returns to. Requested with no `pane`, it names no control.
+     * The merge modal for Bob with `pane=duplicate` returns focus to Bob's rename pencil in the Duplicate pane. With no `pane`,
+     * it names no control.
      *
      * Edge cases:
      *
-     * A `pane` that is no pane is a 400 for the value, not for a parameter the route does not know.
+     * A `pane` that is no pane is a 400 for the value, not for an unknown parameter.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1148,13 +1137,12 @@ import altitude.core.models.Person
     /**
      * Setup:
      *
-     * A logged-in user's repository with two People, each with one test Face on an asset of their own.
+     * A logged-in user's repository with two People, each with one test Face.
      *
      * Assertions:
      *
-     * Merging one into the other answers 204 with no Location header, so nothing redirects. The client owns the search
-     * parameters, so a merge reports only that it happened; showing the destination person is a normal search the browser runs
-     * off the dialog's success event.
+     * Merging one into the other answers 204 with no Location header: the client owns the search parameters and runs the search
+     * for the destination person itself.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1200,10 +1188,9 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * Asked through the first repository for a Person ID that does not exist, and for Eve's, the choose-cover modal, the cover
-     * image (given Eve's Face for Eve), the name view and its editor, the merge modal and the merge with Bob, either way round,
-     * hide, show and the discard as a bad match all answer 404, and no answer carries Eve's name. Neither Eve's repository nor
-     * Bob's changes.
+     * For an unknown Person ID and for Eve's, the choose-cover modal, the cover image, the name view and editor, the merge modal
+     * and the merge with Bob either way round, hide, show and the bad-match discard are all 404s without Eve's name. Neither
+     * repository changes.
      *
      * Edge cases:
      *
@@ -1264,13 +1251,12 @@ import altitude.core.models.Person
     /**
      * Setup:
      *
-     * A logged-in user's repository with a Person named "Bob" with Faces on two assets, the first his cover and the second's
-     * asset recycled and marked for purging, and a Person named "Ann" with a Face of her own.
+     * A logged-in user's repository with a Person named "Bob" with two Faces, the first his cover and the second on an asset
+     * marked for purging, and a Person named "Ann" with a Face.
      *
      * Assertions:
      *
-     * Setting Bob's cover image to Ann's Face answers a plain-text 400 saying the Face is not his, and to his Face on the asset
-     * marked for purging a 400 saying the Face is on an asset being purged. His cover is still his first Face.
+     * Setting Bob's cover to Ann's Face, or to his Face being purged, is a plain-text 400 with its own message. His cover stays.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -1320,8 +1306,7 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * The choose-cover modal for Bob offers his Faces on the first and third assets, and not his Face on the asset marked for
-     * purging, which could not be set as his cover.
+     * The choose-cover modal for Bob offers his Faces on the first and third assets, not the one being purged.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId

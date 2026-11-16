@@ -1,17 +1,13 @@
 /**
- * The Edit's geometry (`docs/image-edits.md`, **Geometry**), as the server's
- * renderer has it (`util/EditRenderer.scala`), and the Crop tool's rules on top of it. DOM-free, so
- * the parity tests run it unchanged under Node (`scripts/test-js/edit.test.mjs`, against
- * `test/resources/edit/vectors.json`).
+ * The Edit's geometry, as the server's renderer has it (`util/EditRenderer.scala`), and the Crop
+ * tool's rules on top of it. DOM-free, so the parity tests run it under Node.
  *
- * Coordinates are continuous pixels: the top-left corner at (0, 0), y down, a pixel's center at
- * +0.5; angles are positive clockwise. Everything starts from the **upright original**, the original
- * turned by its EXIF orientation as a browser shows it, W₀ × H₀. Step 1 turns it clockwise by
- * `rotate` and mirrors it into the **frame**, W × H; step 2 turns the frame by Straighten about
- * its center, keeping its size; step 3 crops a
- * fraction of the frame, giving the **edited size**. A crop rectangle is `{x, y, w, h}` in
- * fractions of the frame; the image's outline in the frame is a quadrilateral of fractions, top
- * left, top right, bottom right, bottom left.
+ * Coordinates are continuous pixels: (0, 0) top left, y down, a pixel's center at +0.5; angles are
+ * positive clockwise. The **upright original** (W₀ × H₀) is the original turned by its EXIF
+ * orientation. Step 1 turns it by `rotate` and mirrors it into the **frame** (W × H); step 2 turns
+ * the frame by Straighten about its center, keeping its size; step 3 crops it to the **edited
+ * size**. A crop is `{x, y, w, h}` in fractions of the frame; the image's outline is a quadrilateral
+ * of fractions, clockwise from the top left.
  */
 
 /** The narrowest and shortest crop, as a fraction of the frame (`EditRecipe.MIN_CROP`) */
@@ -20,23 +16,20 @@ export const MIN_CROP = 0.01
 // How far a crop may stray past the frame's edges in floating point and still count as inside
 const EPSILON = 1e-6
 
-/** The crop of the whole frame, which an Edit with no crop shows */
 export const WHOLE_FRAME = Object.freeze({ x: 0, y: 0, w: 1, h: 1 })
 
-/** The value held to [min, max] (the Edit's modules share it) */
 export function clamp(value, min = 0, max = 1) {
     return value < min ? min : value > max ? max : value
 }
 
-/** The Edit's crop, or the whole frame when it has none */
 export function cropOf(recipe) {
     return recipe.crop ?? WHOLE_FRAME
 }
 
 /**
- * The region of a `width` × `height` output that the Edit's effects are sized from and laid over (Clarity's and Sharpen's
- * blurs, the vignette, the grain), and that `readHistogram` reads, in output pixels: the whole output, or, drawing the whole
- * frame (the Crop tool), the crop in it, so the effects inside the crop are those Done draws, scaled with the output
+ * The region of the output, in output pixels, that the effects (blurs, vignette, grain) are sized from and that
+ * `readHistogram` reads: the whole output, or the crop in it when drawing the whole frame (the Crop tool), so the effects
+ * inside the crop match the final render
  */
 export function effectRegion(recipe, { width, height, wholeFrame = false }) {
     if (!wholeFrame) {
@@ -53,7 +46,7 @@ export function effectRegion(recipe, { width, height, wholeFrame = false }) {
     }
 }
 
-/** The frame's size, W × H: the upright original's, swapped for a quarter turn */
+/** The frame's size: the upright original's, swapped for a quarter turn */
 export function frameSize(uprightWidth, uprightHeight, recipe) {
     return recipe.rotate === 90 || recipe.rotate === 270
         ? { width: uprightHeight, height: uprightWidth }
@@ -96,9 +89,8 @@ export function turnBack(x, y, uprightWidth, uprightHeight, recipe) {
 }
 
 /**
- * `turnBack` as an affine map from a frame point in pixels to the upright original in fractions of
- * its size (a texture coordinate of it): `[a, b, c, d, e, f]`, the point (x, y) going to
- * (a·x + b·y + c, d·x + e·y + f)
+ * `turnBack` as an affine map from frame pixels to a texture coordinate of the upright original:
+ * `[a, b, c, d, e, f]` maps (x, y) to (a·x + b·y + c, d·x + e·y + f)
  */
 export function frameToUpright(uprightWidth, uprightHeight, recipe) {
     const [ox, oy] = turnBack(0, 0, uprightWidth, uprightHeight, recipe)
@@ -115,11 +107,10 @@ export function frameToUpright(uprightWidth, uprightHeight, recipe) {
 }
 
 /**
- * Step 2 on the W × H frame, its constants worked out once: in normalized coordinates around the
- * center (u = (p − c) / s, s half the long side), the point is turned by Straighten, R(θ)·u, and
- * scaled back. `inverse` is what sampling reads: R(−θ)·q, scaled back. `covers` says whether a
- * point of the warped frame shows the image: its source lies within the frame, edges included; the
- * rendered image is opaque exactly there.
+ * Step 2 on the W × H frame, its constants worked out once: around the center, normalized by half
+ * the long side (u = (p − c) / s), the point is turned R(θ)·u and scaled back; `inverse`, which
+ * sampling reads, is R(−θ). `covers` says whether a warped point's source lies within the frame,
+ * edges included: the rendered image is opaque exactly there.
  */
 export function createWarp(width, height, recipe) {
     const s = Math.max(width, height) / 2
@@ -151,7 +142,6 @@ export function createWarp(width, height, recipe) {
     }
 
     return {
-        // Whether the warp moves any point: Straighten
         moves: recipe.straighten !== 0,
         forward,
         inverse,
@@ -161,20 +151,15 @@ export function createWarp(width, height, recipe) {
     }
 }
 
-/** Step 2 for a point of the W × H frame */
 export function warp(x, y, width, height, recipe) {
     return createWarp(width, height, recipe).forward(x, y)
 }
 
-/** The inverse of `warp`, which sampling reads */
 export function unwarp(x, y, width, height, recipe) {
     return createWarp(width, height, recipe).inverse(x, y)
 }
 
-/**
- * The image's outline in the frame: the four corners of the turned image (top left, top right,
- * bottom right, bottom left) through `warp`, as fractions of the frame's width and height
- */
+/** The image's outline in the frame: the turned image's corners through `warp`, as fractions of the frame */
 export function outline(width, height, recipe) {
     const { forward } = createWarp(width, height, recipe)
     return [
@@ -189,9 +174,9 @@ export function outline(width, height, recipe) {
 }
 
 /**
- * Whether the point (fractions of the frame) lies inside the convex quadrilateral `quad`, edges
- * included: the sign of the cross product is the same along every edge. `width` and `height`
- * scale the fractions before the test (1 by default, which every caller leaves).
+ * Whether the point lies inside the convex quadrilateral `quad`, edges included: the cross product
+ * has the same sign along every edge. `width` and `height` scale the fractions first; every caller
+ * leaves them at 1.
  */
 export function insideQuad(quad, x, y, width = 1, height = 1) {
     let sign = 0
@@ -215,9 +200,8 @@ export function insideQuad(quad, x, y, width = 1, height = 1) {
 }
 
 /**
- * Whether the crop rectangle is one the Edit may hold: at least the narrowest crop, within the
- * frame, and, when `quad` is given (the Edit keeps the crop inside the image), its four corners
- * inside the image's outline
+ * Whether the Edit may hold the crop: at least `MIN_CROP`, within the frame, and, given `quad`, its
+ * corners inside the image's outline
  */
 export function validRect(rect, quad = null) {
     if (rect.w < MIN_CROP || rect.h < MIN_CROP) {
@@ -251,10 +235,7 @@ function lerpRect(from, to, t) {
     }
 }
 
-/**
- * How far a move or a resize from `from` towards `to` may go: `to` when it is valid, else the
- * furthest valid rectangle on the way (found by halving), so a gesture stops at the outline
- */
+/** How far a move or resize towards `to` may go: `to` when valid, else the furthest valid rectangle on the way (by bisection) */
 export function limitTransition(from, to, quad = null) {
     if (validRect(to, quad)) {
         return to
@@ -286,7 +267,7 @@ function scaleAbout(rect, cx, cy, scale) {
 
 /**
  * The rectangle shrunk around its center only as much as it must be to be valid; around the
- * frame's center when no shrinking around its own makes it so (its center lies outside the image)
+ * frame's center when its own center lies outside the image
  */
 export function shrinkToValid(rect, quad = null) {
     if (validRect(rect, quad)) {
@@ -323,9 +304,8 @@ export function isPortrait(recipe, width, height) {
 }
 
 /**
- * The width over the height of the crop in pixels that the Edit's aspect lock asks for, or null when
- * it is Free: the frame's own for Original (turned when the lock's orientation is not the frame's),
- * and a ratio's, landscape or portrait
+ * The crop's pixel width over height that the aspect lock asks for, or null when Free; Original is
+ * the frame's own, inverted when the lock's orientation is not the frame's
  */
 export function aspectRatio(recipe, width, height) {
     if (recipe.aspect === "free") {
@@ -340,15 +320,12 @@ export function aspectRatio(recipe, width, height) {
     return portrait ? short / long : long / short
 }
 
-/** A pixel ratio as one of fractions of the frame: the crop's width fraction over its height fraction */
+/** A pixel ratio as a ratio of frame fractions */
 function fractionRatio(ratio, width, height) {
     return (ratio * height) / width
 }
 
-/**
- * The largest crop of the pixel `ratio` (the frame's own when null) centered on the frame, shrunk
- * to stay valid: the crop a fitted lock (`cropFitted`) re-fits to
- */
+/** The largest valid crop of the pixel `ratio` (the frame's own when null) centered on the frame */
 export function fitMaxCentered(ratio, width, height, quad = null) {
     const k = fractionRatio(ratio ?? width / height, width, height)
     let w = 1
@@ -387,10 +364,7 @@ export function rectWithRatioAround(rect, ratio, width, height, quad = null) {
     )
 }
 
-/**
- * The size of the edited image from the upright original's: the frame, then the crop's share of
- * it, rounded to whole pixels (a half up) and never less than one (`EditRecipe.editedSize`)
- */
+/** The edited size: the crop's share of the frame, rounded half up, at least one pixel (`EditRecipe.editedSize`) */
 export function editedSize(uprightWidth, uprightHeight, recipe) {
     const frame = frameSize(uprightWidth, uprightHeight, recipe)
     if (!recipe.crop) {
@@ -402,10 +376,7 @@ export function editedSize(uprightWidth, uprightHeight, recipe) {
     }
 }
 
-/**
- * A render's size: the edited size, its long edge brought down to `longEdge` when that is shorter
- * (null: the edited size), the short side in step and at least one pixel
- */
+/** A render's size: the edited size, its long edge brought down to `longEdge` when that is shorter */
 export function outputSize(editedWidth, editedHeight, longEdge = null) {
     const long = Math.max(editedWidth, editedHeight)
     if (longEdge === null || longEdge >= long) {
@@ -421,17 +392,15 @@ export function outputSize(editedWidth, editedHeight, longEdge = null) {
 }
 
 /**
- * A box of the upright original (`{x, y, width, height}` in its pixels: a Face's) as the edited
- * image shows it: its four corners and its center turned, mirrored and warped into the frame, and
- * taken into the crop. Answers the corners' bounding box as fractions of the edited image, cut to
- * it, or null when the box's center falls outside the crop, where its Face highlight is not drawn.
+ * A box of the upright original (a Face's, in pixels) mapped into the edited image: the bounding box
+ * of its mapped corners, in fractions of the edited image and cut to it, or null when the box's
+ * center falls outside the crop
  */
 export function mapBox(box, recipe, uprightWidth, uprightHeight) {
     const { width, height } = frameSize(uprightWidth, uprightHeight, recipe)
     const { forward } = createWarp(width, height, recipe)
     const crop = cropOf(recipe)
 
-    // A point of the upright original in fractions of the edited image
     function toEdited(x, y) {
         const [tx, ty] = turn(x, y, uprightWidth, uprightHeight, recipe)
         const [wx, wy] = forward(tx, ty)

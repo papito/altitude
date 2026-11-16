@@ -8,14 +8,12 @@ import altitude.core.dao.AlbumDao
 import altitude.core.models.Album
 
 /**
- * Albums are flat, repository-scoped lists of pointers to assets. Nothing here touches an asset: adding to, removing from, or
- * deleting an album changes membership rows only. The reverse direction lives in `LibraryService.recycleAssets`, which drops a
- * recycled asset from every album; purging deletes the asset row and the schema cascades the memberships.
+ * Nothing here touches an asset: album writes change membership rows only. `LibraryService.recycleAssets` drops a recycled asset
+ * from every album, and purging cascades the memberships.
  */
 class AlbumService(val app: Altitude) extends BaseService[Album]:
   override protected val dao: AlbumDao = app.DAO.album
 
-  /** An album name as stored, once it passes the name rule (`Validators.validName`) */
   private def validName(name: String): String =
     Validators.validName(name, Api.Field.Album.NAME, Api.Constraints.MAX_ALBUM_NAME_LENGTH)
 
@@ -33,7 +31,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
   def rename(albumId: String, newName: String): Album =
     txManager.withTransaction {
       val album: Album = getById(albumId)
-      // The copy validates the new name the same way a new album is validated
+      // The new name passes the same rule as a new album's, and the copy derives its name key
       val renamed = album.copy(name = validName(newName.trim))
 
       logger.debug(s"Renaming album [${album.name}] to [${renamed.name}]")
@@ -45,7 +43,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
     if assetIds.isEmpty then return 0
 
     txManager.withTransaction {
-      // Fails with NotFoundException for an unknown album, or another repository's
+      // Scopes the album to the repository
       getById(albumId)
 
       val added = dao.addAssets(albumId, assetIds)
@@ -53,10 +51,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
       added
     }
 
-  /**
-   * Creates the album `name` holding `assetIds`, in one transaction: a duplicate name fails with `DuplicateException` before any
-   * membership is written, and a failed add leaves no empty album behind. Returns the album and how many assets it added.
-   */
+  /** In one transaction, so a failed add leaves no empty album behind; returns the album and how many assets it added */
   def addAssetsToNewAlbum(name: String, assetIds: Set[String]): (Album, Int) =
     txManager.withTransaction {
       val album: Album = add(name)
@@ -69,7 +64,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
     if assetIds.isEmpty then return 0
 
     txManager.withTransaction {
-      // Fails with NotFoundException for an unknown album, or another repository's
+      // Scopes the album to the repository
       getById(albumId)
 
       val removed = dao.removeAssets(albumId, assetIds)
@@ -96,7 +91,6 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
       dao.getAssetsInAnyAlbum(assetIds)
     }
 
-  /** The albums holding the asset, by name, for the Detail panel; see `AlbumDao.getAlbumsOfAsset` */
   def getAlbumsOfAsset(assetId: String): List[Album] =
     txManager.asReadOnly {
       dao.getAlbumsOfAsset(assetId)

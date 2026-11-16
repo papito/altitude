@@ -60,7 +60,7 @@ object CaptureDateResolver:
     exif("Date/Time Original", "Sub-Sec Time Original", ExifOriginal) ++
       exif("Date/Time Digitized", "Sub-Sec Time Digitized", ExifDigitized) ++
       tag("Exif IFD0", "Date/Time", ExifFileChange) ++
-      // An XMP date is ISO 8601 and may carry its fraction itself, which spaces the frames of a burst as the EXIF subsecond tag does
+      // An XMP date is ISO 8601 and may carry its own fraction, which orders a burst as the EXIF subsecond tag does
       List("xmp:CreateDate", "photoshop:DateCreated", "exif:DateTimeOriginal", "xmp:ModifyDate").flatMap(
         key => parsed(field("XMP", key), XmpCreateDate, keepFraction = true)) ++
       iptc("Date Created", "Time Created") ++ iptc("Digital Date Created", "Digital Time Created") ++
@@ -79,9 +79,9 @@ object CaptureDateResolver:
         GpsTimestamp) ++ filenameCandidates(inputs.fileName)
 
   /**
-   * The MP4 / QuickTime creation time, a UTC instant that metadata-extractor describes in the JVM's zone: the track directories
-   * spell it with a numeric offset, the container directories with a zone name. Either is turned back into the UTC wall clock, so
-   * the stored value does not depend on the server's zone. The track directories come first for that reason.
+   * The MP4 / QuickTime creation time: a UTC instant metadata-extractor describes in the JVM's zone, with a numeric offset in the
+   * track directories (tried first) and a zone name in the container ones. Either is turned back into the UTC wall clock, so the
+   * stored value does not depend on the server's zone.
    */
   private def containerCreationTime(field: (String, String) => Option[String]): List[CaptureDate] =
     List("MP4 Video", "QuickTime Video", "MP4", "QuickTime").flatMap {
@@ -132,7 +132,7 @@ object CaptureDateResolver:
     // Dashed timestamp: an optional app prefix, YYYY-MM-DD, a separator or " at ", then the time with its parts dashed, dotted or
     // coloned, on a 12-hour clock when AM or PM follows (2024-07-04 08.09.10, Screenshot 2024-07-04 at 08.09.10,
     // Screen Shot 2024-07-04 at 8.09.10 AM, Screenshot_2024-07-04-08-09-10, photo_2024-07-04_08-09-10,
-    // WhatsApp Image 2024-07-04 at 08.09.10). Since Ventura, macOS writes a narrow no-break space (U+202F) before AM or PM
+    // WhatsApp Image 2024-07-04 at 08.09.10)
     NameShape(
       s"""(?i)^(?:(?:Screenshot|Screen Shot|WhatsApp Image|photo|Image)[_ -]?)?(\\d{4})-(\\d{2})-(\\d{2})(?: at |[ _T-])(\\d{1,2})[-.:](\\d{2})[-.:](\\d{2})(?:$Meridiem)?$Boundary""".r,
       m =>
@@ -140,7 +140,7 @@ object CaptureDateResolver:
           hour => iso(m.group(1).toInt, m.group(2).toInt, m.group(3).toInt, hour, m.group(5).toInt, m.group(6).toInt))
     ),
     // Apple export: Photo, Image or Video, the English month abbreviation, the day, the year, a comma, then the 12-hour time with
-    // its parts spaced (Photo Dec 24 2023, 2 55 06 PM); macOS may write a narrow no-break space (U+202F) before AM or PM here too
+    // its parts spaced (Photo Dec 24 2023, 2 55 06 PM)
     NameShape(
       s"""(?i)^(?:Photo|Image|Video) (${Months.mkString("|")}) (\\d{1,2}) (\\d{4}), (\\d{1,2}) (\\d{2}) (\\d{2})$Meridiem$Boundary""".r,
       m =>
@@ -154,8 +154,8 @@ object CaptureDateResolver:
               m.group(5).toInt,
               m.group(6).toInt))
     ),
-    // Epoch: FB_IMG_ and the instant in milliseconds (13 digits) or seconds (10), read as its UTC wall clock, as the container and
-    // GPS rungs are, whatever the JVM's zone; the milliseconds are dropped
+    // Epoch: FB_IMG_ and the instant in milliseconds (13 digits) or seconds (10), read as its UTC wall clock like the container
+    // and GPS rungs, whatever the JVM's zone; the milliseconds are dropped
     NameShape(
       s"""^FB_IMG_(\\d{13}|\\d{10})$Boundary""".r,
       m =>

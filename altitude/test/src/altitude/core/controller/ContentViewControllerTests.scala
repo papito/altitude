@@ -55,8 +55,8 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * A preview request without a cookie is redirected to the login page. With the cookie, the user's own preview is served, and
-     * the other user's preview is a 404, as for any foreign entity.
+     * Without a cookie, a preview request is redirected to login. With it, the user's own preview is served and the other user's
+     * is a 404.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -91,14 +91,12 @@ import altitude.core.routes.decorators
     /**
      * Setup:
      *
-     * A logged-in user's repository, and a second repository of theirs (they hold a grant in both) holding an imported image with
-     * a Person's Face on it, its files and the Face's images stored.
+     * A logged-in user's repository, and a second repository of theirs holding an image with a Person's Face, its files stored.
      *
      * Assertions:
      *
-     * Asked for through the first repository, the image's original, its preview and the Face's image are plain-text 404s, with
-     * the session's cookie and by a URL the server signed for that path alike, and none serves a byte of the other repository's.
-     * Through the second repository the three are served.
+     * Through the first repository, the original, the preview and the Face's image are plain-text 404s, with the cookie and by a
+     * signed URL alike. Through the second they are served.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -146,8 +144,8 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * An item ID that is not a UUID is a plain-text 400 for every data type. A UUID that names no asset or face, a preview or an
-     * original whose file is gone, and an unknown data type are plain-text 404s. None of them carries a Cache-Control.
+     * A non-UUID item ID is a plain-text 400 for every data type. An unknown UUID, a preview or original whose file is gone, and
+     * an unknown data type are plain-text 404s. None carries a Cache-Control.
      *
      * Edge cases:
      *
@@ -196,9 +194,9 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * The preview, the face and the file content routes all answer with a private, year-long, immutable Cache-Control, with
-     * nosniff, and with a sandbox Content-Security-Policy: the bytes under a content URL never change, and an original is a
-     * user's upload served on the application's origin.
+     * The preview, face and file routes answer with a private, year-long, immutable Cache-Control, since the bytes under a
+     * content URL never change, and with nosniff and a sandbox CSP, since an original is a user's upload served on the app's
+     * origin.
      *
      * Edge cases:
      *
@@ -245,9 +243,8 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * The whole original and a 206 window of it answer with an inline Content-Disposition carrying the file name twice: as ASCII,
-     * with every other character, the quote and the backslash replaced, and as RFC 5987 UTF-8, percent-encoded. The preview and
-     * the face carry no Content-Disposition.
+     * The whole original and a 206 window carry an inline Content-Disposition naming the file twice: as ASCII with non-ASCII
+     * characters, the quote and the backslash replaced, and as RFC 5987 UTF-8. The preview and the face carry none.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -287,13 +284,13 @@ import altitude.core.routes.decorators
     /**
      * Setup:
      *
-     * A user's repository with people/meme-ben.jpg imported, in which the import detects a face, each item requested by a URL
-     * signed by the server's signer, without a cookie, and by its plain URL with the user's cookie.
+     * A user's repository with people/meme-ben.jpg imported, in which the import detects a face. Each item is requested by a
+     * signed URL without a cookie, and by its plain URL with the cookie.
      *
      * Assertions:
      *
-     * The preview, the face, the whole original and a 206 window of it are served to the signed request, with the status, the
-     * bytes and the content headers (type, length, range, caching, nosniff, sandbox, disposition) of the logged-in request.
+     * The preview, the face, the whole original and a 206 window are served to the signed request with the same status, bytes and
+     * content headers as the logged-in one.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -347,8 +344,8 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * The signed URL with its expiry moved a second, with one character of its signature changed, and one signed with an expiry
-     * already past are each a plain-text 403 with no Cache-Control, all with one body, so a refusal does not say which it was.
+     * A moved expiry, a changed signature character and a past expiry are each a plain-text 403 with no Cache-Control, all with
+     * one body, so a refusal does not say which it was.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -388,8 +385,8 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * The signature's exp and sig on the second asset's preview path, and on the first asset's file path, are 403s without a
-     * cookie: the signature covers the path, which names one item of one data type.
+     * The signature's exp and sig on the second asset's preview path, or on the first asset's file path, are 403s: the signature
+     * covers the path, which names one item of one data type.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -418,13 +415,13 @@ import altitude.core.routes.decorators
     /**
      * Setup:
      *
-     * A logged-in user's repository with images/1.jpg imported, its preview requested with only the exp, and with only the sig,
-     * of a valid signed URL.
+     * A logged-in user's repository with images/1.jpg imported, its preview requested with only the exp, then only the sig, of a
+     * valid signed URL.
      *
      * Assertions:
      *
-     * Without a cookie, each is redirected to the login page, as an unsigned request is. With the cookie, each is served: the
-     * lone parameter is not an unknown argument.
+     * Without a cookie each is redirected to login, as an unsigned request is. With the cookie each is served: the lone parameter
+     * is not an unknown argument.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -460,7 +457,7 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * The signed URL, without a cookie, is a plain-text 404, as a request for a repository that does not exist is with a login.
+     * The signed URL, without a cookie, is a plain-text 404.
      */
     withServer(App) {
       host =>
@@ -480,9 +477,8 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * A valid signed URL for the second user's preview is served with the first user's cookie, which alone would be a 404 there.
-     * The first user's own preview, with one character of the signature changed, is a 403 with their cookie, which alone would
-     * serve it.
+     * A valid signed URL for the second user's preview is served despite the first user's cookie, which alone would be a 404. The
+     * first user's own preview with a changed signature is a 403 despite their cookie, which alone would serve it.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -515,13 +511,12 @@ import altitude.core.routes.decorators
     /**
      * Setup:
      *
-     * Anonymous preview requests whose repository ID carries a percent-encoded CR LF and a fake log line, one with a signature
-     * that does not match and one with an expiry already past.
+     * Anonymous preview requests whose repository ID carries a percent-encoded CR LF and a fake log line, one with a wrong
+     * signature and one with a past expiry.
      *
      * Assertions:
      *
-     * Both are 403s, and the decorators log each refusal with the path still percent-encoded, so nothing they log carries a line
-     * break.
+     * Both are 403s, and each refusal is logged with the path still percent-encoded, so no log line carries a line break.
      */
     withServer(App) {
       host =>
@@ -550,7 +545,7 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * The preview is sent uncompressed whether or not the client accepts gzip: an image is deflated already.
+     * The preview is sent uncompressed whatever the client accepts: an image is compressed already.
      *
      * Edge cases:
      *
@@ -585,11 +580,11 @@ import altitude.core.routes.decorators
     /**
      * Setup:
      *
-     * A logged-in user's repository, its search results fragment requested with gzip and identity Accept-Encoding headers.
+     * A logged-in user's repository.
      *
      * Assertions:
      *
-     * The HTML fragment is gzipped for a client that accepts gzip, and sent uncompressed for one that accepts identity only.
+     * The search results fragment is gzipped for a client that accepts gzip, and plain for one that accepts identity only.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -621,8 +616,8 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * The file content route sends the stored original byte for byte, with its full length, typed as the JPEG it was detected as,
-     * and offers byte ranges.
+     * The file route sends the stored original byte for byte, with its full length, typed as the detected JPEG, and offers byte
+     * ranges.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -653,13 +648,13 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * A satisfiable range is a 206 carrying exactly that window of the original, with a matching Content-Range and length and no
-     * compression. A range that starts at or past the end is a 416 naming the file's size.
+     * A satisfiable range is a 206 of exactly that window, with a matching Content-Range and length and no compression. A range
+     * starting at or past the end is a 416 naming the file's size.
      *
      * Edge cases:
      *
-     * An open-ended range, a suffix range of the last bytes, a start exactly at the file's size, and positions too long for a
-     * Long - a start that is past the end, and a suffix that covers the whole file.
+     * An open-ended range, a suffix range, a start exactly at the size, and positions too long for a Long: such a start is past
+     * the end, and such a suffix covers the whole file.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -728,14 +723,14 @@ import altitude.core.routes.decorators
     /**
      * Setup:
      *
-     * A logged-in user's repository with an imported image saved twice, each save rendered, so its edited images are revision
-     * 2's; then its Edit reverted to the identity and rendered, so it has none.
+     * A logged-in user's repository with an image saved and rendered twice, so its edited images are revision 2's; then its Edit
+     * reverted to the identity and rendered.
      *
      * Assertions:
      *
-     * `preview?v=2` and `display?v=2` serve the edited images as WebP; the Preview without `v` is the original's. Each carries
-     * the content headers as every content answer does: cached for good, nosniff, sandboxed. Once the Edit is the identity,
-     * `preview?v=2` and `display?v=2` are plain-text 404s, never cached, while the Preview without `v` is still the original's.
+     * `preview?v=2` and `display?v=2` serve the edited images as WebP, and the Preview without `v` the original's, each with the
+     * content headers. Once the Edit is the identity, the `v=2` requests are plain-text 404s, never cached, and the Preview
+     * without `v` is still the original's.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -786,14 +781,13 @@ import altitude.core.routes.decorators
     /**
      * Setup:
      *
-     * A logged-in user's repository with an imported image saved twice, each save rendered, so its edited images are revision
-     * 2's; `v=1` asked for with the user's cookie and, with no cookie, by a URL signed for the item.
+     * A logged-in user's repository with an image saved and rendered twice, so its edited images are revision 2's. `v=1` is asked
+     * for with the cookie, and by a signed URL without one.
      *
      * Assertions:
      *
-     * `preview?v=1` and `display?v=1` are a 302 to the same item at `v=2`, with `Cache-Control: no-store`, so the browser never
-     * keeps the current bytes under a revision that named others; the signed request's redirect keeps its `exp` and `sig`, and
-     * following it serves the current image with the content headers, no cookie needed.
+     * `preview?v=1` and `display?v=1` are a `no-store` 302 to `v=2`, so the browser never keeps current bytes under an older
+     * revision. The signed redirect keeps its `exp` and `sig`, and following it serves the current image without a cookie.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -837,9 +831,9 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * The unedited image's `display?v=1` and `preview?v=1` are plain-text 404s, and so are the edited image's `preview?v=2` and
-     * `display?v=2`: a revision not used yet may name other bytes later, so it is never answered, nor cached. A `v` that is not
-     * digits, for a Preview or a Display image, and a `display` with no `v` are plain-text 400s saying why, never cached.
+     * `v=1` of the unedited image and `v=2` of the edited one are plain-text 404s: a revision not used yet may name other bytes
+     * later, so it is never answered or cached. A non-digit `v`, and a `display` with no `v`, are plain-text 400s saying why,
+     * never cached.
      *
      * Edge cases:
      *
@@ -884,8 +878,7 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * The Guest gets the sorted asset's `preview?v=1` and `display?v=1`, and a 404 for the triaged one's, as for its original's
-     * Preview.
+     * The Guest gets the sorted asset's `preview?v=1` and `display?v=1`, and a 404 for the triaged one's.
      */
     val library = testContext.persistRepository()
     val repoId = library.persistedId
@@ -959,7 +952,7 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * The face content route, which person covers are drawn from, serves that face's display image as a PNG.
+     * The face route, which person covers are drawn from, serves the face's image as a PNG.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId

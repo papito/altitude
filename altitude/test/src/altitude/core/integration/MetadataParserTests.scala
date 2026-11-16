@@ -92,8 +92,8 @@ import altitude.core.util.{ CaptureDateInputs, CaptureDateResolver, GeoLocationR
     /**
      * Setup:
      *
-     * A random PNG carrying, in an international text chunk, a generated XMP packet with `exif:DateTimeOriginal`. The packet is
-     * generated because the Fuji JPEG fixture's XMP has duplicate `exif:Orientation` fields, which the library rejects.
+     * A random PNG carrying, in an international text chunk, an XMP packet with `exif:DateTimeOriginal`. The packet is generated
+     * because the Fuji JPEG fixture's XMP has duplicate `exif:Orientation` fields, which the library rejects.
      *
      * Assertions:
      *
@@ -149,8 +149,7 @@ import altitude.core.util.{ CaptureDateInputs, CaptureDateResolver, GeoLocationR
      *
      * Edge cases:
      *
-     * A longitude between -1 and 0 (-0.1276), whose DMS description drops the sign so only the W ref carries it; coordinates
-     * without refs and 0/0 resolve to nothing.
+     * A longitude between -1 and 0, whose sign only the W ref carries; coordinates without refs and 0/0 resolve to nothing.
      */
     def resolved(fixture: String): Option[(Double, Double)] = {
       val imported = IntegrationTestUtil.getImportAsset(s"images/exif/$fixture.jpg")

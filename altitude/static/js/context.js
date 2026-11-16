@@ -2,13 +2,9 @@ import { Alpine } from "./lib/alpine.esm.min.js"
 import { Const } from "./constants.js"
 
 /**
- * The context of the current page: the repository being browsed and the user's grid settings.
- *
- * The page template sets the repository once, at load, from the request:
- *
- *     window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
- *
- * It cannot change without a full page load, so no partial needs to set it again.
+ * The context of the current page: the repository being browsed and the user's grid settings. The
+ * page template sets the repository once at load (`window.ctx.setRepoId`); it cannot change without a
+ * full page load, so no partial sets it again.
  */
 export const context = {
     setRepoId: function (repoId) {
@@ -20,10 +16,8 @@ export const context = {
     },
 
     /**
-     * Whether the account holds any one of the Permissions (`Const.permission`) in this Library, as
-     * the main page's body lists them (`data-app-permissions`, from the login token): what a control
-     * the scripts build or bind follows, as the templates render theirs. A page without the list
-     * holds none.
+     * Whether the account holds any of the Permissions (`Const.permission`) in this Library, as the
+     * body's `data-app-permissions` lists them; a page without the list holds none
      */
     holds: function (...anyOf) {
         const held = (document.body.dataset.appPermissions ?? "").split(" ")
@@ -31,18 +25,16 @@ export const context = {
     },
 
     /**
-     * Whether the account may recycle what the page's view shows, as the main page's body says it
-     * (`data-app-recycles`, from `RequestContext.recyclesIn`: Recycle in Browse, a Curate Permission
-     * in Triage, nothing in the Trash), so the rule is the server's alone
+     * Whether the account may recycle what the view shows, as the body's `data-app-recycles` says
+     * (`RequestContext.recyclesIn`), so the rule stays the server's alone
      */
     recyclesHere: function () {
         return document.body.hasAttribute("data-app-recycles")
     },
 
     /**
-     * Whether the account sees triaged items: a member, as the nav's advanced search panel says it
-     * on every page with the nav (`data-app-sees-triaged`, from `RequestContext.isMember`). A Guest
-     * sees Browse alone and is refused the triage filter, so nothing asks for it on its behalf.
+     * Whether the account sees triaged items (a member), as the nav's search panel says. A Guest is
+     * refused the triage filter, so nothing asks for it on their behalf.
      */
     seesTriaged: function () {
         return (
@@ -53,30 +45,25 @@ export const context = {
     },
 
     /**
-     * The folder currently being browsed, or null when no folder filter is active. Read from the
-     * search parameters rather than the address bar, which only catches up once the server has
-     * replied.
+     * The folder being browsed, or null. Read from the search parameters rather than the address bar,
+     * which only catches up once the server has replied.
      */
     getCurrentFolderId: function () {
         return Alpine.store(Const.state.searchParams).folderId
     },
 
-    /** The album whose assets are being browsed, or null when no album filter is active */
     getCurrentAlbumId: function () {
         return Alpine.store(Const.state.searchParams).albumId
     },
 
-    /**
-     * The Location whose assets are being browsed, or null when no Location filter is active or an
-     * advanced search names several
-     */
+    /** The Location being browsed, or null, also when an advanced search names several */
     getCurrentLocationId: function () {
         return Alpine.store(Const.state.searchParams).viewedLocationId()
     },
 
     /**
-     * Seeds the grid-visible metadata fields from localStorage, where they are kept as a JSON array
-     * of field names. A value saved by an earlier version as a comma-separated list still loads.
+     * Seeds the grid's metadata fields from localStorage, kept as a JSON array of field names; an
+     * older comma-separated value still loads
      */
     loadMetadataFieldViewSettingsFromStore: function () {
         const saved = localStorage.getItem(Const.localStore.gridMetadataFields)

@@ -7,12 +7,7 @@ import altitude.core.util.JsonCodec
 import altitude.core.util.JsonCodec.--
 import altitude.core.util.JsonCodec.given
 
-/**
- * All asset-related metadata.
- *
- * Since we do not store actual binary data in a DB, the data itself is only passed via AssetWithData. This [underlying] class is
- * for passing around asset metadata.
- */
+/** An asset's metadata. The file itself is never in the database and travels in [[AssetWithData]]. */
 object Asset:
   given JsonCodec.ReadWriter[Asset] = JsonCodec.macroRW
   given Conversion[ujson.Value, Asset] = json => JsonCodec.read[Asset](json)
@@ -37,7 +32,7 @@ case class Asset(
     id: Option[String] = None,
     // The account that owns the asset: its importer, until that account is deleted and the asset moves to the deleting Admin
     ownerUserId: String,
-    // The importer record: the account that imported the asset, as it was then or as its last edit left it
+    // The account that imported the asset, as it was then or as its last edit left it
     originalOwner: AccountSnapshot,
     assetType: AssetType,
     fileName: String,
@@ -63,16 +58,14 @@ case class Asset(
     imageQuality: Option[ImageQuality] = None,
     // The DCT perceptual hash of a still image; None as for the Image quality
     perceptualHash: Option[PerceptualHash] = None,
-    // The Scene embeddings of a still image, one per Scene model; None per model for a Video, an animated image, or a still
-    // image that model could not embed. Bulky, so no general read of an asset carries them: only the Sequence candidates do
+    // One per Scene model, for a still image the model could embed. Bulky, so only the Sequence candidates' read carries them
     sceneEmbeddings: SceneEmbeddings = SceneEmbeddings(),
-    // The Histogram of a still image, measured with the Image quality; None as for it. Bulky, so no general read of an asset
-    // carries it: only Curation's read of a set's frames does
+    // Measured with the Image quality; None as for it. Bulky, so only Curation's read of a set's frames carries it
     histogram: Option[Histogram] = None,
-    // The Sequence the image is in while in triage: the id its members share; None otherwise
+    // The Sequence the image is in while in triage; None otherwise
     sequenceId: Option[String] = None,
-    // The revision of the asset's edited images (its Edit rendered: the edited Preview and the Display image), which their URLs
-    // carry as a cache key; 0 when it has none, so the original's Preview and file are shown
+    // The revision of the asset's edited images (the edited Preview and Display image), their URLs' cache key; 0 when it has
+    // none, so the original's are shown
     editRev: Int = 0,
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)
@@ -81,8 +74,8 @@ case class Asset(
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   /**
-   * The asset as the browser is sent it: [[toJson]] without its owner and its importer record, which name an account (its ID, and
-   * its name, username and email) to anyone who can see the Library, and which no page reads
+   * [[toJson]] for the browser, without the owner and importer record: no page reads them, and they would expose an account to
+   * anyone who can see the Library
    */
   lazy val toBrowserJson: ujson.Obj = toJson -- (FieldConst.Asset.ORIGINAL_OWNER, FieldConst.Asset.OWNER_USER_ID)
 

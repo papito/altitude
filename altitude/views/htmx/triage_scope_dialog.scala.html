@@ -4,13 +4,9 @@
 
 @(scope: TriageScope)
 
-@* The scope dialog (GET /htmx/triage/r/:repoId/dialogs/scope): what a click on a folder, a Person or a Location of the Triage
-   explorer shows when it does not search, a popover dialog anchored to the clicked control (the request names it in
-   `data-app-dialog-anchor`), titled by the name of what it describes. A folder holds no triaged asset, so it is described by its
-   Browse count, with Quick view, which loads into the general modal host and so takes this dialog's place. A Person or a
-   Location with no triaged assets says so. "Show … in new tab" opens Browse scoped to it, with Browse's defaults, in a new tab;
-   a folder or a Location with no assets at all offers Close alone. The bare x-data is the scope Close's Alpine handler needs:
-   the popover host has none. *@
+@* What a click on a folder, a Person or a Location of the Triage explorer shows when it does not search. A folder holds no
+   triaged asset, so it is described by its Browse count, with Quick view, which takes this dialog's place in the general
+   modal host. The bare x-data is the scope Close's Alpine handler needs: the popover host has none. *@
 
 @repoId = @{ RequestContext.getRepository.persistedId }
 

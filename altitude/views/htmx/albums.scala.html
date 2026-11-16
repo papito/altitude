@@ -2,12 +2,11 @@
 
 @includes.html.cannot_organize("albums")
 
-@* Hosts for the two add controls, built by js/common/album-list.js; each opens a popover dialog.
-   The renderer shows one or the other: the top button normally, the centered one while there are no albums; both stay hidden
-   until the list has loaded *@
+@* Hosts for the add controls, built by js/common/album-list.js: the top one normally, the centered one while there are no
+   albums; both stay hidden until the list has loaded *@
 <div id="albumActions" hidden></div>
 
 <div id="noAlbums" hidden></div>
 
-@* Rendered client-side by js/common/album-list.js once the tab has settled (js/fragments/explorer.js) *@
+@* Rendered client-side by js/common/album-list.js once the tab has settled *@
 <div id="albumList" class="album-list" data-app-fragment="album-list"></div>

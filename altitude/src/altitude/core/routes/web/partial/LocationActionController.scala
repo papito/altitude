@@ -104,7 +104,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
         json(fields.LONGITUDE).str.toDouble,
         optional(json, fields.CATEGORY_ID)
       )
-      // The list expands the category the Location went into, so the client needs to know which one (null at the top level)
+      // The client expands the category the Location went into (null at the top level)
       dialogSuccessResponse(ujson.Obj(fields.CATEGORY_ID -> location.categoryId.fold[ujson.Value](ujson.Null)(ujson.Str(_))))
     }
 
@@ -196,7 +196,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
       json
     )
 
-  /** Both model violations and duplicate names are field errors; only a successful mutation completes the dialog. */
+  /** Every refusal is a field error; only a success completes the dialog */
   private def submit(render: Map[String, String] => Html, operationField: String)(action: => Any): Response[String] =
     respond(render, operationField) {
       action

@@ -1,20 +1,20 @@
 package altitude.core.models
 
 /**
- * A Person on the People tab, with the number the tab shows for them: what clicking that Person finds. It stands apart from
- * `Person.numOfFaces`, the count over every asset outside the trash, which `Person.isMatched` and the People buckets read.
+ * A Person on the People tab with the count it shows: what clicking that Person finds. It differs from `Person.numOfFaces`, the
+ * count over every asset outside the trash.
  */
 case class ListedPerson(person: Person, visibleCount: Int)
 
 /**
- * The assets out of the trash that a listed Person's number counts: the sorted ones, as the repository view shows them while
- * triaged items are hidden; the triaged ones, as the Triage view does; or both, the repository view with the triaged items shown.
+ * The assets out of the trash that a listed Person's count covers: sorted ones (triaged items hidden), triaged ones (the Triage
+ * view), or both
  */
 enum CountedAssets:
   case Sorted, Triaged, All
 
 /**
- * A pane of the People tab: the people it lists, and whether its buckets hold people none of whom is listed, every one of them
- * having only triaged assets while triaged items are hidden, so that its empty line can say so.
+ * A pane of the People tab. `leftOffByTriage` is whether the list came out empty because everyone in the buckets has only triaged
+ * assets while those are hidden.
  */
 case class ListedPeople(people: List[ListedPerson], leftOffByTriage: Boolean)

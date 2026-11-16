@@ -11,9 +11,8 @@ import altitude.core.pipeline.PipelineUtils.debugInfo
 import altitude.core.pipeline.PipelineUtils.stage
 
 /**
- * Measures a still image's Image quality and perceptual hash over the staged file and the faces `DetectFacesFlow` found, and each
- * of those faces' sharpness, several assets at once and with no database touched. `RecognizeFacesFlow`, next, stores the faces
- * with their sharpness, and the completion stage the metrics and the hash. A Video and an animated image pass through untouched.
+ * Measures a still image's Image quality, perceptual hash and each detected face's sharpness, several assets at once with no
+ * database touched; later stages store them. A Video or an animated image passes through untouched.
  */
 object MeasureImageFlow:
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =

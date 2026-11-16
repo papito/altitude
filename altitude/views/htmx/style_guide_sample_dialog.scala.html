@@ -3,8 +3,8 @@
 
 @(fieldErrors: Map[String, String] = Map.empty)
 
-@* The style guide's sample dialog (dev only): the dialog flow of a real one, with nothing persisted. A blank name comes
-   back as a validation response replacing this form. Focus returns to whichever control opened it. *@
+@* The style guide's sample dialog (dev only): a real dialog's flow, persisting nothing; a blank name shows the error
+   state. *@
 <form action="#"
       id="styleGuideSample"
       data-app-fragment="modal"

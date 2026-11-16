@@ -1,12 +1,8 @@
 /**
- * Modal dialog fragments (`data-app-fragment="modal"`): hydration into the shared modal owner, and
- * the modal presentation of the dialog operation lifecycle (`dialog-operations.js`). The host the
- * fragment was swapped into decides how it is presented: the popover dialog or the general modal.
- * A validation response that replaces the form in place is re-hydrated, which re-opens the same
- * host.
- *
- * A dialog that needs wiring beyond its form names it with `data-app-dialog-kind`: the batch ops'
- * Add to album (`add-to-album.js`) and Add to location (`add-to-location.js`) dialogs.
+ * Modal dialog fragments: opened in the popover or the general modal host, by where the fragment was
+ * swapped in, and registered with the dialog operation lifecycle. A validation response that replaces
+ * the form in place is re-hydrated, which re-opens the same host. `data-app-dialog-kind` names a
+ * dialog that needs wiring beyond its form.
  */
 import {
     closeModal,

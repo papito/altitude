@@ -3,10 +3,7 @@ package altitude.core.dao.sql.tables
 import java.time.OffsetDateTime
 import scalasql.Table
 
-/**
- * The `location` table: a category (a named container, no pin) or a Location (a pin) - `kind` says which. Memberships live in
- * `location_asset`.
- */
+/** The `location` table: a category (a named container, no pin) or a Location (a pin), as `kind` says */
 case class LocationRow[T[_]](
     id: T[String],
     repositoryId: T[String],

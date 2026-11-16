@@ -1,5 +1,5 @@
 package altitude.core.models
 
-/** Trait to use for submodels and transient objects that are not stored in databases as separate entities. */
+/** For submodels and transient objects not stored as entities of their own */
 trait NoId:
   val id: Option[String] = None

@@ -147,7 +147,6 @@ import altitude.core.models.Repository
     val location: Location = addLocation("Paris")
     val category: Location = testApp.service.location.addCategory("France")
 
-    // Same name as a Location, as a category, and the other way around
     intercept[DuplicateException] {
       testApp.service.location.addCategory("paris")
     }
@@ -161,7 +160,6 @@ import altitude.core.models.Repository
       testApp.service.location.rename(category.persistedId, "PARIS")
     }
 
-    // Changing only the casing of a row's own name is allowed
     testApp.service.location.rename(location.persistedId, "PARIS")
     (testApp.service.location.getById(location.persistedId): Location).name shouldEqual "PARIS"
   }
@@ -266,13 +264,11 @@ import altitude.core.models.Repository
       testApp.service.location.addLocation("nan", Double.NaN, 0)
     }
 
-    // The edges of the range are fine
     val edge: Location = testApp.service.location.addLocation("edge", -90, 180)
     val stored: Location = testApp.service.location.getById(edge.persistedId)
     stored.latitude shouldEqual Some(-90.0)
     stored.longitude shouldEqual Some(180.0)
 
-    // The model itself keeps the two kinds honest
     intercept[ValidationException] {
       Location(name = "pinless", kind = LocationKind.Location)
     }
@@ -347,7 +343,6 @@ import altitude.core.models.Repository
     testApp.service.location.moveToCategory(location.persistedId, None)
     (testApp.service.location.getById(location.persistedId): Location).categoryId shouldEqual None
 
-    // Categories are one level deep: a category cannot be moved, and nothing can be moved under a Location
     intercept[IllegalOperationException] {
       testApp.service.location.moveToCategory(category.persistedId, Some(otherCategory.persistedId))
     }
@@ -417,7 +412,6 @@ import altitude.core.models.Repository
     remaining.map(_.persistedId) shouldEqual List(lyon.persistedId, paris.persistedId)
     remaining.map(_.categoryId) shouldEqual List(None, None)
     remaining.map(_.categoryName) shouldEqual List(None, None)
-    // The Locations keep their memberships
     testApp.service.location.getAssetIds(paris.persistedId) shouldEqual Set(asset.persistedId)
   }
 
@@ -498,7 +492,7 @@ import altitude.core.models.Repository
     val asset2: Asset = testContext.persistAsset()
 
     testApp.service.location.addAssets(location1.persistedId, Set(asset1.persistedId)) shouldEqual 1
-    // asset1 is already there - only asset2 is new
+    // asset1 is already a member, so only asset2 counts
     testApp.service.location.addAssets(location1.persistedId, Set(asset1.persistedId, asset2.persistedId)) shouldEqual 1
     testApp.service.location.addAssets(location2.persistedId, Set(asset1.persistedId)) shouldEqual 1
     testApp.service.location.addAssets(location2.persistedId, Set()) shouldEqual 0
@@ -506,7 +500,6 @@ import altitude.core.models.Repository
     testApp.service.location.getAssetIds(location1.persistedId) shouldEqual Set(asset1.persistedId, asset2.persistedId)
     testApp.service.location.getAssetIds(location2.persistedId) shouldEqual Set(asset1.persistedId)
 
-    // The asset itself is untouched: still in its folder, still not recycled
     val asset: Asset = testApp.service.asset.getById(asset1.persistedId)
     asset.folderId shouldEqual testContext.repository.rootFolderId
     asset.isRecycled shouldBe false
@@ -566,7 +559,6 @@ import altitude.core.models.Repository
     testApp.service.location.addAssets(location.persistedId, Set(asset1.persistedId, asset2.persistedId))
 
     testApp.service.location.removeAssets(location.persistedId, Set(asset1.persistedId)) shouldEqual 1
-    // Removing an asset that is not there is a no-op
     testApp.service.location.removeAssets(location.persistedId, Set(asset1.persistedId)) shouldEqual 0
 
     testApp.service.location.getAssetIds(location.persistedId) shouldEqual Set(asset2.persistedId)
@@ -641,7 +633,6 @@ import altitude.core.models.Repository
     val keeper: Asset = testContext.persistAsset()
     testApp.service.location.addAssets(location.persistedId, Set(asset.persistedId, keeper.persistedId))
 
-    // What the purge pipeline and dangling-asset pruning do: delete the row itself
     testApp.service.asset.deleteById(asset.persistedId)
 
     testApp.service.location.getAssetIds(location.persistedId) shouldEqual Set(keeper.persistedId)
@@ -669,7 +660,7 @@ import altitude.core.models.Repository
     val italy: Location = testApp.service.location.addCategory("Italy")
     val france: Location = testApp.service.location.addCategory("france")
     val rome: Location = addLocation("Rome", categoryId = Some(italy.persistedId))
-    // Sorts before its category by name alone, so the order has to put the category first explicitly
+    // Sorts before its category by name alone
     val alba: Location = addLocation("Alba", categoryId = Some(italy.persistedId))
     val paris: Location = addLocation("paris", categoryId = Some(france.persistedId))
     val geneva: Location = addLocation("Geneva")
@@ -730,7 +721,6 @@ import altitude.core.models.Repository
     listedNames shouldEqual List("Paris", "shared name")
     locationCounts.values.sum shouldEqual 0
 
-    // Every read and mutation by a foreign ID is "not found"
     intercept[NotFoundException] {
       testApp.service.location.getById(location.persistedId)
     }

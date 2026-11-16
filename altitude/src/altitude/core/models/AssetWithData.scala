@@ -4,11 +4,9 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * An asset and its file on disk, as it moves through the import pipeline: a staged file until the file store renames it into
- * place, the stored file after. A video never sits in the heap; `bytes` reads the whole file for the image-only consumers. Its
- * detected faces ride along from face detection through the image measurement to face recognition. `origin` is the Import file it
- * is a file of, which the pipeline settles with what becomes of it; a file imported outside an Import (an `ImportAsset`) has
- * none.
+ * An asset and its file on disk as it moves through the import pipeline: a staged file until the file store renames it into
+ * place, the stored file after. A video never sits in the heap; `bytes` reads the whole file, for image-only consumers. `origin`
+ * is the Import file to settle, none for a file imported outside an Import.
  */
 case class AssetWithData(
     asset: Asset,

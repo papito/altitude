@@ -5,7 +5,7 @@ import altitude.core.models.Settings
 /** A Settings snapshot for a test that has no database: the seeds of the `setting` table, with a test's own values over them */
 object TestSettings {
 
-  /** The seeds the plan names, which the table's default_value column carries */
+  /** The seed values of `all.sql`, which the table's default_value column carries */
   val seeds: Map[String, String] = Map(
     Settings.FACE_YUNET_CONFIDENCE_THRESHOLD -> "0.85",
     Settings.FACE_YUNET_NMS_THRESHOLD -> "0.3",

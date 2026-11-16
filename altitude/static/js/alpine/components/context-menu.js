@@ -1,38 +1,22 @@
 /**
- * Alpine coordination for folder, album, and Location menus, the View settings popover and the
- * choice menus (Group, Sort, Dock side, the nav's Browse).
+ * Alpine coordination for the folder, album and Location menus, the View settings popover and the
+ * choice menus (Group, Sort, Dock side, the nav's Library menu).
  *
- * The component root is the `.menu-ctrl` cell (the View settings `.dialog-trigger-ctrl`, a choice menu's
- * `.choice-menu-ctrl`) built by `common/context-menu-markup.js`: it holds the trigger (`x-ref="trigger"`, opening the
- * panel with `popovertarget`) and the `popover="auto"` panel (`x-ref="panel"`). Keeping the root that small means a
- * child folder's menu is never a DOM descendant of its ancestor's panel, so the browser treats the menus as
- * siblings: opening one closes any other, exactly as required.
+ * The component root is the small menu cell holding the trigger and its `popover="auto"` panel, so a
+ * child folder's menu is never a DOM descendant of its ancestor's panel: the browser treats the menus
+ * as siblings, and opening one closes any other.
  *
- * Entity menus hold actions that open popover dialogs (`common/modal.js`). Only View settings has a
- * dialog host (`x-ref="dialog"`), cleared when its panel closes so a later open loads fresh
- * settings. A choice menu (`data-menu-kind="choice"`) holds options that run a search or are links
- * (the nav's Library menu), and may end with actions opening dialogs; picking any closes the menu.
- *
- * The browser owns visibility. It toggles the panel from the trigger, dismisses it on a click
- * anywhere outside, and reports every change through `beforetoggle`/`toggle`. This component
- * adds only what native popovers lack: placement against the trigger (again when a dialog changes
- * the panel's height), focus on the checked or first action when the panel opens and the arrow
- * keys between actions, dismissal when keyboard focus
- * leaves, dismissal on scroll or resize, and cleanup. Escape is handled once for the whole
- * document in `global.js`.
- *
- * Callers outside the component that must close a menu (that Escape handler, the folder model when
- * an ancestor collapses, the modal owner) go through
- * `closeContextMenu()` / `closeOpenContextMenu()` below. Because at most one auto popover of this
- * kind is open at a time, "the open menu" is a single panel. The menu markup itself is built by
- * `common/context-menu-markup.js`.
+ * The browser owns visibility and outside-click dismissal. This component adds placement against the
+ * trigger, initial focus and arrow keys, dismissal when focus leaves or on scroll or resize, and the
+ * View settings dialog host. Escape is handled document-wide in `global.js`. At most one menu is open
+ * at a time, so callers outside close "the open menu" with `closeOpenContextMenu()`.
  */
 
 import { placeAnchoredPanel } from "../../common/anchored-panel.js"
 
 const OPEN_MENU_SELECTOR = ".context-menu:popover-open"
 
-// A menu's actions: its buttons, and the links of a choice menu whose options lead to another page
+// A menu's actions: its buttons, and a choice menu's links to another page
 const ACTION_SELECTOR = ".actions :is(button, a[href])"
 
 /** The ⋯ control that opens `panel`: the button in the same menu cell that targets it. */
@@ -41,8 +25,8 @@ export function getContextMenuTrigger(panel) {
 }
 
 /**
- * Hides `panel` if it is open, optionally moving focus to the panel's trigger. Returns
- * whether a menu was closed. `reason` is logged so a surprising dismissal can be traced.
+ * Hides `panel` if open, optionally refocusing its trigger, and returns whether it closed. `reason`
+ * is logged so a surprising dismissal can be traced.
  */
 export function closeContextMenu(panel, { reason, returnFocus = false }) {
     if (!panel?.matches(":popover-open")) {
@@ -60,10 +44,7 @@ export function closeContextMenu(panel, { reason, returnFocus = false }) {
     return true
 }
 
-/**
- * Closes the open context menu, if any, looking only inside `within`. Returns whether one was
- * closed.
- */
+/** Closes the open context menu inside `within`, if any. Returns whether one was closed. */
 export function closeOpenContextMenu({
     reason,
     returnFocus = false,
@@ -76,13 +57,12 @@ export function closeOpenContextMenu({
 }
 
 export function contextMenu() {
-    // The request loading a dialog into this panel, from `htmx:before:request` until its response
-    // is handled or the panel closes. Closure state rather than component data: an htmx request
-    // context has no reactive consumers.
+    // The request loading this panel's dialog, until its response is handled or the panel closes.
+    // Closure state, not component data: nothing reacts to it.
     let dialogRequest = null
 
     return {
-        // Removes the listeners and observer that exist only while the menu is open
+        // Removes the listeners that exist only while the menu is open
         detachOpenListeners: null,
 
         destroy() {
@@ -99,9 +79,8 @@ export function contextMenu() {
         },
 
         /**
-         * `beforetoggle` fires synchronously just before the browser shows the panel, so placing
-         * it here means it is never displayed, painted, or focusable at the browser's default
-         * centered position. The `toggle` event that follows is a queued task, too late for that.
+         * `beforetoggle` fires synchronously before the panel shows, so placing it here means it is
+         * never painted at the default centered position; the queued `toggle` is too late.
          */
         handleBeforeToggle(event) {
             if (event.newState === "open") {
@@ -121,7 +100,6 @@ export function contextMenu() {
             }
         },
 
-        /** The panel's actions that can take focus: its buttons and links, less the disabled buttons */
         actions() {
             return Array.from(
                 this.$refs.panel.querySelectorAll(ACTION_SELECTOR),
@@ -129,8 +107,8 @@ export function contextMenu() {
         },
 
         /**
-         * A menu opens on its current choice, else on its first action, as a menu button does;
-         * View settings has no actions and keeps focus where the dialog hydrator puts it.
+         * Focuses the current choice, else the first action. View settings has no actions and keeps
+         * the focus its dialog hydrator gives.
          */
         focusInitialAction() {
             const actions = this.actions()
@@ -142,10 +120,8 @@ export function contextMenu() {
         },
 
         /**
-         * Down and Up move focus through the actions, wrapping; Home and End jump to the ends.
-         * Enter and Space are the focused button's own; on a link, which takes Enter alone, Space
-         * follows it too, so every option of a choice menu is picked with either key. Other keys
-         * pass, Escape to `global.js`.
+         * Arrows move through the actions, wrapping; Home and End jump to the ends. A link natively
+         * takes only Enter, so Space follows it too, letting either key pick any option.
          */
         handleKeydown(event) {
             const actions = this.actions()
@@ -177,11 +153,7 @@ export function contextMenu() {
             actions[next].focus()
         },
 
-        /**
-         * Picking a choice menu's option or action closes the menu: the option's own search
-         * trigger runs on the same click, and the results it brings back carry a new control
-         * showing the choice; a link loads its page; an action's dialog opens below the trigger.
-         */
+        /** Picking an option or action closes the menu; the click's own search, link or dialog still runs. */
         handleActionClick(event) {
             if (!event.target.closest(ACTION_SELECTOR)) {
                 return
@@ -191,10 +163,8 @@ export function contextMenu() {
         },
 
         /**
-         * Tab or Shift+Tab leaving the trigger and its panel closes the menu. Focus is left where
-         * it went; a menu must never pull it back from the control the user moved to. A click on
-         * non-interactive dialog content (heading, label, padding) moves focus to the panel
-         * itself, which is inside the root, so it keeps the menu open.
+         * Focus leaving the trigger and panel closes the menu, without pulling focus back. A click on
+         * non-interactive dialog content focuses the panel itself, inside the root, so it stays open.
          */
         handleFocusOut(event) {
             if (!this.isOpen() || this.$root.contains(event.relatedTarget)) {
@@ -205,11 +175,8 @@ export function contextMenu() {
         },
 
         /**
-         * Remember the View settings load as the only response allowed to fill its dialog host, and
-         * empty the host first (`clearDialog`), so the load never swaps over a leftover fragment.
-         *
-         * The load's request events are dispatched on the trigger, the element that issued it, and
-         * reach the component on its root, as does the settle event dispatched on the dialog host.
+         * Records the View settings load as the only response allowed to fill the dialog host, and
+         * empties the host first so the load never swaps over a leftover fragment.
          */
         handleBeforeRequest(event) {
             const ctx = event.detail.ctx
@@ -221,9 +188,8 @@ export function contextMenu() {
         },
 
         /**
-         * Runs before htmx swaps a response into the dialog host. Only the response to the
-         * request the open panel is waiting for may show; one for a panel that has closed since
-         * (and possibly reopened) is dropped. Failed loads use the shared HTMX request listener.
+         * Runs before the swap into the dialog host: a response for a panel that has closed since (and
+         * possibly reopened) is dropped.
          */
         handleAfterRequest(event) {
             const ctx = event.detail.ctx
@@ -244,12 +210,9 @@ export function contextMenu() {
         },
 
         /**
-         * View settings has loaded: reveal its content and place the panel for its new height.
-         * Alpine binds the fragment from its mutation observer, a microtask the swap queued, so the
-         * reveal waits in a microtask queued after it: placing the panel computes the switches'
-         * style, and computed before their bindings ran, every switch would slide from off into its
-         * state. The fragment hydrator that runs next, from the body-level settle listener, gives
-         * the dialog focus.
+         * View settings has loaded: reveal it and place the panel for its new height. Alpine binds the
+         * fragment in a microtask the swap queued, so the reveal waits in a later one: placing computes
+         * the switches' style, and before their bindings ran every switch would slide from off.
          */
         handleAfterSettle(event) {
             if (!this.$refs.dialog.contains(event.target)) {
@@ -262,7 +225,7 @@ export function contextMenu() {
             })
         },
 
-        /** Only View settings has inline content to discard; entity menus keep their actions. */
+        /** Only View settings has a dialog host to empty. */
         clearDialog() {
             const dialog = this.$refs.dialog
             if (dialog) {
@@ -271,10 +234,6 @@ export function contextMenu() {
             }
         },
 
-        /**
-         * The native popover is fixed in the top layer, so the shared viewport placement applies
-         * before it opens too. Menus close on scroll/resize instead of following their trigger.
-         */
         place() {
             placeAnchoredPanel(this.$refs.panel, this.$refs.trigger, {
                 center: this.$root.dataset.menuAlign === "center",
@@ -282,10 +241,8 @@ export function contextMenu() {
         },
 
         /**
-         * While the menu is open, any scrolling outside the panel, a window resize, or a change in
-         * the explorer's size closes it: the trigger has moved (or may have), and the agreed
-         * behavior is to dismiss rather than follow it. Scrolling inside the panel (its own
-         * scrollbar when the height is capped) keeps it open.
+         * Scrolling outside the panel, a window resize or an explorer resize closes the open menu: the
+         * trigger may have moved, and menus dismiss rather than follow it.
          */
         attachOpenListeners() {
             this.detachOpenListeners?.()
@@ -305,10 +262,8 @@ export function contextMenu() {
             })
             window.addEventListener("resize", onResize)
 
-            // The explorer's divider (js/common/explorer-dock.js) resizes the explorer without
-            // resizing the window. A
-            // ResizeObserver reports the current size once as soon as it starts observing; only a
-            // later notification means the size changed.
+            // The explorer's divider resizes it without resizing the window. A ResizeObserver reports
+            // the current size once on observe; only a later notification is a change.
             let observer = null
             const explorer = document.getElementById("explorer")
 

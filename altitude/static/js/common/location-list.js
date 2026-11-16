@@ -1,36 +1,12 @@
 /**
- * JSON-driven Location list renderer: the album list's shape (`album-list.js`) with one level of
- * nesting.
+ * JSON-driven Location list: the album list's shape with one level of nesting. The endpoint returns
+ * rows in path order; a category node holds its row and a children container with its Locations,
+ * collapsed on first render. A category holds no assets, so it is neither a drop target nor a
+ * search trigger; a category with no Locations has no expand button. A Location's icon and name
+ * are search triggers and its row a drop zone. Locations are pointers only: nothing here moves or
+ * changes an asset.
  *
- * Public API:
- *   reloadLocationList(repoId) — fetch every category and Location from the server, snapshot the
- *   expanded categories and the focused control, re-render, restore both, and show the right add
- *   controls: the top "Add location" and "Add category" buttons normally, the centered "Add your
- *   first location" while the list is empty.
- *   refreshLocationCounts(repoId) — fetch the list and patch only the asset counts in place; falls
- *   back to a full render when the list gained a row the DOM does not have.
- *   setViewedLocation(locationId) — mark the Location whose results are displayed (green icon).
- *   expandLocationCategory(categoryId) — reveal a category's Locations (the add listener uses it
- *   for the category a new Location went into).
- *   focusAddLocationControlIfFocusLost() — move focus to whichever add control is visible.
- *
- * The list endpoint returns the rows in path order (a category directly followed by its Locations,
- * top-level Locations interleaved by name). Top-level Locations and categories are rendered as
- * siblings in that order; a category is a node holding its row and a children container
- * (`#location-children-<id>`) with its Locations, collapsed on first render. A category with
- * Locations wraps its icon and name in one native button (`#location-expand-<id>`) that expands
- * and collapses the children; the CSS in the tab template draws a +/− badge on its icon. The
- * category holds no assets, so it is neither a drop target nor a search trigger, and a category
- * with no Locations is plain: no button, no badge. A category row shows its ⋯ menu (Rename,
- * Delete), the icon and the name. A Location row shows its ⋯ menu (Rename, Delete, Move to
- * category), an icon, the name and its asset count (`.asset-count`, directly after the name, empty
- * for zero; `common/asset-count.js`); icon and name are search triggers for the Location, each the
- * anchor of the scope dialog its click may open in Triage, and the row's `.controls` is a drop zone
- * for assets (`dragdrop/locations.js`). Locations are pointers only: nothing here moves or changes
- * an asset.
- *
- * Expansion is presentation state: it survives every rebuild of the list within the page (the
- * snapshot is taken immediately before the DOM is replaced) and is not persisted across page loads.
+ * Expansion survives every rebuild within the page and is not persisted across page loads.
  */
 import { closeOpenContextMenu } from "../alpine/components/context-menu.js"
 import { Const } from "../constants.js"
@@ -52,8 +28,8 @@ const CATEGORY_KIND = "category"
 
 // ─── public ─────────────────────────────────────────────────────────────────
 
-// Monotonic reload counter: if another reload starts while a fetch is in flight, the older
-// response is discarded so a stale list is never rendered
+// A reload started while a fetch is in flight discards the older response, so a stale list is
+// never rendered
 let _reloadSeq = 0
 
 export async function reloadLocationList(repoId) {
@@ -77,10 +53,9 @@ export async function reloadLocationList(repoId) {
 let _countsSeq = 0
 
 /**
- * Re-fetches the list after a membership change or an asset mutation and patches each Location
- * row's count in place, so expansion, focus and open menus are untouched. Nothing is fetched while
- * another explorer tab is active: the next render of the Locations tab brings fresh counts. A full
- * reload started meanwhile carries fresh counts itself, so this one stands down.
+ * Patches each Location row's count in place, leaving expansion, focus and open menus alone; a
+ * Location the DOM lacks means a full render. Fetches nothing while another explorer tab is active,
+ * and stands down if a full reload started meanwhile.
  */
 export async function refreshLocationCounts(repoId) {
     if (!document.getElementById("locationList")) return
@@ -109,20 +84,15 @@ export async function refreshLocationCounts(repoId) {
 let _viewedLocationId = null
 
 /**
- * Records the Location whose results are displayed and marks its row with `data-viewed-scope`,
- * which the CSS in `static/css/htmx/locations.css` colors green. Null clears the marker. Like
- * the viewed folder scope, this follows the displayed results, never the search parameters. A
- * viewed Location inside a collapsed category stays hidden until the category is expanded.
+ * Marks the Location whose results are displayed (null clears it). Like the viewed folder scope,
+ * it follows the displayed results, never the search parameters.
  */
 export function setViewedLocation(locationId) {
     _viewedLocationId = locationId || null
     _applyViewedLocation()
 }
 
-/**
- * Reveals the Locations of the category rendered as `#location-<categoryId>`. Nothing happens for
- * an ID the list does not hold, a Location, or a category with no Locations.
- */
+/** Reveals a category's Locations; a no-op for anything but a category with Locations */
 export function expandLocationCategory(categoryId) {
     const nodeEl = _findCategoryNode(categoryId)
     if (nodeEl) {
@@ -131,9 +101,8 @@ export function expandLocationCategory(categoryId) {
 }
 
 /**
- * Moves focus to whichever add control is visible, if focus was lost. Used after a rebuild that a
- * dialog triggered: adding the first Location hides the empty-state button that opened the dialog,
- * and deleting the last row hides the top button its dialog returns focus to.
+ * Moves focus to whichever add control is visible, if focus was lost: adding the first Location
+ * hides the empty-state button, and deleting the last row hides the top buttons.
  */
 export function focusAddLocationControlIfFocusLost() {
     // A control hidden after it took focus can keep it for a while; that counts as lost too
@@ -151,17 +120,12 @@ export function focusAddLocationControlIfFocusLost() {
 
 // ─── rendering ──────────────────────────────────────────────────────────────
 
-/**
- * Replaces the rendered list with `locations`, preserving the expanded categories, focus and the
- * viewed-Location marker.
- */
 function _render(locations, repoId) {
     const container = document.getElementById("locationList")
     if (!container) return
 
-    // Snapshot expansion and focus only now, immediately before the DOM is replaced: both may have
-    // changed while the fetch was in flight (a category toggled; a dialog returning focus to a
-    // menu control as its operation completes), and an older snapshot would undo that
+    // Snapshot only now: expansion or focus may have changed while the fetch was in flight (a
+    // dialog returns focus to a menu control as its operation completes)
     const expandedIds = _getExpandedCategoryIds(container)
     const focusedId = _getFocusedListControlId(container)
 
@@ -169,37 +133,32 @@ function _render(locations, repoId) {
     _ensureAddControls(repoId)
     _showAddControl(locations.length === 0)
 
-    // Let HTMX wire up the new elements. Alpine's mutation observer initializes the appended
-    // rows; an explicit `initTree` would initialize every component a second time
+    // Alpine's mutation observer initializes the new rows; an explicit `initTree` would
+    // initialize every component twice
     if (window.htmx) {
         htmx.process(container)
     }
 
-    // The list is built after the Locations tab has already settled, so it is not covered by the
-    // fragment hydration that binds every other search trigger
+    // Built after the tab settled, so the fragment hydration of search triggers missed it
     bindSearchTriggers(container)
 
-    // A category that no longer exists is absent, and one that lost its last Location has no
-    // children to reveal, which `_setCategoryExpanded` ignores
     expandedIds.forEach(expandLocationCategory)
 
     _applyViewedLocation()
 
-    // Keep keyboard focus on the rebuilt copy of the control that had it, if it still exists
     if (focusedId) {
         document.getElementById(focusedId)?.focus()
     }
 }
 
 /**
- * Builds the add controls into their hosts on the first render after the tab loads. "Add category"
- * opens a popover dialog below its button; "Add location" opens a centered modal, with room for
- * its map editor. The hosts (`#locationActions`, `#noLocations`) decide which controls are shown.
+ * Builds the add controls on the first render. "Add location" opens the general modal, with room
+ * for its map editor.
  */
 function _ensureAddControls(repoId) {
     const actionsEl = document.getElementById("locationActions")
     if (actionsEl.childElementCount > 0) return
-    // Adding a Location or a category is Organize's: without it both hosts stay empty
+    // Without Organize both hosts stay empty
     if (!context.holds(Const.permission.organize)) return
 
     actionsEl.appendChild(
@@ -240,16 +199,14 @@ function _ensureAddControls(repoId) {
     }
 }
 
-/** With no rows the centered empty-state button is the only control; otherwise the top buttons show */
 function _showAddControl(isEmpty) {
     document.getElementById("locationActions").hidden = isEmpty
     document.getElementById("noLocations").hidden = !isEmpty
 }
 
 /**
- * Writes each Location's count into its rendered row. Returns false as soon as a Location has no
- * row, leaving the caller to render in full; rows with no Location in the JSON are left alone,
- * since Location operations always reload the whole list. Categories carry no count.
+ * Returns false as soon as a Location has no row. Rows missing from the JSON are left alone:
+ * Location operations always reload the whole list.
  */
 function _patchAssetCounts(locations) {
     return locations
@@ -294,7 +251,6 @@ function _applyViewedLocation() {
 
 // ─── expansion ──────────────────────────────────────────────────────────────
 
-/** The category node rendered as `#location-<id>`, or null for anything else */
 function _findCategoryNode(categoryId) {
     const el = categoryId
         ? document.getElementById(`location-${categoryId}`)
@@ -308,10 +264,8 @@ function _isExpanded(nodeEl) {
 }
 
 /**
- * The one place a category's state changes: the `data-expanded` flag (which the CSS reads for the
- * badge and the group spacing), the visibility of its children, and the `aria-expanded` and
- * tooltip of its button move together. A category with no Locations has no children container
- * and no button, and nothing to change.
+ * The one place a category's state changes, so `data-expanded` (read by the CSS), the children's
+ * visibility and the button's `aria-expanded` and tooltip move together.
  */
 function _setCategoryExpanded(nodeEl, expanded) {
     const id = nodeEl.dataset.locationId
@@ -331,9 +285,8 @@ function _setCategoryExpanded(nodeEl, expanded) {
 }
 
 /**
- * Closes a category. Hiding the Locations hides their menu triggers too, so an open menu among
- * them is closed first, and focus that was inside moves to the category's button rather than
- * being left in hidden content.
+ * Hiding the Locations hides their menu triggers too, so an open menu among them is closed first,
+ * and focus inside moves to the category's button rather than staying in hidden content.
  */
 function _collapseCategory(nodeEl) {
     const id = nodeEl.dataset.locationId
@@ -357,13 +310,9 @@ function _collapseCategory(nodeEl) {
 }
 
 /**
- * Click on a category's button. A pointer double-click arrives as click (`detail` 1), click
- * (`detail` 2), then `dblclick`: the first click toggles at once and every later click of the
- * sequence is ignored, so a double- or triple-click toggles exactly once, as a folder branch's
- * first click does. Keyboard activation (Enter, Space) dispatches a click with `detail` 0 and is
- * always a single toggle. Categories are one level deep, so there is no recursive action and no
- * `dblclick` handler. A control replaced by a rebuild between the clicks is detached and ignores
- * its events.
+ * Only the first click of a pointer sequence (`detail` 1) toggles, so a double- or triple-click
+ * toggles once; keyboard activation (`detail` 0) always toggles. Categories are one level deep, so
+ * there is no `dblclick` action.
  */
 function _bindExpandGesture(ctrlEl, categoryId) {
     ctrlEl.addEventListener("click", (event) => {
@@ -393,9 +342,8 @@ function _nameOf(nodeEl) {
 // ─── DOM builders ────────────────────────────────────────────────────────────
 
 /**
- * The list's top-level nodes in the order the rows came: a category node for each category, holding
- * the Locations that name it as theirs, and a `.top-level` row for every other Location. Grouping
- * by category ID rather than by adjacency keeps the nesting right whatever the order.
+ * The top-level nodes in row order. Locations are grouped by category ID rather than by adjacency,
+ * so the nesting is right whatever the order.
  */
 function _buildNodes(locations, repoId) {
     const categoryIds = new Set(
@@ -433,11 +381,6 @@ function _buildNodes(locations, repoId) {
     return nodes
 }
 
-/**
- * A category node: its row, then, when it has Locations, the children container holding their rows
- * (`.child`, indented by one step), hidden until the category is expanded. The node is the
- * `.location.category` element, which carries `data-expanded` while open.
- */
 function _buildCategoryNode(category, children, repoId) {
     const nodeEl = document.createElement("div")
     nodeEl.className = "location category"
@@ -456,7 +399,7 @@ function _buildCategoryNode(category, children, repoId) {
         // ⋯ menu button | expand button (icon | name)
         controlsEl.appendChild(_buildExpandCtrl(category, iconEl, nameEl))
     } else {
-        // ⋯ menu button | icon | name: nothing to expand, so the icon and name are plain
+        // ⋯ menu button | icon | name
         controlsEl.appendChild(iconEl)
         controlsEl.appendChild(nameEl)
     }
@@ -467,7 +410,6 @@ function _buildCategoryNode(category, children, repoId) {
         childrenEl.className = "children"
         childrenEl.id = `location-children-${category.id}`
         childrenEl.setAttribute(Const.attributes.locationId, category.id)
-        // Collapsed on first render; a rebuild restores the previous state afterwards
         childrenEl.style.display = "none"
         children.forEach((child) => {
             childrenEl.appendChild(_buildLocationRow(child, repoId, true))
@@ -479,11 +421,8 @@ function _buildCategoryNode(category, children, repoId) {
 }
 
 /**
- * A category's expand control: a native button (Enter and Space work, no page jump) wrapping the
- * icon and the name, so clicking either toggles. It keeps the stable ID `location-expand-<id>`
- * (focus restoration after a rebuild, focus recovery after a collapse), names the category, points
- * `aria-controls` at the children container and carries `aria-expanded`, kept in step by
- * `_setCategoryExpanded`. The icon is decorative; the CSS draws the +/− badge on it.
+ * A button wrapping the icon and the name, so clicking either toggles. Its ID is stable across
+ * rebuilds for focus restoration. The CSS draws the +/− badge on the icon.
  */
 function _buildExpandCtrl(category, iconEl, nameEl) {
     const ctrlEl = document.createElement("button")
@@ -504,10 +443,7 @@ function _buildExpandCtrl(category, iconEl, nameEl) {
     return ctrlEl
 }
 
-/**
- * A Location row: `.top-level`, or `.child` under a category with `--depth: 1` and a `.trace` cell,
- * so the CSS in the tab template indents it like a folder. The row is the drop target for assets.
- */
+/** A `.child` row has `--depth: 1` and a `.trace` cell, so `locations.css` indents it like a folder */
 function _buildLocationRow(location, repoId, isChild) {
     const rowEl = document.createElement("div")
     rowEl.className = `location ${isChild ? "child" : "top-level"}`
@@ -564,13 +500,10 @@ function _buildNameEl(location) {
 }
 
 /**
- * Opening a Location is a search like any other: the element declares the one parameter it knows
- * about and `search-results/search-triggers.js` combines it with the rest of the current search.
- * That hydrator also owns where the click goes in Triage: a search there too when the Location has
- * triaged assets, and otherwise its scope dialog, a popover dialog anchored to the clicked icon or
- * name. Each carries `anchor-name: --<its id>` (`locationIcon-<id>`, `locationName-<id>`) and names
- * that ID in `data-app-dialog-anchor`, as the triggers `context-menu-markup.js` builds do; the IDs
- * are stable, so a rebuild of the list re-anchors an open dialog.
+ * Opening a Location is a search: the element declares its one parameter and
+ * `search-results/search-triggers.js` combines it with the current search. The element also
+ * anchors the scope dialog its click may open in Triage; its ID is stable, so a rebuild re-anchors
+ * an open dialog.
  */
 function _makeSearchTrigger(el, locationId) {
     el.setAttribute("data-app-search", "click")
@@ -580,10 +513,8 @@ function _makeSearchTrigger(el, locationId) {
 }
 
 /**
- * The row's ⋯ menu cell (see `buildContextMenuCtrl`): Rename and Delete for both kinds, plus Move
- * to category for a Location, each loading a popover dialog.
- * `locationMenuCtrl-<id>` is the trigger the rename and move dialogs return focus to. Every action is
- * Organize's, so an account without it gets the empty cell.
+ * The row's ⋯ menu cell. The trigger ID is stable, since dialogs return focus to it. Every action
+ * needs Organize.
  */
 function _buildMenuCtrl(location, repoId) {
     if (!context.holds(Const.permission.organize)) {

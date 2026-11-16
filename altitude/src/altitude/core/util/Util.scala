@@ -53,16 +53,13 @@ object Util:
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'", Locale.ENGLISH).withZone(ZoneOffset.UTC)
 
   /**
-   * A moment in UTC, "2026-11-11" or with its time "2026-11-11 22:12 UTC": the text a `<time>` element holds until the page shows
-   * it in the viewer's zone (js/alpine/components/local-time.js), and without script
+   * A moment in UTC, "2026-11-11" or "2026-11-11 22:12 UTC": a `<time>` element's text until local-time.js shows it in the
+   * viewer's zone, and without script
    */
   def utcText(instant: Instant, withTime: Boolean): String =
     (if withTime then utcDateTimeFormatter else utcDateFormatter).format(instant)
 
-  /**
-   * A number of minutes as a person reads it: "10 min" under an hour, "2 h" for whole hours, "1 h 30 min" otherwise. The Watch
-   * folder scan interval is shown so.
-   */
+  /** A number of minutes as "10 min", "2 h" or "1 h 30 min" */
   def minutesText(minutes: Int): String =
     val (hours, rest) = (minutes / 60, minutes % 60)
     if hours == 0 then s"$rest min"
@@ -71,20 +68,16 @@ object Util:
 
   private val dateFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.ENGLISH)
 
-  /** A calendar day as a date group header reads it, "Sunday, September 6, 2026". No zone is involved: the day is the day */
+  /** A calendar day as "Sunday, September 6, 2026"; no zone is involved */
   def humanReadableDate(date: LocalDate): String = date.format(dateFormatter)
 
-  /**
-   * The URL of an asset's stored content in the context repository: its Preview, its file or a Face's crop (`Const.DataStore`),
-   * as the templates link it, with no signature
-   */
+  /** The unsigned URL of stored content (a Preview, a file or a Face's crop) in the context repository */
   def contentUrl(dataType: String, itemId: String): String =
     s"/${Const.DataStore.CONTENT}/r/${RequestContext.getRepository.persistedId}/$dataType/$itemId"
 
   /**
-   * The URL of an asset's Preview as the grid and Quick view show it: the edited Preview, by its revision (`?v=<editRev>`, the
-   * cache key a new render changes), for an asset with edited images, and the original's otherwise. Curation keeps the original's
-   * ([[contentUrl]]): it judges captures, not edits.
+   * An asset's Preview URL: the edited Preview (`?v=<editRev>`, which a new render changes) for an edited asset, the original's
+   * otherwise. Curation uses the original's ([[contentUrl]]): it judges captures, not edits.
    */
   def previewUrl(asset: Asset): String =
     val url = contentUrl(Const.DataStore.PREVIEW, asset.persistedId)
@@ -92,33 +85,27 @@ object Util:
 
   private val shortDateFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
 
-  /**
-   * A calendar day as a row of Curation's Sequence rail and an end of a search's date range read it, "12 Mar 2026": the month by
-   * its first three letters, September as "Sep". No zone is involved: the day is the day
-   */
+  /** A calendar day as "12 Mar 2026"; no zone is involved */
   def humanReadableShortDate(date: LocalDate): String = date.format(shortDateFormatter)
 
   private val dayAndMonthFormatter = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
 
-  /** A calendar day without its year, "12 Mar", as the first day of a search's date range within one year reads */
+  /** A calendar day without its year, "12 Mar" */
   def humanReadableDayAndMonth(date: LocalDate): String = date.format(dayAndMonthFormatter)
 
   private val timeFormatter = DateTimeFormatter.ofPattern("h:mm:ss a", Locale.ENGLISH)
 
   /**
-   * A moment as a Sequence's group header reads it, "Sunday, September 6, 2026, 10:00:05 AM": the seconds tell apart the bursts
-   * of one minute. The camera's wall clock, so no zone is involved.
+   * A moment as "Sunday, September 6, 2026, 10:00:05 AM": the seconds tell apart bursts within one minute. The camera's wall
+   * clock, so no zone is involved.
    */
   def humanReadableDayAndTime(dateTime: LocalDateTime): String =
     s"${humanReadableDate(dateTime.toLocalDate)}, ${dateTime.format(timeFormatter)}"
 
-  /**
-   * A date group's match count as its header reads it, "(3 items)". The client rebuilds the same text as the count falls
-   * (`itemCountText` in js/search-results/date-groups.js); the two have to agree.
-   */
+  /** A date group's count as "(3 items)". `itemCountText` in js/search-results/date-groups.js builds the same text. */
   def humanReadableItemCount(count: Int): String = if count == 1 then "(1 item)" else s"($count items)"
 
-  /** A Video's length as a cell shows it, "m:ss" under an hour and "h:mm:ss" from there, rounded to the second */
+  /** A Video's length as "m:ss", or "h:mm:ss" from an hour, rounded to the second */
   def humanReadableDuration(durationMs: Long): String =
     val totalSeconds = Math.round(Math.max(0L, durationMs) / 1000.0)
     val hours = totalSeconds / 3600
@@ -137,9 +124,8 @@ object Util:
       f"${bytes / Math.pow(unit, exp)}%.1f ${pre}B"
 
   /**
-   * `text` as a log line or an audit record may carry text a client typed: each control character escaped as `\uXXXX`, so it
-   * cannot start a line of its own (CR, LF) or reach a column that refuses it (PostgreSQL refuses a NUL), and the result cut to
-   * `maxLength` characters
+   * Client-typed text made safe for a log line or an audit record: control characters escaped as `\uXXXX`, so a CR or LF cannot
+   * start a line and a NUL cannot reach PostgreSQL, which refuses it; cut to `maxLength` characters
    */
   def printable(text: String, maxLength: Int): String =
     text.flatMap(c => if c.isControl then f"\\u${c.toInt}%04x" else c.toString).take(maxLength)

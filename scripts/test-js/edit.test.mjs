@@ -1,9 +1,8 @@
 /**
  * The parity of the Edit panel's geometry and per-pixel math with the server's renderer: the
- * client modules (`altitude/static/js/edit/geometry.js`, `tone.js`, `recipe.js`), unchanged, against
- * the shared vectors the Scala renderer generated (`altitude/test/resources/edit/vectors.json`,
- * whose `_doc` describes each group), at the tolerances the file states. Run by `make test-js`
- * under Node's built-in runner (`node --test`), with no dependency.
+ * client modules (`altitude/static/js/edit/geometry.js`, `tone.js`, `recipe.js`) against the
+ * shared vectors the Scala renderer generated (`altitude/test/resources/edit/vectors.json`), at
+ * the tolerances the file states. Run by `make test-js`.
  */
 import { test } from "node:test"
 import assert from "node:assert/strict"

@@ -1,29 +1,17 @@
 /**
- * One upload of the Import page, from its Import's opening to its closing (the upload routes of
- * `ImportController`), through the shared axios client, whose `onUploadProgress` drives the
- * section's progress; nothing of it is an htmx request.
- *
- * The Import is opened with its name, its destination folder and the number of files about to be
- * sent, each file is sent in a request of its own, `CONCURRENCY` at a time, under its relative
- * path, and the Import is closed once the last is answered. A file whose request fails with no answer, or with a 5xx, is sent again, `RETRIES`
- * times after a pause; when the last try fails too, the page has the server record the file as
- * failed and goes on with the rest. A file the server answers as failed was recorded so by the
- * server, and one it refuses (a 400) was not recorded; neither is sent again. Any other refusal
- * ends the upload, since no file after it would fare better: the Import is gone or takes no more
- * files (404, 409), or the account may no longer import (401, 403).
- *
- * Cancelling (`signal`) stops the sending, the requests in flight included, and closes the Import:
- * to the server a cancelled upload is an Import with fewer files. Leaving the page is cancelling
- * too: the Import is closed by a beacon as the page goes, so it does not stay in progress.
+ * One upload of the Import page, from opening its Import to closing it, through the shared axios
+ * client (not htmx). Each file is its own request, `CONCURRENCY` at a time. A file that gets no answer
+ * or a 5xx is retried `RETRIES` times, then recorded failed on the server, and the rest go on; a 400
+ * refuses that file alone. Any other refusal ends the upload, since no later file would fare better:
+ * the Import is gone or closed (404, 409), or the account may no longer import (401, 403). Cancelling,
+ * or leaving the page (by a beacon), closes the Import, which the server sees as one with fewer files.
  */
 import { getHttpErrorMessage, http } from "../http/client.js"
 
 const CONCURRENCY = 3
 const RETRIES = 2
-// The pause before each retry, in ms
 const RETRY_DELAYS_MS = [1000, 3000]
 
-/** Waits `ms`, or until the signal aborts */
 function pause(ms, signal) {
     return new Promise((resolve) => {
         const timer = setTimeout(resolve, ms)
@@ -38,19 +26,16 @@ function pause(ms, signal) {
     })
 }
 
-/** Whether a failed request is worth another try: it got no answer, or the server failed */
+/** No answer at all, or a 5xx */
 function isTransient(error) {
     const status = error?.response?.status
     return !status || status >= 500
 }
 
 /**
- * Runs the upload of `files` (`{ file, relPath }`) to the route that opens an Import
- * (`importsUrl`), under `name` and into `destFolderId` when given. `onProgress` is told, as it
- * changes, how many files are done (sent, failed or refused), how many of those failed, and the
- * bytes sent so far. Resolves, once the Import is closed, with those counts, whether the upload
- * was cancelled, what ended it early (`stopped`, the server's words) and whether the Import could
- * be closed. An Import that cannot be opened rejects, with nothing sent.
+ * `onProgress` gets the files done (sent, failed or refused), how many of them failed, and the bytes
+ * sent. Resolves after closing with the counts, `stopped` (the server's words for what ended it early)
+ * and whether the Import closed. Rejects, with nothing sent, when the Import cannot be opened.
  */
 export async function runUpload({
     importsUrl,
@@ -63,7 +48,7 @@ export async function runUpload({
     const opened = await http.post(importsUrl, {
         ...(name ? { name } : {}),
         ...(destFolderId ? { destFolderId } : {}),
-        // What is about to be sent, the ignored files left out already: the history counts them as remaining
+        // Ignored files are already left out; the history counts these as remaining
         expectedFiles: files.length,
     })
     const importUrl = `${importsUrl}/${opened.data.id}`
@@ -73,7 +58,7 @@ export async function runUpload({
     let failed = 0
     let doneBytes = 0
     let stopped = null
-    // The bytes sent of each request in flight, by its file's index
+    // Bytes sent of each request in flight, by file index
     const inFlight = new Map()
 
     const report = () => {
@@ -81,7 +66,6 @@ export async function runUpload({
         onProgress({ done, failed, bytes: doneBytes + sending })
     }
 
-    /** Has the server record a file the page could not send; a record that fails too is only logged */
     async function recordFailed({ file, relPath }) {
         try {
             await http.post(`${importUrl}/failures`, {
@@ -95,7 +79,6 @@ export async function runUpload({
         }
     }
 
-    /** Sends one file, with its retries: whether it was sent (recorded and handed on), or failed */
     async function send(upload, index) {
         for (let attempt = 0; ; attempt++) {
             try {
@@ -144,7 +127,6 @@ export async function runUpload({
         }
     }
 
-    /** Takes the next file until none is left, the upload is cancelled or the server ends it */
     async function sendNext() {
         while (next < files.length && !signal.aborted && !stopped) {
             const index = next++
@@ -162,7 +144,7 @@ export async function runUpload({
         }
     }
 
-    /** Closes the Import, trying again as a file's request does; whether it closed */
+    /** Retries like a file's request; resolves whether the Import closed */
     async function close() {
         for (let attempt = 0; ; attempt++) {
             try {

@@ -23,17 +23,13 @@ import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.decorators.requirePermission
 
 object WatchFolderController:
-  // The service's field of an error, as the dialog's field
   private val DIALOG_FIELD_OF_ERROR = Map(
     FieldConst.WatchFolder.NAME -> Api.Field.WatchFolder.NAME,
     FieldConst.WatchFolder.PATH -> Api.Field.WatchFolder.PATH,
     FieldConst.WatchFolder.DEST_FOLDER_ID -> Api.Field.WatchFolder.DEST_FOLDER_ID
   )
 
-  /**
-   * The Watch folder dialog's fields, as an Admin submitted them or as an edit opens over them. `storedName` is the name an
-   * edit's title shows, whatever was typed; `destination` the path of the destination folder, for its chip.
-   */
+  /** The dialog's fields. `storedName` is what an edit's title shows, whatever was typed; `destination` is the chip's path. */
   case class Form(
       watchFolderId: Option[String] = None,
       name: String = "",
@@ -44,11 +40,10 @@ object WatchFolderController:
       storedName: Option[String] = None,
       destination: Option[String] = None):
 
-    /** What the form asks the service for: a destination only with "Keep folder structure" on */
+    /** A destination only with "Keep folder structure" on */
     def spec: WatchFolderSpec = WatchFolderSpec(name, path, destFolderId.filter(_ => keepsStructure), deletesImported)
 
   object Form:
-    /** The form an edit opens over */
     def of(watchFolder: WatchFolder): Form =
       Form(
         watchFolderId = watchFolder.id,
@@ -60,7 +55,7 @@ object WatchFolderController:
         storedName = Some(watchFolder.name)
       )
 
-    /** The form a submit's JSON body holds: a switch is the text of its hidden input, "true" or "false" */
+    /** A switch arrives as the text of its hidden input, "true" or "false" */
     def ofWatchFolderBody(json: ujson.Obj): Form =
       def text(field: String): String = json.obj.get(field).flatMap(_.strOpt).getOrElse("")
       def isOn(field: String): Boolean =
@@ -75,19 +70,15 @@ object WatchFolderController:
         deletesImported = isOn(Api.Field.WatchFolder.DELETES_IMPORTED)
       )
 
-  /** A Watch folder's ID as a request names it: a UUID, or a 400 */
   def uuid(id: String): String =
     if Validators.isUuid(id) then id else throw ValidationException(C.Msg.Err.VALUE_NOT_A_UUID)
 
   private def isAdmin: Boolean = RequestContext.getAccount.accountType == AccountType.Admin
 
-  /** The Library's Watch folders as the Import page shows them to the request's account: an Admin's cards carry their actions */
+  /** An Admin's cards carry their actions */
   def list: Html = htmx.html.watch_folders(App.altitude.service.watchFolder.cards(), isAdmin)
 
-/**
- * The Watch folders of the Import page: the cards, which every account that holds Import in the Library reads, and what an Admin
- * does with a Watch folder: add, edit, pause, resume, scan now, retry its failed files and remove
- */
+/** The Import page's Watch folders: any holder of Import reads the cards; every write is an Admin's */
 class WatchFolderController(using logger: Logger) extends BaseController:
   import WatchFolderController.*
 
@@ -95,7 +86,6 @@ class WatchFolderController(using logger: Logger) extends BaseController:
 
   private def watchFolders = App.altitude.service.watchFolder
 
-  /** The Library's Watch folders, as cards; read-only for an account that is no Admin */
   @requireLogin()
   @requirePermission(Permission.Import)
   @cask.get(f"/$prefix/r/:repoId/list")
@@ -108,7 +98,6 @@ class WatchFolderController(using logger: Logger) extends BaseController:
   def showAddDialog(repoId: String)(using request: Request): Response[String] =
     htmlResponse(rendered(Form()))
 
-  /** The edit form of a Watch folder, over what is stored; one that is not the Library's is a 404 */
   @requireLogin()
   @requireAdmin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/edit")
@@ -117,10 +106,7 @@ class WatchFolderController(using logger: Logger) extends BaseController:
       htmlResponse(rendered(Form.of(watchFolders.getById(uuid(watchFolderId)))))
     }
 
-  /**
-   * Adds the Watch folder the dialog describes, owned by the request's Admin. A field the rules refuse comes back as the form,
-   * with the values submitted and the error under the field; a destination that is no folder of the Library is a 404.
-   */
+  /** Owned by the request's Admin. A destination that is no folder of the Library is a 404. */
   @requireLogin()
   @requireAdmin()
   @cask.post(f"/$prefix/r/:repoId/add")
@@ -133,7 +119,7 @@ class WatchFolderController(using logger: Logger) extends BaseController:
       }
     }
 
-  /** An Admin's edit of a Watch folder, through the same form; the Admin owns it from here on */
+  /** The editing Admin owns the Watch folder from here on */
   @requireLogin()
   @requireAdmin()
   @cask.put(f"/$prefix/r/:repoId/edit")
@@ -141,7 +127,6 @@ class WatchFolderController(using logger: Logger) extends BaseController:
     answering {
       val form = Form.ofWatchFolderBody(unscrubbedJson.get)
       val id = uuid(form.watchFolderId.getOrElse(throw ValidationException(C.Msg.Err.VALUE_REQUIRED)))
-      // The title names the Watch folder as stored, whatever name was typed
       saving(form.copy(storedName = Some(watchFolders.getById(id).name))) {
         val edited = watchFolders.update(id, form.spec)
         dialogSuccessResponse(ujson.Obj("message" -> s"Watch folder ${edited.name} saved"))
@@ -149,9 +134,8 @@ class WatchFolderController(using logger: Logger) extends BaseController:
     }
 
   /**
-   * What the dialog says once "Delete imported files" is switched on: the number of files in the directory at `path` now, as a
-   * scan would find them, or the warning alone for a path that cannot be a Watch folder's as it stands. `watchFolderId` is the
-   * Watch folder edited, whose own path is no overlap.
+   * The notice once "Delete imported files" is on: how many files a scan would find at `path` now, or the warning alone for a
+   * path that cannot be a Watch folder's. `watchFolderId` is the one edited, whose own path is no overlap.
    */
   @requireLogin()
   @requireAdmin()
@@ -180,10 +164,7 @@ class WatchFolderController(using logger: Logger) extends BaseController:
       noContentResponse
     }
 
-  /**
-   * "Scan now": starts a scan of the Watch folder and answers at once; the card follows the scan through the status feed. A
-   * paused one, and one whose destination folder is in the Trash, is a 409 saying so.
-   */
+  /** Starts a scan and answers at once. A paused Watch folder, or one whose destination is in the Trash, is a 409. */
   @requireLogin()
   @requireAdmin()
   @cask.put(f"/$prefix/r/:repoId/scan")
@@ -195,7 +176,7 @@ class WatchFolderController(using logger: Logger) extends BaseController:
       noContentResponse
     }
 
-  /** "Retry failed": the failed files of the Watch folder are read again by its next scans */
+  /** The failed files are read again by the next scans */
   @requireLogin()
   @requireAdmin()
   @cask.put(f"/$prefix/r/:repoId/retry")
@@ -205,7 +186,6 @@ class WatchFolderController(using logger: Logger) extends BaseController:
       noContentResponse
     }
 
-  /** The Remove dialog, which says what stays: the files of the directory and the Imports of its scans */
   @requireLogin()
   @requireAdmin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/remove")
@@ -224,7 +204,6 @@ class WatchFolderController(using logger: Logger) extends BaseController:
       dialogSuccessResponse(ujson.Obj("message" -> s"Watch folder ${watchFolder.name} removed"))
     }
 
-  // The Watch folder a write's body names, a UUID
   private def watchFolderIdOf(json: ujson.Obj): String =
     uuid(
       json.obj
@@ -232,8 +211,7 @@ class WatchFolderController(using logger: Logger) extends BaseController:
         .flatMap(_.strOpt)
         .getOrElse(throw ValidationException(C.Msg.Err.VALUE_REQUIRED)))
 
-  // The form with what the server knows of what it holds: the path of its destination folder, for the chip (a folder that is
-  // not the Library's is a 404), and, with the deletion on, the number of files in its directory now
+  // With the destination's path for its chip (a folder that is not the Library's is a 404) and, with deletion on, the file count
   private def rendered(form: Form, errors: Map[String, String] = Map.empty): Html =
     val destination = form.destFolderId.map {
       folderId =>
@@ -243,10 +221,7 @@ class WatchFolderController(using logger: Logger) extends BaseController:
     val scanInterval = App.altitude.settings.current.watchFolderScanInterval
     htmx.html.watch_folder_form(form.copy(destination = destination), fileCount, scanInterval, errors)
 
-  /**
-   * Runs a submitted form's write, or answers the form again with the values submitted and the error of every field refused. One
-   * error is the form's own, refused here before the service: "Keep folder structure" with no folder chosen.
-   */
+  /** Runs the write, or answers the form again with its errors. "Keep folder structure" with no folder is refused here. */
   private def saving(form: Form)(write: => Response[String]): Response[String] =
     def again(errors: Map[String, String]): Response[String] =
       val fieldErrors = errors.map((key, error) => DIALOG_FIELD_OF_ERROR.getOrElse(key, key) -> error)

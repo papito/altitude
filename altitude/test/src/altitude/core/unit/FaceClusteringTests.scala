@@ -58,8 +58,8 @@ import altitude.core.service.FaceRecognitionService.meanNormalized
      *
      * Assertions:
      *
-     * Clustering goes in descending quality and compares with each cluster's leader: the 40 degree detection joins the 0 degree
-     * one, and the 80 degree one is too far from that leader and starts its own cluster.
+     * Clustering goes in descending quality and compares with each cluster's leader: 40 degrees joins 0 degrees, and 80 degrees
+     * is too far from that leader and starts its own cluster.
      */
     val a = Detection(0, 3)
     val b = Detection(40, 2)
@@ -77,13 +77,12 @@ import altitude.core.service.FaceRecognitionService.meanNormalized
      *
      * Assertions:
      *
-     * The 40 degree detection leads, and being within the threshold of both others, gathers all three into one cluster ordered by
+     * The 40 degree detection leads and, within the threshold of both others, gathers all three into one cluster ordered by
      * quality.
      */
     val a = Detection(0, 1)
     val b = Detection(40, 3)
     val c = Detection(80, 2)
-    // b is within the threshold of both others, so with b leading all three are one cluster
     FaceRecognitionService.cluster(Seq(a, c, b), features, _.quality, threshold) shouldBe List(Cluster(b, List(b, c, a)))
   }
 
@@ -92,13 +91,13 @@ import altitude.core.service.FaceRecognitionService.meanNormalized
     /**
      * Setup:
      *
-     * Two clusters as clustering leaves them, 0 and 40 degrees led by quality 3 and 80 degrees alone; then two single clusters at
-     * 0 and 120 degrees.
+     * Two clusters as clustering leaves them, 0 and 40 degrees led by quality 3 and 80 degrees alone; then single clusters at 0
+     * and 120 degrees.
      *
      * Assertions:
      *
-     * The first pair's centroids are within the threshold, so the higher-quality cluster absorbs the other's members; the
-     * far-apart pair is left as it is.
+     * The first pair's centroids are within the threshold, so the higher-quality cluster absorbs the other; the far pair stays as
+     * it is.
      */
     val a = Detection(0, 3)
     val b = Detection(40, 2)

@@ -106,11 +106,9 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Library names that are empty, only whitespace, one character, one character once composed ("e" and a combining accent), 81
-     * characters, 27 of U+FB2C (81 characters once in NFC), 70 of U+FDFA (a name key NFKC spells out to 2310 bytes), ones holding
-     * a control character between words or at the end, ones holding an invisible format character (a zero-width space, a
-     * right-to-left override, a directional isolate pair, a byte order mark, a soft hyphen), and ones holding an unpaired
-     * surrogate, high or low.
+     * Library names that are empty, blank, one character (also once composed), 81 characters (also once in NFC), 70 of U+FDFA (a
+     * name key NFKC spells out to 2310 bytes), or that hold a control character, an invisible format character or an unpaired
+     * surrogate.
      *
      * Assertions:
      *
@@ -605,7 +603,7 @@ import altitude.core.util.Util
        */
       val candidates = List.fill(2)(testContext.persistUser(
         Some(testContext.makeUser().copy(grantsNewLibraries = true, newLibraryPermissions = Permissions.of(Permission.Import)))))
-      // The order an unordered read of the switch lists them in, which is the order a create took them in when it read them so
+      // The order an unordered read of the switch lists them in, which a create that did not lock by ID would take them in
       val listed = testApp.txManager.asReadOnly {
         query("SELECT id FROM account WHERE grants_new_libraries = ?", Boolean.box(true)).map(_("id").toString.trim)
       }

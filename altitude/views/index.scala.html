@@ -5,8 +5,7 @@
 @* `current` is the nav entry of the view shown (a `Const.NavEntry` key) *@
 @(stats: Stats, current: String)
 
-@* An option of the Dock side menu: its glyph (includes/dock_glyphs) and its label. The pick is the `data-app-dock-side`
-   click js/common/explorer-dock.js takes; nothing here is a search trigger *@
+@* An option of the Dock side menu: its glyph and its label, not a search trigger *@
 @dockOption(side: String, label: String) = {
   <button type="button" data-app-dock-side="@side"><svg class="glyph" width="16" height="16" aria-hidden="true"><use href="#dockGlyph-@side"/></svg><span>@label</span></button>
 }
@@ -19,15 +18,14 @@
 
     @includes.html.header_common()
     @* The Dock side and the explorer's share are written on <html> before the first paint, from what this browser
-       remembers under the `data-key` (js/common/explorer-dock.js keeps them from then on) *@
+       remembers under the `data-key` *@
     <script src="/static/js/explorer-dock-boot.js" data-key="explorerDock"></script>
     <script src="/static/js/lib/interact.min.js" defer></script>
     <script src="/static/js/lib/json-enc.js" defer></script>
   </head>
 
-  @* The Permissions the account holds in this Library, by name (`Permission`), from its login token, and whether it may recycle
-     what this view shows (`RequestContext.recyclesIn`): the controls the scripts build or bind (the explorer's menus and add
-     buttons, drag and drop, Curation's keys) follow them as the templates' do (`window.ctx.holds`, `recyclesHere`) *@
+  @* The Permissions the account holds in this Library, and whether it may recycle what this view shows, so the controls
+     the scripts build or bind follow them as the templates' do *@
   <body class="index" data-app-permissions="@{RequestContext.permissions.value.toList.mkString(" ")}"@if(RequestContext.recyclesIn(current)) { data-app-recycles}>
     <nav>
       @includes.html.nav(stats = stats, current = current)
@@ -39,14 +37,11 @@
 
       <div id="explorer">
         <div id="explorerViews">
-          @* The header: in Triage the Triage summary across its width, then the tab list and the row's end. Each tab is
-             the link itself. A successful tab load marks its tab selected (js/listeners/htmx-requests.js); the initial
-             tab is loaded the same way below *@
+          @* Each tab is the link itself; a successful load marks its tab selected, and the initial tab is loaded the same way
+             below *@
           <div id="explorerHeader">
-            @* Triage alone: the Triage summary (htmx/triage_summary), a row of its own above the tabs, loaded once with
-               the page and kept across tab loads; js/listeners/triage.js reloads it after every change it counts, issued
-               from this host so the reloads take turns (htmx's default queue). Its links are search triggers, bound when
-               the swap is hydrated (js/listeners/htmx-requests.js) *@
+            @* Triage alone: the Triage summary, a row of its own above the tabs, kept across tab loads. Its reloads are
+               issued from this host so they take turns (htmx's default queue) *@
             @if(current == Const.NavEntry.TRIAGE) {
             <div id="triageSummary"
                  hx-get="/htmx/triage/r/@{RequestContext.getRepository.persistedId}/summary"
@@ -104,9 +99,7 @@
               </a>
             </div>
 
-            @* The Dock side menu, at the row's end: a compact choice menu (js/common/context-menu-markup.js) whose
-               trigger shows the current side's glyph alone; js/common/explorer-dock.js checks the current option and
-               keeps the trigger's glyph on every side change. Built by the page's hydration (ensureChoiceMenus) *@
+            @* The Dock side menu: a compact choice menu whose trigger shows the current side's glyph alone *@
             <div id="dockSideMenuHost" data-choice-menu="Dock side" data-choice-menu-compact>
               @dockOption("left", "Left")
               @dockOption("right", "Right")
@@ -119,8 +112,7 @@
         </div>
       </div>
 
-      @* The divider between the explorer and the results, in the grid's gutter area; js/common/explorer-dock.js drags
-         it, moves it with the arrow keys and keeps its separator state current *@
+      @* The divider between the explorer and the results, in the grid's gutter area *@
       <div id="explorerDivider" class="divider" role="separator" aria-controls="explorer" aria-label="Explorer size" tabindex="0"></div>
 
       <div id="content"></div>
@@ -145,13 +137,10 @@
           window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
 
           /**
-           * The browser URL is authoritative exactly once, here: it seeds the search parameters
-           * (a bookmarked or shared search, or the view the nav links navigated to). From now on
-           * the store is the source of truth and every search goes through `runSearch`.
-           *
-           * A member's Browse opens with the triage filter the URL names, or else the one last
-           * chosen in this browser, triaged items shown when none was; a Guest sees none, and
-           * its search holds no filter.
+           * The browser URL is authoritative exactly once, here: it seeds the search parameters.
+           * From then on the store is the source of truth and every search goes through
+           * `runSearch`. A member's Browse opens with the triage filter the URL names, else the one
+           * last chosen in this browser; a Guest's search holds none.
            */
           const searchParams = Alpine.store(Const.state.searchParams)
           searchParams.seedFromLocation(window.location.search, {
@@ -161,24 +150,17 @@
           const view = searchParams.view
           Alpine.store(Const.state.currentView).setViewName(view)
 
-          /**
-           * This switches the background color of the content area (triage, trash, etc.)
-           */
+          // The view's class sets the content area's background (triage, trash)
           document.getElementById("content").classList.add(view)
 
-          /**
-           * Load which fields to show in the grid
-           */
           window.ctx.loadMetadataFieldViewSettingsFromStore()
 
-          // The divider between the explorer and the results, and the Dock side's upkeep; the trash
-          // bin shows no explorer, so nothing is bound there (js/common/explorer-dock.js)
+          // The trash bin shows no explorer, so nothing is bound there
           initExplorerDock(view)
 
-          // The URL fragment names the explorer tab to open, defaulting to folders; a fragment
-          // naming no tab of this view (#albums in triage) opens the first tab, folders. The tab
-          // is loaded exactly as a click on it would load it: issued from the tab, so it is
-          // marked selected on success
+          // The URL fragment names the explorer tab to open; one naming no tab of this view
+          // (#albums in triage) opens folders. Issued from the tab, as a click is, so it is marked
+          // selected on success
           const fragment = window.location.hash || "#folders"
           const tabEl = document.querySelector(`[role="tab"][href="${fragment}"]`) ?? document.querySelector('[role="tab"]')
 
@@ -188,9 +170,6 @@
               swap: "innerHTML",
           })
 
-          /**
-           * Perform search on load - the default one, or the one the URL asked for
-           */
           runSearch()
 
           // An asset's URL (/r/:repoId/asset/:assetId) opens Asset detail over those results

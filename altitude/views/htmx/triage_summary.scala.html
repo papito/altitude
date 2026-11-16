@@ -3,10 +3,8 @@
 
 @(summary: TriageSummary)
 
-@* The Triage summary (GET /htmx/triage/r/:repoId/summary): an info notice above the Triage explorer's tabs saying how many
-   assets are in triage, how many of them have a Face of an Unknown person and how many no Location points at. The total is plain
-   text. Each of the other two counts above zero is a search trigger for its Triage subset (`subset`), named for what it shows,
-   since its text is a bare number; a zero is plain text ("None have…", "All have…"), and an empty triage is one sentence. The counts are LibraryService.triageSummary's. *@
+@* The Triage summary. A count above zero is a search trigger for its Triage subset, named by its aria-label since its text
+   is a bare number. The counts are LibraryService.triageSummary's. *@
 
 @count(n: Int) = @{ f"$n%,d" }
 

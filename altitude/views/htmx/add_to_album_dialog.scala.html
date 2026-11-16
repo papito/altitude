@@ -5,10 +5,8 @@
 
 @(title: String, albums: List[Album], fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
-@* js/fragments/add-to-album.js fills the hidden assetIds field from the current selection on the first render, keeps the
-   success detail naming the chosen album, and shows the name field while "New album…" is chosen. That option's value is
-   empty: an empty album ID with a name creates the album (AlbumActionController). The name field shows when there are no
-   albums to choose, or when the submission being re-rendered chose "New album…". *@
+@* js/fragments/add-to-album.js fills the hidden assetIds from the selection. "New album…" has an empty value: an empty
+   album ID with a name creates the album. *@
 @defining(formJson.obj.get(Api.Field.Album.ALBUM_ID).flatMap(_.strOpt)) { chosenId =>
 @defining(albums.isEmpty || chosenId.contains("")) { creating =>
 <form id="addToAlbum" data-app-fragment="modal"
@@ -18,9 +16,9 @@
       data-app-success-event="ASSETS_ADDED_TO_ALBUM_EVENT"
       hx-target="this" hx-swap="none" hx-json-enc
       hx-put="/htmx/album/r/@{RequestContext.getRepository.persistedId}/assets">
-  @* The hidden selection is filled by the client, so its error is a general one; the album's sits by its select *@
+  @* The client fills the selection, so its error is a general one *@
   @if(fieldErrors.contains(Api.Field.ASSET_IDS)) {<div class="error">@{fieldErrors(Api.Field.ASSET_IDS)}</div>}
-  @* The title says "album", so the select has no visible label, only its aria-label *@
+  @* The title names the album, so the select has only an aria-label *@
   <div>
     <select id="field-albumId" name="@{Api.Field.Album.ALBUM_ID}" aria-label="Album">
       @for(album <- albums) {

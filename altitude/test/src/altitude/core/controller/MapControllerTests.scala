@@ -16,21 +16,19 @@ import altitude.core.models.Person
     /**
      * Setup:
      *
-     * A logged-in user's repository with the Location "Beach", in "Category" and pinned at 10, 20, holding two imported assets:
-     * one with its own point at 11, 21, and one with no point, which the map plots at the Location's pin. A third asset, in no
-     * Location, has its own point at -40, -50.
+     * A logged-in user's repository with the Location "Beach" pinned at 10, 20, holding an asset with its own point and one with
+     * none, plotted at the pin. A third asset, in no Location, has its own point at -40, -50.
      *
      * Assertions:
      *
-     * Scoped to the Location as the grid is, the bounds and the cells agree on the two assets, the cells counting plotted points
-     * and listing the Location's pin with its member count. Panning clips cells and pins to the viewport, while a visible
-     * Location still counts all of its members. The map follows the grid's scope - search text, recycling, the trash view - and
-     * ignores the grid-only parameters the client sends with it.
+     * Scoped to the Location, the bounds and the cells agree on its two assets, and the cells list the Location's pin with its
+     * member count. Panning clips cells and pins to the viewport, while a visible Location still counts all its members. The map
+     * follows the grid's search text, recycling and trash view, and ignores the grid-only parameters.
      *
      * Edge cases:
      *
-     * The panel's bbox filter, the sort, layout, grouping and paging parameters change nothing; search text that matches nothing
-     * is a count with no bounds; a recycled asset leaves the library's bounds and is the trash view's only point.
+     * The bbox filter, sort, layout, grouping and paging change nothing. Search text that matches nothing is a count with no
+     * bounds. A recycled asset leaves the library's bounds and is the trash view's only point.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -70,11 +68,10 @@ import altitude.core.models.Person
         get("cells", scope ++ Map("viewport" -> "10.5,20.5,12,22", "zoom" -> "10"))("cells").arr
           .map(_("assetId").str)
           .toList shouldBe List(ownPoint.persistedId)
-        // Panning clips plotted cells and Location pins, but a visible Location still counts every matching member.
         val pinViewport = get("cells", scope ++ Map("viewport" -> "9,19,10.5,20.5", "zoom" -> "10"))
         pinViewport("cells").arr.map(_("assetId").str).toList shouldBe List(fallback.persistedId)
         pinViewport("locations").arr.head("count").num shouldBe 2
-        // The client sends its search parameters verbatim: grid-only ones are ignored, and so is the panel's bbox filter
+        // The client sends its search parameters verbatim
         val gridOnly = Map(
           "bbox" -> "-1,-1,1,1",
           "sort" -> "filename1",
@@ -105,8 +102,7 @@ import altitude.core.models.Person
     /**
      * Setup:
      *
-     * A logged-in user's repository with two imported assets far apart, each with a point: one with a saved Edit, rendered as
-     * revision 1.
+     * A logged-in user's repository with two imported assets far apart, one with a saved Edit rendered as revision 1.
      *
      * Assertions:
      *
@@ -142,8 +138,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * The bounds and the cells hold the sorted asset's point alone without the parameter and both points with `triaged=true`; the
-     * triage view with `triaged=false` is a JSON 400 naming the view on both routes.
+     * The bounds and the cells hold only the sorted asset by default and both with `triaged=true`. The triage view with
+     * `triaged=false` is a JSON 400 naming the view on both routes.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -184,13 +180,13 @@ import altitude.core.models.Person
     /**
      * Setup:
      *
-     * A logged-in user's repository with two triaged assets, each plotted at a point of its own: one in the Location "Beach" and
-     * one with a Face of an unnamed person.
+     * A logged-in user's repository with two plotted triaged assets: one in the Location "Beach" and one with a Face of an
+     * unnamed person.
      *
      * Assertions:
      *
-     * In the triage view the bounds and the cells hold both points without a subset, the asset in no Location alone with
-     * `subset=noLocation`, and the asset with the unknown person alone with `subset=unknownPeople`.
+     * In the triage view the bounds and the cells hold both assets without a subset, only the asset in no Location for
+     * `subset=noLocation`, and only the one with the unnamed person for `subset=unknownPeople`.
      *
      * Edge cases:
      *
@@ -235,21 +231,19 @@ import altitude.core.models.Person
     /**
      * Setup:
      *
-     * A logged-in user's repository with the people Alice and Bob, the Locations Lisbon and Sintra, and four assets, each plotted
-     * at a point of its own: one taken on June 1, 2024 with a Face of each person, in Lisbon; one taken on June 15 with Alice
-     * alone, in Sintra; one taken on July 1 with Bob alone; and one with no capture time and nobody. All four are imported at one
-     * moment.
+     * A logged-in user's repository with the people Alice and Bob, the Locations Lisbon and Sintra, and four plotted assets
+     * imported at one moment: June 1, 2024 with both people, in Lisbon; June 15 with Alice, in Sintra; July 1 with Bob; and one
+     * with no capture time and nobody.
      *
      * Assertions:
      *
-     * The bounds count and the cells plot the asset with both people for `personId` naming the two, the three assets with either
-     * with `peopleMatch=any`, the two assets in either Location for `locationId` naming the two, the two assets taken in June for
-     * `takenFrom` and `takenTo`, and all four for the Date Imported range of the day they were imported, none for the day after.
+     * The bounds and the cells agree on: the asset with both people for both IDs, the three with either for `peopleMatch=any`,
+     * the two in either Location, the two taken in June, and all four for their import day, none for the day after.
      *
      * Edge cases:
      *
-     * A malformed date, a range whose start is after its end, an unknown `peopleMatch`, eleven people in one parameter and a date
-     * range with the trash view are JSON 400s on both routes.
+     * A malformed date, a reversed range, an unknown `peopleMatch`, eleven people and a date range in the trash view are JSON
+     * 400s on both routes.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -326,9 +320,8 @@ import altitude.core.models.Person
      *
      * Edge cases:
      *
-     * A missing parameter, a viewport whose south is above its north, NaN in the viewport and a fractional zoom; text with no
-     * usable term, which counts as no text and is allowed in the trash; a malformed bbox search filter, which is ignored rather
-     * than refused.
+     * A missing parameter, a south above the north, NaN in the viewport and a fractional zoom are refused. Text with no usable
+     * term counts as no text and is allowed in the trash. A malformed bbox search filter is ignored.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -357,7 +350,6 @@ import altitude.core.models.Person
               else error should include("zoom")
             }
         }
-        // Search text does not reach the trash, on either endpoint; text without a usable term is no text
         for (endpoint <- List("cells", "bounds")) withClue(s"$endpoint: ") {
           def inTrash(q: String) = requests.get(
             s"$host/api/map/r/$repoId/$endpoint",
@@ -370,7 +362,7 @@ import altitude.core.models.Person
           ujson.read(refused.text())("error").str should include("trash")
           inTrash("- OR").statusCode shouldBe 200
         }
-        // The bbox search filter is not the map's: a malformed one is ignored rather than refused
+        // The bbox search filter is not the map's
         val ignoredBounds = requests.get(
           s"$host/api/map/r/$repoId/bounds",
           params = Map("bbox" -> "bad"),

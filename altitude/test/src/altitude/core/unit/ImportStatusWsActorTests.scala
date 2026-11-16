@@ -36,11 +36,11 @@ object ImportStatusWsActorTests {
     override def sendAsync(event: Future[cask.Ws.Event])(implicit fileName: sourcecode.FileName, line: sourcecode.Line): Unit =
       throw new UnsupportedOperationException("The import status actor sends a socket what it has")
 
-    /** The next event the socket was sent, waiting for it; none within the wait fails */
+    /** The next event the socket was sent, failing when none comes within the wait */
     def next(): cask.Ws.Event =
       Option(sent.poll(10, TimeUnit.SECONDS)).getOrElse(throw new AssertionError("The socket was sent nothing"))
 
-    /** Every event the socket was sent that no call has taken yet */
+    /** Every event sent that has not been taken yet */
     def taken(): List[cask.Ws.Event] = {
       val events = new java.util.ArrayList[cask.Ws.Event]()
       sent.drainTo(events)
@@ -50,8 +50,8 @@ object ImportStatusWsActorTests {
 }
 
 /**
- * The import status actor on an actor system of its own whose time the test moves (`ExplicitlyTriggeredScheduler`), with sockets
- * that keep what they are sent and a status rendered as a line of the Import's counters.
+ * The import status actor on its own actor system whose clock the test moves (`ExplicitlyTriggeredScheduler`), with sockets that
+ * keep what they are sent and a status rendered as a line of the Import's counters.
  */
 @DoNotDiscover class ImportStatusWsActorTests extends funsuite.AnyFunSuite with TestFocus with BeforeAndAfterEach {
   import ImportStatusWsActorTests.Socket
@@ -73,7 +73,7 @@ object ImportStatusWsActorTests {
 
   override def afterEach(): Unit = system.terminate()
 
-  /** What the actor pushes for an Import in these tests: its ID and its counters, and that it is closed */
+  /** What the actor pushes for an Import in these tests: its ID, its counters and whether it is closed */
   private def status(anImport: Import): String =
     s"${anImport.persistedId}: ${anImport.imported} of ${anImport.total}${if (anImport.isInProgress) "" else ", closed"}"
 
@@ -85,7 +85,7 @@ object ImportStatusWsActorTests {
 
   private def closed(anImport: Import): Import = anImport.copy(isComplete = true, closedAt = Some(LocalDateTime.now()))
 
-  /** A socket of the account on the Library, added to the actor and told so */
+  /** A socket of the account on the Library, added to the actor and acknowledged */
   private def socketOf(repositoryId: String, userId: String = "account"): Socket = {
     val socket = new Socket
     system ! ImportStatusWsActor.AddClient(repositoryId, userId, socket)
@@ -93,10 +93,7 @@ object ImportStatusWsActorTests {
     socket
   }
 
-  /**
-   * Waits until the actor has handled everything it was sent so far: a socket added now is told so only after that, the actor
-   * handling its messages in the order they came
-   */
+  /** Waits until the actor has handled everything sent so far, since it acknowledges a new socket only after that */
   private def settle(): Unit = socketOf("a-library-with-no-import"): Unit
 
   /** Lets `duration` pass on the actor system's clock, which sends the timers due by then, and waits for the actor */
@@ -113,18 +110,18 @@ object ImportStatusWsActorTests {
     /**
      * Setup:
      *
-     * Two accounts with sockets on one Library, the first with two; the first account also has a socket on another Library. An
-     * Import of the first Library changes.
+     * Two accounts with sockets on one Library, the first with two and a third on another Library. An Import of the first Library
+     * changes.
      *
      * Assertions:
      *
-     * Each of the three sockets on the Import's Library is sent its status once, whichever account's it is. The socket on the
-     * other Library is sent nothing.
+     * Each of the three sockets on the Import's Library is sent its status once, whichever account's it is; the other Library's
+     * socket is sent nothing.
      *
      * Edge cases:
      *
-     * A socket that was removed is sent nothing of the next change. When the first account's versions are raised, its sockets on
-     * both Libraries are closed with 1013 and sent nothing after; the second account's socket is still told.
+     * A removed socket is sent nothing more. When the first account's versions are raised, its sockets on both Libraries are
+     * closed with 1013 and sent nothing after, while the second account's socket is still told.
      */
     val mine = List(socketOf(LIBRARY, "first"), socketOf(LIBRARY, "first"))
     val theirs = socketOf(LIBRARY, "second")
@@ -159,13 +156,12 @@ object ImportStatusWsActorTests {
     /**
      * Setup:
      *
-     * Two sockets on a Library, of two accounts, and one on another Library. The first Library's Watch folders change twice in a
-     * row.
+     * Two accounts' sockets on a Library and one on another Library. The first Library's Watch folders change twice in a row.
      *
      * Assertions:
      *
-     * Each socket of the first Library is sent the message that says to read the Watch folders again, twice, with no interval
-     * awaited between the two. The other Library's socket is sent nothing.
+     * Each socket of the first Library is told to reload the Watch folders twice, with no interval awaited between. The other
+     * Library's socket is sent nothing.
      */
     val first = socketOf(LIBRARY, "first")
     val second = socketOf(LIBRARY, "second")
@@ -187,13 +183,12 @@ object ImportStatusWsActorTests {
     /**
      * Setup:
      *
-     * A socket on a Library. An Import of it changes, then five more times before an interval has passed, while a second Import
-     * of the Library changes once.
+     * A socket on a Library. An Import changes six times within an interval, while a second Import changes once.
      *
      * Assertions:
      *
-     * The first change of each Import is pushed at once. Nothing more is pushed until the interval ends; then the first Import is
-     * pushed once, as its last change left it, and the second, unchanged since, not at all.
+     * Each Import's first change is pushed at once. At the interval's end the first Import is pushed once, as its last change
+     * left it, and the second, unchanged since, not at all.
      *
      * Edge cases:
      *
@@ -233,13 +228,13 @@ object ImportStatusWsActorTests {
      *
      * Assertions:
      *
-     * The first change is pushed at once, the second is held, and the close is pushed at once in its place: the socket's last
-     * message of the Import says it is closed. The interval's end pushes nothing more.
+     * The first change is pushed at once, the second is held, and the close is pushed at once in its place. The interval's end
+     * pushes nothing more.
      *
      * Edge cases:
      *
-     * A change told late, with the Import as it was before a state the actor already has, is not pushed: neither one in progress
-     * after the close, nor one with fewer files settled than the last one pushed.
+     * A stale change arriving late is not pushed: neither one in progress after the close, nor one with fewer files settled than
+     * the last pushed.
      */
     val socket = socketOf(LIBRARY)
 
@@ -271,17 +266,17 @@ object ImportStatusWsActorTests {
     /**
      * Setup:
      *
-     * A socket on a Library, and an upload's Import there that expects 10 files, told three times: with 1 file, with 2 files of
-     * which 1 is settled, and closed with those 2.
+     * A socket on a Library, and an upload's Import expecting 10 files, changed with 1 file, then 2 files with 1 settled, then
+     * closed with those 2.
      *
      * Assertions:
      *
-     * The first change is pushed at once, the second once the interval ends, and the close at once: how far along an Import is
-     * goes by the files it has and what became of them, never by the number it expects.
+     * The first change is pushed at once, the second at the interval's end, and the close at once: progress goes by the files the
+     * Import has, never by the number it expects.
      *
      * Edge cases:
      *
-     * The first state told again after the second, late, is not pushed.
+     * The first state arriving again after the second is not pushed.
      */
     val socket = socketOf(LIBRARY)
     val first = anImport("import", imported = 0, total = 1).copy(expectedFiles = Some(10))
@@ -307,13 +302,12 @@ object ImportStatusWsActorTests {
     /**
      * Setup:
      *
-     * An upload's Import in progress whose name, an uploaded folder's, holds markup, with files of every outcome.
+     * An upload's Import in progress whose name holds markup, with files of every outcome.
      *
      * Assertions:
      *
-     * Its message is JSON for `hx-ws`: the status element of the Import's ID as the content, to replace the element of that ID on
-     * the page, with the Import's ID and that it is not closed. The content holds the counts, the duplicates under "already in
-     * the Library", and the Import's title to swap out of band, in which the name's markup is escaped.
+     * Its message is JSON for `hx-ws`: the Import's status element, replacing the element of that ID, with the Import's ID and
+     * that it is not closed. The content holds the counts and the title to swap out of band, with the name's markup escaped.
      *
      * Edge cases:
      *

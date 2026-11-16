@@ -15,11 +15,11 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Four unsaved Folders: two share a parent ID and name, and two more each have a random parent and name, one of them an ID.
+     * Four Folders: two sharing a parent ID and name, and two with random parents and names, one of them with an ID.
      *
      * Assertions:
      *
-     * Folders are equal by ID, parent ID and name, so the two alike collapse into one element of a set of three.
+     * Folders are equal by ID, parent ID and name, so the two alike collapse into one and the set holds three.
      */
     val folder1 = new Folder(parentId = BaseDao.genId, name = Util.randomStr(30))
     val folder2 = new Folder(parentId = folder1.parentId, name = folder1.name)
@@ -42,8 +42,8 @@ import altitude.core.util.Util
      *
      * Edge cases:
      *
-     * Past four elements a Scala set is a hashed set, which looks an element up by its hash code before comparing; the test above
-     * stays under that size.
+     * Past four elements a Scala set looks an element up by its hash code before comparing, which the test above, at four, never
+     * reaches.
      */
     val folder = new Folder(id = Option(BaseDao.genId), parentId = BaseDao.genId, name = "Holidays")
     val copy = folder.copy(name = "HOLIDAYS", numOfChildren = 1, numOfAssets = 3)

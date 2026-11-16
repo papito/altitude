@@ -65,13 +65,7 @@ import altitude.core.util.OnnxDescribeEmbedder
 import altitude.core.util.OnnxSceneEmbedder
 import altitude.core.util.SceneEmbedder
 
-/**
- * @param newSceneEmbedder
- *   builds the instance's Scene embedder from the model files in place: the ONNX Runtime one, which production and the dev server
- *   use; the test instances build one they can switch off
- * @param newDescribeEmbedder
- *   builds the instance's Describe embedder, likewise: the ONNX Runtime one, or the test instances' switchable one
- */
+/** The embedder factories build the ONNX Runtime embedders by default; tests pass ones they can switch off. */
 class Altitude(
     val dbEngineOverride: Option[String] = None,
     newSceneEmbedder: ModelFiles => SceneEmbedder = OnnxSceneEmbedder(_),
@@ -81,27 +75,13 @@ class Altitude(
 
   final val app: Altitude = this
 
-  // ID for this application
   final val id: Int = scala.util.Random.nextInt(java.lang.Integer.MAX_VALUE)
   logger.debug(s"Initializing Altitude Server application. Instance ID [$id]")
 
   /**
-   * In development, application-dev.conf will override system defaults.
-   *
-   * Production JAR defaults to SQLITE and can be overridden by application.conf.
-   *
-   * ENV var overrides are a Typesafe Config feature:
-   * https://github.com/lightbend/config?tab=readme-ov-file#optional-system-or-env-variable-overrides
-   *
-   * In short: CONFIG_FORCE_db_engine=postgres will override db.engine=sqlite in the config. This is only for tests,
-   *
-   * Default reference configs are in altitude/resources/reference.conf and test/resources/reference.conf
-   *
-   * For DEV and PROD, application*.conf files have the final say - and are in the root of the project (and along the live JAR in
-   * release)
+   * The config before the SQLite URL is added. `application-dev.conf` or `application.conf` in the root (the JAR's folder in a
+   * release) overrides `reference.conf`; only tests take `CONFIG_FORCE_` environment overrides.
    */
-
-  // the config before final actual config as we need to dynamically figure out some values
   private val preConfig: Config = Environment.CURRENT match {
     case Environment.Name.DEV =>
       ConfigFactory
@@ -127,11 +107,10 @@ class Altitude(
 
   private val SQLITE_URL_PREFIX = "jdbc:sqlite:"
 
-  /** Heroically assemble SQLITE URL based on what we have */
   final private val sqliteRelDbPath = preConfig.getString(Const.Conf.REL_SQLITE_DB_PATH)
 
-  // The database file lives under the test directory under test, and under the data directory otherwise, which is absolute, as
-  // every other data path (`dataPath`), since the root is the JAR's folder in production
+  // The SQLite file sits under the test directory in tests, otherwise under the data directory resolved against the root (the
+  // JAR's folder in production)
   final val config: Config = Environment.CURRENT match {
 
     case Environment.Name.TEST =>
@@ -144,14 +123,7 @@ class Altitude(
       preConfig.withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(sqliteUrl))
   }
 
-  /**
-   * Has the first admin user been created? This flag is loaded from the system metadata table upon start and then cached for the
-   * lifetime of the application instance.
-   *
-   * This is to avoid getting the value from the database every time we need it.
-   *
-   * See: setIsInitializedState() in this file.
-   */
+  /** Whether the first admin user exists, cached from the system metadata by [[setIsInitializedState]] */
   var isInitialized = false
 
   final private val schemaVersion = 2
@@ -162,7 +134,6 @@ class Altitude(
   final val fileStoreType: String = config.getString(Const.Conf.DEFAULT_STORAGE_ENGINE)
   logger.debug(s"File store type: $fileStoreType")
 
-  // The SQL explain log, for development only
   private val sqlExplainer: Option[SqlExplainer] =
     Option.when(Environment.devSwitch(config, Const.Conf.DEV_SQL_EXPLAIN)) {
       val file = new File(Environment.ROOT_PATH, SqlExplainer.FILE_NAME)
@@ -170,22 +141,20 @@ class Altitude(
       new SqlExplainer(dataSourceType, file)
     }
 
-  // For development only: a pipeline queue whose stream fails restarts it after a backoff, rather than staying down. Read before
-  // the services, whose queues are started as they are wired up.
+  // Dev only. Read before the services, which start their queues as they are wired up.
   final val isPipelineRestartEnabled: Boolean = Environment.devSwitch(config, Const.Conf.DEV_RESTART_PIPELINE)
   if isPipelineRestartEnabled then logger.info("A pipeline queue whose stream fails restarts it after a backoff")
 
   // Startup order: settings service (empty) → transaction manager → DAOs → migration → settings load → importParallelism → model
-  // files → actor system → Scene embedder → services. The transaction manager reads the Settings an Admin tunes on the Settings
-  // screen for the transactions it begins, so their service comes first; it is loaded once the schema is in place, and until then
-  // a transaction sets none. The import dispatcher's thread count starts from a Setting, so the database must be current and read
-  // before the actor system is built. The model files are in place, downloaded if missing, before anything that reads them, and
-  // before the actor system, so a download that fails leaves no non-daemon thread to keep the process up.
+  // files → actor system → embedders → services. The transaction manager applies the Settings to each transaction, so their
+  // service exists first, empty (no Settings applied) until it loads after the migration. The import dispatcher's thread count is
+  // a Setting, so Settings load before the actor system. The model files come before the actor system, so a failed download
+  // leaves no thread keeping the process up.
   final val settings: SettingsService = SettingsService(app)
 
   final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer, () => settings.currentIfLoaded)
 
-  /** The folder of the SQLite database file, on SQLite: one of the directories the app stores into */
+  /** On SQLite, the database file's folder: one of the app's own directories */
   final val sqliteDir: Option[Path] = Option.when(dataSourceType == Const.DbEngineName.SQLITE) {
     Path.of(config.getString(Const.Conf.SQLITE_URL).stripPrefix(SQLITE_URL_PREFIX)).toAbsolutePath.getParent
   }
@@ -322,15 +291,14 @@ class Altitude(
   final val migrationService: MigrationService =
     MigrationService(app, currentVersion = schemaVersion, migrationsDir = s"/migrations/$dataSourceType")
 
-  // A fresh or behind database is migrated in every environment, before anything reads it
+  // In every environment, before anything reads the database
   migrationService.migrate()
 
   settings.load()
 
   /**
-   * How many threads do the import's work, and why: the `import.parallelism` Setting as it was saved when the server started (a
-   * Restart setting), or, at 0, what the machine affords, within the cap in the server config (see `ImportParallelism`). Each of
-   * them holds its own YuNet face detector, and they share one ArcFace recognition net.
+   * The import's thread count and its reason: the Setting as saved at startup, or at 0 what the machine affords, within the
+   * config's cap. Each thread holds its own YuNet detector; they share one ArcFace net.
    */
   final val importParallelismResolution: ImportParallelism.Resolution = ImportParallelism.resolve(
     settings.atStartup.importParallelism,
@@ -342,18 +310,10 @@ class Altitude(
   final val importParallelism: Int = importParallelismResolution.value
   logger.info(s"Import parallelism: ${importParallelismResolution.summary}")
 
-  /**
-   * The model files of the pinned set, in its directory under `models.dir` (the per-user cache by default). The missing ones are
-   * downloaded here, once, and the start waits for them, so nothing after this runs without its model; a download that cannot
-   * finish fails the start with the files missing, their URLs and the directory to put them in by hand (`ModelFilesException`).
-   * They come before the actor system, whose threads would keep the process up after such a failure.
-   */
+  /** Missing model files are downloaded here and the start waits; a download that cannot finish fails the start. */
   final val models: ModelFiles = ModelFiles.ensure(config)
 
-  /**
-   * The most undated frames one undated import is compared with (`SequenceService.assign`): `Const.Sequence` per core, which
-   * bounds the read's cost by the machine rather than by what triage holds. Computed once, at startup, as `importParallelism` is.
-   */
+  /** The most undated frames an undated import is compared with: per core, so the machine bounds the read, not triage's size */
   final val undatedSequenceCandidates: Int =
     val cores = Runtime.getRuntime.availableProcessors
     val candidates = Const.Sequence.UNDATED_CANDIDATES_PER_CORE * cores
@@ -361,13 +321,9 @@ class Altitude(
       s"Undated Sequence candidates: $candidates (${Const.Sequence.UNDATED_CANDIDATES_PER_CORE} per core, $cores cores)")
     candidates
 
-  /**
-   * How many Edits are rendered at once (`EditRenderService`): a quarter of the cores, at least one. A render decodes a whole
-   * original and works on floats, so it is bounded apart from the import's threads.
-   */
+  // A render decodes a whole original in floats, so Edit renders get their own, smaller pool
   final val editRenderParallelism: Int = Math.max(1, Runtime.getRuntime.availableProcessors / 4)
 
-  // The app's config, with the dispatchers the import's work and the Edits' renders run on
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
     val importDispatcherConfig = ConfigFactory.parseString(s"""
       altitude.import-dispatcher {
@@ -386,38 +342,26 @@ class Altitude(
       "altitude-actor-system",
       importDispatcherConfig.withFallback(config))
 
-  /**
-   * Where the import pipeline's stages do their work (`PipelineUtils.guardedAsync`), so the stream actors on the default
-   * dispatcher, which the import status feed, the SQLite optimize schedule and the Import history prune share, only route
-   */
+  /** Runs the import's stage work, so the stream actors on the shared default dispatcher only route */
   final val importDispatcher: ExecutionContextExecutor =
     actorSystem.dispatchers.lookup(DispatcherSelector.fromConfig("altitude.import-dispatcher"))
 
-  /** Where the Edits are rendered (`EditRenderService`), `editRenderParallelism` at once */
   final val editRenderDispatcher: ExecutionContextExecutor =
     actorSystem.dispatchers.lookup(DispatcherSelector.fromConfig("altitude.edit-render-dispatcher"))
 
-  // SQLite refreshes its planner statistics hourly, on the write connection between transactions, and once more at cleanup
+  // SQLite planner statistics, refreshed hourly and at cleanup
   private val sqliteOptimizing: Option[Cancellable] = Option.when(dataSourceType == Const.DbEngineName.SQLITE) {
     actorSystem.scheduler.scheduleAtFixedRate(1.hour, 1.hour)(() => txManager.optimize())(actorSystem.executionContext)
   }
 
-  // The Import history is pruned daily of the Imports past the `import.history.days` Setting, and once at startup (`App`); the
-  // Watch folders forget the files long absent from their directories with it. A prune that fails is logged and not thrown: a
-  // scheduled task that throws is not run again
+  // Also run at startup. It logs a failure rather than throwing: a scheduled task that throws is not run again
   private val importHistoryPruning: Cancellable =
     actorSystem.scheduler.scheduleAtFixedRate(1.day, 1.day)(() => service.imports.pruneOrLog())(actorSystem.executionContext)
 
-  /**
-   * The Scene models every imported still image is embedded with (`AssetService.measureImage`), built before the services, so a
-   * model that fails to open fails the start and never an import. The import threads share it, and `cleanup` closes it.
-   */
+  /** Built before the services, so a model that fails to open fails the start, never an import. Shared by the import threads. */
   final val sceneEmbedder: SceneEmbedder = newSceneEmbedder(models)
 
-  /**
-   * What embeds a description in the space of SigLIP 2's Scene embeddings. Building it loads nothing: the text tower is opened by
-   * the first description and stays open until `cleanup` closes it, so an import, which embeds images alone, never loads it.
-   */
+  /** Building it loads nothing: the first description opens the text tower, so an import never loads it. */
   final val describeEmbedder: DescribeEmbedder = newDescribeEmbedder(models)
 
   object service {
@@ -460,16 +404,14 @@ class Altitude(
     }
   }
 
-  // Sizes the buffers of the import and purge queues (twice this many assets each), on both engines. It does not decide the
-  // concurrent work of an import, which the import dispatcher's threads (`importParallelism`) bound.
+  // Sizes the queue buffers and the purge's concurrent deletes, not an import's concurrency (`importParallelism`). Must be set
+  // before the first use of `service`, whose pipelines read it.
   val parallelism: Int = Runtime.getRuntime.availableProcessors()
 
   // An account's import status sockets close when its versions change, so a deactivated, deleted or revoked account's feed ends
   service.accountVersions.onChange((accountId, change) => actorSystem ! ImportStatusWsActor.CloseAllFor(accountId, change))
 
-  // The import status sockets of a Library are told of each change to one of its Imports, once it has committed, and of a
-  // change to what its Watch folders show: one added, edited, paused, resumed or removed, a scan of one started or ended, and
-  // an Import of one opened or closed, which is when its counts are worth reading again
+  // A Watch folder's counts are worth reading again when its Import opens or closes
   service.imports.onChange {
     (repositoryId, anImport) =>
       actorSystem ! ImportStatusWsActor.ImportChanged(repositoryId, anImport)
@@ -478,8 +420,6 @@ class Altitude(
   }
   service.watchFolder.onChange(repositoryId => actorSystem ! ImportStatusWsActor.WatchFoldersChanged(repositoryId))
 
-  // A staged file outlives nothing: whatever is there was left by a run that did not finish. After `parallelism`, which the
-  // services read as they are wired up.
   service.staging.clear()
 
   def setIsInitializedState(): Unit =
@@ -488,9 +428,9 @@ class Altitude(
 
   def cleanup(): Unit =
     logger.debug("Cleaning up resources")
-    // Before the import queue closes: no scan of a Watch folder starts, and one that is running offers the queue nothing more
+    // Before the import queue closes, so no Watch folder scan feeds it
     service.watchFolder.stop()
-    // Before the transaction manager closes the pools: each queue finishes what it has accepted, up to a limit
+    // Before the pools close: each queue finishes what it has accepted, up to a limit
     service.importPipeline.shutdown()
     service.purgePipeline.shutdown()
     // A render cut off, or not yet queued, is queued again at the next startup
@@ -509,7 +449,6 @@ class Altitude(
     // This is already done by default and will cause a warning
     // actorSystem.terminate()
 
-  // id -> repository
   var repositoriesById: Map[String, Repository] = Map[String, Repository]()
 
   def clearState(): Unit =
@@ -519,11 +458,7 @@ class Altitude(
 
 object Altitude:
 
-  /**
-   * The test environment's config, before the SQLite URL is added: the reference config with the `CONFIG_FORCE_` environment
-   * overrides, the data directory under the test directory, the test Postgres database, and the engine if one is given. What a
-   * test needs of the config without an instance (the model files) reads it here, so it reads what an instance does.
-   */
+  /** The test config before the SQLite URL is added; a test that needs config without an instance reads it here. */
   def testConfig(dbEngineOverride: Option[String] = None): Config =
     val relativeTestDir = ConfigFactory.defaultReference().getString(Const.Conf.TEST_DIR)
     val fsDataDirName = ConfigFactory.defaultReference().getString(Const.Conf.FS_DATA_DIR)

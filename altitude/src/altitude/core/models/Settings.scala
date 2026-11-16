@@ -23,13 +23,9 @@ enum SettingKind:
 
 /** What a Setting's text must be. `error` is why a text is not one, or nothing when it is. */
 enum SettingType:
-  /**
-   * A number between the bounds, the lower one excluded when `minExclusive` and the upper one when `maxExclusive`, written as a
-   * plain decimal ([[SettingType.PLAIN_DECIMAL]])
-   */
+  /** A number between the bounds, written as a plain decimal ([[SettingType.PLAIN_DECIMAL]]) */
   case Decimal(min: Double, max: Double = Double.MaxValue, minExclusive: Boolean = false, maxExclusive: Boolean = false)
 
-  /** A whole number between the bounds */
   case Integer(min: Int, max: Int = Int.MaxValue)
   case Flag
   case Text
@@ -38,7 +34,7 @@ enum SettingType:
   case TileUrl
   case HttpUrl
 
-  /** The text as a number, when this is a numeric type and the text is one; the one parse every reading of a number goes through */
+  /** The one parse every reading of a number goes through; nothing for a non-numeric type or text */
   def number(text: String): Option[Double] = this match
     case Decimal(_, _, _, _) => Option.when(SettingType.PLAIN_DECIMAL.matches(text))(text.toDouble)
     case Integer(_, _) => text.toIntOption.map(_.toDouble)
@@ -78,21 +74,15 @@ enum SettingType:
 
 object SettingType:
   /**
-   * A decimal as a Setting spells it: digits with at most one point, after an optional sign. A number with an exponent is not
-   * one, though a JVM reads it, and prints a small number as one (0.00009 as 9.0E-5): a Setting is stored and shown as the text
-   * that was saved, so only what reads as a number on the screen is saved. Nor is anything else a JVM reads as a double: a
-   * hexadecimal number, a type suffix, the words for infinity and for no number. The first three are numbers written another way,
-   * and [[SettingType.error]] says so; the words are no number.
+   * Digits with at most one point, after an optional sign. A Setting is stored and shown as the text saved, so an exponent is
+   * refused though a JVM reads it (and prints 0.00009 as 9.0E-5), as are hexadecimal, a type suffix, Infinity and NaN.
    */
   private val PLAIN_DECIMAL = """[+-]?(\d+\.?\d*|\.\d+)""".r
 
   // A whole bound reads as one: "255", not "255.0"
   private def bound(value: Double): String = if value == value.toLong then value.toLong.toString else value.toString
 
-/**
- * One Setting as the screen and the validation know it. `engine` names the one database engine it applies to, when it does not
- * apply to both. Its default is the `default_value` of its row.
- */
+/** `engine` names the one database engine a Setting applies to, when not both. Its default is its row's `default_value`. */
 case class SettingDef(
     name: String,
     group: SettingGroup,
@@ -109,17 +99,14 @@ case class SettingDef(
 case class CrossRule(field: String, other: String, holds: (Double, Double) => Boolean, message: String)
 
 /**
- * The Settings an Admin tunes on the Settings screen, read from the `setting` table into one immutable typed snapshot that is
- * replaced whole on every load and save. The companion is the registry: every Setting's name, group, label, help, type and rules.
- * Both maps are keyed by name and hold valid text for every Setting of the registry.
+ * An immutable typed snapshot of the `setting` table, replaced whole on every load and save; the companion is the registry. Both
+ * maps are keyed by name and hold valid text for every registered Setting.
  */
 case class Settings(private val text: Map[String, String], private val defaults: Map[String, String]):
   import Settings.*
 
-  /** The saved value of a Setting, as text */
   def value(name: String): String = text(name)
 
-  /** The default of a Setting, as text */
   def default(name: String): String = defaults(name)
 
   private def number(name: String): Double = byName(name).valueType.number(text(name)).get
@@ -160,10 +147,7 @@ case class Settings(private val text: Map[String, String], private val defaults:
   /** The most assets a Describe search shows */
   val searchDescribeMaxResults: Int = number(SEARCH_DESCRIBE_MAX_RESULTS).toInt
 
-  /**
-   * The fraction of the best match's cosine to a description under which a Describe search's result is a weaker match; 0 leaves
-   * every result above the line
-   */
+  /** Below this fraction of the best match's cosine, a Describe result is a weaker match; 0 means none is */
   val searchDescribeWeakerMatchRatio: Double = number(SEARCH_DESCRIBE_WEAKER_MATCH_RATIO)
   val mapTileUrl: String = text(MAP_TILE_URL)
   val mapTileAttribution: String = text(MAP_TILE_ATTRIBUTION)
@@ -539,9 +523,8 @@ object Settings:
   )
 
   /**
-   * Why each of `values` is not valid, by name; empty when the whole set is. A name the registry does not know is an error, and a
-   * cross-field rule is judged only when both of its fields pass their own and its field applies to `engine`: a Setting of the
-   * other engine keeps a stored value nobody can see or change.
+   * Why each of `values` is invalid, by name. A cross-field rule is judged only when both fields pass their own rules and its
+   * field applies to `engine`: another engine's Setting keeps a stored value nobody can see or change.
    */
   def validate(values: Map[String, String], engine: String): Map[String, String] =
     val own: Map[String, String] = values.flatMap {

@@ -8,11 +8,8 @@ import scalasql.core.TypeMapper
 import scalasql.dialects.PostgresDialect
 
 /**
- * PostgreSQL for this schema.
- *
- * The stock mappers already read `timestamp` as a `LocalDateTime` and `date` as a `LocalDate`, which is what
- * `PostgresOverrides.javaTimeRowProcessor` does for the raw paths. Only `timestamptz` is pinned here, so an instant is read as
- * the moment the column stores rather than through `java.sql.Timestamp` in the JVM zone.
+ * The stock mappers already read `timestamp` and `date` as java.time types. Only `timestamptz` is pinned here, so an instant is
+ * read as the stored moment rather than through `java.sql.Timestamp` in the JVM zone.
  */
 object AltitudePostgresDialect extends PostgresDialect:
 

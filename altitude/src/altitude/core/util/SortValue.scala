@@ -4,14 +4,14 @@ import java.time.LocalDateTime
 import java.time.OffsetDateTime
 
 /**
- * A typed sort-key value read from a grouped search page row, kept exactly as the engine returned it so a continuation cursor can
- * bind it back for comparison against the stored column without any conversion.
+ * A sort-key value read from a search page row, kept exactly as the engine returned it so a cursor can bind it back against the
+ * stored column without conversion.
  */
 enum SortValue:
   case Text(value: String)
   case Num(value: Long)
 
-  /** The cosine distance a Describe search orders by: computed by the engine, no column's value */
+  /** The cosine distance a Describe search orders by, computed by the engine */
   case Real(value: Double)
 
   /** A wall-clock timestamp (PostgreSQL `timestamp`). SQLite timestamps stay `Text` in their stored format. */

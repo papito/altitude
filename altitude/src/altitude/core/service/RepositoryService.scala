@@ -25,11 +25,10 @@ import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 object RepositoryService:
 
   /**
-   * How many Libraries a User or a Guest may be granted access to: every grant rides in the login token, which the session cookie
-   * carries, and a browser keeps at most 4096 bytes of a cookie. A grant costs about 57 bytes of token; the longest account a
-   * token describes (80 four-byte characters of name, which the token's JSON escapes to 12 bytes each, and the longest email
-   * address and username) costs about 1820 with none, so 37 fit with the cookie's name and attributes, and the bound keeps a
-   * margin below that (`LoginTokenTests`, "A token at the grant bound fits the session cookie").
+   * How many Libraries a User or a Guest may be granted: every grant rides in the login token in the session cookie, which a
+   * browser caps at 4096 bytes. A grant costs about 57 bytes; the longest account (80 four-byte name characters, each escaped to
+   * 12 bytes in JSON, and the longest email and username) costs about 1820 with none, so 37 fit with the cookie's name and
+   * attributes, and 35 keeps a margin (`LoginTokenTests` proves it fits).
    */
   val MAX_GRANTS_PER_ACCOUNT = 35
 
@@ -40,15 +39,10 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
   override protected val txManager: TransactionManager = app.txManager
 
   /**
-   * Adds a Library, with its root folder and stats, under its name as the Library name rule normalizes it
-   * (`Repository.validName`, whose `ValidationException` this passes on). A Library has no owner: it belongs to the server, an
-   * Admin reaches it by type and anyone else by a grant. A name whose name key another Library holds fails with a
-   * `DuplicateException` saying so: `repository_01` decides it, so of two adds racing on one name, one fails.
-   *
-   * In the same transaction, every account whose new-Library switch is on is granted its new-Library Permissions in the Library
-   * (`grantNewLibrary`), and `creatorId`, the account creating it from the New library dialog, unless it is an Admin, is granted
-   * every Permission: a creator already at its bound of grants fails the whole add with `IllegalOperationException`
-   * (`TOO_MANY_GRANTS`), so no Library is left that its creator cannot open.
+   * Adds a Library with its root folder, stats and new-Library grants ([[grantNewLibrary]]). A Library has no owner: an Admin
+   * reaches it by type, anyone else by a grant. `repository_01` decides a name-key clash, so of two adds racing on one name, one
+   * fails with a `DuplicateException`. A non-Admin creator at its grant bound fails the whole add, so no Library is left that its
+   * creator cannot open.
    */
   def addRepository(name: String, fileStoreType: String, creatorId: Option[String] = None): Repository =
     val id = BaseDao.genId
@@ -60,8 +54,8 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       fileStoreType = fileStoreType
     )
 
-    // The add switches the request's Library to the new one, which a refusal rolls back: the caller's is put back then, so the
-    // answer to the refusal (the New library dialog again) still names the Library it was opened from
+    // The add switches the request's Library to the new one; a refusal puts the caller's back, so the error response still names
+    // the Library it came from
     val previousContext = RequestContext.repository.value
     try addRepositoryInContext(repoToSave, creatorId)
     catch
@@ -78,7 +72,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
             logger.debug(s"Adding repository [${repoToSave.name}] failed: ${e.getMessage}")
             throw newDuplicateExceptionOrRethrow(e, Some(C.Msg.Err.LIBRARY_NAME_TAKEN.format(repoToSave.name)))
 
-      // we must force the context to the new repository because following operations depend on this
+      // The folder and stats writes below act in the context Library
       switchContextToRepository(repo)
 
       logger.debug(s"Creating repository [$repo] system folders")
@@ -106,18 +100,14 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
     }
 
   /**
-   * The grants of a Library just created: those of the accounts whose new-Library switch is on, each with its new-Library
-   * Permissions, and the creator's, every Permission for one that is no Admin (by its stored type). An account refused a grant
-   * (one at its bound of grants) is skipped with a WARN, so creating a Library never fails for another account's bound; the
-   * creator's refusal fails the add. Each grant is recorded as a change of Permissions, acted by the creator (none for a Library
-   * added with no creator, as setup adds one), and bumps its account's version once the add commits (`setGrant`).
+   * Grants a new Library: their new-Library Permissions to accounts whose switch is on, and every Permission to a non-Admin
+   * creator (by stored type). An account at its grant bound is skipped with a WARN, so another account's bound never fails the
+   * add; the creator's does. Each grant is audited as the creator's act (no actor at setup).
    */
   private def grantNewLibrary(repo: Repository, creatorId: Option[String]): Unit =
-    // The rows are locked in the one order of every account write: the active Admins' first, in ID order (`lockActiveAdmins`, as
-    // an Admin's account write takes them), then every account granted in one pass, in ID order, before any grant is written.
-    // An Admin creating the Library is among the grantees' rows, so without the Admins first it could hold a grantee's row while
-    // waiting on its own, which an Admin's edit of that grantee holds while it waits on the grantee; and two creates at once,
-    // each granting the other's creator, take the rows in one order, so neither holds one the other waits on while it waits.
+    // Rows are locked in the order of every account write, so none deadlocks with this: the active Admins first (an Admin's
+    // account write takes them), then every grantee in ID order, before any grant is written. An Admin creator is among the
+    // grantees, so without the Admins first it could hold a grantee's row that an Admin's edit of that grantee waits on.
     app.DAO.user.lockActiveAdmins()
     val locked = app.DAO.user.lockGrantees(creatorId)
     val actor = creatorId.flatMap(id => locked.find(_.id.contains(id)))
@@ -157,13 +147,9 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       .sortBy(_.name)(using NaturalOrder)
 
   /**
-   * Gives the account access to the Library with `permissions`, replacing what it held there. The account and the Library are
-   * read in the write's transaction, so an unknown one is a `NotFoundException`, and the account's type is the stored one, not
-   * that of a model the caller holds: an Admin holds every Permission in every Library with no grant, and a Guest holds none, so
-   * a grant to an Admin, or one with a Permission to a Guest, is an `IllegalOperationException`. So is a grant in one Library
-   * more than an account may hold (`MAX_GRANTS_PER_ACCOUNT`, `TOO_MANY_GRANTS`); the account's row is locked first, so of two
-   * grants racing past the bound, the second counts the first's. Once committed, the account's version is bumped, so its sessions
-   * pick the grant up at their next request.
+   * Gives the account `permissions` in the Library, replacing what it held there. The account's type is read under its row lock,
+   * not taken from a caller's model, and the lock makes the second of two grants racing past `MAX_GRANTS_PER_ACCOUNT` count the
+   * first. Once committed, the bumped account version makes its sessions pick the grant up at their next request.
    */
   def setGrant(accountId: String, repositoryId: String, permissions: Permissions): Unit =
     txManager.withTransaction {
@@ -181,12 +167,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       }
     }
 
-  /**
-   * Replaces the account's grants with `grants`, Library ID to Permissions, in one transaction: the grants it held elsewhere go,
-   * and an Admin is left with none. Each grant is held to the rules of [[setGrant]] (a stored Library, no grant to an Admin, no
-   * Permission to a Guest, at most `MAX_GRANTS_PER_ACCOUNT`), the account's row locked first, and any refusal writes nothing.
-   * Once committed, the account's version is bumped.
-   */
+  /** Replaces all the account's grants (Library ID to Permissions) under the rules of [[setGrant]]; a refusal writes nothing */
   def replaceGrants(accountId: String, grants: Map[String, Permissions]): Unit =
     txManager.withTransaction {
       val account = app.DAO.user.lockById(accountId)
@@ -202,8 +183,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       }
     }
 
-  // A grant to the account, as stored, in the Library: refused for an unknown Library (`NotFoundException`), to an Admin, who
-  // holds every Permission in every Library with no grant, and of a Permission to a Guest, who holds none
+  // `getById` refuses an unknown Library; an Admin holds every Permission without grants, a Guest holds none
   private def checkGrant(account: User, repositoryId: String, permissions: Permissions): Unit =
     dao.getById(repositoryId)
     account.accountType match
@@ -222,9 +202,8 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
     }
 
   /**
-   * The Library login and `/` open for `user`: the last active one, read from the database (the login token does not carry it),
-   * while it exists and `user` can see it. Otherwise the first Library `user` can see by name, which is recorded as the last
-   * active one, and None when `user` can see none. The reads take no write lock; only a fallback writes.
+   * The Library login and `/` open: the last active one (from the database, as the login token does not carry it) while `user`
+   * can still see it, else the first they can see by name, recorded as the new last active one; None when they can see none
    */
   def landingRepositoryOf(user: User): Option[Repository] =
     val (lastActiveId, accessible) = txManager.asReadOnly {
@@ -248,7 +227,6 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
     }
 
   override def getById(id: String): Repository =
-    // try cache first
     if app.repositoriesById.contains(id) then return app.repositoriesById(id)
 
     val repo: Repository = super.getById(id)

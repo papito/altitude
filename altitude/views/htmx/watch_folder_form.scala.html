@@ -4,19 +4,11 @@
 @import altitude.core.routes.web.partial.WatchFolderController.Form
 @import altitude.core.util.Util
 
-@* The Watch folder dialog of the Import page (GET /htmx/watch-folders/r/:repoId/dialogs/add and /dialogs/edit, an Admin's),
-   in the general modal host: three fieldsets. Source is the name and the path on the server. Destination is the "Keep
-   folder structure" switch: off, the files land in Triage; on, the destination folder, the advanced search panel's Folder
-   field (includes/filter_combobox, in an element of the panel's class, which its rules are scoped by), under which the
-   directory's tree is mirrored. After import is the "Delete imported files" switch: on, the red notice
-   (includes/watch_folder_deletion_notice) names the number of files in the folder now, read from the server for the path
-   typed, and the submit reads "Save and delete imported files".
-
-   The `watchFolderForm` component (js/alpine/components/watch-folder-form.js) holds the two switches, starting from
-   what the form is rendered with, and asks for the notice when the deletion is switched on and when the path changes
-   while it is on (`data-app-notice-url`). `scanInterval` is the scan interval now, in minutes, which the path's help
-   names in minutes and hours (`Util.minutesText`). A refused field comes back as this form with the values submitted and the
-   error under the field; an edit's title names the Watch folder as stored. *@
+@* The Watch folder dialog (an Admin's). With "Keep folder structure" off the files land in Triage; on, the directory's
+   tree is mirrored under the destination folder, whose field sits in an element of the advanced search panel's class
+   because its rules are scoped by it. With "Delete imported files" on, the red notice names how many files the path holds
+   now, asked again as the path changes. `scanInterval` is in minutes. A refused field comes back as this form with the
+   values submitted; an edit's title names the Watch folder as stored. *@
 @(form: Form, fileCount: Option[Int], scanInterval: Int, errors: Map[String, String] = Map.empty)
 
 @repoId = @{ RequestContext.getRepository.persistedId }
@@ -35,7 +27,6 @@
     </div>
 }
 
-@* The path's input asks for the deletion notice again when the path changes *@
 @pathAttributes = @{ Html("x-ref=\"path\" x-on:change=\"onPathChange()\"") }
 
 @pathHelp = {

@@ -54,10 +54,7 @@ object UserMetadata:
 
   def fromJson(json: ujson.Value): UserMetadata = JsonCodec.read[UserMetadata](json)
 
-  /**
-   * Adapter to easily set metadata from a set of plain strings. Note: dummy implicit is added to prevent compiler from
-   * complaining about double definition due to type erasure
-   */
+  /** Metadata from plain strings; the `DummyImplicit` keeps erasure from making this a double definition */
   def apply(data: Map[String, Set[String]])(using d: DummyImplicit): UserMetadata =
     val convertedData: Map[String, Set[UserMetadataValue]] = data.foldLeft(Map[String, Set[UserMetadataValue]]()) {
       case (a, (fieldId, strValues)) =>

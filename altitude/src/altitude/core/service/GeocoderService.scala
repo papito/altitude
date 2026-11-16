@@ -25,10 +25,9 @@ object GeocoderService:
   private val USER_AGENT = "Altitude (+https://github.com/papito/altitude)"
 
 /**
- * Place-name search for the Add Location dialog, proxied through the server so the browser never talks to the geocoder and the
- * one identifying `User-Agent` is set in one place. Off unless `map.geocoder.enabled` is set: every query is sent to a third
- * party. The endpoint (`map.geocoder.url`) is Nominatim-compatible: `?q=&format=json&limit=` answered with a list of places
- * carrying `display_name`, `lat` and `lon`.
+ * Place-name search, proxied through the server so the browser never talks to the geocoder and the identifying `User-Agent` is
+ * set in one place. Off unless `map.geocoder.enabled`, since every query goes to a third party. The endpoint (`map.geocoder.url`)
+ * must be Nominatim-compatible.
  */
 class GeocoderService(settings: () => Settings):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -65,7 +64,7 @@ class GeocoderService(settings: () => Settings):
     val places = Try(ujson.read(response.body).arr.toList)
       .getOrElse(throw GeocoderException("The geocoder did not answer with a list of places"))
 
-    // A place the geocoder could not pin is of no use to a dialog that needs a pin; skip it rather than fail the search
+    // A place without coordinates cannot be pinned; skip it rather than fail the search
     val results = places.flatMap {
       place =>
         for

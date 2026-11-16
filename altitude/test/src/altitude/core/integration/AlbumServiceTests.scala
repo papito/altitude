@@ -106,7 +106,6 @@ import altitude.core.util.SearchQuery
       testApp.service.album.rename(album.persistedId, "OTHER")
     }
 
-    // Changing only the casing of an album's own name is allowed
     testApp.service.album.rename(album.persistedId, "TRIP")
     (testApp.service.album.getById(album.persistedId): Album).name shouldEqual "TRIP"
   }
@@ -315,7 +314,6 @@ import altitude.core.util.SearchQuery
     testApp.service.album.getAssetIds(album1.persistedId) shouldEqual Set(asset1.persistedId, asset2.persistedId)
     testApp.service.album.getAssetIds(album2.persistedId) shouldEqual Set(asset1.persistedId)
 
-    // The asset itself is untouched: still in its folder, still not recycled
     val asset: Asset = testApp.service.asset.getById(asset1.persistedId)
     asset.folderId shouldEqual testContext.repository.rootFolderId
     asset.isRecycled shouldBe false
@@ -488,7 +486,6 @@ import altitude.core.util.SearchQuery
     val keeper: Asset = testContext.persistAsset()
     testApp.service.album.addAssets(album.persistedId, Set(asset.persistedId, keeper.persistedId))
 
-    // What the purge pipeline and dangling-asset pruning do: delete the row itself
     testApp.service.asset.deleteById(asset.persistedId)
 
     testApp.service.album.getAssetIds(album.persistedId) shouldEqual Set(keeper.persistedId)
@@ -514,7 +511,6 @@ import altitude.core.util.SearchQuery
     val secondRepo: Repository = testContext.persistRepository()
     switchContextRepo(secondRepo)
 
-    // Same name is fine in another repository, and the first repository's albums are not visible
     testApp.service.album.add("shared name")
     testApp.service.album.getAll.map(_.name) shouldEqual List("shared name")
     albumCounts.values.sum shouldEqual 0
@@ -572,7 +568,6 @@ import altitude.core.util.SearchQuery
     val notInAlbum: Asset = testContext.persistAsset()
     testApp.service.album.addAssets(album.persistedId, Set(inAlbum1.persistedId, inAlbum2.persistedId))
 
-    // Assets from any folder show up, ones outside the album do not
     searchAlbum(album) shouldEqual Set(inAlbum1.persistedId, inAlbum2.persistedId)
     val everything = testApp.service.library.search(new SearchQuery(rpp = 100)).records.map(_.persistedId).toSet
     everything shouldEqual Set(inAlbum1.persistedId, inAlbum2.persistedId, notInAlbum.persistedId)

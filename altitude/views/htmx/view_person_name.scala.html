@@ -3,9 +3,8 @@
 @import altitude.core.models.Person
 @(person: Person)
 
-@* The person's name in the results title; a click swaps in the editor (htmx/edit_person_name). The pencil is revealed by
-   static/css/htmx/person.css while the title is hovered or the name has focus. Naming is Edit metadata's: without it the name
-   is plain text, with no editor behind it. *@
+@* The person's name in the results title. Naming follows Edit metadata: for a holder a click swaps in the editor, and
+   the pencil shows while the title is hovered or the name has focus; for anyone else it is plain text. *@
 @if(RequestContext.holds(Permission.EditMetadata)) {
 <span hx-trigger="click"
       hx-swap="outerHTML"

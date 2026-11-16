@@ -1,10 +1,9 @@
 /**
- * The asset-detail Video's playback beyond its element: unloading it, and describing it to the OS
- * media controls (hardware media keys, the browser's and the system's media overlays) through the
- * Media Session API.
+ * Video playback beyond the element: unloading it, and describing it to the OS media controls (media
+ * keys, browser and system overlays) through the Media Session API.
  */
 
-// The OS controls' skip step, the player's `j` / `l` step
+// The OS controls' skip step, the same as the player's `j` / `l`
 const SEEK_OFFSET_SECONDS = 10
 const ACTIONS = [
     "play",
@@ -16,7 +15,7 @@ const ACTIONS = [
     "nexttrack",
 ]
 
-// Stops the position updates of the Video the session describes
+// Aborts the `timeupdate` listener of the Video the session describes
 let positionUpdates = null
 
 /** Stops and unloads a video, so nothing keeps playing, downloading, or holding the OS media controls */
@@ -27,9 +26,8 @@ export function unloadVideo(videoEl) {
 }
 
 /**
- * Describes the shown Video to the OS: its title and Preview, play, pause and seeking, and
- * previous/next asset when `previous` and `next` are given (a detail opened from a map pin cannot
- * step).
+ * Describes the shown Video to the OS; previous/next only when given (a detail opened from a map pin
+ * cannot step).
  */
 export function describeInMediaSession({
     videoEl,
@@ -74,7 +72,7 @@ export function describeInMediaSession({
     })
 }
 
-/** Leaves the OS media controls with nothing from asset detail */
+/** Clears everything the session told the OS */
 export function clearMediaSession() {
     if (!("mediaSession" in navigator)) {
         return

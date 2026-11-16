@@ -18,12 +18,9 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
   override protected val dao: FolderDao = app.DAO.folder
 
   /**
-   * Adds the folder under `parentId`, or under the repository root when none is given. A parent that is no folder of the context
-   * repository, unknown or another repository's, is a `NotFoundException` that adds nothing. It takes its turn among the creators
-   * of a folder of that name there (`FolderDao.lockName`), so it waits for an import that is creating the folder ([[ensurePath]])
-   * and is then refused as a duplicate, rather than failing that import's file. [[rename]] and [[move]] take the same turn for
-   * the name they bring a folder under, each one lock, while [[ensurePath]] takes its locks from the parent down, so no two of
-   * them wait on each other.
+   * Adds the folder under `parentId`, or under the repository root. It waits its turn on the name (`FolderDao.lockName`) behind
+   * an import creating that folder, and is then refused as a duplicate instead of failing the import's file. An add, a [[rename]]
+   * and a [[move]] each take one such lock and [[ensurePath]] takes them parent first, so they cannot deadlock.
    */
   def add(name: String, parentId: Option[String] = None): Folder =
     txManager.withTransaction {
@@ -34,12 +31,10 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
     }
 
   /**
-   * The folder at the end of `names` under `parentId`, each name a folder under the one before it; with no names, the parent
-   * itself. A folder is found by its name key among its parent's folders, as `folder_02` keeps it unique there: a live one is
-   * reused, a recycled one is restored, alone, as restoring an asset restores the folders above it, and a missing one is added.
-   * The creators of one folder take turns (`FolderDao.lockName`), so of two imports that both miss a folder, the second finds the
-   * one the first created. A name the folder rule refuses is a `ValidationException`, and a parent that is no folder of the
-   * context repository a `NotFoundException`; either leaves the folders as they were, in a transaction that is rolled back.
+   * The folder at the end of the path `names` under `parentId` (the parent itself for none). Each folder is found by its name
+   * key: a live one is reused, a recycled one restored alone (as restoring an asset restores the folders above it), a missing one
+   * added. Creators take turns on a name, so of two imports missing a folder the second finds the first's. A refused name or an
+   * unknown parent rolls the whole path back.
    */
   def ensurePath(parentId: String, names: Seq[String]): Folder =
     txManager.withTransaction {
@@ -47,10 +42,9 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
     }
 
   /**
-   * The caller's turn, until its transaction ends, among the transactions that sort an import's file into the folder tree and
-   * those that delete a folder (`FolderDao.lockTree`). The completion of a file with a destination takes it before it reads the
-   * destination, and a delete before it reads what it deletes, so whichever goes second sees what the first committed: a
-   * completion finds its destination in the Trash, or a delete recycles the asset and the folders the completion put there.
+   * Takes the caller's turn, until its transaction ends, among imports sorting a file into the folder tree and folder deletes.
+   * Each takes it before reading, so the second sees what the first committed: a completion finds its destination in the Trash,
+   * or a delete recycles what the completion put there.
    */
   def lockTree(): Unit =
     txManager.withTransaction {
@@ -71,7 +65,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
         existing.copy(isRecycled = false)
       case None => add(wanted)
 
-  /** A folder to add under `parentId`: the name trimmed, and stored once it passes the name rule (`Validators.validName`) */
+  /** A folder to add under `parentId`, its name trimmed and validated */
   private def named(name: String, parentId: String): Folder = Folder(name = validName(name.trim), parentId = parentId)
 
   private def validName(name: String): String =
@@ -89,8 +83,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
     }
 
   /**
-   * The non-recycled folder tree rooted at the repository root, children sorted by name, with `numOfChildren` and the recursive
-   * `numOfAssets` populated on every node. Loaded with one folder query and one per-folder asset count query.
+   * The live folder tree from the repository root, children sorted by name, each node with `numOfChildren` and the recursive
+   * `numOfAssets`; two queries, one for the folders and one counting assets by folder.
    */
   def getTree: Folder =
     txManager.asReadOnly {
@@ -127,7 +121,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
   def isRootFolder(id: String): Boolean =
     id == contextRepo.rootFolderId
 
-  /** Get children for the parent given, but only a single level - non-recursive */
+  /** The folder's direct children only */
   def getChildren(rootId: String): List[Folder] =
     txManager.asReadOnly {
       dao.getChildren(rootId)
@@ -159,29 +153,25 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
   override def deleteByQuery(query: Query): Int =
     throw NotImplementedError("Cannot delete folders by query")
 
-  /** Move a folder from one parent to another */
   def move(folderBeingMovedId: String, destFolderId: String): (Folder, Folder) =
     if isRootFolder(folderBeingMovedId) then throw IllegalOperationException("Cannot move the root folder")
 
     logger.debug(s"Moving folder $folderBeingMovedId to $destFolderId")
 
-    // cannot move into itself
     if folderBeingMovedId == destFolderId then
       throw IllegalOperationException(s"Cannot move a folder into itself. ID: $folderBeingMovedId")
 
     txManager.withTransaction {
-      // cannot move into own child
       if getAncestors(destFolderId).map(_.persistedId).contains(folderBeingMovedId) then
         throw DuplicateException(Some("Cannot move parent folder into a child node"))
 
       var destFolder: Option[Folder] = None
-      // check that the destination folder exists
       try destFolder = Some(getById(destFolderId))
       catch case _: NotFoundException => throw ValidationException(s"Destination folder ID $destFolderId does not exist")
 
       val folderBeingMoved: Folder = getById(folderBeingMovedId)
 
-      // Its turn among the creators of a folder of its name in the destination, as for an add
+      // Waits its turn on the name in the destination, as an add does
       dao.lockName(destFolderId, folderBeingMoved.nameKey)
 
       val data = Map(
@@ -202,7 +192,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
 
       val folderForUpdate: Folder = folder.copy(name = validName(newName))
 
-      // Its turn among the creators of a folder of the new name beside it, as for an add
+      // Waits its turn on the new name beside it, as an add does
       dao.lockName(folder.parentId, folderForUpdate.nameKey)
 
       val data = Map(FieldConst.Folder.NAME -> folderForUpdate.name, FieldConst.Folder.NAME_KEY -> folderForUpdate.nameKey)

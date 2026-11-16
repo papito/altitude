@@ -112,8 +112,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * `Util.printable` escapes each control character as `\uXXXX`, so the text cannot start a line of its own or carry a NUL, and
-     * cuts the result to the length given.
+     * `Util.printable` escapes each control character as `\uXXXX`, so the text cannot start a log line or carry a NUL, and cuts
+     * the result to the given length.
      */
     Util.printable("jane\r\nINFO forged", 64) shouldBe "jane\\u000d\\u000aINFO forged"
     Util.printable("jane\u0000", 64) shouldBe "jane\\u0000"

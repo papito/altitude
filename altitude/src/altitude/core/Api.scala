@@ -73,16 +73,15 @@ object Api:
     object Library:
       val NAME = "name"
 
-    // The account forms of the Users page (htmx/account_form, htmx/set_password_dialog) and the own password dialog
-    // (htmx/own_password_dialog). `libraryIds` holds the Libraries given, `permissions` a "<Library ID>:<Permission>" per
-    // Permission given in one, `newLibraryPermissions` the Permission names of the new-Library grant.
+    // The account forms. `permissions` holds a "<Library ID>:<Permission>" per Permission given in a Library,
+    // `newLibraryPermissions` the Permission names of the new-Library grant.
     object User:
       val ACCOUNT_ID = "accountId"
       val NAME = "name"
       val USERNAME = "username"
       val EMAIL = "email"
       val PASSWORD = "password"
-      // The Add User form's password typed again, which must match it
+      // The password typed again, which must match it
       val PASSWORD2 = "password2"
       val ACCOUNT_TYPE = "accountType"
       val LIBRARY_IDS = "libraryIds"
@@ -93,7 +92,7 @@ object Api:
       val CURRENT_PASSWORD = "currentPassword"
       val NEW_PASSWORD = "newPassword"
       val NEW_PASSWORD2 = "newPassword2"
-      // The state an Admin's edit form was opened over (UserService.editState), which its save carries back
+      // The state an Admin's edit form was opened over (`UserService.editState`), which its save carries back
       val OPENED_STATE = "openedState"
 
     object Location:
@@ -119,13 +118,12 @@ object Api:
       val SEQUENCE_OF = "sequenceOf"
       val COUNT = "count"
 
-    // The Edit's JSON API (EditController): a save's body, and the state it answers (also the asset detail's `edit`)
+    // The Edit's JSON API: a save's body and the state it answers
     object Edit:
       // The edit version a save was built on
       val BASE = "base"
       val RECIPE = "recipe"
-      // The Edit's edit version (the count of its saves, not its format's `version`), and the edit version whose edited images
-      // are stored
+      // The count of the Edit's saves (not its format's `version`), and the one whose edited images are stored
       val EDIT_VERSION = "editVersion"
       val RENDERED_VERSION = "renderedVersion"
       // The revision of the edited images, their URLs' cache key
@@ -133,15 +131,14 @@ object Api:
       val EDITED = "edited"
       val WIDTH = "width"
       val HEIGHT = "height"
-      // The size of the asset's upright original, the space of the Edit's geometry and of its Faces' boxes
+      // The upright original's size: the space of the Edit's geometry and of its Faces' boxes
       val UPRIGHT_WIDTH = "uprightWidth"
       val UPRIGHT_HEIGHT = "uprightHeight"
       // A 409's current state, beside its error
       val STATE = "state"
-      // Auto-straighten's answer: the Straighten that levels the image's lines
+      // Auto-straighten's answer: the Straighten angle that levels the image's lines
       val ANGLE = "angle"
-      // The asset detail's Edit, when it has one, whether the account may edit the asset, and, for a holder of Edit
-      // images, why the asset cannot be edited, which the Edit toggle's title shows
+      // The asset detail's Edit, whether the account may edit the asset, and, for a holder of Edit images, why it cannot
       val EDIT = "edit"
       val EDITABLE = "editable"
       val REFUSAL = "editRefusal"
@@ -173,21 +170,21 @@ object Api:
       val PEOPLE = "people"
       val NAME = "name"
       val NEW_NAME = "newName"
-      // The pane of the People tab a rename dialog was opened from, which its form sends back
+      // The People tab pane a rename dialog was opened from, which its form sends back
       val PANE = "pane"
       val MERGE_SOURCE_ID = "mergeSourceId"
       val MERGE_DEST_ID = "mergeDestId"
       val MERGE_SOURCE_PERSON = "mergeSourcePerson"
       val MERGE_DEST_PERSON = "mergeDestPerson"
-      // do not delete - used in templates but not references in Scala code
+      // Referenced nowhere; it matches the people merge route's `:srcPersonId` path parameter
       val SRC_PERSON_ID = "srcPersonId"
-      // The Person a Face's Person is merged into (AssetActionController.mergeFacePerson)
+      // The Person a Face's Person is merged into
       val DEST_PERSON_ID = "destPersonId"
 
     object Search:
       val PERSON = "person"
       val QUERY_TEXT = "q"
-      // A description, the words of a Describe search
+      // The words of a Describe search
       val DESCRIBE = "describe"
       val RESULTS_PER_PAGE = "rpp"
       val RESULTS = "results"
@@ -235,8 +232,6 @@ object Api:
     object Sort:
       val DIRECTION = "direction"
 
-    // The upload routes of the Import page (ImportController): an Import's name and destination folder as it is opened, a
-    // file's relative path and size, and what an answer says of the Import file
     object Import:
       val NAME = "name"
       val DEST_FOLDER_ID = "destFolderId"
@@ -247,19 +242,17 @@ object Api:
       val OUTCOME = "outcome"
       val REASON = "reason"
 
-    // The Watch folder dialog's fields (htmx/watch_folder_form), and the Watch folder an action of its card names
     object WatchFolder:
       val WATCH_FOLDER_ID = "watchFolderId"
       val NAME = "name"
       val PATH = "path"
-      // "Keep folder structure": on, the files are sorted under the destination folder; off, they land in Triage
+      // On, the files are sorted under the destination folder; off, they land in Triage
       val KEEPS_STRUCTURE = "keepsStructure"
       val DEST_FOLDER_ID = "destFolderId"
       val DELETES_IMPORTED = "deletesImported"
 
-    // A message of the import status feed (ImportStatusWsActor), as `hx-ws` reads one: the markup to swap in, the element it
-    // replaces and how, and for the page's script the Import it is the status of and whether that Import is closed; or, alone,
-    // that the socket is connected
+    // A message of the import status feed, as `hx-ws` reads it: markup, its target and swap, and the Import it is about; or,
+    // alone, that the socket is connected
     object ImportStatus:
       val TARGET = "target"
       val SWAP = "swap"

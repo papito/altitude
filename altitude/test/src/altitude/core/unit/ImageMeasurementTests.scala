@@ -24,8 +24,8 @@ import altitude.core.models.PerceptualHash
 import altitude.core.util.ImageMeasurement
 
 /**
- * The Image quality metrics, the score and the perceptual hash of [[ImageMeasurement]], as orderings on the fixtures: the
- * `people/` photos, since the `images/` ones are 10 to 64 px and too small to be sharp or soft
+ * [[ImageMeasurement]]'s Image quality metrics, score and perceptual hash, as orderings on the `people/` photos: most `images/`
+ * fixtures are too small to be sharp or soft
  */
 @DoNotDiscover class ImageMeasurementTests extends AnyFunSuite with TestFocus {
 
@@ -50,7 +50,7 @@ import altitude.core.util.ImageMeasurement
     try f(image)
     finally image.release()
 
-  /** A Face whose box is the rectangle; the rest of it does not matter to the measurement */
+  /** A Face whose box is the rectangle; nothing else of it matters to the measurement */
   private def faceAt(box: Rect): Face =
     Face(
       x1 = box.x,
@@ -72,9 +72,8 @@ import altitude.core.util.ImageMeasurement
     ImageMeasurement.measure(image, boxes.map(faceAt)).faces.map(_.sharpness)
 
   /**
-   * Runs `f` over `people/affleck.jpg` blurred everywhere except a rectangle in the middle, which keeps the original pixels, with
-   * that rectangle, a box over a blurred corner, and a 30 x 30 box inside the sharp rectangle, under the least face area that
-   * counts
+   * Runs `f` over `people/affleck.jpg` blurred everywhere but a sharp rectangle in the middle, with that rectangle, a box over a
+   * blurred corner, and a 30 x 30 box in the sharp rectangle, under the least face area that counts
    */
   private def withPartlySharpPhoto[A](f: (Mat, Rect, Rect, Rect) => A): A =
     val image = fixture("people/affleck.jpg")
@@ -100,7 +99,7 @@ import altitude.core.util.ImageMeasurement
   private def channelsOf(histogram: Histogram): List[(String, IArray[Float])] =
     List("luminance" -> histogram.luminance, "red" -> histogram.red, "green" -> histogram.green, "blue" -> histogram.blue)
 
-  /** Each channel of one Histogram against the same channel of another, bin for bin, within the tolerance */
+  /** Compares two Histograms channel by channel, bin for bin, within the tolerance */
   private def shouldBeNear(actual: Histogram, expected: Histogram, tolerance: Float): Unit =
     channelsOf(actual).zip(channelsOf(expected)).foreach {
       case ((name, actualBins), (_, expectedBins)) =>
@@ -118,8 +117,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * The sharpness and the score fall with each step of blur; the exposure metrics stay nearly the same, since blurring moves no
-     * light; every score is within 0 to 100.
+     * The sharpness and the score fall with each step of blur, the exposure metrics stay nearly the same, and every score is in
+     * [0, 100].
      */
     val sharp = fixture("people/affleck.jpg")
     val soft = blurred(sharp, 1.0)
@@ -145,9 +144,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * Every pixel of the white one is a clipped highlight and none a crushed shadow, with a luminance of 1; the black one the
-     * reverse, with a luminance of 0; the gray one has neither and a luminance of about a half. A flat image has no edges, so its
-     * sharpness and score are 0.
+     * White is all clipped highlights at luminance 1, black all crushed shadows at 0, and gray neither at about a half. With no
+     * edges, each has sharpness and score 0.
      */
     val white = withFlat(255)(quality(_))
     white.clippedHighlights shouldBe 1.0
@@ -173,13 +171,13 @@ import altitude.core.util.ImageMeasurement
     /**
      * Setup:
      *
-     * `people/damon.jpg` as decoded (BGR), the same converted to one gray channel (as `IMREAD_ANYCOLOR` decodes a grayscale file)
-     * and to BGRA, and a two-channel image.
+     * `people/damon.jpg` as decoded (BGR), converted to one gray channel (as `IMREAD_ANYCOLOR` decodes a grayscale file) and to
+     * BGRA, and a two-channel image.
      *
      * Assertions:
      *
-     * The three layouts give the same sharpness, luminance and hash within rounding, since all are measured over the same gray
-     * pixels; the two-channel image is an `ImageException`.
+     * The three layouts give the same sharpness, luminance and hash within rounding; the two-channel image is an
+     * `ImageException`.
      */
     val bgr = fixture("people/damon.jpg")
     val gray = new Mat()
@@ -206,14 +204,13 @@ import altitude.core.util.ImageMeasurement
     /**
      * Setup:
      *
-     * A flat BGR image of blue 10, green 128 and red 250, whose gray is 151, the same with an opaque alpha channel, and a flat
-     * white gray image.
+     * A flat BGR image of blue 10, green 128 and red 250 (gray 151), the same with an opaque alpha channel, and a flat white gray
+     * image.
      *
      * Assertions:
      *
-     * Each channel holds every pixel in the one bin of its level, a bin being four levels: blue in bin 2, green in 32, red in 62
-     * and luminance in 37, with every other bin empty. The alpha channel changes nothing. The white image's channels are all its
-     * luminance, every pixel in the last bin, the bin of the clipped highlights.
+     * Each channel holds every pixel in the bin of its level, four levels a bin, and every other bin is empty. The alpha channel
+     * changes nothing. Every channel of the white gray image has every pixel in the last bin.
      */
     def binsHolding(histogram: Histogram): List[(String, List[Int])] =
       channelsOf(histogram).map((name, bins) => name -> bins.indices.filter(bins(_) > 0).toList)
@@ -239,9 +236,9 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * Each channel's bins sum to 1, and the photo's channels differ, as a color photo's do. The BGRA image has the BGR one's
-     * Histogram. The gray image's three color channels are its luminance, which is the BGR image's within a hundredth a bin. The
-     * enlarged copy's Histogram is the photo's within a hundredth a bin, both being counted over the image fitted to the box.
+     * Each channel's bins sum to 1, and the color channels differ. The BGRA image has the BGR one's Histogram. The gray image's
+     * color channels are its luminance, which is the BGR image's within a hundredth a bin. The enlarged copy's Histogram is the
+     * photo's within a hundredth a bin, both counted over the image fitted to the measurement box.
      */
     val bgr = fixture("people/damon.jpg")
     val gray = new Mat()
@@ -270,8 +267,7 @@ import altitude.core.util.ImageMeasurement
     /**
      * Setup:
      *
-     * `people/damon.jpg` (nothing clipped or crushed), the same image with 160 added to every channel (saturating to white) and
-     * the same with 160 taken from every channel (saturating to black).
+     * `people/damon.jpg`, and copies with 160 added to and taken from every channel, saturating to white and to black.
      *
      * Assertions:
      *
@@ -301,8 +297,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * All four have one sharpness, so two images can be compared on it whichever faces were detected in each. The exposure
-     * metrics are the whole frame's too.
+     * All four have one sharpness, so images compare on it whatever faces each has. The exposure metrics are the whole frame's
+     * too.
      */
     withPartlySharpPhoto {
       (photo, sharpRect, blurredCorner, tiny) =>
@@ -326,8 +322,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * The face over the sharp rectangle scores above the whole frame, which scores above the face over the blurred corner, so a
-     * sharp portrait on a flat background is not dragged down. The tiny face scores exactly as the whole frame.
+     * The sharp face scores above the whole frame, which scores above the blurred face, so a sharp portrait on a soft background
+     * is not dragged down. The tiny face scores exactly as the whole frame.
      */
     withPartlySharpPhoto {
       (photo, sharpRect, blurredCorner, tiny) =>
@@ -348,8 +344,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * The sharp face measures above the blurred one, so a soft face in a group shot is not averaged away. The tiny face has none.
-     * The values follow the faces' order, and no faces give none.
+     * The sharp face measures above the blurred one, so a soft face in a group shot is not averaged away, and the tiny face has
+     * none. The values follow the faces' order.
      */
     withPartlySharpPhoto {
       (photo, sharpRect, blurredCorner, tiny) =>
@@ -389,9 +385,9 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * At the half-point sharpness and a perfect exposure the score is 50; a very sharp image with a perfect exposure comes to 99
-     * or more; the exposure penalty saturates, so a fully clipped image scores 0 whatever its sharpness; a luminance off the
-     * target costs the difference; an image without edges scores 0.
+     * At the half-point sharpness and a perfect exposure the score is 50, and a very sharp one is 99 or more. The exposure
+     * penalty saturates, so a fully clipped image scores 0 whatever its sharpness; a luminance off the target costs the
+     * difference; no edges score 0.
      */
     val K = ImageMeasurement.SHARPNESS_HALF_POINT
     ImageMeasurement.score(K, ImageMeasurement.TARGET_LUMINANCE, 0, 0) shouldBe 50
@@ -406,14 +402,13 @@ import altitude.core.util.ImageMeasurement
     /**
      * Setup:
      *
-     * `people/affleck.jpg`; a copy of it shifted by three pixels each way (the edge filled by its border) and brightened by 12
-     * levels, as the next frame of a burst would differ; the same image at half its size; and `people/damon.jpg`, a different
-     * picture.
+     * `people/affleck.jpg`; a copy shifted three pixels each way and brightened by 12 levels, as a burst's next frame would
+     * differ; a half-size copy; and `people/damon.jpg`.
      *
      * Assertions:
      *
-     * The hash is deterministic. The burst-like copy and the half-size copy are within the default `sequence.max_hash_distance`
-     * of the original, the different picture is farther than that, and the distance is symmetric.
+     * The hash is deterministic. Both copies are within the default `sequence.max_hash_distance` of the original, the other photo
+     * is farther, and the distance is symmetric.
      */
     val image = fixture("people/affleck.jpg")
     val shifted = new Mat()
@@ -440,12 +435,12 @@ import altitude.core.util.ImageMeasurement
     /**
      * Setup:
      *
-     * `people/affleck.jpg` (1280 x 1786, so it is fitted to the box already) and the same photo enlarged twice.
+     * `people/affleck.jpg` (1280 x 1786, already larger than the measurement box) and the same photo enlarged twice.
      *
      * Assertions:
      *
-     * The two sharpness values are within a third of each other and the hashes within the burst distance: both are measured over
-     * the image fitted to the box.
+     * The two sharpness values are within a third of each other and the hashes within the burst distance, since both are measured
+     * over the image fitted to the box.
      */
     val image = fixture("people/affleck.jpg")
     val large = new Mat()

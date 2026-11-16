@@ -3,10 +3,7 @@ package altitude.core.dao.sql.tables
 import java.time.OffsetDateTime
 import scalasql.Table
 
-/**
- * The `audit_event` table. `actor`, `target` and `detail` are `jsonb` on PostgreSQL and `TEXT` on SQLite; both read as their JSON
- * text, as `RepositoryRow.fileStoreConfig` does.
- */
+/** The `audit_event` table. `actor`, `target` and `detail` are JSON text: `jsonb` on PostgreSQL, `TEXT` on SQLite. */
 case class AuditEventRow[T[_]](
     id: T[String],
     event: T[String],

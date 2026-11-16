@@ -11,9 +11,8 @@ object Person:
   given Conversion[ujson.Value, Person] = json => JsonCodec.read[Person](json)
 
 /**
- * `numOfFaces` is, despite its name, the number of assets outside the trash on which the person has a Face, triaged ones
- * included: what a search for the person finds with triaged items shown, and what the Matched line is drawn on. A person seen
- * twice in one image has two Faces there and counts it once. The number the People tab shows is `ListedPerson.visibleCount`.
+ * `numOfFaces` is, despite its name, the number of assets outside the trash (triaged included) on which the person has a Face; an
+ * image with two Faces of the person counts once. The number the People tab shows is `ListedPerson.visibleCount`.
  */
 case class Person(
     id: Option[String] = None,
@@ -26,10 +25,7 @@ case class Person(
   extends BaseModel
   with NoDates:
 
-  /**
-   * The glossary's Matched person: named, or a Face on at least `MIN_FACES_THRESHOLD` assets outside the trash (`numOfFaces`);
-   * `PersonDao.getInBuckets` restates the rule in SQL
-   */
+  /** Named, or seen on at least `MIN_FACES_THRESHOLD` assets; `PersonDao.getInBuckets` restates the rule in SQL */
   def isMatched: Boolean = isNamed || numOfFaces >= FaceRecognition.MIN_FACES_THRESHOLD
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]

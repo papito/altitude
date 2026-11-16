@@ -35,8 +35,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Under an hour it reads as its minutes, "10 min". A whole number of hours reads as its hours alone, "2 h", and anything else
-     * from an hour on as its hours and the minutes left, "1 h 30 min".
+     * Under an hour it reads as "10 min", whole hours as "2 h", and anything else as "1 h 30 min".
      */
     Util.minutesText(2) shouldEqual "2 min"
     Util.minutesText(10) shouldEqual "10 min"
@@ -61,7 +60,7 @@ import altitude.core.util.Util
      *
      * Edge cases:
      *
-     * Zero, the half-second rounding boundary (2,499 vs 2,500 ms), and the last second before an hour against the hour itself.
+     * Zero, the half-second rounding boundary, and the last second before an hour against the hour itself.
      */
     Util.humanReadableDuration(0) shouldEqual "0:00"
     Util.humanReadableDuration(2_499) shouldEqual "0:02"

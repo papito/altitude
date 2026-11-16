@@ -69,8 +69,8 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
     location.copy(id = Some(id))
 
   override def getAll: List[Location] =
-    // Path order: a category and its Locations share the category's name as the first key, top-level rows use their own; a category
-    // comes before its Locations whatever their names, because the ordering by name alone would put "Alba" before "Italy"
+    // Path order: Locations sort under their category's name, after the category itself; name order alone would put "Alba"
+    // before "Italy"
     val sql = s"""
       SELECT l.*, p.${FieldConst.Location.NAME} AS ${FieldConst.Location.CATEGORY_NAME}, (
         SELECT COUNT(*)
@@ -88,8 +88,8 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
 
   override def addAssets(locationId: String, assetIds: Set[String]): Int =
-    // Rows are selected from the asset table so that unknown, foreign, and recycled ids are dropped, and assets already in
-    // the Location are skipped rather than tripping the unique index
+    // Selecting from `asset` drops unknown, foreign and recycled IDs; existing members are skipped rather than tripping the
+    // unique index
     val sql = s"""
       INSERT INTO $membershipTable (${FieldConst.REPO_ID}, ${FieldConst.Location.LOCATION_ID}, ${FieldConst.Location.ASSET_ID})
       SELECT asset.${FieldConst.REPO_ID}, ?, asset.${FieldConst.ID}
@@ -141,8 +141,8 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
       .toSet
 
   override def getLocationsOfAsset(assetId: String): List[Location] =
-    // Through the index that leads with the asset. Path order as `getAll` has it, less the category-first key: a
-    // member is always a Location, never a category
+    // By the index that leads with the asset. Path order as in `getAll`, less the category-first key: a member is never a
+    // category
     val sql = s"""
       SELECT l.*, p.${FieldConst.Location.NAME} AS ${FieldConst.Location.CATEGORY_NAME}
         FROM $tableName l

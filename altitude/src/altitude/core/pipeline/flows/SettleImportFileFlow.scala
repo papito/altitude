@@ -18,13 +18,9 @@ import altitude.core.pipeline.PipelineUtils.debugInfo
 import altitude.core.pipeline.PipelineUtils.withContext
 
 /**
- * The last stage that works: a dropped asset that is a file of an Import has its Import file settled by the cause it was dropped
- * for (`ImportService.settleDropped`), once what its import wrote is undone. An imported one was settled by its completion, in
- * that transaction, and an asset with no origin has no Import file.
- *
- * A Watch folder's file (an origin with a source) is then told to its Watch folder, imported or dropped, with the transaction
- * that settled it committed: the Watch folder remembers what became of the file and, when it deletes imported files, deletes the
- * source of one that was imported or is a duplicate (`WatchFolderService.settled`).
+ * The last working stage: a dropped asset's Import file is settled by its drop cause, once what its import wrote is undone (an
+ * imported one was settled in its completion's transaction). A Watch folder's file (an origin with a source) is then reported to
+ * its Watch folder, imported or dropped, after the settling transaction has committed.
  */
 object SettleImportFileFlow:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -53,8 +49,7 @@ object SettleImportFileFlow:
       case other => Future.successful(other)
     }
 
-  // Tells a Watch folder what became of its file. A failure leaves what the Watch folder remembers of the file as it was, so a
-  // later scan reads the file again, and deletes nothing
+  // A failure leaves the Watch folder's memory of the file as it was, so a later scan reads the file again, and deletes nothing
   private def tellWatchFolder(app: Altitude, origin: ImportOrigin, asset: Asset, cause: Option[Throwable]): Unit =
     if origin.source.isDefined then
       try app.service.watchFolder.settled(origin, asset, cause)

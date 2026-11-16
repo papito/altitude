@@ -1,7 +1,7 @@
 /**
- * The content URLs the client builds (`altitude/static/js/common/content-urls.js`), the ones the
- * server's `Util.previewUrl` and content route answer, and the repointing of a grid cell's image at
- * a new Preview after a render, on a stand-in for the image element. Run by `make test-js`.
+ * The content URLs the client builds (`altitude/static/js/common/content-urls.js`), which must
+ * match the server's `Util.previewUrl` and content route, and the repointing of a grid cell's image
+ * at a new Preview after a render. Run by `make test-js`.
  */
 import { test } from "node:test"
 import assert from "node:assert/strict"

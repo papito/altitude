@@ -4,8 +4,7 @@
 @(title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), id: String, existingName: Option[String] = None)
 @defining(formJson.obj.get(Api.Field.Album.NAME).flatMap(_.strOpt)) { name =>
 
-@* hx-target="this" lets the server's
-   "HX-Retarget: this" (validation errors) replace this form in place *@
+@* hx-target="this" lets the server's "HX-Retarget: this" on a validation error replace this form in place *@
 <form action="#"
       id="renameAlbum"
       data-app-fragment="modal"

@@ -12,13 +12,7 @@ import altitude.core.routes.decorators.requireLogin
 class FolderController(using logger: Logger) extends BaseController:
   private val prefix = "api/folder"
 
-  /**
-   * Returns the full (non-recycled) folder tree for the current repository as JSON.
-   *
-   * Response shape (recursive): { "id": "uuid", "parentId": "uuid", "name": "folder name", "numOfChildren": <count of direct
-   * non-recycled children>, "numOfAssets": <count of sorted assets in the folder and every folder beneath it>, "isRoot": true |
-   * false, "children": [ ... ] }
-   */
+  /** The non-recycled folder tree; `numOfAssets` counts the sorted assets in a folder and every folder beneath it */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tree")
   def getFolderTree(repoId: String)(using request: Request): Response[String] =

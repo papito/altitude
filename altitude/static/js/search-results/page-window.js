@@ -12,38 +12,19 @@ import { runSearch } from "./search.js"
  * PAGE WINDOW
  *
  * The grid keeps a window of loaded pages around the viewport, so what it holds is bounded by the
- * viewport and not by how far the session has scrolled. A page is recorded as it arrives: the first
- * one at hydration (the initial children of `#assets`), every later one from the grid's
- * `htmx:after:settle` event, which htmx dispatches on the swap target - the cell or the spacer the
- * page was requested from - with the nodes it inserted.
+ * viewport, not by how far the session scrolled. `#assets` holds one spacer per folded page, then the
+ * loaded pages, contiguous.
  *
- * From top to bottom `#assets` holds: zero or more spacers, one per folded page; then the loaded
- * pages, contiguous; then nothing. The last loaded page's last cell is the only cell carrying
- * `data-app-search-after`, the one js/search-results/infinite-scroll.js observes.
+ * Once an appended page takes the loaded cells past MAX_LOADED_CELLS, the topmost page folds into a
+ * `.page-spacer` of its height carrying its cursor, unless it is within a viewport of the screen or
+ * only two pages are loaded. The header of a group still open at the page's end stays before the
+ * spacer, sticking over and counting the group's loaded cells. A spacer within a viewport is reloaded
+ * as a continuation (a 204 means its assets are gone, and the spacer goes); a reload that overfills
+ * the window drops the bottom page, whose cursor goes back on the new last cell.
  *
- * Folding: once a page is appended and the loaded cells exceed MAX_LOADED_CELLS, the topmost
- * page is folded, unless it is within a viewport of the screen or only two pages are loaded. Its
- * nodes make way for one `.page-spacer` of about the page's height carrying its cursor, so the
- * scrollbar stays proportional. The header of the group still open at the page's end stays
- * before the spacer, where it keeps sticking over the group's loaded cells and counting them
- * (js/alpine/components/date-group-selectable.js walks the header's siblings, and a spacer is not
- * a header).
- *
- * Reloading: a spacer within a viewport (one IntersectionObserver with the lazy images' margin)
- * is reloaded as a continuation is, swapped after the spacer, which then goes with the kept
- * header, since the page renders its own headers again. One reload is in flight per spacer: the
- * detail modal meeting the spacer on its walk (`reloadSpacer`) and the scroll share it. A 204 means the page's
- * assets are gone, and the spacer goes. A reload that pushes the loaded cells over the maximum
- * drops the bottom page: its nodes are removed, the new last cell gets the dropped page's cursor
- * and is observed, and scrolling down loads the page again as any continuation.
- *
- * Every fold, reload and drop re-wraps the rows above the viewport, and `#assets` has
- * `overflow-anchor: none`, so the scroll position is corrected here: the viewport offset of the
- * first cell on screen is noted before the change and restored after it.
- *
- * A spacer is not a `.cell` or a `.result-group` and carries no `data-asset-id`, `img` or
- * `.metadata`: the detail modal's sibling walk, the group headers, selection, drag and drop and
- * lazy loading never see it.
+ * Rows above the viewport re-wrap on every change and `#assets` has `overflow-anchor: none`, so the
+ * scroll position is restored here from the first cell on screen. A spacer is no `.cell`, header or
+ * asset, so the modal's walk, selection, drag and lazy loading never see it.
  */
 
 export const MAX_LOADED_CELLS = 600
@@ -103,12 +84,11 @@ export function bindPageWindow({ assetsElement, scrollElement }) {
     })
 }
 
-/** The page records of the grid `assetsElement`, in grid order */
 export function pagesOf(assetsElement) {
     return windows.get(assetsElement)?.pages
 }
 
-/** Folds the pages above the window of `assetsElement` as an appended page does */
+/** Folds the pages above the window, as an appended page does */
 export function foldPagesIfNeeded(assetsElement) {
     const grid = windows.get(assetsElement)
 
@@ -117,10 +97,7 @@ export function foldPagesIfNeeded(assetsElement) {
     }
 }
 
-/**
- * Reloads the page a spacer stands for, resolving when the request completes. A reload in flight
- * is shared, so nothing is ever requested twice.
- */
+/** Reloads the page a spacer stands for; a reload in flight is shared */
 export function reloadSpacer(spacerEl) {
     const pending = pendingReloads.get(spacerEl)
     if (pending) {
@@ -151,15 +128,11 @@ export function reloadSpacer(spacerEl) {
     return request
 }
 
-/** Whether `el` is the spacer of a folded page: what the detail modal's walk reloads as it meets one */
 export function isSpacer(el) {
     return el.classList.contains(SPACER_CLASS)
 }
 
-/**
- * Records the page a settled swap brought: the one a spacer was reloaded into, or a continuation
- * appended after the last cell, and keeps the window within its size.
- */
+/** Records the page a settled swap brought, reloaded into a spacer or appended, and keeps the window within its size */
 function recordPage(grid, event) {
     const nodes = Array.from(event.detail.newContent)
     const reloaded = pageOfSpacer(grid, event.target)
@@ -205,10 +178,9 @@ function foldPages(grid) {
 }
 
 /**
- * A page within a viewport stays, as a fold leaves one: dropping the page on screen would bring
- * it straight back through its last cell, and the fold after that would take the page the modal
- * is stepping up into. The window grows past its size only while the modal walks away from the
- * viewport, and the next scroll trims it.
+ * A page within a viewport stays: dropped, the page on screen would come straight back through its
+ * last cell. So the window grows past its size while the modal walks up away from the viewport, and
+ * the next scroll trims it.
  */
 function dropPages(grid) {
     while (isOverfull(grid)) {
@@ -232,16 +204,15 @@ function isOverfull(grid) {
 function foldPage(grid, page) {
     const bounds = cellBounds(page)
 
-    // Its cells all left the grid (an action moved its assets out of these results), so its cursor
-    // now leads to the next page's assets: there is nothing to fold or to bring back. Its headers
-    // stay for the groups they still count.
+    // Its cells all left the grid, so there is nothing to fold or bring back; its headers stay for
+    // the groups they still count
     if (!bounds) {
         forget(grid, page)
         return
     }
 
-    // The header of the group still open at the page's end - the next page continues it with no
-    // header of its own - stays with the group's loaded cells; a group closed with the page keeps nothing
+    // The header of a group still open at the page's end (the next page continues it with no header
+    // of its own) stays with the group's loaded cells
     const elements = connectedElements(page)
     const nextPage = loadedPages(grid)[1]
     const nextFirstEl = nextPage && connectedElements(nextPage)[0]
@@ -255,8 +226,7 @@ function foldPage(grid, page) {
     spacerEl.dataset.appSearchAfter = page.after ?? ""
     spacerEl.style.height = `${bounds.bottom - bounds.top}px`
 
-    // After the page's last element, so it follows the kept header and precedes the next page,
-    // which was swapped in right after that element; the page's other nodes then go
+    // After the page's last element, so it follows the kept header and precedes the next page
     elements.at(-1).after(spacerEl)
     page.nodes.forEach((node) => {
         if (node !== keptHeader) {
@@ -279,8 +249,8 @@ function dropPage(grid, page) {
     page.nodes.forEach((node) => node.remove())
     forget(grid, page)
 
-    // The grid's last cell continues to the dropped page, as the last cell always does - unless a
-    // spacer follows it, whose reload brings the page with the dropped page's cursor on its last cell
+    // The last cell continues to the dropped page, unless a spacer follows it, whose reload brings
+    // the dropped page's cursor on its own last cell
     const lastEl = Array.from(grid.assetsElement.children).findLast(
         (el) => isCell(el) || isSpacer(el),
     )
@@ -303,10 +273,7 @@ function forget(grid, page) {
     grid.pages.splice(grid.pages.indexOf(page), 1)
 }
 
-/**
- * Whether any of the page's cells is within a viewport of the screen: the margin the spacers and
- * the lazy images are observed with, so a page folded here is not reloaded at once.
- */
+/** Within a viewport of the screen, the spacers' observer margin, so a page folded here is not reloaded at once */
 function isNearViewport(page) {
     const bounds = cellBounds(page)
     const margin = window.innerHeight
@@ -315,9 +282,8 @@ function isNearViewport(page) {
 }
 
 /**
- * The top of the page's first cell and the bottom of its last, relative to the viewport, or null
- * when no cell of it is in the grid. Its headers are left out: a header above the pane sticks to
- * the pane's top, so its box says nothing of where the page is.
+ * The viewport top of the page's first cell and bottom of its last, or null with no cell left. Headers
+ * are left out: one above the pane sticks to its top, so its box says nothing of where the page is.
  */
 function cellBounds(page) {
     const cells = connectedElements(page).filter(isCell)
@@ -339,7 +305,7 @@ function keepingViewport(grid, change) {
     restoreAnchor(grid)
 }
 
-/** Notes the viewport offset of the first cell on screen, or of the first one below it when none is */
+/** Notes the viewport offset of the first cell on screen, or the first below it */
 function noteAnchor(grid) {
     const paneTop = grid.scrollElement.getBoundingClientRect().top
     grid.anchor = null

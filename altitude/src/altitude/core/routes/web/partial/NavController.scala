@@ -11,8 +11,8 @@ class NavController(using logger: Logger) extends BaseController:
   private val prefix = "htmx"
 
   /**
-   * The nav with fresh counts. `current` is the entry of the page reloading it (a `Const.NavEntry` key), which the swap would
-   * otherwise unmark. The Library menu's host comes empty (`reload`): the page keeps its own, `hx-preserve`.
+   * The nav with fresh counts. `current` (a `Const.NavEntry` key) keeps the page's entry marked across the swap; the Library menu
+   * comes empty, as the page keeps its own (`hx-preserve`).
    */
   @requireLogin()
   @cask.get(f"/$prefix/nav/r/:repoId")

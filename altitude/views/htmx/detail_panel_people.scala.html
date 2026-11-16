@@ -8,37 +8,13 @@
 
 @(asset: Asset, faces: List[(Face, Person)], message: Option[String] = None, deletedPerson: Option[Person] = None, merge: Option[(Person, Person)] = None)
 
-@* The People section of the Detail panel: one row per Face of the asset, in the order the server reads them
-   (PersonService.getAssetFacesForDetail: by x for an image, by Frame time for a Video), bad matches left out. A row
-   carries what the Face highlights and the corrections read: the Face, its Person and their name, the box in the
-   asset's pixels (x, y, width, height), the Frame time for a Face in a Video, whether the Person is Hidden, and for the
-   combobox whether the Person is named (`data-person-named`) and their number of assets (`data-person-asset-count`,
-   `numOfFaces`: the assets outside the trash with a Face of theirs). The
-   row's button (`data-app-face-row`) selects the Face, which js/search-results/detail-panel.js marks with `aria-pressed`
-   and shows as a Face highlight. Under a selected row (detail_panel.css shows it by the button's `aria-pressed`) sit Search,
-   the link to the Person's results in a new tab, which adds the triaged assets for an image in triage so that it is among them,
-   and the corrections: Change, which turns the actions into the combobox of the people the Face can be given to
-   (`x-data="faceCombobox"`, js/alpine/components/face-combobox.js: an input with role="combobox", an X back to the
-   buttons, and the `role="listbox"` popover its options render into, anchored to the input), and Remove, whose label
-   moves through two clicks, the second one removing (the one after the first click is on the button). The section is
-   swapped in whole by a correction's response (PUT /htmx/asset/r/:repoId/face/:faceId/person, its /name and /merge, which
-   name or merge the Face's Person as a whole, and DELETE /htmx/asset/r/:repoId/face/:faceId), whose root then carries the
-   result message for the snackbar, for a Person the correction deleted their ID and the line the snackbar adds, and after
-   a merge the merged Person's ID (`data-app-merged-person-id`) and the ID of the Person they were merged into
-   (`data-app-merged-into-id`). For an asset in the trash, and for an account without Edit metadata, the root is marked
-   read-only: Search alone is rendered, and the server refuses the corrections. The listbox opens with the Suggested group, the
-   people nearest the Face (the component's `suggested`, rendered while nothing is typed, under a heading the group is
-   labelled by), then the list (`matches`); both render the same option. For a Face of a Person with no name the
-   combobox acts on the whole Person: between the input and the X sits the "This face only" switch (a `.switch` and its
-   label, rendered for such a row alone and inside the component root, so focus moving to it keeps the listbox open),
-   each option's suffix after its name says what its pick does ("· merge Unknown 7 (5 assets)", "· this face"), the
-   Create row's label names the Person ("Name Unknown 7 'X' (5 assets)"), and a merge's first pick arms its option,
-   whose label becomes the question its second pick answers, which the visually hidden `role="status"` also says. The
-   switch's and label's `mousedown` is prevented and the label's click flips the switch through the component, so a
-   pointer leaves focus in the input. *@
+@* The People section of the Detail panel: one row per Face, bad matches left out. `data-person-asset-count` is the Person's
+   `numOfFaces`, their assets outside the trash. A correction's response swaps the section in whole, its root carrying the
+   snackbar's message and the IDs of a deleted or merged Person. For a Person with no name the combobox acts on the whole
+   Person unless "This face only" is on. That switch sits inside the component root, so focusing it keeps the listbox open, and
+   its and its label's `mousedown` is prevented, so a pointer leaves focus in the input. *@
 
-@* An option of the combobox's listbox for each Person of the component's `people` list: the cover, the name (or on the
-   armed option the question its second pick answers) with the suffix of what its pick does, the Hidden mark *@
+@* An option per Person of the given list; on the armed option the label is the question its second pick answers *@
 @personOptions(people: String) = {
 <template x-for="option in @people" :key="option.personId">
     <li role="option" :id="optionId(option.personId)" :aria-selected="isActive(option.personId)" :data-option-key="option.personId">
@@ -56,7 +32,8 @@
 @* No correction is offered for an asset in the trash, nor to an account without Edit metadata *@
 @readOnly = @{ asset.isRecycled || !RequestContext.holds(Permission.EditMetadata) }
 
-@* Search: the Person's results in a new tab, so Asset detail stays open *@
+@* The Person's results in a new tab, so Asset detail stays open; for an image in triage they include the triaged assets, so
+   it is among them *@
 @searchLink(person: Person) = {
 <a class="action-button small" href="/r/@{RequestContext.getRepository.persistedId}?personId=@{person.persistedId}@if(asset.isTriaged) {&amp;triaged=true}" target="_blank">Search</a>
 }

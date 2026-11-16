@@ -51,8 +51,8 @@ import altitude.core.service.WatchFolderService.ScanResult
 import altitude.core.util.Sha256
 
 /**
- * The Watch folders: the path rules, the scan and what it remembers, the retries, the statuses, the owner rules, and the deletion
- * of imported files. Every directory a test watches is a fresh one under the suite's own temporary directory.
+ * Watch folders: the path rules, the scan and what it remembers, retries, statuses, owner rules and the deletion of imported
+ * files. Every directory a test watches is a fresh one under the suite's own temporary directory.
  */
 @DoNotDiscover class WatchFolderServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -61,10 +61,9 @@ import altitude.core.util.Sha256
   private val F = FieldConst.WatchFolder
   private val E = Const.Msg.Err
 
-  // The suite's own temporary directory, which holds every directory a test watches and goes with the suite
   private var tempRoot: Path = scala.compiletime.uninitialized
 
-  // The Admin every test acts as, who owns the Watch folders it adds
+  // The Admin every test acts as
   private var admin: User = scala.compiletime.uninitialized
 
   override def beforeAll(): Unit = {
@@ -82,8 +81,8 @@ import altitude.core.util.Sha256
     switchContextUser(admin)
   }
 
-  // A bundle's database keeps every test's Libraries: no Watch folder outlives its test, so a scan of every Watch folder reads
-  // the test's own alone
+  // A bundle's database keeps every test's Libraries, so no Watch folder outlives its test: a scan of every Watch folder then
+  // reads the test's own alone
   override def afterEach(): Unit =
     try testApp.txManager.withTransaction(update("DELETE FROM watch_folder"))
     finally super.afterEach()
@@ -96,14 +95,14 @@ import altitude.core.util.Sha256
   /** A fresh, empty directory under the suite's temporary directory */
   private def directory(prefix: String = "watched"): Path = Files.createTempDirectory(tempRoot, prefix).toRealPath()
 
-  /** A random image written at the path under the directory, its directories created; `size` is the image's side, in pixels */
+  /** A random image written at the path under the directory; `size` is its side in pixels */
   private def image(dir: Path, relPath: String, size: Int = 40): Path = {
     val path = dir.resolve(relPath)
     Files.createDirectories(path.getParent)
     Files.write(path, IntegrationTestUtil.generateRandomImagBytesBgr(size))
   }
 
-  /** A file no import supports, written at the path under the directory with the text after what every such file says */
+  /** A file no import supports, written at the path under the directory, its content unique and ending in `text` */
   private def textFile(dir: Path, relPath: String, text: String = ""): Path = {
     val path = dir.resolve(relPath)
     Files.createDirectories(path.getParent)
@@ -130,10 +129,7 @@ import altitude.core.util.Sha256
   private def settle(watchFolder: WatchFolder): Unit =
     eventually(testContext.isWatchFolderWorking(watchFolder.persistedId) shouldBe false)
 
-  /**
-   * One scan of the Watch folder, with everything it handed to the pipeline settled, and then the rest of the files it has not
-   * read yet let pass, as the interval before the next scan does: the next scan may read them
-   */
+  /** One scan, settled, then the rest of the files it has not read yet let pass, so the next scan may read them */
   private def scanAndSettle(watchFolder: WatchFolder): ScanResult = {
     val result = scan(watchFolder)
     settle(watchFolder)
@@ -141,7 +137,7 @@ import altitude.core.util.Sha256
     result
   }
 
-  /** Two scans an interval apart, as it takes to read a file found for the first time, with everything settled */
+  /** Two settled scans a rest apart, as it takes to read a file found for the first time */
   private def scanTwice(watchFolder: WatchFolder): ScanResult = {
     scanAndSettle(watchFolder)
     scanAndSettle(watchFolder)
@@ -180,7 +176,7 @@ import altitude.core.util.Sha256
     finally walk.close()
   }
 
-  /** An import pipeline that runs `before` once, as the scan offers its first file, and then offers to the instance's own queue */
+  /** An import pipeline that runs `before` as the scan offers its first file, then offers to the instance's own queue */
   private def pipelineThat(before: => Unit): ImportPipelineService = new ImportPipelineService(testApp) {
     private val isDone = new AtomicBoolean(false)
 
@@ -201,7 +197,7 @@ import altitude.core.util.Sha256
   private def addLibrary(): Repository =
     testApp.service.repository.addRepository(name = TestContext.nextRepositoryName(), fileStoreType = Const.StorageEngineName.FS)
 
-  /** An asset of the Library imported from a file, by a Watch folder of its own, so its stored file has the content it names */
+  /** An asset imported by a Watch folder of its own, so its stored file has the content its checksum names */
   private def importedAsset(): Asset = {
     val dir = directory("library")
     val file = image(dir, "known.png")
@@ -209,10 +205,7 @@ import altitude.core.util.Sha256
     assetOf(file).get
   }
 
-  /**
-   * Keeps the store of the test's Library outside the data directory while `work` runs, as a store on another volume is kept: its
-   * directory in the data directory is a symbolic link to `target`
-   */
+  /** Runs `work` with the test Library's store at `target`, as on another volume: a symbolic link in the data directory */
   private def withStoreAt[T](target: Path)(work: => T): T = {
     val inData = Path.of(testApp.dataPath, Const.DataStore.REPOSITORIES, testContext.repository.persistedId)
     FileUtils.deleteDirectory(inData.toFile)
@@ -231,9 +224,9 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * A Watch folder added on the first directory is stored with its name trimmed, its path, no destination, deletion off, not
-     * paused, with no status reason and no scan yet, and the Admin as its owner. One added on the second with a destination and
-     * deletion on is stored so. The Library's cards list both by name, each watching, with nothing imported or failed.
+     * A Watch folder on the first directory is stored with its name trimmed, no destination, deletion off, not paused, no status
+     * reason or scan yet, and the Admin as owner. One on the second with a destination and deletion on is stored so. The cards
+     * list both by name, watching, with nothing imported or failed.
      *
      * Edge cases:
      *
@@ -276,14 +269,14 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * Each of these is refused with an error on the path's field that says why, and adds nothing: no path, a relative path, a
-     * path that does not exist, a path that is a file, a directory the server cannot read, and, with deletion on, a directory it
-     * cannot write to. A blank name is refused on the name's field, and a destination in the Trash on the destination's.
+     * Each is refused with its reason on the path's field and adds nothing: no path, a relative or missing path, a file, an
+     * unreadable directory and, with deletion on, an unwritable one. A blank name is refused on the name's field, and a
+     * destination in the Trash on the destination's.
      *
      * Edge cases:
      *
-     * A directory the server cannot write to is taken with deletion off. A name and a path refused together are both named. A
-     * destination that is no folder of the Library is not found.
+     * An unwritable directory is taken with deletion off. A name and a path refused together are both named. A destination that
+     * is no folder of the Library is not found.
      */
     val dir = directory()
     val file = image(dir, "photo.png")
@@ -298,7 +291,7 @@ import altitude.core.util.Sha256
     try {
       Files.setPosixFilePermissions(unreadable, PosixFilePermissions.fromString("---------"))
       Files.setPosixFilePermissions(readOnly, PosixFilePermissions.fromString("r-xr-xr-x"))
-      // An account that reads and writes whatever the permissions say (root) cannot run into these two rules
+      // Root reads and writes whatever the permissions say, so it cannot hit these two rules
       assume(!Files.isReadable(unreadable) && !Files.isWritable(readOnly))
 
       refusal(add("  ")) shouldBe Map(F.PATH -> E.VALUE_REQUIRED)
@@ -330,14 +323,14 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * In either Library, a Watch folder on the same directory, on its subdirectory and on its parent is refused, on the path's
-     * field, naming "Phone sync" and, from the second Library, the first Library too. The app's data directory, a directory
-     * inside it and the directory that holds it are refused as overlapping the data directory. Nothing is added.
+     * In either Library, a Watch folder on the same directory, its subdirectory or its parent is refused on the path's field,
+     * naming "Phone sync" (and, from the second Library, the first Library). The data directory, a directory inside it and its
+     * parent are refused as overlapping it. Nothing is added.
      *
      * Edge cases:
      *
-     * A path that reaches the watched directory, its subdirectory or the data directory through a symbolic link is refused the
-     * same way. A sibling of the watched directory is taken. An edit of "Phone sync" is not refused for its own path.
+     * A path reaching any of these through a symbolic link is refused the same way. A sibling of the watched directory is taken.
+     * An edit of "Phone sync" is not refused for its own path.
      */
     val parent = directory("parent")
     val watched = Files.createDirectory(parent.resolve("watched"))
@@ -383,18 +376,17 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A temporary directory "volume" holding "store" and "photos". The store of the test's Library is kept in "store": its
-     * directory in the data directory is a symbolic link to it. An asset imported into the Library, so the store holds its file.
+     * A directory "volume" holding "store" and "photos", the test Library's store kept in "store" through a symbolic link in the
+     * data directory, and an asset imported so the store holds its file.
      *
      * Assertions:
      *
-     * A Watch folder on "store", on "volume", which holds it, and on the directory of the Library's files inside it is refused,
-     * on the path's field, as overlapping the app's data directory, although none of the three paths is under the data directory.
-     * Nothing is added.
+     * A Watch folder on "store", on "volume" or on the directory of the asset's file is refused as overlapping the data
+     * directory, though none is under it. Nothing is added.
      *
      * Edge cases:
      *
-     * "photos", which lies beside the store, is taken.
+     * "photos", beside the store, is taken.
      */
     val volume = directory("volume")
     val store = Files.createDirectory(volume.resolve("store"))
@@ -418,12 +410,12 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A directory with a subdirectory. Two transactions run at once: the first adds a Watch folder on the directory and stays
-     * open; the second adds one on the subdirectory.
+     * A directory with a subdirectory. One transaction adds a Watch folder on the directory and stays open while another adds one
+     * on the subdirectory.
      *
      * Assertions:
      *
-     * The second waits for the first and is then refused as inside the first's Watch folder, so the Library has the first alone.
+     * The second waits for the first and is then refused as inside it, so the Library has the first alone.
      */
     val watched = directory()
     val inside = Files.createDirectory(watched.resolve("inside"))
@@ -451,16 +443,14 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * The first scan hands nothing to the pipeline and remembers both files as seen; no Import is opened. The second imports
-     * both: one Import of the Watch folder, named after it, with no account's upload (the owner as its account) and no
-     * destination, closed with two imported files under their paths; both assets are in Triage and owned by the Watch folder's
-     * owner; both files are remembered as handled, and both are still in the directory, where nothing else appeared. The card
-     * counts two imported and has a last scan.
+     * The first scan hands nothing to the pipeline, remembers both files as seen and opens no Import. The second imports both in
+     * one closed Import named after the Watch folder, with the owner as its account and no destination. Both assets are in Triage
+     * and owned by the owner, both files are remembered as handled and left in the directory, and the card counts two imported
+     * and has a last scan.
      *
      * Edge cases:
      *
-     * A file still growing is not read: written before a scan, and longer by the next scan, it is seen again rather than read,
-     * and read by the scan after, which finds it as the one before did.
+     * A file that grew since the last scan is seen again rather than read, and read by the scan after, which finds it unchanged.
      */
     val dir = directory()
     val first = image(dir, "a.png")
@@ -488,7 +478,6 @@ import altitude.core.util.Sha256
     val card = watchFolders.cards().head
     (card.imported, card.failed, card.lastScanAt.isDefined) shouldBe (2, 0, true)
 
-    // A file a copy is still writing
     val growing = image(dir, "growing.png")
     scanAndSettle(watchFolder) shouldBe ScanResult.Scanned(0)
     Files.write(growing, IntegrationTestUtil.generateRandomImagBytesBgr(60))
@@ -506,20 +495,17 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder on a directory with one image, scanned twice with nothing between the two scans, as two presses of "Scan
-     * now" would.
+     * A Watch folder on a directory with one image, scanned back to back, as two manual scans would.
      *
      * Assertions:
      *
-     * The first scan remembers the file as seen. The second, which finds it with the same size and modified time, reads nothing:
-     * the file was first seen less than the rest ago. It leaves what the Watch folder remembers as it was, the moment the file
-     * was first seen included, and opens no Import. A scan once the rest has passed, five seconds on, reads the file, which is
-     * imported.
+     * The first scan remembers the file as seen. The second finds it unchanged but reads nothing, since it was first seen less
+     * than the rest ago, and leaves the memory (first-seen time included) as it was and opens no Import. A scan once the rest has
+     * passed imports the file.
      *
      * Edge cases:
      *
-     * A third scan, still inside the rest, reads nothing either: the rest is counted from the first sight of the file, not from
-     * the scan before.
+     * A third scan inside the rest reads nothing either: the rest counts from the first sight of the file, not the last scan.
      */
     val dir = directory()
     val file = image(dir, "a.png")
@@ -554,12 +540,12 @@ import altitude.core.util.Sha256
      * Setup:
      *
      * A Watch folder on a directory with three images, all seen by a first scan. The next scan runs through a pipeline that reads
-     * the scan's Import as the scan offers its first file.
+     * the scan's Import at its first offer.
      *
      * Assertions:
      *
-     * At that moment the Import has one file and expects three, so two more are to come. Once the scan has settled, the Import is
-     * closed with three imported files, and still says it expected three.
+     * At that moment the Import has one file and expects three. Once settled, it is closed with three imported and still expects
+     * three.
      */
     val dir = directory()
     for (name <- List("a.png", "b.png", "c.png")) image(dir, name)
@@ -589,8 +575,8 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * Further scans hand nothing to the pipeline and open no Import. Once the file is overwritten with another image, the next
-     * scan sees it as a new file and the one after imports it: a second Import, a second asset, and the file handled again.
+     * Further scans read nothing and open no Import. Once the file is overwritten with another image, the next scan sees it as
+     * new and the one after imports it in a second Import, as a second asset.
      */
     val dir = directory()
     val file = image(dir, "a.png")
@@ -617,16 +603,14 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A directory outside the Watch folder's holding an image and a subdirectory with an image. The Watch folder, which deletes
-     * imported files, is on a directory holding one image, a hidden file, a `Thumbs.db`, a partial download, an empty file, an
-     * image in an `@eaDir` directory and one in a hidden directory, a symbolic link to the outside image and a symbolic link to
-     * the outside directory.
+     * A Watch folder that deletes imported files, on a directory holding one image, files imports ignore (hidden, `Thumbs.db`, a
+     * partial download, an empty file, images in `@eaDir` and in a hidden directory), and symbolic links to an image and to a
+     * directory outside it.
      *
      * Assertions:
      *
-     * After two scans the one image is imported and deleted, and it is the only file the Watch folder remembers and the only file
-     * of its Import. Everything else in the directory is as it was, the two links still links, and both outside images are still
-     * there and are no assets of the Library.
+     * After two scans the one image is imported and deleted, and it is the only file remembered or recorded. Everything else in
+     * the directory is as it was, links included, and the outside images are still there and are no assets.
      */
     val outside = directory("outside")
     val outsideImage = image(outside, "private.png")
@@ -668,8 +652,8 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * After two scans, the Import's destination is "Archive", and the three assets are sorted, out of Triage: the top one in
-     * "Archive" itself, the others in "Archive/2026", the folder that was there, and in "Archive/2026/Trip", which is created.
+     * After two scans the Import's destination is "Archive" and the three assets are out of Triage: the top one in "Archive", the
+     * others in the existing "Archive/2026" and in "Archive/2026/Trip", which is created.
      */
     val archive = testApp.service.folder.add("Archive")
     val existing = testApp.service.folder.add("2026", archive.id)
@@ -698,10 +682,9 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * Each of the next three scans reads the file and records it failed, "Storage error", in an Import of its own; the file is to
-     * be retried after the first and the second, with one and two attempts, and parked after the third. Two more scans read
-     * nothing. The file is still in the directory. With the store repaired, "Retry failed" makes the file one to read again,
-     * never tried, and the next scan imports it.
+     * Each of the next three scans records the file failed in an Import of its own; it is to be retried after the first two, and
+     * parked after the third. Two more scans read nothing, and the file stays in the directory. With the store repaired, retrying
+     * the failed files resets it to seen with no attempts, and the next scan imports it.
      *
      * Edge cases:
      *
@@ -746,9 +729,8 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * The second scan reads the file and records it unsupported; it is remembered as final, with no attempt counted, and stays in
-     * the directory. Further scans read nothing. "Retry failed" makes it a file to read again, and the next scan records it
-     * unsupported once more, final again.
+     * The second scan records the file unsupported; it is remembered as final with no attempt counted and stays in the directory.
+     * Further scans read nothing. Retrying the failed files has the next scan record it unsupported again, final.
      *
      * Edge cases:
      *
@@ -785,9 +767,8 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * A scan through that queue ends at its first file: the file is recorded failed, "Import queue unavailable", in an Import
-     * that is closed, the second file is not recorded at all, and both are remembered as seen with no attempt, as before. A scan
-     * through the instance's own queue then imports both.
+     * A scan through that queue ends at its first file, which is recorded failed in a closed Import; the second is not recorded,
+     * and both stay seen with no attempt. A scan through the instance's own queue then imports both.
      */
     val dir = directory()
     val first = image(dir, "a.png")
@@ -814,13 +795,13 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder on a directory with one image, seen by a first scan. The test holds a transaction that has written the Watch
-     * folder's row, so a scan cannot finish remembering what it found, and asks for two scans one after the other.
+     * A Watch folder on a directory with one seen image. The test holds a transaction that has written the Watch folder's row, so
+     * a scan cannot finish remembering what it found, and asks for two scans in a row.
      *
      * Assertions:
      *
-     * The second scan does nothing and says so at once, while the first is still running. Once the transaction ends the first
-     * scan reads the file, which is imported once: one Import, with one file.
+     * The second scan reports at once that it did not start, while the first still runs. Once the transaction ends the first scan
+     * imports the file once.
      */
     val dir = directory()
     image(dir, "a.png")
@@ -847,17 +828,16 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder on a directory with one image, seen by a first scan and rested. On PostgreSQL the Watch folder also
-     * remembers a hundred thousand other files, so reading its memory takes far longer than settling one file, and the test holds
-     * the memory's table locked from the moment a second scan offers the image: the image's import completes and waits at the
-     * write of its memory, in the pipeline still, and a third scan, started then, waits at its read of the memory. The lock is
-     * released, so the read begins with the image remembered as not read yet and the image settles while the rows are read. On
-     * SQLite, whose one write connection never lets a file settle inside a scan's transaction, the scans run without the lock.
+     * A Watch folder with one image, seen and rested. On PostgreSQL it also remembers 100,000 other files, so reading its memory
+     * takes far longer than settling one file, and the memory's table is locked as a second scan offers the image: the image's
+     * import waits at its memory write, and a third scan at its memory read. Once released, the third scan's read starts with the
+     * image unread, and the image settles meanwhile. On SQLite, whose one write connection never lets a file settle inside a
+     * scan's transaction, the scans run without the lock.
      *
      * Assertions:
      *
-     * The third scan hands nothing to the pipeline: the image was in the pipeline when the scan looked. It is imported once, in
-     * one Import, and remembered as handled.
+     * The third scan hands nothing to the pipeline, since the image was in it when the scan looked. It is imported once and
+     * remembered as handled.
      */
     val isPostgres = testApp.dataSourceType == Const.DbEngineName.POSTGRES
     val dir = directory()
@@ -884,7 +864,7 @@ import altitude.core.util.Sha256
       )
     }
 
-    // Locks the memory's table as the scan offers its file, which is then in the pipeline and settles only once it is released
+    // Locks the memory's table as the scan offers its file, which then settles only once the lock is released
     val locking = pipelineThat {
       if (isPostgres) {
         onAnotherThread {
@@ -929,10 +909,9 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * The next scan walks nothing: it is blocked, the path does not exist, which is the Watch folder's stored status reason, and
-     * its card says Unavailable with that reason. What it remembers is as it was. With a file put where the directory was, the
-     * reason becomes that the path is not a directory. Once the directory is moved back, a scan finds it available: no reason is
-     * stored, the card says Watching, and nothing is read again.
+     * The next scan is blocked because the path does not exist, which is stored as the status reason and shown on the Unavailable
+     * card; the memory is kept. With a file where the directory was, the reason is that it is not a directory. Once the directory
+     * is back, a scan clears the reason, the card says Watching, and nothing is read again.
      *
      * Edge cases:
      *
@@ -981,19 +960,18 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder on a directory with an image at its top, one in "locked" and one in "open/deep". The server is then denied
-     * "locked": it can neither list it nor enter it.
+     * A Watch folder on a directory with an image at its top, one in "locked" and one in "open/deep", "locked" then made
+     * unreadable to the server.
      *
      * Assertions:
      *
-     * Two scans import the top image and the one in "open/deep": the walk goes on past "locked". The Watch folder's card says
-     * Unavailable with a reason that names "locked" by its path and says the rest is scanned, which is its stored status reason.
-     * Nothing is remembered of the image in "locked". Once the server may read "locked" again, a scan clears the reason, the card
-     * says Watching, and two scans import its image.
+     * Two scans import the top image and the one in "open/deep", walking past "locked". The stored status reason, shown on the
+     * Unavailable card, names "locked" and says the rest is scanned, and nothing in "locked" is remembered. Once "locked" is
+     * readable again, a scan clears the reason and two scans import its image.
      *
      * Edge cases:
      *
-     * The deletion notice's file count, asked while "locked" is denied, counts the two files that can be read.
+     * The deletion notice's file count, asked meanwhile, counts the two readable files.
      */
     val dir = directory()
     image(dir, "top.png")
@@ -1030,20 +1008,18 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder whose destination is the folder "Scans", on a directory with one image that a first scan has seen. "Scans"
-     * is then deleted, which recycles it.
+     * A Watch folder with the destination "Scans", on a directory with one seen image. "Scans" is then recycled.
      *
      * Assertions:
      *
-     * A scan reads nothing: it is blocked, the destination folder is in the Trash, and "Scan now" is refused saying so. The card
-     * says Paused with that reason, while the Watch folder itself is not stored as paused. No Import is opened, no file is
-     * failed, the file is remembered as seen, as before, and is still in the directory. Once the folder is restored, a scan
-     * imports the file into it, and the card says Watching.
+     * A scan is blocked with the destination in the Trash, and a manual scan is refused saying so. The card says Paused with that
+     * reason, though the Watch folder is not stored as paused. No Import is opened and the file stays seen and in the directory.
+     * Once the folder is restored, a scan imports the file into it, and the card says Watching.
      *
      * Edge cases:
      *
-     * A lost destination that is replaced resumes the Watch folder too: with "Scans" in the Trash again and the Watch folder
-     * edited to the folder "Other", a second image is imported into "Other".
+     * Replacing a lost destination resumes the Watch folder too: with "Scans" recycled again and the Watch folder edited to
+     * "Other", a second image is imported into "Other".
      */
     val scans = testApp.service.folder.add("Scans")
     val other = testApp.service.folder.add("Other")
@@ -1082,13 +1058,13 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder whose destination is the folder "Scans", on a directory with two images, both seen by a first scan. The next
-     * scan runs through a pipeline that deletes "Scans" as the scan offers its first file.
+     * A Watch folder with the destination "Scans", on a directory with two seen images. The next scan runs through a pipeline
+     * that recycles "Scans" at the scan's first offer.
      *
      * Assertions:
      *
-     * The first file is recorded failed, the destination folder being in the Trash, and the second is not recorded: the scan
-     * ended before it. Both are remembered as seen, with no attempt, and both are still in the directory. Neither is an asset.
+     * The first file is recorded failed for the destination in the Trash, and the second is not recorded, the scan having ended.
+     * Both stay seen with no attempt and in the directory, and neither is an asset.
      */
     val scans = testApp.service.folder.add("Scans")
     val dir = directory()
@@ -1121,9 +1097,9 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * It is stored as paused and its card says Paused, with no reason. A scan reads nothing, "Scan now" is refused as paused, and
-     * a scan of every Watch folder leaves it out: the file stays seen and no Import is opened. Resumed, it is watching again, and
-     * a scan of every Watch folder imports the file.
+     * It is stored as paused and its card says Paused, with no reason. A scan reads nothing, a manual scan is refused, and a scan
+     * of every Watch folder leaves it out: the file stays seen and no Import is opened. Resumed, it is watching again, and a scan
+     * of every Watch folder imports the file.
      */
     val dir = directory()
     val file = image(dir, "a.png")
@@ -1159,8 +1135,7 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * Two scans of every Watch folder, asked for from the first Library, import each image into the Library of its Watch folder,
-     * and into no other.
+     * Two scans of every Watch folder, asked for from the first Library, import each image into its Watch folder's Library alone.
      */
     val firstLibrary = testContext.repository
     val firstDir = directory("first")
@@ -1197,20 +1172,19 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder on a directory with one image. The scans are started, as a server's start does, with a schedule of the
-     * test's own in place of the actor system's: it keeps each round it is handed with the delay it was asked for, and runs none
-     * of them, so the test runs a round when it chooses to.
+     * A Watch folder on a directory with one image. The scans are started as a server's start does, with a schedule of the test's
+     * own that records each round and its delay and runs none, so the test runs a round when it chooses.
      *
      * Assertions:
      *
-     * Starting scans at once, with nobody asking: the file is remembered as seen and the Watch folder has a last scan. One round
-     * is scheduled, 10 minutes on, the Setting's default, and nothing more while it waits. Once the file has rested, running that
-     * round reads the file, which becomes an asset of the Library, and schedules the round after it, 10 minutes on again.
+     * Starting scans at once: the file is remembered as seen and the Watch folder has a last scan. One round is scheduled, 10
+     * minutes on (the Setting's default), and nothing more. Once the file has rested, running that round imports the file and
+     * schedules the next, 10 minutes on again.
      *
      * Edge cases:
      *
-     * The Setting is read as each round is scheduled: saved as 90 while a round waits, the round keeps the delay it was scheduled
-     * with, and the one it schedules when it runs is 90 minutes on.
+     * The Setting is read as each round is scheduled: saved as 90 while a round waits, that round keeps its delay and the one it
+     * schedules is 90 minutes on.
      */
     val dir = directory()
     val file = image(dir, "a.png")
@@ -1248,19 +1222,18 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * Three Admins besides the one who acts, each owning a Watch folder in the first Library, and the first of them another in a
-     * second Library. The acting Admin deactivates the first, changes the second to a User, and deletes the third.
+     * Three Admins besides the acting one, each owning a Watch folder in the first Library, the first also one in a second
+     * Library. The acting Admin deactivates the first, demotes the second to a User, and deletes the third.
      *
      * Assertions:
      *
-     * Both Watch folders of the deactivated Admin are paused, saying its owner was deactivated, and the demoted Admin's is
-     * paused, saying its owner is no longer an Admin; each still has its owner. The deleted Admin's is owned by the acting Admin
-     * and is not paused. A scan of a paused one reads nothing.
+     * The deactivated and the demoted Admins' Watch folders are paused, each with its reason, and keep their owners. The deleted
+     * Admin's passes to the acting Admin, unpaused. A scan of a paused one reads nothing.
      *
      * Edge cases:
      *
-     * Resumed by the acting Admin, a Watch folder whose owner cannot own it is the acting Admin's from there on, and its files
-     * are imported as that Admin's. A reactivated owner's Watch folder stays paused until it is resumed, and stays its owner's.
+     * A Watch folder whose owner cannot own it, once resumed, is the resuming Admin's, and its files are imported as theirs. A
+     * reactivated owner's Watch folder stays paused until resumed, and stays its owner's.
      */
     val users = testApp.service.user
     val firstLibrary = testContext.repository
@@ -1325,20 +1298,18 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder added by one Admin on a directory with one image, imported by two scans, and a second directory with an
-     * image of its own. Another Admin edits the Watch folder: a new name, the second directory, the folder "Scans" as its
-     * destination.
+     * A Watch folder whose image was imported, and a second directory with an image. Another Admin edits the Watch folder to a
+     * new name, the second directory and the destination "Scans".
      *
      * Assertions:
      *
-     * The Watch folder is stored as edited and owned by the editor, and remembers nothing of the first directory's file. Two
-     * scans import the second directory's image into "Scans", owned by the editor. Removed, the Watch folder is gone from the
-     * cards and is not found, and what it remembered is gone with it; both directories still hold their files, and both Imports
-     * of its scans are still in the history, pointing at no Watch folder.
+     * The Watch folder is stored as edited, owned by the editor, and remembers nothing of the first directory. Two scans import
+     * the second image into "Scans", owned by the editor. Removed, the Watch folder and its memory are gone, both directories
+     * keep their files, and both Imports stay in the history, pointing at no Watch folder.
      *
      * Edge cases:
      *
-     * A Watch folder of another Library is not found, to edit, pause, resume, retry, scan or remove, and stays as it is.
+     * Every action on a Watch folder of another Library is not found (a scan is blocked), and it stays as it is.
      */
     val scans = testApp.service.folder.add("Scans")
     val firstDir = directory("first")
@@ -1393,16 +1364,15 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Library that holds an asset already. A Watch folder that deletes imported files, on a directory holding: an image at its
-     * top; an image in "2026/Trip", alone there; a copy of the asset the Library holds in "copies", alone there; an image beside
-     * a `.DS_Store` in "kept"; a text file, which no import supports, in "docs"; and an empty directory, "empty".
+     * A Library holding an asset, and a Watch folder that deletes imported files, on a directory holding an image at its top, one
+     * alone in "2026/Trip", a copy of the existing asset alone in "copies", an image beside a `.DS_Store` in "kept", a text file
+     * in "docs", and an empty directory "empty".
      *
      * Assertions:
      *
-     * After two scans the three new images are assets and the copy is recorded as already in the Library; all four are deleted
-     * from the directory, and so are "2026/Trip", "2026" and "copies", which they left empty. What stays: the watched directory
-     * itself, "kept" with its `.DS_Store`, "docs" with the text file, which is recorded unsupported and remembered as final, and
-     * "empty", which no deleted file was in. The four deleted files are remembered as handled.
+     * After two scans the three new images are assets and the copy is a duplicate; all four are deleted, as are the directories
+     * they left empty, and remembered as handled. What stays: the watched directory, "kept" with its `.DS_Store`, "docs" with the
+     * text file (unsupported, final), and "empty", which no deleted file was in.
      *
      * Edge cases:
      *
@@ -1444,7 +1414,7 @@ import altitude.core.util.Sha256
       "copies/copy.png" -> (WatchFileState.Handled, 0),
       "docs/notes.txt" -> (WatchFileState.Final, 0)
     )
-    // The Watch folder that only reads kept its file
+    // The Watch folder that does not delete kept its file
     Files.exists(known) shouldBe true
 
     val single = directory("single")
@@ -1460,12 +1430,12 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder that deletes imported files, on a directory with one image in a subdirectory, in a Library whose file store
-     * is broken, so every import fails as it is stored.
+     * A Watch folder that deletes imported files, on a directory with one image in a subdirectory, in a Library whose broken file
+     * store fails every import.
      *
      * Assertions:
      *
-     * Four scans read the file three times and park it; it is recorded failed each time, and it is still in its subdirectory.
+     * Four scans read the file three times, recording it failed each time, and park it; it is still in its subdirectory.
      */
     val dir = directory()
     val file = image(dir, "2026/a.png")
@@ -1486,13 +1456,13 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder that deletes imported files, on a directory with one image, seen by a first scan. The next scan runs through
-     * a pipeline that overwrites the file with another image as the scan offers it, its copy staged by then.
+     * A Watch folder that deletes imported files, on a directory with one seen image. The next scan runs through a pipeline that
+     * overwrites the file as the scan offers it, its copy staged by then.
      *
      * Assertions:
      *
-     * The image as it was staged is imported, and the file is still in the directory, with its new content, which is no asset.
-     * The next scan sees it as a new file, and the one after imports it and deletes it.
+     * The staged image is imported, and the file stays with its new content, which is no asset. The next scan sees it as new, and
+     * the one after imports and deletes it.
      */
     val dir = directory()
     val file = image(dir, "a.png")
@@ -1524,15 +1494,14 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder that deletes imported files, on a directory with an image at its top and one in "album", both seen by a
-     * first scan. The next scan runs through a pipeline that, as the scan offers its first file: moves "album" out of the watched
-     * directory and puts a symbolic link to it in its place, so the image is reached through the link, as it was; and moves the
-     * top image out and puts a symbolic link to it in its place.
+     * A Watch folder that deletes imported files, on a directory with a seen image at its top and one in "album". At the next
+     * scan's first offer, a pipeline moves "album" and the top image out of the directory, leaving a symbolic link to each in its
+     * place.
      *
      * Assertions:
      *
-     * Whatever was staged before the swap is imported, and nothing is deleted: both images are where they were moved to, outside
-     * the watched directory, and both links are still in it.
+     * Whatever was staged before the swap is imported, and nothing is deleted: both images are where they were moved to, and both
+     * links are still in place.
      */
     val outside = directory("outside")
     val dir = directory()
@@ -1569,16 +1538,14 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder that deletes imported files, on a temporary directory "volume" with an image in "photos". The store of the
-     * test's Library is then moved into "volume": its directory in the data directory becomes a symbolic link to "volume/store".
-     * An asset is imported into the Library, by another Watch folder, so "volume/store" holds its file and its Preview, both
-     * files a scan would take: the file a duplicate of the asset, the Preview a new image.
+     * A Watch folder that deletes imported files, on a directory "volume" with an image in "photos". The test Library's store is
+     * then moved to "volume/store" through a symbolic link in the data directory, and an asset imported, so the store holds its
+     * file and its Preview, both files a scan would take.
      *
      * Assertions:
      *
-     * Two scans are both blocked, the path overlapping the app's data directory, which the card says beside Unavailable. No
-     * Import is opened, nothing is remembered, and the asset's stored file and its Preview are where they were, as is the image
-     * in "photos".
+     * Two scans are blocked as overlapping the data directory, the card's reason beside Unavailable. No Import is opened, nothing
+     * is remembered, and the stored file, its Preview and the image in "photos" are untouched.
      *
      * Edge cases:
      *
@@ -1614,18 +1581,16 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Library holding an asset, imported by another Watch folder. A Watch folder that deletes imported files, on a temporary
-     * directory on the store's file system, beside the test's data directory, holding two files with the asset's content: a hard
-     * link to the asset's stored file, which is that file under a second path, and a copy of it.
+     * A Library holding an asset, and a Watch folder that deletes imported files, on a directory on the store's file system
+     * holding a hard link to the asset's stored file and a copy of it.
      *
      * Assertions:
      *
-     * After two scans both are recorded as already in the Library. The copy is deleted and remembered as handled. The link is
-     * still in the directory, and the asset's stored file in the store; the link is remembered as final, so no later scan reads
-     * it again.
+     * After two scans both are duplicates. The copy is deleted and remembered as handled. The link and the stored file stay, and
+     * the link is remembered as final, so no later scan reads it again.
      */
     val stored = testApp.service.fileStore.assetFile(importedAsset().persistedId).toRealPath()
-    // Beside the directory that holds the data directory: on its file system, which a hard link cannot leave, and outside it
+    // Beside the data directory's parent: on its file system, which a hard link cannot leave, yet outside it
     val dir = Files.createTempDirectory(Path.of(testApp.dataPath).toRealPath().getParent.getParent, "watched-links")
 
     try {
@@ -1651,13 +1616,13 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder that deletes imported files, on a directory with one image, seen by a first scan. The next scan runs through
-     * a pipeline that pauses the Watch folder as the scan offers the file.
+     * A Watch folder that deletes imported files, on a directory with one seen image. The next scan runs through a pipeline that
+     * pauses the Watch folder as the scan offers the file.
      *
      * Assertions:
      *
-     * The file is imported, is still in the directory, and is remembered as seen, not as handled. Once the Watch folder is
-     * resumed, a scan reads the file again, records it as already in the Library, and deletes it.
+     * The file is imported but stays in the directory, remembered as seen, not handled. Once resumed, a scan reads it again,
+     * records it as a duplicate, and deletes it.
      */
     val dir = directory()
     val file = image(dir, "a.png")
@@ -1688,13 +1653,13 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder that does not delete imported files, on a directory with two images, both imported by two scans and still in
-     * the directory. The asset of the second is then recycled. The Watch folder is edited to delete imported files.
+     * A Watch folder that does not delete, whose two images were imported and stay in the directory. The second's asset is then
+     * recycled, and the Watch folder edited to delete imported files.
      *
      * Assertions:
      *
-     * The edit makes both files ones to read again. The next scan reads both: the first is recorded as already in the Library and
-     * deleted; the second, whose only copy is in the Trash, is imported again and deleted. The directory is empty.
+     * The edit makes both files ones to read again. The next scan records the first a duplicate and deletes it, and imports the
+     * second, whose only copy is in the Trash, again and deletes it. The directory is empty.
      *
      * Edge cases:
      *
@@ -1726,14 +1691,13 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A Watch folder on a directory with two images, both imported by two scans; the second is then removed from the directory.
-     * Both files' memory is stamped as last found 100 days ago, and a scan follows. A second Watch folder, never scanned since,
-     * has a file remembered from 100 days ago too, and its last scan was then.
+     * A Watch folder whose two images were imported, the second then removed from the directory. Both files are stamped as last
+     * found 100 days ago, and a scan follows. A second Watch folder, last scanned 100 days ago, remembers a file from then too.
      *
      * Assertions:
      *
-     * The scan stamps the file it finds as found now. The prune, with the Import history kept 90 days, forgets the absent file
-     * and keeps the one in the directory; the Watch folder that was not scanned since forgets nothing.
+     * The prune, with the Import history kept 90 days, forgets the absent file and keeps the one the scan found again; the Watch
+     * folder not scanned since forgets nothing.
      *
      * Edge cases:
      *
@@ -1763,7 +1727,7 @@ import altitude.core.util.Sha256
     testApp.txManager.withTransaction {
       update("UPDATE watch_folder SET last_scan_at = ? WHERE id = ?", daysAgo(100), idle.persistedId)
     }
-    // A scan alone, with no rest let pass after it: the moments the files were last found are the test's own
+    // No rest let pass after the scan, so the last-found times stay the test's own
     scan(watchFolder)
     settle(watchFolder)
 

@@ -15,63 +15,53 @@ import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSource
 
 trait SearchDao:
-  /** One ordered page of a flat search: its assets, each with where it stands in the order */
+  /** One ordered page of a flat search, each asset with its position in the order */
   def search(query: SearchQuery): SearchPage
 
-  /** One ordered page of a grouped search: its assets with their group and count data */
   def searchGrouped(query: SearchQuery): GroupedSearchPage
 
   /**
-   * One page of a Describe search: the assets `query` matches, in the context repository, whose SigLIP 2 Scene embedding is at a
-   * cosine of at least the ranking's `minCosine` to its `embedding`, a description's, the nearest `limit` of them at most,
-   * nearest first and then by ID. The query is resolved as any search's is, and carries the page: the `rpp` rows after its
-   * cursor, whose position is a row's cosine distance and ID, or the first ones without it, each row standing at its distance
-   * (`SearchRow.sortValue`, a `SortValue.Real`); a page that counts the total (`SearchQuery.isTotalCounted`) carries the count of
-   * all the ranked rows, and the page on which the search's weaker matches begin, the ranked rows whose cosine is under the
-   * ranking's `weakerRatio` of the nearest one's, says where (`SearchPage.weaker`). Its sort and grouping are not read. An asset
-   * with no embedding (a Video, an animated image, a still image the model could not embed) is in no page. The caller's
-   * transaction is set up for a vector search of that many rows (`TransactionManager.withVectorSearch`).
+   * One page of a Describe search: the matches whose SigLIP 2 embedding has a cosine of at least `minCosine` to the
+   * description's, at most `limit`, nearest first, then by ID. The cursor is a row's cosine distance and ID. A counted page also
+   * says where the weaker matches begin (cosine under `weakerRatio` of the nearest's, `SearchPage.weaker`). Sort and grouping are
+   * ignored; an asset with no embedding is in no page. The caller's transaction is set up for the vector search
+   * (`TransactionManager.withVectorSearch`).
    */
   def describe(query: SearchQuery, ranking: DescribeRanking): SearchPage
 
   /**
-   * The ranking as this engine reads it for the matches of `query`, a resolved search with no description of its own: through its
-   * vector index when it has one and the matches are many (`DescribeRanking.throughIndex`), exactly otherwise. `describe` reads
-   * its ranking so itself; a search among a part of a description's matches (`SearchQuery.described`) is handed the ranking read
-   * here, once for its pages' statements.
+   * How this engine ranks `query`'s matches: through its vector index when it has one and the matches are many, exactly
+   * otherwise. A search within a description's matches (`SearchQuery.described`) reads it here once for all its statements.
    */
   def rankingFor(query: SearchQuery, ranking: DescribeRanking): DescribeRanking
 
-  /** The number of assets a search matches, exact, without reading any of them */
+  /** Exact, without reading any asset */
   def count(query: SearchQuery): Int
 
-  /** The number of assets a search matches up to the query's cap; one past the cap means more than it */
+  /** Up to the query's cap; one past the cap means more */
   def cappedCount(query: SearchQuery): Int
 
-  /** How many assets of the default view each folder holds itself, by folder ID; a folder with none is absent */
+  /** Folder ID to how many assets of the default view it holds itself; a folder with none is absent */
   def countByFolder(): Map[String, Int]
 
-  /** The map's cells for a viewport: the plotted points in the box, aggregated into square cells of the given size in degrees */
+  /** The plotted points in the box, aggregated into square cells of `cellDegrees` */
   def mapCells(query: SearchQuery, bbox: BoundingBox, cellDegrees: Double): List[MapCell]
 
   /** The Locations pinned in the box that hold at least one matching asset, with that count */
   def mapLocations(query: SearchQuery, bbox: BoundingBox): List[MapLocation]
 
-  /** The box around every plotted point of the search and their count; nothing when nothing is plotted */
+  /** The box around every plotted point of the search, and their count */
   def mapBounds(query: SearchQuery): Option[MapBounds]
 
   /**
-   * The ID and name of every candidate of each of the name sources asked for, keyed by each of them, even one with no candidates:
-   * people who are named and neither hidden, merged away nor a bad match; Locations with their Category as the parent;
-   * Categories; folders with their parent, less the recycled ones and the root; albums. A source not asked for is not read, and
-   * the Search document is no name source.
+   * The ID and name of every candidate of each source asked for, keyed by source even when empty. People are the named, visible,
+   * live ones; folders leave out the recycled ones and the root. The Search document is no name source.
    */
   def searchNames(sources: Set[SearchSource]): Map[SearchSource, Seq[SearchName]]
 
   /**
-   * The hits of each positive group of the Search text, by group index, one past `limit` at most: a group with at most `limit`
-   * hits has none other. An asset is a hit once per source it is in. Groups with no hit, and groups that are not positive, have
-   * no entry.
+   * The hits of each positive Search text group, by group index, at most one past `limit`. An asset is a hit once per source it
+   * is in. Groups with no hit, and groups that are not positive, have no entry.
    */
   def probeText(text: ResolvedSearchText, limit: Int): Map[Int, Seq[String]]
 

@@ -13,14 +13,13 @@ import altitude.core.util.SceneEmbedder
 
 /**
  * The test instances' Scene embedder: off, it embeds nothing, so a fixture import runs no Scene model; on, it answers the real
- * models' embeddings, from the instance's model files. A suite whose subject is the embeddings turns it on
- * (`IntegrationTestCore.usesSceneModels`, `withSceneModels`). The real models are opened when it is first turned on, on the
- * test's thread, so a model that fails to open fails the suite or the test with its own error rather than an import thread's
- * WARN, and a test JVM that never turns it on never loads them (about 1.2 GB).
+ * models' embeddings. A suite whose subject is the embeddings turns it on (`IntegrationTestCore.usesSceneModels`,
+ * `withSceneModels`). The models open at the first `turnOn`, on the test's thread, so a model that fails to open fails the test
+ * with its own error rather than an import thread's WARN, and a JVM that never turns it on never loads them (about 1.2 GB).
  *
- * The real models' answers are kept for the instance's life, by the image's pixels: the suites that turn the models on import the
- * same synthesized frames (`BurstFrames`) test after test, and a model pass is a pure function of the pixels, so each image is
- * embedded once. Two threads embedding the same new image at once both run the models and store the same answer.
+ * Answers are cached for the instance's life by the image's pixels: suites import the same synthesized frames (`BurstFrames`)
+ * test after test, and a pass is a pure function of the pixels. Two threads embedding the same new image both run the models and
+ * store the same answer.
  */
 class SwitchableSceneEmbedder(models: ModelFiles) extends SceneEmbedder with ModelSwitch {
 
@@ -30,13 +29,12 @@ class SwitchableSceneEmbedder(models: ModelFiles) extends SceneEmbedder with Mod
   // Opened by the first turnOn, set before the switch so an embed that sees it on sees the models
   @volatile private var onnx: Option[OnnxSceneEmbedder] = None
 
-  // The real models' embeddings by the digest of the image's size, type and pixels (`pixelKey`)
+  // By `pixelKey`
   private val embedded = new ConcurrentHashMap[String, SceneEmbeddings]()
 
-  /** Whether `embed` runs the real models */
   override def on: Boolean = switchedOn
 
-  /** Opens the real models if they are not open yet, then switches them on; a model that fails to open throws here */
+  /** Opens the real models on first use, then switches them on; a model that fails to open throws here */
   override def turnOn(): Unit = synchronized {
     if (onnx.isEmpty) onnx = Some(OnnxSceneEmbedder(models))
     switchedOn = true
@@ -58,12 +56,11 @@ class SwitchableSceneEmbedder(models: ModelFiles) extends SceneEmbedder with Mod
     case _ => SceneEmbeddings()
   }
 
-  /** Closes the real models if they were opened */
   override def close(): Unit = onnx.foreach(_.close())
 
   /**
-   * The SHA-256 of an 8-bit image's size, type and pixels; none for another depth, which is embedded every time. A decoded image
-   * is 8-bit (`ImageUtil.matFromBytes`), so none is the exception.
+   * The SHA-256 of an 8-bit image's size, type and pixels; none for another depth, which is embedded every time. Decoded images
+   * are 8-bit (`ImageUtil.matFromBytes`).
    */
   private def pixelKey(image: Mat): Option[String] =
     Option.when(image.depth() == CvType.CV_8U) {

@@ -1,17 +1,8 @@
 /**
- * The Location pin editor (`data-app-fragment="location-editor"`, inside the Add location modal,
- * `htmx/add_location_dialog.scala.html`): a Leaflet map on which the pin is placed by clicking and
- * moved by dragging, a read-only readout of the pin under it, and, when the server enabled the
- * geocoder, a place-name search whose result places the pin. The coordinates are never typed: the
- * editor writes them into the form's hidden `latitude` / `longitude` inputs, which is all the
- * server sees.
- *
- * Leaflet is the plain-script `window.L` (see `static/js/lib/README.md`), loaded by the first
- * editor. One editor exists at a time: hydrating a new one (a fresh dialog, or a validation
- * replacement of the form, which re-renders the hidden inputs with the submitted values) disposes
- * of the previous map first. The
- * modal host is shown by `x-show` in a later task than the swap, so the map is sized once its
- * container is actually displayed, and again whenever the container resizes.
+ * The Location pin editor in the Add location dialog: a Leaflet map where a click places the pin and
+ * a drag moves it, writing the form's hidden `latitude` / `longitude` inputs (the coordinates are
+ * never typed), and, when the server enabled the geocoder, a place-name search. One editor exists at
+ * a time: hydrating a new one (a fresh dialog, or a validation re-render) disposes of the previous map.
  */
 import { showErrorSnackBar } from "../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
@@ -23,7 +14,7 @@ const WORLD_VIEW = { center: [20, 0], zoom: 2 }
 const HIDDEN_DECIMALS = 6
 const READOUT_DECIMALS = 4
 
-// The editor currently on screen, disposed of before the next one is created
+// The editor on screen, disposed of before the next one is created
 let current = null
 
 export async function hydrateLocationEditorFragment({ fragmentEl }) {
@@ -113,8 +104,8 @@ export async function hydrateLocationEditorFragment({ fragmentEl }) {
 }
 
 /**
- * Whatever state the previous map is in (its container may already have left the DOM with the
- * dialog that held it), the new dialog must get its map: a failing removal is logged, not raised.
+ * The previous map's container may already have left the DOM, so a failing removal is logged, not
+ * raised: the new dialog must still get its map.
  */
 function disposeCurrentEditor() {
     if (!current) {
@@ -166,11 +157,9 @@ function whenDisplayed(el, callback, attempt = 0) {
 }
 
 /**
- * The place-name search, present only when the server rendered it (the geocoder is config-gated).
- * Enter in the box or the Search button asks the server's proxy; each result is a button that
- * jumps the map to the place, places the pin, and fills the name when it is still empty (the first
- * segment of the place's label, which Nominatim writes as "Name, Street, City, Country"). The
- * newest search wins: a slower earlier response is dropped.
+ * The place-name search, rendered only when the geocoder is enabled. A result jumps the map there,
+ * places the pin and fills an empty name with the label's first segment (Nominatim writes "Name,
+ * Street, City, Country"). The newest search wins: a slower earlier response is dropped.
  */
 function bindGeocoder(fragmentEl, { map, setPin, nameEl }) {
     const inputEl = fragmentEl.querySelector("#locationGeocode")

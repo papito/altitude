@@ -70,11 +70,9 @@ abstract class IntegrationTestCore
   }
 
   /**
-   * Whether the suite's tests run the real Scene models. Off, a fixture import is measured and hashed but carries no Scene
-   * embedding, so its frames pair by the hash alone, which spares each import about 0.75 s of model passes; a suite whose subject
-   * is the embeddings turns them on for all its tests here, or for one test with `withSceneModels`. The real models are opened
-   * when the switch is first turned on, by `beforeAll` or `withSceneModels`, so a model that fails to open aborts the suite or
-   * fails the test with its own error, and they stay open until the test instance is cleaned up.
+   * Whether the suite's tests run the real Scene models. Off, a fixture import carries no Scene embedding, so its frames pair by
+   * the hash alone, sparing about 0.75 s an import. The models open when the switch is first turned on, so one that fails to open
+   * fails the suite or test with its own error.
    */
   protected def usesSceneModels: Boolean = false
 
@@ -88,10 +86,8 @@ abstract class IntegrationTestCore
   }
 
   /**
-   * Whether the suite's tests embed descriptions with the real SigLIP 2 text tower. Off, a description has no embedding; a suite
-   * whose subject is the Describe search turns the model on for all its tests here, or for one test with `withDescribeModel`. The
-   * text tower is opened by the first description embedded with the model on, on the test's thread, and stays open until the test
-   * instance is cleaned up.
+   * Whether the suite's tests embed descriptions with the real SigLIP 2 text tower. Off, a description has no embedding. The
+   * tower opens on the first description embedded with the switch on.
    */
   protected def usesDescribeModel: Boolean = false
 
@@ -137,18 +133,16 @@ abstract class IntegrationTestCore
     testApp.isInitialized = false
     testContext = new TestContext(testApp)
 
-    // A bundle's database keeps every test's accounts, and a Library created grants every account whose new-Library switch is on:
-    // no switch outlives the test that turned it on
+    // A bundle's database keeps every test's accounts, and a new Library grants each account whose new-Library switch is on, so
+    // no switch outlives its test
     testApp.txManager.withTransaction {
       new QueryRunner().update(RequestContext.getConn, "UPDATE account SET grants_new_libraries = ?", Boolean.box(false))
     }
 
-    // Every integration test starts with one repository and one account (a User holding no grant, which a test grants if it
-    // needs access), since every asset has an owner. Tests then create more repositories and accounts to test the boundaries
-    // between them.
+    // One repository and one account (a User with no grant), since every asset has an owner
     testContext.persistRepository()
-    // The context account acts with every Permission, as an Admin's request does; a test of the rules that read them narrows
-    // them around its calls (`RequestContext.permissions.withValue`)
+    // Every Permission, as an Admin's request has; a test of a rule that reads them narrows them with
+    // `RequestContext.permissions.withValue`
     RequestContext.permissions.value = Permissions.all
 
     // nuke the data dir tree
@@ -199,9 +193,8 @@ abstract class IntegrationTestCore
   }
 
   /**
-   * Runs `first` and `second` on threads of their own, each in its transaction, `first` holding its transaction open until
-   * `second` waits for it: for a row lock on PostgreSQL, whose backend is identified by its process ID, and for the one write
-   * connection on SQLite, whose waiter is the thread parked in the pool.
+   * Runs `first` and `second` on threads of their own, each in its transaction, `first` holding its open until `second` waits on
+   * it: for a row lock on PostgreSQL (seen by backend PID), for the one write connection on SQLite (a thread parked in the pool).
    */
   def contend(first: => Unit, second: => Unit): Unit = {
     val holding = new CountDownLatch(1)

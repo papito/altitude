@@ -1,21 +1,19 @@
--- A row of a repository's table holds its repository (repository_id NOT NULL), and a reference from one such row to another is
--- a foreign key over (repository_id, <ref>_id), so the database refuses a reference into another repository. Each table such a
--- key names has UNIQUE (id, repository_id) for it, led by the ID so that it never competes with the indexes that lead with the
--- repository. A NULL reference is not checked. A person's cover, an Import file's asset and an Import's Watch folder are the
--- references that are not such keys: a single column each, at the person, import_file and import tables.
+-- A repository's table holds repository_id NOT NULL, and a reference between its rows is a foreign key over
+-- (repository_id, <ref>_id), so the database refuses a reference into another repository. Each referenced table has
+-- UNIQUE (id, repository_id), led by the ID so it never competes with the indexes that lead with the repository. The exceptions
+-- are single columns: a person's cover, an Import file's asset and an Import's Watch folder.
 
 CREATE TABLE system (
   id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1), -- the one and only row: the key rejects a second, the check pins its id
   version INT NOT NULL,
   is_initialized TINYINT NOT NULL DEFAULT FALSE,
-  -- The HMAC-SHA256 key of signed content URLs, the Base64 of 32 random bytes, generated on first start
-  -- (SystemService.loadOrCreateSigningKey) so a signed URL survives a restart
+  -- The HMAC-SHA256 key of signed content URLs (Base64 of 32 random bytes), stored so a signed URL survives a restart
   signing_key CHAR(44)
 );
 
 INSERT INTO system (version, is_initialized) VALUES (0, 0);
 
--- The Settings an Admin tunes on the Settings screen, seeded with their defaults; the registry is models/Settings.scala
+-- The Settings an Admin tunes, seeded with their defaults; the registry is models/Settings.scala
 CREATE TABLE setting (
   name TEXT NOT NULL PRIMARY KEY,
   value TEXT NOT NULL,
@@ -60,8 +58,8 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('import.history.days', '90', '90'),
   ('watch_folder.scan_interval', '10', '10');
 
--- email_key and username_key are the name keys of the email address and the username (User.emailKey and User.usernameKey:
--- NameKey.of, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
+-- email_key and username_key are name keys (NameKey.of), folded in Scala so both engines fold alike: SQLite's lower() folds
+-- ASCII only
 CREATE TABLE account (
   id CHAR(36) PRIMARY KEY,
   email TEXT NOT NULL,
@@ -74,10 +72,9 @@ CREATE TABLE account (
   password_hash TEXT NOT NULL,
   -- A deactivated account can do nothing until it is reactivated
   is_active TINYINT NOT NULL DEFAULT 1,
-  -- The Create Libraries flag, which only an Admin sets
+  -- Only an Admin sets it
   can_create_libraries TINYINT NOT NULL DEFAULT 0,
-  -- The new-Library grant: with the switch on, every Library created later grants the account these Permissions (a bitmask of
-  -- Permission bits)
+  -- When on, every Library created later grants the account new_library_permissions (a Permission bitmask)
   grants_new_libraries TINYINT NOT NULL DEFAULT 0,
   new_library_permissions INT NOT NULL DEFAULT 0 CHECK (new_library_permissions >= 0),
   -- The account that created this one; NULL for the setup Admin, and once the creator is deleted
@@ -88,8 +85,7 @@ CREATE TABLE account (
   updated_at DATETIME DEFAULT NULL
 );
 
--- One account per email address and one per username, whatever the case or Unicode form either is typed in; a login compares
--- the key column of what it names
+-- One account per email address and per username, in any case or Unicode form; a login compares the key column
 CREATE UNIQUE INDEX account_01 ON account (email_key);
 CREATE UNIQUE INDEX account_02 ON account (username_key);
 
@@ -105,12 +101,11 @@ CREATE TABLE repository (
   updated_at DATETIME DEFAULT NULL
 );
 
--- repository_01: a Library's name is unique instance-wide under its name key (Repository.nameKey: NameKey.of of the normalized
--- name, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
+-- A Library's name is unique instance-wide under its name key (Repository.nameKey, folded in Scala as account's keys are)
 CREATE UNIQUE INDEX repository_01 ON repository (name_key);
 
--- Who may see a Library, and do what in it: one row per account and Library, its Permissions a bitmask of Permission bits (0
--- for a Guest, who only looks). An Admin reaches every Library with no row. A row goes with its Library or its account.
+-- An account's Permissions in a Library, a Permission bitmask (0 for a Guest, who only looks). An Admin reaches every Library
+-- with no row.
 CREATE TABLE repository_grant (
   account_id CHAR(36) NOT NULL REFERENCES account (id) ON DELETE CASCADE,
   repository_id CHAR(36) NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
@@ -122,9 +117,8 @@ CREATE TABLE repository_grant (
 -- A Library's grants, and the cascade from a deleted Library
 CREATE INDEX repository_grant_01 ON repository_grant (repository_id);
 
--- An append-only record of account events (AuditEventType), written from the service layer. The actor and the target are
--- snapshots of the accounts as they were (id, name, username, email), since accounts are deleted; the actor is NULL for a failed
--- login, which names no account.
+-- Append-only account events (AuditEventType). The actor and target are snapshots of the accounts (id, name, username, email),
+-- since accounts are deleted; the actor is NULL for a failed login.
 CREATE TABLE audit_event (
   id CHAR(36) PRIMARY KEY,
   event TEXT NOT NULL,
@@ -149,8 +143,8 @@ CREATE UNIQUE INDEX stats_01 ON stats (repository_id, dimension);
 CREATE TABLE asset (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) NOT NULL,
-  -- The account that owns the asset: its importer, until the importer is deleted and the asset moves to the deleting Admin. No
-  -- delete action, so an account with assets cannot be deleted without that move.
+  -- The importer, until deleted, then the deleting Admin. No delete action, so an account with assets cannot be deleted before
+  -- that move.
   owner_user_id CHAR(36) NOT NULL REFERENCES account (id),
   -- SHA-256 of the file, 64 lowercase hex characters (Sha256.hex)
   checksum CHAR(64) NOT NULL,
@@ -190,71 +184,63 @@ CREATE TABLE asset (
   -- The Sequence the image is in while in triage: the id its members share. A Sequence has no table; it exists while some
   -- asset carries its id. NULL for a sorted asset, a Video or an animated image.
   sequence_id CHAR(36),
-  -- The revision of the asset's edited images (its Edit rendered: the edited Preview and the Display image), which their URLs
-  -- carry as a cache key; 0 when it has none, so the original's Preview and file are shown
+  -- The revision of the edited Preview and Display image, carried in their URLs as a cache key; 0 when there are none, so the
+  -- original's are shown
   edit_rev INTEGER NOT NULL DEFAULT 0,
-  -- The importer record (AccountSnapshot): id, name, username and email of the account that imported the asset, as JSON,
-  -- written at import, which outlives the account
+  -- The importer record (AccountSnapshot) as JSON, written at import, which outlives the account
   original_owner TEXT NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
-  -- The bulky columns come last, the most read of them first: a row's columns are stored in order, a row past the page size
-  -- (4 KB) spills into overflow pages, and reading a column walks the overflow pages of every large value before it. The two
-  -- metadata JSON columns every general read selects (public_metadata also decides the Sequence candidates' device model) come
-  -- before the Histogram, 1 KB a row that the read of a Curation set's Histograms alone selects, then the Scene embeddings,
-  -- about 6 KB a row that the Sequence candidates' statement selects and a Describe search scans, and the raw extracted
-  -- metadata, the largest and the least read, comes after everything.
+  -- The bulky columns come last, the most read first: a row past the page size (4 KB) spills into overflow pages, and reading
+  -- a column walks the overflow of every large value before it. So: the two metadata JSON columns every general read selects,
+  -- the Histogram (1 KB, read only for a Curation set), the Scene embeddings (about 6 KB, read by the Sequence candidates and a
+  -- Describe scan), then the raw extracted metadata, the largest and least read.
   public_metadata TEXT,
   user_metadata TEXT,
-  -- The Histogram of a still image (Histogram): its luminance, red, green and blue channels, each 64 bins of the fraction of
-  -- the pixels in the bin, as 1,024 bytes of little-endian float32. NULL for a Video, an animated image, or a still image the
-  -- pipeline did not measure, as the Image quality is.
+  -- The Histogram of a still image: luminance, red, green and blue, 64 bins each of the pixel fraction, as 1,024 bytes of
+  -- little-endian float32; NULL as the five Image quality columns are.
   histogram BLOB,
-  -- The Scene embeddings of a still image, one per Scene model, each a unit vector the Sequence rule compares by cosine
-  -- similarity, stored as its raw little-endian float32 values: DINOv2 ViT-B/14's pooled CLS token and the pooled output of
-  -- SigLIP 2 ViT-B/16's image tower (768 of them each). NULL for a Video, an animated image, or a still image the model could
-  -- not embed. Selected by the Sequence candidates' statement alone and transferred by no other read. A Describe search reads
-  -- SigLIP 2's too, in the database: sqlite-vector scans the column, which every connection registers with it as it is opened
-  -- (TransactionManager.setUpSqliteConnection), and ranks the assets by the distance of theirs from a description's embedding.
+  -- The Scene embeddings of a still image, unit vectors the Sequence rule compares by cosine, as 768 little-endian float32
+  -- values each: DINOv2 ViT-B/14's pooled CLS token and SigLIP 2 ViT-B/16's pooled image output. NULL for a Video, an animated
+  -- image, or a still image the model could not embed. Only the Sequence candidates' statement selects them. A Describe search
+  -- also ranks by SigLIP 2's in the database: sqlite-vector scans the column, which each connection registers as it opens.
   dinov2_embedding BLOB,
   siglip2_embedding BLOB,
   extracted_metadata TEXT,
   UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
-  -- No delete action, as no folder is ever deleted on its own (a deleted folder is recycled)
+  -- No delete action: a folder is recycled, never deleted on its own
   FOREIGN KEY (repository_id, folder_id) REFERENCES folder (repository_id, id)
 );
 
 -- One live asset per content in a repository; the recycle bin may hold any number of copies of it. A statement that binds the
 -- flag as a number matches the predicate; one that binds it as text does not.
 CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum) WHERE is_recycled = FALSE;
--- Capture-day grouping for search results: the camera's calendar date followed by the raw timestamp, so a day range or a
--- day-count probe seeks directly and a grouped, date-sorted page reads in index order. Both are camera-local wall-clock text.
--- It carries the ID and the folder, so a pass over the library that tests text membership, a folder or a day reads the index
--- and not the table, the triage flag for the repository view, which leaves triaged assets out by default, and the import time,
--- so a page sorted by Date Taken within a Date Imported range is read in index order with the range tested on the index and
--- not the table. What it carries is its trailing columns.
+-- Capture-day grouping: the camera date, then the raw timestamp (both camera-local wall-clock text), so a day range or
+-- day-count probe seeks directly and a grouped, date-sorted page reads in index order. Its trailing columns carry the ID and the
+-- folder (a pass testing text membership, a folder or a day reads the index, not the table), the triage flag (the repository
+-- view leaves triaged assets out) and the import time (a Date Taken page within a Date Imported range tests the range on the
+-- index).
 CREATE INDEX asset_search_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at, id, folder_id, is_triaged,
   created_at
 );
--- The default flat sort, Date Imported, as an ordered read of the page slice that needs nothing but the index: it carries, as
--- its trailing columns, the ID, the triage flag and the capture time, so a page within a Date Taken range tests the range on
--- the index and not the table
+-- The default flat sort, Date Imported, read from the index alone: its trailing columns carry the ID, the triage flag and the
+-- capture time, so a page within a Date Taken range tests the range on the index
 CREATE INDEX asset_search_created ON asset (
   repository_id, is_recycled, is_pipeline_processed, created_at, id, is_triaged, original_created_at
 );
--- The triage view: only the triaged assets, in Date Imported order and by capture day, so a small triage set in a large library
--- is read without passing over the library. They shrink as triage is sorted. Neither carries the other date: a search reads them
--- in the triage view alone, where a date range tests the rows of a triage set, not of the library. A statement that binds the
--- flag as a number matches the predicate; one that binds it as text does not.
+-- The triage view: only triaged assets, by Date Imported and by capture day, so a small triage set in a large library is read
+-- without passing over the library. Neither carries the other date: only the triage view reads them, where a date range tests
+-- a triage set, not the library. A statement that binds the flag as a number matches the predicate; one that binds it as text
+-- does not.
 CREATE INDEX asset_triage_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at, id)
   WHERE is_triaged = TRUE;
 CREATE INDEX asset_triage_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at, id, folder_id
 ) WHERE is_triaged = TRUE;
--- The undated Sequence candidates: the triaged assets with no capture time, by repository and size in Date Imported order, so an
--- undated import walks its size backwards from the newest and stops at its cap, whatever else triage holds
+-- The undated Sequence candidates: triaged assets with no capture time, by size in Date Imported order, so an undated import
+-- walks its size backwards from the newest and stops at its cap, whatever else triage holds
 CREATE INDEX asset_triage_undated ON asset (repository_id, width, height, created_at, id)
   WHERE is_triaged = TRUE AND original_created_at IS NULL;
 -- Folder browsing and the folder source of Search text; it also lets an OR of text sources be planned as a multi-index OR
@@ -265,21 +251,19 @@ CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_process
   WHERE latitude IS NOT NULL;
 -- The members of a Sequence: their count, their repointing when Sequences merge, and a Curate view's listing
 CREATE INDEX asset_sequence ON asset (sequence_id) WHERE sequence_id IS NOT NULL;
--- An account's assets, in every Library: the key from the account, which a delete of an account checks
+-- An account's assets in every Library, for the account key's check on delete
 CREATE INDEX asset_owner ON asset (owner_user_id);
--- The assets an account imported, in every Library, by the ID of their importer record: the rewrite of the records when the
--- account changes (AssetDao.rewriteImporterRecords)
+-- The assets an account imported, in every Library, by importer record ID: rewriting the records when the account changes
 CREATE INDEX asset_importer ON asset (json_extract(original_owner, '$.id'));
 
--- An asset's Edit (AssetEditService): the Edit itself, its edit version and the edit version its edited images were rendered
--- from. No row until the asset's first save; the original is never written.
+-- An asset's Edit, its edit version and the edit version its edited images were rendered from. No row until the first save;
+-- the original is never written.
 CREATE TABLE asset_edit (
   repository_id CHAR(36) NOT NULL,
   asset_id CHAR(36) NOT NULL PRIMARY KEY,
   -- The Edit (EditRecipe's JSON), the identity once reverted to the original
   recipe TEXT NOT NULL,
-  -- The edit version: 1 at the first save and one more at each save after it; a save names the one it was built on. Not the
-  -- recipe's own `version`, the version of its format
+  -- 1 at the first save, one more at each save; a save names the one it was built on. Not the recipe's format `version`
   edit_version INTEGER NOT NULL,
   -- The edit version whose edited images are stored; NULL before the first render
   rendered_version INTEGER,
@@ -309,15 +293,15 @@ CREATE TABLE person_label (
 CREATE TABLE person (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) NOT NULL,
-  -- this is taken from the person_label table, where its primary key is a sequence
+  -- An unnamed person's is "Unknown <n>", n drawn from person_label
   name TEXT NOT NULL,
   name_for_sort TEXT NOT NULL,
-  -- One of the person's own Faces, which the code checks (PersonService.setFaceAsCover); the key refuses one that is no Face.
-  -- A single column: a composite key's SET NULL would clear the person's repository_id too. Every path that deletes a cover
-  -- Face picks another cover first (PersonService.moveCoversOff), so the delete action only backs that up. NULL for a person
-  -- with no Face.
+  -- One of the person's own Faces, which the code checks; the key refuses a non-Face. NULL for a person with no Face. A single
+  -- column: a composite key's SET NULL would clear the person's repository_id too. Every path that deletes a cover Face picks
+  -- another cover first, so the delete action only backs that up.
   cover_face_id CHAR(36) REFERENCES face (id) ON DELETE SET NULL,
-  -- The assets outside the trash on which the person has a face, triaged ones included (what a search for the person finds with triaged items shown), not the face rows
+  -- The assets outside the trash the person has a face on, triaged ones included (what a search for the person finds with
+  -- triaged items shown); not the face rows
   num_of_faces INT NOT NULL DEFAULT 0,
   is_named TINYINT NOT NULL DEFAULT 0,
   is_hidden TINYINT NOT NULL DEFAULT 0,
@@ -329,12 +313,11 @@ CREATE TABLE person (
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
--- The partial person indexes cover the live people, the ones every person query reads; a merged-away person keeps its name and
--- its cover face, which another person may take. The predicates are written as the queries write them: SQLite uses a partial
--- index only for a query whose own terms imply it, and `is_deleted = FALSE` does not imply `is_deleted = 0`.
--- person_01 is the name-key index: a named person's name_for_sort is its name key (PersonService.nameKey: NameKey.of of the
--- name, folded in Scala so both engines fold alike), and an unnamed person's is "unknown 0042", so a live person's name is
--- unique under that fold: case in any script, canonical and compatibility forms
+-- The partial person indexes cover the live people, which every person query reads; a merged-away person keeps its name and
+-- cover face, which another person may take. The predicates are written as the queries write them: SQLite uses a partial index
+-- only for a query whose own terms imply it, and `is_deleted = FALSE` does not imply `is_deleted = 0`.
+-- person_01: name_for_sort is a named person's name key (PersonService.nameKey, folded in Scala) or "unknown 0042", so a live
+-- name is unique under that fold: case in any script, canonical and compatibility forms
 CREATE UNIQUE INDEX person_01 ON person (repository_id, name_for_sort)
     WHERE is_deleted = FALSE AND is_bad_match = FALSE;
 
@@ -375,7 +358,7 @@ CREATE TABLE face (
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
--- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo).
+-- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed video copy, a re-exported photo).
 -- Leading with the asset, it serves the purge cascade and the per-asset probes of Search text.
 CREATE UNIQUE INDEX face_01 ON face (asset_id, repository_id, checksum);
 -- A person's faces, best first; the asset rides along, so the person source of Search text reads the index alone
@@ -400,8 +383,8 @@ CREATE TABLE folder (
   repository_id CHAR(36) NOT NULL,
   name VARCHAR(255) NOT NULL,
   name_key TEXT NOT NULL,
-  -- The root folder is its own parent, which its insert satisfies: the key is checked once the row is in. No delete action, as
-  -- no folder is ever deleted on its own (a deleted folder is recycled).
+  -- The root folder is its own parent, which its insert satisfies: the key is checked once the row is in. No delete action: a
+  -- folder is recycled, never deleted on its own.
   parent_id CHAR(36) NOT NULL,
   is_recycled TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
@@ -541,23 +524,22 @@ CREATE TRIGGER search_document_after_update AFTER UPDATE ON search_document BEGI
   INSERT INTO search_document_fts (rowid, body) VALUES (new.id, new.body);
 END;
 
--- A Watch folder: a directory on the server that the app scans for one Library, importing the files that arrive in it
--- (WatchFolderService). Its files are only ever copied out of it, and deleted from it when it deletes imported files.
+-- A directory on the server scanned for one Library, importing the files that arrive in it. Files are only copied out of it,
+-- and deleted from it when it deletes imported files.
 CREATE TABLE watch_folder (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) NOT NULL,
   name TEXT NOT NULL,
-  -- The directory's absolute path, as it was entered. Unique in the instance: no two Watch folders overlap, in any Library,
-  -- which the code checks by real path, one inside the other included (WatchFolderService)
+  -- The absolute path as entered. Unique in the instance; the code also refuses an overlap by real path, in any Library
   path TEXT NOT NULL UNIQUE,
-  -- The folder its files are sorted into, the directory's tree mirrored under it ("Keep folder structure"); NULL = Triage
+  -- The folder its files go into, the directory's tree mirrored under it; NULL = Triage
   dest_folder_id CHAR(36),
   -- Whether a file is deleted from the directory once it is imported, or is a duplicate of an asset of the Library
   deletes_imported TINYINT NOT NULL DEFAULT 0,
   -- Paused by an Admin, or because its owner was deactivated or is no Admin any more
   is_paused TINYINT NOT NULL DEFAULT 0,
-  -- The Admin who added it or last edited it, who owns the assets it imports. No delete action: a deleted Admin's Watch
-  -- folders pass to the deleting Admin first, as its assets do
+  -- The Admin who added or last edited it, who owns what it imports. No delete action: a deleted Admin's Watch folders pass
+  -- to the deleting Admin first, as its assets do
   account_id CHAR(36) NOT NULL REFERENCES account (id),
   -- Why it is paused, when its owner is why; otherwise why its directory is unavailable, as its last scan found it
   status_reason TEXT,
@@ -567,16 +549,15 @@ CREATE TABLE watch_folder (
   updated_at DATETIME DEFAULT NULL,
   UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
-  -- No delete action, as no folder is ever deleted on its own (a deleted folder is recycled)
+  -- No delete action: a folder is recycled, never deleted on its own
   FOREIGN KEY (repository_id, dest_folder_id) REFERENCES folder (repository_id, id)
 );
 
 -- A Library's Watch folders: its list, and the cascade from a deleted Library
 CREATE INDEX watch_folder_01 ON watch_folder (repository_id);
 
--- A Watch folder's memory of a file of its directory, by the file's path under it: what the last scan saw of it, and what
--- became of it. A file is read once a scan finds it with the size and modified time a scan saw at least 5 seconds before,
--- and not again while they stay.
+-- A Watch folder's memory of a file, by its path: what the last scan saw and what became of it. A file is read once a scan
+-- finds the size and modified time a scan saw at least 5 seconds before, and not again while they stay.
 CREATE TABLE watch_folder_file (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) NOT NULL,
@@ -591,9 +572,8 @@ CREATE TABLE watch_folder_file (
   state TEXT NOT NULL DEFAULT 'seen'
     CHECK (state IN ('seen', 'handled', 'final', 'retry', 'parked')),
   attempts INT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
-  -- When a scan last found the file, to the day (a scan moves it once it is a day old): a file absent from the directory
-  -- is forgotten once this is past the retention period. For a file not read yet it is the moment it was first seen with
-  -- its size and modified time, which its rest before it is read is counted from
+  -- When a scan last found the file, to the day (a scan moves it once it is a day old); an absent file is forgotten once this
+  -- passes the retention period. For a file not read yet, when it was first seen as it is, from which its rest is counted
   last_seen_at DATETIME NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
@@ -604,9 +584,8 @@ CREATE TABLE watch_folder_file (
 -- A Watch folder's memory, which a scan reads whole, and a file of it by its path; the cascade from a removed Watch folder
 CREATE UNIQUE INDEX watch_folder_file_01 ON watch_folder_file (watch_folder_id, rel_path);
 
--- An Import: the stored record of one delivery of files to a Library, an upload from a browser or one scan of a Watch folder
--- that found files (ImportService). The five counters are its Import files by outcome, kept by the write that sets a file's
--- outcome, so a listing reads no file.
+-- One delivery of files to a Library: a browser upload, or a Watch folder scan that found files. The five counters count its
+-- files by outcome, kept by the write that sets an outcome, so a listing reads no file.
 CREATE TABLE import (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) NOT NULL,
@@ -614,16 +593,14 @@ CREATE TABLE import (
     CHECK (source IN ('upload', 'watch_folder')),
   -- The uploaded folder's or the Watch folder's name; NULL for an upload of files
   name TEXT,
-  -- The Watch folder whose scan this is; NULL for an upload, and once the Watch folder is removed: its Imports stay in the
-  -- history. A single column: a composite key's SET NULL would clear repository_id too, so the code checks that the Watch
-  -- folder is the Library's (ImportService.open).
+  -- NULL for an upload, and once the Watch folder is removed (its Imports stay in the history). A single column: a composite
+  -- key's SET NULL would clear repository_id too, so the code checks that the Watch folder is the Library's.
   watch_folder_id CHAR(36) REFERENCES watch_folder (id) ON DELETE SET NULL,
   -- The account that delivered it; NULL once that account is deleted
   account_id CHAR(36) REFERENCES account (id) ON DELETE SET NULL,
   -- The folder its files are sorted into; NULL = Triage
   dest_folder_id CHAR(36),
-  -- How many files it was opened to hold: what an upload is about to send, what a scan is about to offer; NULL when it was
-  -- not told. Read only while it still takes files, to show the files yet to come as remaining
+  -- The files the upload or scan announced; NULL when not told. Read only while it takes files, to show those yet to come
   expected_files INT CHECK (expected_files >= 0),
   -- No more files will be added: the upload closed it, or the scan offered its last file
   is_complete TINYINT NOT NULL DEFAULT 0,
@@ -638,17 +615,16 @@ CREATE TABLE import (
   updated_at DATETIME DEFAULT NULL,
   UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
-  -- No delete action, as no folder is ever deleted on its own (a deleted folder is recycled)
+  -- No delete action: a folder is recycled, never deleted on its own
   FOREIGN KEY (repository_id, dest_folder_id) REFERENCES folder (repository_id, id)
 );
 
--- A Library's Import history by age: the closed Imports of its listing, its count, and the prune of the Imports past
--- import.history.days
+-- A Library's Import history by age: the closed Imports of its listing, its count, and the prune past import.history.days
 CREATE INDEX import_01 ON import (repository_id, created_at);
 -- A Watch folder's Imports: the counts its card shows, and the key's delete action when it is removed
 CREATE INDEX import_02 ON import (watch_folder_id) WHERE watch_folder_id IS NOT NULL;
--- A Library's Imports in progress, which are few and head the history's listing, and which a start closes
--- (ImportDao.closeInterrupted): read without the closed ones, which are the history
+-- A Library's Imports in progress, read without the history: few, they head the listing, and a start closes them
+-- (ImportDao.closeInterrupted)
 CREATE INDEX import_03 ON import (repository_id, created_at) WHERE closed_at IS NULL;
 
 -- An Import file: one file of an Import with its outcome. rel_path is the file's path as it was delivered, its name for an
@@ -662,9 +638,8 @@ CREATE TABLE import_file (
     CHECK (outcome IN ('pending', 'imported', 'duplicate', 'unsupported', 'failed')),
   -- Why the file has its outcome, where there is something to say: where the asset a duplicate matches is, why a file failed
   reason TEXT,
-  -- The asset an imported file became, or the asset of the Library a duplicate matches, until that asset is purged; the row
-  -- keeps its path after. A single column: a composite key's SET NULL would clear repository_id too, so the code checks that
-  -- the asset is the Library's (ImportService.settle).
+  -- The asset an imported file became, or a duplicate matches, until that asset is purged. A single column: a composite key's
+  -- SET NULL would clear repository_id too, so the code checks that the asset is the Library's.
   asset_id CHAR(36) REFERENCES asset (id) ON DELETE SET NULL,
   size_bytes BIGINT NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),

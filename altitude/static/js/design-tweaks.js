@@ -1,15 +1,10 @@
 /**
- * The design tweaks panel (dev only; `includes/header_common` loads it on every page once its two
- * script tags are uncommented, and they are commented out for now): the vendored
- * tokentweak package (`lib/tokentweak.js`) configured for Altitude. The package reads every `:root`
- * token of the bundle (the stylesheet served under `/assets/`), builds the panel in a shadow root on a
- * `popover="manual"` host and applies every change through one adopted stylesheet, whose text it
- * keeps under `Const.localStore.designTweaks` so the boot script (`lib/tokentweak-boot.js`, the same
- * key in its `data-key`) adopts it again before the first paint. This module only passes what the
- * package cannot infer: the sections in the style guide's order, the spacing scale, the type scale,
- * the two tokens the server sets inline on their containers, the explorer size
- * (no token of its own in the panel: the share `js/common/explorer-dock.js` owns), the scan the server serves and
- * the file the exports name. `Ctrl+Alt+T` toggles the panel; there is no trigger element.
+ * The design tweaks panel (dev only; its script tags in `includes/header_common` are commented out): the vendored
+ * tokentweak package configured for Altitude. The package reads every `:root` token of the bundle and applies changes
+ * through one adopted stylesheet, kept in local storage so the boot script adopts it again before the first paint.
+ * This module passes only what the package cannot infer: the style guide's section order, the spacing and type
+ * scales, the two tokens the server sets inline, the explorer size (a share, not a token), the scan and the export
+ * file name. `Ctrl+Alt+T` toggles the panel; there is no trigger element.
  */
 import {
     DEFAULT_WIDTH_SHARE,
@@ -20,8 +15,7 @@ import {
 import { Const } from "./constants.js"
 import { createTokenTweaks } from "./lib/tokentweak.js"
 
-// The package takes one default, so a top or bottom dock, whose default share of the height differs, resets to the
-// width's from the panel
+// The package takes one default, so a top or bottom dock, whose default height share differs, resets to the width's
 const EXPLORER_DEFAULT = DEFAULT_WIDTH_SHARE
 
 createTokenTweaks({
@@ -76,8 +70,8 @@ createTokenTweaks({
         ],
         base: "--font-size-base",
     },
-    // The two tokens the server sets inline, with the server constants' values for a page without
-    // their containers; a page that has one reads the inline value instead
+    // The two tokens the server sets inline; the defaults (the server constants' values) serve a page without their
+    // containers
     scopedTokens: [
         {
             name: "--preview-box",

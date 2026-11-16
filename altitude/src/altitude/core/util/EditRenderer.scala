@@ -17,17 +17,19 @@ import altitude.core.models.EditCrop
 import altitude.core.models.EditRecipe
 
 /**
- * Renders an Edit (`CONTEXT.md`) from the original with OpenCV, as the spec of the geometry and of the per-pixel math in
- * `docs/image-edits.md` says; the Edit panel's WebGL renderer draws the same math (`static/js/edit/`), and both are checked
- * against the shared vectors (`test/resources/edit/vectors.json`). The geometry and the math are public functions of their own,
- * so the tests and the vectors read them one by one.
+ * Renders an Edit from the original with OpenCV. The Edit panel's WebGL renderer (`static/js/edit/`) draws the same math, and
+ * both are checked against the shared vectors (`test/resources/edit/vectors.json`), so each piece of geometry and math is a
+ * public function the tests read on its own.
  *
- * Coordinates are continuous pixel coordinates, the top-left corner of the image at (0, 0) and y down, so a pixel's center is at
- * +0.5. An angle is positive clockwise.
+ * Geometry runs turn and mirror, Straighten's warp, crop. Per pixel: the tone tables (to linear, white balance, exposure, back to
+ * sRGB, tone, curve), saturation and vibrance, Clarity and Sharpen, the vignette, the grain, and the clamp to 8 bits.
+ *
+ * Coordinates are continuous, the image's top-left corner at (0, 0) and y down, so a pixel's center is at +0.5. Angles are
+ * positive clockwise.
  */
 object EditRenderer:
 
-  /** Entries of each channel's table of the tone steps (1 to 6), over the input value 0 to 1 */
+  /** Entries of each channel's tone table, over the input value 0 to 1 */
   val TABLE_SIZE = 4096
 
   /** The output long edge at which the sizes of Sharpen's blur and of Grain's cells are given; they scale with the output */
@@ -53,7 +55,7 @@ object EditRenderer:
   def frameSize(uprightWidth: Int, uprightHeight: Int, recipe: EditRecipe): (Int, Int) =
     if recipe.rotate == 90 || recipe.rotate == 270 then (uprightHeight, uprightWidth) else (uprightWidth, uprightHeight)
 
-  /** Step 1 for a point of the upright original: turned clockwise by `rotate`, then mirrored in the turned frame */
+  /** A point of the upright original turned clockwise by `rotate`, then mirrored in the turned frame */
   def turn(x: Double, y: Double, uprightWidth: Int, uprightHeight: Int, recipe: EditRecipe): (Double, Double) =
     val (tx, ty) = recipe.rotate match
       case 90 => (uprightHeight - y, x)
@@ -64,8 +66,8 @@ object EditRenderer:
     (if recipe.flipH then width - tx else tx, if recipe.flipV then height - ty else ty)
 
   /**
-   * Step 2 on the W × H frame, its constants worked out once: in normalized coordinates around the center (u = (p − c) / s, s
-   * half the long side), the point is turned by Straighten, R(θ)·u, and scaled back
+   * Straighten's warp of the W × H frame, its constants worked out once: in normalized coordinates around the center (u = (p − c)
+   * / s, s half the long side), the point is turned by R(θ)·u and scaled back
    */
   final class Warp(width: Double, height: Double, recipe: EditRecipe):
     private val s = Math.max(width, height) / 2
@@ -92,7 +94,7 @@ object EditRenderer:
       val (px, py) = inverse(x, y)
       px >= 0 && px <= width && py >= 0 && py <= height
 
-  /** Step 2 for a point of the W × H frame ([[Warp.forward]]) */
+  /** Straighten's warp of a point of the W × H frame ([[Warp.forward]]) */
   def warp(x: Double, y: Double, width: Double, height: Double, recipe: EditRecipe): (Double, Double) =
     Warp(width, height, recipe).forward(x, y)
 
@@ -119,7 +121,7 @@ object EditRenderer:
   /** The sRGB OETF: linear light to an sRGB-encoded value, unclamped */
   def linearToSrgb(l: Double): Double = if l <= 0.0031308 then 12.92 * l else 1.055 * Math.pow(l, 1 / 2.4) - 0.055
 
-  /** The white balance's gains of red, green and blue (step 2), divided by their luminance so a neutral gray keeps its own */
+  /** The white balance's red, green and blue gains, divided by their luminance so a neutral gray keeps its own */
   def whiteBalanceGains(recipe: EditRecipe): (Double, Double, Double) =
     val (t, tint) = (recipe.temperature / 100.0, recipe.tint / 100.0)
     val (r, g, b) = ((1 + 0.28 * t) * (1 + 0.08 * tint), 1 - 0.2 * tint, (1 - 0.28 * t) * (1 + 0.08 * tint))
@@ -133,7 +135,7 @@ object EditRenderer:
     val x = clamp(t)
     x * x * (3 - 2 * x)
 
-  /** Step 5, the tone of one sRGB-encoded value, in [0, 1] */
+  /** The tone sliders on one sRGB-encoded value, in [0, 1] */
   def tone(value: Double, recipe: EditRecipe): Double =
     val blackPoint = -0.1 * recipe.blacks / 100
     val whitePoint = 1 - 0.15 * recipe.whites / 100
@@ -160,10 +162,9 @@ object EditRenderer:
     clamp(v)
 
   /**
-   * Step 6: the monotone cubic Hermite through the points (Fritsch–Carlson), held flat outside the first and last x and clamped
-   * to [0, 1]. The tangents are Fritsch–Carlson's as `docs/image-edits.md` gives them (step 6): the end ones the end secants, an
-   * inner one the mean of its two secants (0 where they differ in sign), then, segment by segment in order, both zero on a flat
-   * segment, or scaled down by 3 / √(α² + β²) when that is over 3.
+   * The curve: a monotone cubic Hermite through the points, held flat outside the first and last x and clamped to [0, 1].
+   * Fritsch–Carlson tangents: the end ones the end secants, an inner one the mean of its two secants (0 where they differ in
+   * sign); then, segment by segment in order, both zeroed on a flat segment, or scaled by 3 / √(α² + β²) when α² + β² is over 9.
    */
   final class Curve(points: List[(Double, Double)]):
     private val xs = points.map(_._1).toArray
@@ -202,7 +203,7 @@ object EditRenderer:
           (2 * t3 - 3 * t2 + 1) * ys(seg) + (t3 - 2 * t2 + t) * h * tangents(seg) + (-2 * t3 + 3 * t2) * ys(seg + 1) +
             (t3 - t2) * h * tangents(seg + 1))
 
-  /** Steps 1 to 6 on one channel's sRGB-encoded value: `channel` 0 is red, 1 green, 2 blue */
+  /** The tone table's math on one channel's sRGB-encoded value: `channel` 0 is red, 1 green, 2 blue */
   def channelValue(v: Double, channel: Int, recipe: EditRecipe, curve: Option[Curve] = None): Double =
     val (r, g, b) = whiteBalanceGains(recipe)
     val gain = channel match
@@ -212,7 +213,7 @@ object EditRenderer:
     val toned = tone(linearToSrgb(srgbToLinear(v) * gain * Math.pow(2, recipe.exposure)), recipe)
     curve.getOrElse(Curve(recipe.curve))(toned)
 
-  /** The tables of steps 1 to 6, red, green and blue: entry i of a channel is its value for the input i / 4095 */
+  /** The red, green and blue tone tables: entry i is the value for the input i / 4095 */
   def tables(recipe: EditRecipe): Array[Array[Float]] =
     val curve = Curve(recipe.curve)
     Array.tabulate(3)(
@@ -224,7 +225,7 @@ object EditRenderer:
     val i = f.toInt
     if i >= TABLE_SIZE - 1 then table(TABLE_SIZE - 1) else table(i) + (table(i + 1) - table(i)) * (f - i)
 
-  /** Step 7: each channel moved from the luminance by the saturation's and the vibrance's factor */
+  /** Saturation and vibrance: each channel moved from the luminance by their factor */
   def saturate(r: Double, g: Double, b: Double, recipe: EditRecipe): (Double, Double, Double) =
     val y = 0.2126 * r + 0.7152 * g + 0.0722 * b
     val chroma = Math.max(r, Math.max(g, b)) - Math.min(r, Math.min(g, b))
@@ -233,19 +234,15 @@ object EditRenderer:
     (y + (r - y) * k, y + (g - y) * k, y + (b - y) * k)
 
   /**
-   * Step 9's weight at the pixel (x, y), columns and rows from the top left, of a `width` × `height` output: smoothstep of the
-   * distance d from the center, the offsets being fractions of the half width and half height, starting at d = 0.39375 and
-   * reaching 1 over 0.65625
+   * The vignette's weight at the integer pixel (x, y) of a `width` × `height` output, with no +0.5: smoothstep of the distance d
+   * from the center, offsets as fractions of the half width and height, starting at d = 0.39375 and reaching 1 over 0.65625
    */
   def vignetteWeight(x: Int, y: Int, width: Int, height: Int): Double =
     val dx = (x - width / 2.0) / (width / 2.0)
     val dy = (y - height / 2.0) / (height / 2.0)
     smoothstep((Math.sqrt((dx * dx + dy * dy) / 2) - 0.39375) / 0.65625)
 
-  /**
-   * The grain's integer hash of a cell (`docs/image-edits.md`, step 10), in [0, 1]: 32-bit integer arithmetic, each product
-   * wrapping as `Math.imul` and GLSL's `uint` do
-   */
+  /** Grain's integer hash of a cell, in [0, 1]: 32-bit arithmetic, each product wrapping as `Math.imul` and GLSL's `uint` do */
   def hash(x: Int, y: Int): Double =
     var h = x * 374761393 + y * 668265263
     h = (h ^ (h >>> 13)) * 1274126177
@@ -258,17 +255,15 @@ object EditRenderer:
   def grainCell(width: Int, height: Int): Double = Math.max(1.0, rawGrainCell(width, height))
 
   /**
-   * What Grain's strength is multiplied by for a `width` × `height` output: 1 while its cell is a pixel or more, and below that
-   * the cell's size in pixels, the scale of the larger output's grain once seen at this size. A Display image shown at a smaller
-   * size is averaged over about 1/c² of its cells per pixel shown (c its cell in the pixels shown), which takes the noise's
-   * spread down by c; a smaller output floored at one cell per pixel draws independent cells, so its noise is scaled by c to look
-   * as strong at that size.
+   * What Grain's strength is multiplied by for a `width` × `height` output: 1 while its cell is a pixel or more, else the cell's
+   * size c. A larger image shown at this size averages about 1/c² cells per pixel, cutting the noise's spread by c; a smaller
+   * output floored at one cell per pixel draws independent cells, so its noise is scaled by c to look as strong.
    */
   def grainScale(width: Int, height: Int): Double = Math.min(1.0, rawGrainCell(width, height))
 
   private def rawGrainCell(width: Int, height: Int): Double = 1.75 * Math.max(width, height) / REFERENCE_LONG_EDGE
 
-  /** Step 10's value noise at the pixel (x, y) over cells of `cell` pixels: the hash bilinearly between the cell's corners, −½ */
+  /** Grain's value noise at the pixel (x, y) over cells of `cell` pixels: the hash bilinearly between the cell's corners, −½ */
   def grainNoise(x: Int, y: Int, cell: Double): Double =
     val (gx, gy) = (x / cell, y / cell)
     val (x0, y0) = (Math.floor(gx).toInt, Math.floor(gy).toInt)
@@ -306,9 +301,9 @@ object EditRenderer:
 
   /**
    * The Edit rendered from the original file at `longEdge` at most (None: the edited size), an 8-bit BGRA image the caller
-   * releases. The original is decoded as stored and turned upright by its EXIF orientation, as its Preview is; metadata that
-   * cannot be read is taken as upright, as `AssetService.uprightSize` takes it. A JPEG whose frame the output samples at half its
-   * size or less is decoded at a half, a quarter or an eighth of its size (`IMREAD_REDUCED_*`), as fine as the output needs.
+   * releases. The original is turned upright by its EXIF orientation, unreadable metadata counting as upright, as in
+   * `AssetService.uprightSize`. A JPEG the output samples at half its size or less is decoded reduced (`IMREAD_REDUCED_*`), as
+   * fine as the output needs.
    */
   def render(original: Path, recipe: EditRecipe, longEdge: Option[Int]): Mat =
     val data = Files.readAllBytes(original)
@@ -476,11 +471,10 @@ object EditRenderer:
   private def scaling(x: Double, y: Double): Matrix = Array(x, 0, 0, 0, y, 0, 0, 0, 1)
 
   /**
-   * Steps 2 and 3 on `source`, the frame (which may be a reduction of the `frameWidth` × `frameHeight` frame): warped and cropped
-   * by one `warpAffine` of the composed transform (frame → Straighten's turn about its center → crop offset → output scale) into
-   * `width` × `height`, in the source's own depth and channels. Sampling is bilinear, the edge pixels repeated beyond the frame's
-   * last pixel centers (`BORDER_REPLICATE`, as a texture's `CLAMP_TO_EDGE`), so no color is mixed with a border; where the image
-   * ends, the toning step makes the output transparent.
+   * Straighten and crop on `source`, the frame (possibly a reduction of the `frameWidth` × `frameHeight` frame), in one
+   * `warpAffine` of the composed transform into `width` × `height`, keeping the source's depth and channels. Sampling is bilinear
+   * with the edge pixels repeated (`BORDER_REPLICATE`, as a texture's `CLAMP_TO_EDGE`), so no color mixes with a border;
+   * [[toned]] makes the pixels past the image transparent.
    */
   private def warped(source: Mat, frameWidth: Double, frameHeight: Double, recipe: EditRecipe, width: Int, height: Int): Mat =
     val crop = recipe.crop.getOrElse(EditCrop(0, 0, 1, 1))
@@ -510,9 +504,8 @@ object EditRenderer:
     }
 
   /**
-   * Steps 4 to 7 on the warped image, in place: the tables of the tone steps and the curve, read for each channel, then the
-   * saturation and the vibrance; a pixel the image does not cover (`covered`) is made transparent. Answers the luminance L of the
-   * result, which the detail steps read.
+   * The tone tables, then saturation and vibrance, on the warped image in place; a pixel the image does not cover is made
+   * transparent. Returns the result's luminance L, which Clarity and Sharpen read.
    */
   private def toned(image: Mat, recipe: EditRecipe, covered: (Int, Int) => Boolean): Mat =
     val Array(red, green, blue) = tables(recipe)
@@ -547,8 +540,8 @@ object EditRenderer:
     }
 
   /**
-   * Steps 8 to 11: Clarity's and Sharpen's deltas of L added to each channel, the vignette, the grain, then each value clamped
-   * and encoded to 8 bits. Answers a new 8-bit BGRA image.
+   * Clarity's and Sharpen's deltas of L added to each channel, then the vignette, the grain and the clamp, into a new 8-bit BGRA
+   * image
    */
   private def finished(image: Mat, luminance: Mat, recipe: EditRecipe): Mat =
     val (width, height) = (image.width, image.height)
@@ -642,13 +635,9 @@ object EditRenderer:
         Some(Math.round(-lean * 10) / 10.0 + 0.0)
 
   /**
-   * The Straighten that levels the image's lines, or nothing when no lines agree on one. The turned frame (step 1, before any
-   * Straighten) is read at a 1280 px long edge, its edges found by Canny and its segments by `HoughLinesP`. Of the segments
-   * longer than 8 % of the long edge, those within ±10° of level or plumb count, each by its length (a plumb one by half of it).
-   * Their leans go into a histogram of 0.2° bins, lightly smoothed, whose peak is the answer, refined by the weighted mean of the
-   * leans within ±1° of it and negated so that it turns the lines level, in tenths of a degree. It answers only when the lines
-   * agree: their length reaches half the long edge, and the ±1° around the peak holds 35 % of it. A portrait or a busy scene with
-   * no horizon answers nothing rather than a guess.
+   * The Straighten that levels the image's lines, in tenths of a degree, or None when they do not agree. The turned frame (before
+   * any Straighten) is read small, through Canny and `HoughLinesP`; long segments near level or plumb vote by length, a plumb one
+   * at half weight, and [[levelOf]] finds their consensus. A portrait or a busy scene with no horizon gets None, not a guess.
    */
   def autoStraightenAngle(original: Path, recipe: EditRecipe): Option[Double] =
     val data = Files.readAllBytes(original)

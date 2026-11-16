@@ -1,8 +1,7 @@
 /**
- * View settings is the only inline dialog: it stays in its popover and applies each switch
- * immediately through its own Alpine component (`alpine/components/view-settings.js`). The
- * contextMenu component owns placement, dismissal, and content cleanup; this hydrator only places
- * focus. Entity actions use modal fragments.
+ * View settings is the only inline dialog: it stays in its popover and applies each switch at once
+ * through its own Alpine component. The contextMenu component owns placement, dismissal and content
+ * cleanup; this hydrator only places focus.
  */
 import { focusFragmentElement } from "./helpers.js"
 

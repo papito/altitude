@@ -34,17 +34,14 @@ import altitude.core.util.SearchQuery
 @DoNotDiscover class AssetImportServiceTests(override val testApp: Altitude) extends IntegrationTestCore with BurstFrames {
   import BurstFrames.*
 
-  /** A synthetic unit vector of a Scene model's dimensions, of values no shorter type than float32 keeps */
+  /** A synthetic unit vector of a Scene model's dimensions, whose values only float32 or wider stores exactly */
   private def unitVector(model: SceneModel, seed: Int): SceneEmbedding = {
     val raw = Array.tabulate(model.dimensions)(i => math.sin(seed + i.toDouble).toFloat)
     val norm = math.sqrt(raw.map(v => v.toDouble * v).sum).toFloat
     SceneEmbedding(IArray.unsafeFromArray(raw.map(_ / norm)))
   }
 
-  /**
-   * The two columns of the asset through a raw select, each in a form that compares by value: SQLite's BLOB bytes as a sequence,
-   * PostgreSQL's vector as its text; None for NULL
-   */
+  /** The two embedding columns from a raw select, comparable by value (SQLite's BLOB bytes, PostgreSQL's vector text) */
   private def rawEmbeddingColumns(assetId: String): (Option[Any], Option[Any]) = {
     val row = testApp.txManager.asReadOnly {
       query("SELECT dinov2_embedding, siglip2_embedding FROM asset WHERE id = ?", assetId).head
@@ -74,7 +71,6 @@ import altitude.core.util.SearchQuery
       testApp.service.library.addImportAsset(importAsset)
     }
 
-    // The duplicate's staged copy is discarded
     stagedFiles shouldBe empty
   }
 
@@ -124,7 +120,6 @@ import altitude.core.util.SearchQuery
 
     val asset: Asset = testApp.service.asset.getById(imported.persistedId)
     asset.durationMs.value shouldBe 2000L +- 100
-    // The container says to show the landscape encoding as portrait
     asset.width shouldBe TestVideos.HEIGHT
     asset.height shouldBe TestVideos.WIDTH
 
@@ -199,10 +194,9 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * The JPEG is detected as an image and keeps its type, checksum and size when read back from the repository; the checksum is
-     * the SHA-256 of the file in lowercase hex, what `sha256sum` prints for it. Metadata extraction ran: the raw extracted
-     * metadata has the JPEG directory, and every camera field of the public metadata derived from the EXIF directories is filled
-     * in - device model, exposure settings and the original capture time.
+     * The JPEG is detected as an image and keeps its type, checksum (the file's lowercase-hex SHA-256, as `sha256sum` prints it)
+     * and size when read back. The extracted metadata has the JPEG directory, and every camera field of the public metadata is
+     * filled in.
      */
     val importAsset = IntegrationTestUtil.getImportAsset("people/bullock.jpg")
     val fileSha256 = IntegrationTestUtil.jdkSha256Hex(Files.readAllBytes(importAsset.path))
@@ -236,8 +230,8 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * The stored preview is a WebP (a RIFF container of the WEBP form) that decodes as an image filling the square preview box.
-     * The image is square, so nothing of the box is transparent and the WebP carries no alpha plane: three channels.
+     * The stored preview is a WebP filling the square preview box with three channels: a square image leaves nothing of the box
+     * transparent, so there is no alpha plane.
      */
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
@@ -342,15 +336,13 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Three Users, each the context account in turn, who each stage a JPEG as an upload does, before the import pipeline takes
-     * it. Then the first User's name changes in the database, the second User is deactivated and the third deleted, each by
-     * hand-written SQL, and each staged file is imported.
+     * Three Users who each stage a JPEG, as an upload does before the pipeline takes it. Then, by hand-written SQL, the first is
+     * renamed, the second deactivated and the third deleted, and each staged file is imported.
      *
      * Assertions:
      *
-     * The first file's asset is the first User's, its importer record naming the account as it is stored now, with its new name.
-     * The second file fails with `ImporterUnavailableException` saying the account that imported it is deactivated, and the third
-     * saying it no longer exists; neither leaves an asset.
+     * The first file's importer record has the account as stored now, with its new name. The second and third fail with
+     * `ImporterUnavailableException` (deactivated, gone) and leave no asset.
      */
     val List(renamed, deactivated, deleted) = List.fill(3)(testContext.persistUser())
     def staged(account: altitude.core.models.User, file: String): AssetWithData = {
@@ -444,10 +436,8 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * The photo is read back with the five metrics, a score within 0 to 100, the exposure fractions within 0 to 1 (its dark
-     * background crushes more than it clips, so the two columns are not swapped) and a hash, the hash the import returned,
-     * written with the completion flag. The Video, which the measurement stage passes through untouched, has neither. (An
-     * animated GIF is covered in `ImportPipelineServiceTests`, where the GIF fixtures are synthesized.)
+     * The photo reads back complete with the five metrics in range and the hash the import returned. The Video, which the
+     * measurement stage passes through untouched, has neither. `ImportPipelineServiceTests` covers an animated GIF.
      */
     val photo = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/bullock.jpg"))
     val stored: Asset = testApp.service.asset.getById(photo.persistedId)
@@ -478,9 +468,12 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * The Histograms read for the two hold the photo's alone, bin for bin the one measured from its file: it was written with the
-     * completion, float32-exact, and the Video has none. A read by ID (the typed row) and the hand-written locking read of a
-     * library operation each hand the photo back without it, a bulky column no general read selects. No IDs read nothing.
+     * The Histograms read for the two hold only the photo's, float32-exact to the one measured from its file. A read by ID and
+     * the hand-written locking read of a library operation carry no Histogram, a bulky column no general read selects.
+     *
+     * Edge cases:
+     *
+     * No IDs read nothing.
      */
     val photo = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/bullock.jpg"))
     val video = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.portrait.toFile))
@@ -512,9 +505,9 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * The first frame comes out of the import with an embedding of each Scene model, of the model's dimensions and unit norm. The
-     * second frame's Sequence candidates, the one read that selects the two columns, hold the first with both equal to what the
-     * import returned, value for value: the embeddings were written with the completion.
+     * The first frame comes out of the import with a unit-norm embedding of each Scene model, of the model's dimensions. The
+     * second frame's Sequence candidates, the one read that selects the embeddings, hold the first with both exactly as the
+     * import returned them.
      */
     withSceneModels {
       val first = importFrame(frame(0))
@@ -539,14 +532,13 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Two frames of the synthesized burst a second apart (BurstFrames). The first, read back by ID with its metrics and hash, is
-     * completed again through `markAsCompleted` with a synthetic unit vector of each Scene model's dimensions, of values chosen
-     * rather than measured, so the read-back is checked against known numbers.
+     * Two frames of the synthesized burst a second apart (BurstFrames). The first is completed again through `markAsCompleted`
+     * with a synthetic unit vector for each Scene model, so the read-back is checked against known numbers.
      *
      * Assertions:
      *
-     * The second frame's Sequence candidates, the one read that selects the two columns, hold the first with both vectors equal
-     * to what was written, value for value, and its metrics and hash still on it.
+     * The second frame's Sequence candidates hold the first with both vectors exactly as written, and its metrics and hash still
+     * on it.
      */
     val first = importFrame(frame(0))
     val second = importFrame(frame(1), taken = Some(takenAt(1)))
@@ -574,10 +566,9 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * The columns hold the vectors, but a read by ID (the typed row) and the hand-written locking read of a library operation
-     * (its own column list) each hand the asset back with neither: the embeddings are bulky columns no general read selects.
-     * Completing it again with a SigLIP 2 vector one value short of the model's dimensions is refused on both engines, and the
-     * stored vectors stand.
+     * The columns hold the vectors, but a read by ID and the hand-written locking read of a library operation carry neither: the
+     * embeddings are bulky columns no general read selects. Completing it again with a SigLIP 2 vector one value short is refused
+     * on both engines, and the stored vectors stand.
      */
     val frameAsset = importFrame(frame(0))
     val stored: Asset = testApp.service.asset.getById(frameAsset.persistedId)
@@ -608,8 +599,7 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * A synthesized two-second MP4 (TestVideos.portrait) run through the whole import with the real Scene models on, which
-     * completes it.
+     * A synthesized two-second MP4 (TestVideos.portrait) run through the whole import with the real Scene models on.
      *
      * Assertions:
      *
@@ -660,13 +650,11 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Bytes no image decoder takes, staged under a JPEG asset, handed to the measurement as the pipeline would hand a staged
-     * file.
+     * Bytes no image decoder takes, staged under a JPEG asset and handed to the measurement.
      *
      * Assertions:
      *
-     * The measurement does not throw: the asset comes back as it was, with no Image quality and no hash, so the import goes on
-     * without the metrics.
+     * The measurement does not throw: the asset comes back as it was, with no Image quality and no hash.
      */
     val undecodable = AssetWithData(
       testContext.makeAsset().copy(assetType = AssetType("image", "jpeg", "image/jpeg")),

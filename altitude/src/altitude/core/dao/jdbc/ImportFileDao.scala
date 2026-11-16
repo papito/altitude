@@ -72,7 +72,7 @@ abstract class ImportFileDao(override val config: Config) extends BaseDao[Import
 
     manyBySqlQuery(sql, List(repositoryId, importId) ++ outcome.map(_.dbValue) :+ limit).map(makeModel)
 
-  // Reads the files of that outcome alone, by the index on a file's Import and outcome
+  // Reads only the files of that outcome, by `import_file_01`
   override def havingReason(importIds: Set[String], outcome: ImportOutcome, reason: String): Set[String] =
     if importIds.isEmpty then return Set.empty
 
@@ -103,7 +103,7 @@ abstract class ImportFileDao(override val config: Config) extends BaseDao[Import
 
     updateByBySql(sql, List(outcome.dbValue, reason.orNull, assetId.orNull, fileId, repositoryId, ImportOutcome.Pending.dbValue))
 
-  // The pending files are reached through the Imports in progress, which are few, by the index on a file's Import and outcome
+  // Reaches the pending files through the few Imports in progress, by `import_file_01`
   override def failPending(reason: String): Int =
     val sql = s"""
       UPDATE $tableName

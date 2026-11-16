@@ -1,20 +1,6 @@
 /**
- * JSON-driven album list renderer: the flat counterpart of the folder tree (`folder-tree.js`).
- *
- * Public API:
- *   reloadAlbumList(repoId) — fetch every album from the server, re-render, restore focus, and
- *   show the right add control: the top "Add album" button normally, the centered empty-state
- *   button while there are no albums. Each add button opens a popover dialog below it
- *   (`buildModalTriggerCtrl`).
- *   refreshAlbumCounts(repoId) — fetch the list and patch only the asset counts in place; falls
- *   back to a full render when the list gained an album the DOM does not have.
- *   setViewedAlbum(albumId) — mark the album whose results are displayed (green icon).
- *
- * Each row shows: the album's ⋯ menu (Rename, Delete; built by `common/context-menu-markup.js`), an
- * icon, the name, and its asset count (`.asset-count`, directly after the name, empty for zero;
- * `common/asset-count.js`).
- * Icon and name are search triggers for the album; every row's `.controls` is a drop zone for
- * assets (`dragdrop/albums.js`). Albums are pointers only: nothing here moves or changes an asset.
+ * The album list, rendered from JSON: the flat counterpart of the folder tree. Albums only point at
+ * assets, so nothing here moves or changes an asset.
  */
 import { Const } from "../constants.js"
 import { context } from "../context.js"
@@ -32,8 +18,7 @@ const SCOPE_MARKER = Const.attributes.viewedScope
 
 // ─── public ─────────────────────────────────────────────────────────────────
 
-// Monotonic reload counter: if another reload starts while a fetch is in flight, the older
-// response is discarded so a stale list is never rendered
+// A reload started while a fetch is in flight discards the older response, so a stale list never renders
 let _reloadSeq = 0
 
 export async function reloadAlbumList(repoId) {
@@ -45,7 +30,7 @@ export async function reloadAlbumList(repoId) {
 
         _render(response.data, repoId)
     } catch (error) {
-        // A newer reload superseded this one - let it report its own outcome
+        // Superseded: the newer reload reports its own outcome
         if (seq !== _reloadSeq) return
 
         console.error("Failed to load albums", error)
@@ -57,10 +42,8 @@ export async function reloadAlbumList(repoId) {
 let _countsSeq = 0
 
 /**
- * Re-fetches the list after a membership change or an asset mutation and patches each row's count
- * in place, so focus and open menus are untouched. Nothing is fetched while another explorer tab
- * is active: the next render of the albums tab brings fresh counts. A full reload started
- * meanwhile carries fresh counts itself, so this one stands down.
+ * Patches the counts in place, so focus and open menus are untouched. Skipped under another explorer
+ * tab, whose switch back renders fresh counts; stands down for a full reload started meanwhile.
  */
 export async function refreshAlbumCounts(repoId) {
     if (!document.getElementById("albumList")) return
@@ -88,20 +71,15 @@ export async function refreshAlbumCounts(repoId) {
 
 let _viewedAlbumId = null
 
-/**
- * Records the album whose results are displayed and marks its row with `data-viewed-scope`, which
- * the CSS in `static/css/htmx/albums.css` colors green. Null clears the marker. Like the viewed
- * folder scope, this follows the displayed results, never the search parameters.
- */
+/** Like the viewed folder scope, this follows the displayed results, never the search parameters */
 export function setViewedAlbum(albumId) {
     _viewedAlbumId = albumId || null
     _applyViewedAlbum()
 }
 
 /**
- * Moves focus to whichever add control is visible, if focus was lost. Used after a rebuild that a
- * dialog triggered: adding the first album hides the empty-state button that opened the dialog,
- * and deleting the last album hides the top button its dialog returns focus to.
+ * For a rebuild a dialog triggered: adding the first album hides the empty-state button that opened
+ * the dialog, and deleting the last hides the top button its dialog returns focus to.
  */
 export function focusAddAlbumControlIfFocusLost() {
     // A control hidden after it took focus can keep it for a while; that counts as lost too
@@ -119,7 +97,6 @@ export function focusAddAlbumControlIfFocusLost() {
 
 // ─── rendering ──────────────────────────────────────────────────────────────
 
-/** Replaces the rendered list with `albums`, preserving focus and the viewed-album marker. */
 function _render(albums, repoId) {
     const container = document.getElementById("albumList")
     if (!container) return
@@ -134,28 +111,23 @@ function _render(albums, repoId) {
     _ensureAddControls(repoId)
     _showAddControl(albums.length === 0)
 
-    // Let HTMX wire up the new elements. Alpine's mutation observer initializes the appended
-    // rows; an explicit `initTree` would initialize every component a second time
+    // Alpine's mutation observer initializes the appended rows; an explicit `initTree` would
+    // initialize every component a second time
     if (window.htmx) {
         htmx.process(container)
     }
 
-    // The list is built after the albums tab has already settled, so it is not covered by the
-    // fragment hydration that binds every other search trigger
+    // Built after the tab settled, so the fragment hydration that binds other search triggers missed it
     bindSearchTriggers(container)
 
     _applyViewedAlbum()
 
-    // Keep keyboard focus on the rebuilt copy of the control that had it, if it still exists
     if (focusedId) {
         document.getElementById(focusedId)?.focus()
     }
 }
 
-/**
- * Builds the two add controls into their hosts on the first render after the tab loads. They are
- * shared popover-opening buttons; the hosts (`#albumActions`, `#noAlbums`) decide which one is shown.
- */
+/** Built once, on the first render after the tab loads; `_showAddControl` decides which one shows */
 function _ensureAddControls(repoId) {
     const actionsEl = document.getElementById("albumActions")
     if (actionsEl.childElementCount > 0) return
@@ -191,16 +163,14 @@ function _ensureAddControls(repoId) {
     }
 }
 
-/** With no albums the centered empty-state button is the only control; otherwise the top button shows */
 function _showAddControl(isEmpty) {
     document.getElementById("albumActions").hidden = isEmpty
     document.getElementById("noAlbums").hidden = !isEmpty
 }
 
 /**
- * Writes each album's count into its rendered row. Returns false as soon as an album has no row,
- * leaving the caller to render in full; rows with no album in the JSON are left alone, since
- * album operations always reload the whole list.
+ * False as soon as an album has no row, for a full render. Rows with no album in the JSON are left
+ * alone, since album operations always reload the whole list.
  */
 function _patchAssetCounts(albums) {
     return albums.every((album) => {
@@ -241,7 +211,7 @@ function _buildAlbumRow(album, repoId) {
     albumEl.id = `album-${album.id}`
     albumEl.setAttribute(Const.attributes.albumId, album.id)
 
-    // The row is the drop target for assets
+    // The assets' drop target
     const controlsEl = document.createElement("div")
     controlsEl.classList.add("controls", "dropzone")
     controlsEl.setAttribute(Const.attributes.albumId, album.id)
@@ -257,7 +227,6 @@ function _buildAlbumRow(album, repoId) {
     nameEl.textContent = album.name
     _makeSearchTrigger(nameEl, album.id)
 
-    // ⋯ menu button | icon | album-name | asset count
     controlsEl.appendChild(_buildMenuCtrl(album, repoId))
     controlsEl.appendChild(iconEl)
     controlsEl.appendChild(nameEl)
@@ -269,19 +238,15 @@ function _buildAlbumRow(album, repoId) {
     return albumEl
 }
 
-/**
- * Opening an album is a search like any other: the element declares the one parameter it knows
- * about and `search-results/search-triggers.js` combines it with the rest of the current search.
- */
+/** The element declares its one parameter; `search-triggers.js` combines it with the current search */
 function _makeSearchTrigger(el, albumId) {
     el.setAttribute("data-app-search", "click")
     el.setAttribute("data-app-search-album-id", albumId)
 }
 
 /**
- * The album's ⋯ menu cell (see `buildContextMenuCtrl`): Rename and Delete, each loading a
- * popover dialog. `albumMenuCtrl-<id>` is the trigger the rename dialog
- * returns focus to. Both are Organize's, so an account without it gets the empty cell.
+ * `albumMenuCtrl-<id>` is the trigger the rename dialog returns focus to. Both actions are
+ * Organize's, so an account without it gets the empty cell.
  */
 function _buildMenuCtrl(album, repoId) {
     if (!context.holds(Const.permission.organize)) {

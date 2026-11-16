@@ -11,10 +11,9 @@ import { runSearch } from "../search-results/search.js"
 const CURATE_PARAM = "curate"
 
 /**
- * Curation on the Sequence the browser's URL names (`?curate=`, the Detail panel's Curation link), over the page's first
- * results. The first search replaces the URL without the parameter, so a reload shows the grid. An ID that is no Sequence's
- * opens on Curation's own too-few-frames state. Opening Curation takes a Curate Permission, so without one the
- * parameter is left alone, as the server would refuse every request of Curation.
+ * Opens Curation on the Sequence `?curate=` names, over the page's first results; the first search drops
+ * the parameter from the URL, so a reload shows the grid. Without a Curate Permission the parameter is
+ * ignored, since the server would refuse Curation.
  */
 export function openCurationInLocation(app) {
     const sequenceId = new URLSearchParams(window.location.search).get(
@@ -30,9 +29,9 @@ export function openCurationInLocation(app) {
 }
 
 /**
- * What Asset detail comes back on when Curation closes: the asset it left, or, when Curation recycled
- * that asset, the nearest cell still in the grid, the next one before the previous one. Null when the
- * asset is gone and no cell is left to go to. Read before the recycled cells leave the grid.
+ * Where Asset detail resumes when Curation closes: the asset it left or, when that was recycled, the
+ * nearest remaining cell, next before previous; null when none is left. Read before the recycled cells
+ * leave the grid.
  */
 function detailAfterCuration({ assetId, cellEl }, recycledIds) {
     const recycled = new Set(recycledIds)
@@ -64,19 +63,13 @@ function detailAfterCuration({ assetId, cellEl }, recycledIds) {
 }
 
 /**
- * Curation's events: opening it, the counts after each mutation in it, and the grid beneath when it
- * closes. A view that opens it dispatches `Const.events.curateRequested` with no detail for the queue,
- * `{ sequenceId }` for one Sequence or `{ assetIds }` for a selection; the batch ops' Curate goes through
- * `Const.events.batchCurateRequested`, which holds a selection over the cap back. Exit and Esc close it, through
- * `closeModal` (`common/modal.js`); the `curation` component announces that.
- *
- * The Detail panel's Curation link opens in place on a plain click, with Asset detail's place in the
- * `resumeDetail` of the request, and Asset detail comes back on it when Curation closes, through its
- * cell as a click would, so stepping goes on from there. A click with a modifier, or a middle click,
- * is left to the browser: the link's new tab (`openCurationInLocation`).
+ * The Detail panel's Curation link opens Curation in place on a plain click, keeping Asset detail's
+ * place; Asset detail comes back there when Curation closes, through its cell as a click would, so
+ * stepping goes on from it. A modified or middle click is left to the browser's new tab
+ * (`openCurationInLocation`).
  */
 export function registerCurationListeners(app) {
-    // Asset detail's place while Curation is open over it; each open of Curation sets or clears it
+    // Asset detail's place while Curation is open over it
     let resumeDetail = null
 
     document.body.addEventListener("click", (event) => {
@@ -118,8 +111,8 @@ export function registerCurationListeners(app) {
     })
 
     /**
-     * The server refuses a selection over the cap too, but the generic report of a refused request
-     * says only its path and status, so this is what tells the user why. The button carries the cap.
+     * The server refuses a selection over the cap too, but the generic refusal report gives only the
+     * path and status, so the reason is told here
      */
     document.body.addEventListener(
         Const.events.batchCurateRequested,
@@ -143,13 +136,10 @@ export function registerCurationListeners(app) {
     })
 
     /**
-     * The selection is reset whatever happened in Curation: a set opened on a selection is done with
-     * when Curation closes, resolved or not, and a selection left standing would make the next one
-     * additive. The grid keeps its scroll position, and with nothing changed nothing else moves.
-     * Otherwise the frames still recycled leave it as the grid's own Recycle takes them, with the
-     * group counts and the total, a group whose Sequence was cleared loses its Curate button, and
-     * kept frames stay under their old header until the next search. The map layout has no cells,
-     * so it runs the search again. Asset detail then comes back if Curation was opened over it.
+     * The selection is reset however Curation ended, or the next selection would be additive. The grid
+     * keeps its scroll: recycled frames leave it as Recycle takes them, a cleared Sequence's group loses
+     * its Curate button, and kept frames stay under their old header until the next search. The map has
+     * no cells, so it searches again.
      */
     document.body.addEventListener(Const.events.curationClosed, (event) => {
         const { recycledIds, clearedSequenceIds } = event.detail

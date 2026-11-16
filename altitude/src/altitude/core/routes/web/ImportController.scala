@@ -38,12 +38,8 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   /**
-   * Opens the Import of an upload from the Import page, which then sends its files one request each ([[uploadFile]]) and closes
-   * it ([[closeImport]]). The JSON body may name it (`name`, the uploaded folder's), give the folder its files are sorted into
-   * (`destFolderId`; none is Triage), which takes Organize as well as this route's Import: without it the answer is a 403, and
-   * say how many files the upload is about to send (`expectedFiles`, a whole number from 0), so the Import history counts the
-   * files yet to come as remaining. A destination that is no folder of the Library is a 404, and one in the Trash, or a number of
-   * files that is none, a 400. Answers the Import's ID.
+   * Opens an upload's Import. A `destFolderId` (none is Triage) takes Organize as well as Import; `expectedFiles` lets the Import
+   * history count the files yet to come as remaining.
    */
   @requireLogin()
   @requirePermission(Permission.Import)
@@ -60,10 +56,7 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
       jsonResponse(ujson.Obj(Api.Field.ID -> opened.persistedId))
     }
 
-  /**
-   * The number of files an upload says it is about to send, none when the body has none (or a null one); anything but a whole
-   * number from 0 that an Import can count is a `ValidationException`
-   */
+  /** None when absent or null; anything but a whole number from 0 that fits an Int is a `ValidationException` */
   private def expectedFiles(json: ujson.Obj): Option[Int] =
     json.obj.get(Api.Field.Import.EXPECTED_FILES).filterNot(_.isNull).map {
       case ujson.Num(files) if files >= 0 && files <= Int.MaxValue && files == files.floor => files.toInt
@@ -75,17 +68,13 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
     json.obj.get(field).flatMap(_.strOpt).map(_.trim).filter(_.nonEmpty)
 
   /**
-   * Takes one file of an upload's Import: the request's body is the file, and `relPath` (a query parameter) its path relative to
-   * what was chosen, its name for a file chosen on its own. The file is staged, added to the Import and offered to the import
-   * queue (`ImportService.upload`), the request waiting while the queue is full. Answers the Import file with its outcome:
-   * pending, or failed with its reason when it was recorded and then could not be handed to the pipeline, which is no failure of
-   * the request, so the page does not send the file again. A file of an Import whose destination folder is in the Trash is
-   * answered so too, recorded failed with that reason and neither staged nor offered to the queue
-   * (`ImportService.failForLostDestination`): the upload fails its remaining files, each in the record.
+   * Takes one file of an upload: the body is the file, `relPath` its path relative to what was chosen. The request waits while
+   * the import queue is full. A file recorded but not handed to the pipeline is answered as failed, not as a failed request, so
+   * the page does not send it again; so is a file whose destination folder is in the Trash, recorded failed and never staged.
    *
-   * A refused file is a 400 and is not recorded: a path with an ignored name, a ".." or an empty name, and an empty file. It is
-   * refused before its body is read where the path says so. An Import that is not the Library's is a 404, one that is not an
-   * upload the account itself opened a 403, and one that takes no more files a 409, on each of which the page stops sending.
+   * A refused file (a bad path, an empty file) is a 400 and is not recorded, refused before its body is read where the path says
+   * so. An Import that is not the account's own upload is a 403, and one that takes no more files a 409; the page stops on
+   * either.
    */
   @requireLogin()
   @requirePermission(Permission.Import)
@@ -101,10 +90,7 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
       fileResponse(lost.getOrElse(imports.upload(importId, relPath, App.altitude.service.staging.stage(request.data))))
     }
 
-  /**
-   * Records a file of an upload that the page could not send, after its retries, as failed (`ImportService.addFailedFile`): the
-   * JSON body gives its path (`relPath`) and its size (`sizeBytes`). Refused as [[uploadFile]] refuses a path and an Import.
-   */
+  /** Records as failed a file the page could not send after its retries; refused as [[uploadFile]] refuses a path and an Import */
   @requireLogin()
   @requirePermission(Permission.Import)
   @cask.post("/import/r/:repoId/imports/:importId/failures")
@@ -118,9 +104,8 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
     }
 
   /**
-   * Closes an upload's Import: no more files will come, whether the page sent them all or the upload was cancelled, which is the
-   * same to the Import. It stays in progress until the files it has are settled. An Import that is not the Library's is a 404,
-   * and one that is not an upload the account itself opened a 403.
+   * No more files will come, whether the page sent them all or the upload was cancelled; the Import stays in progress until its
+   * files are settled
    */
   @requireLogin()
   @requirePermission(Permission.Import)
@@ -131,10 +116,7 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
       jsonResponse(ujson.Obj())
     }
 
-  /**
-   * [[answeringJson]] for the routes that add a file to an open upload: an Import that takes no more files is a 409, which the
-   * page tells from a refused file's 400
-   */
+  /** An Import that takes no more files is a 409, which the page tells from a refused file's 400 */
   private def answeringUpload(f: => cask.Response[String]): cask.Response[String] =
     answeringJson {
       try f
@@ -147,16 +129,10 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
     jsonResponse(json)
 
   /**
-   * The import status stream of the path's Library, for an account that holds Import in it: every socket of the Library is told
-   * of its Imports as they change (`ImportStatusWsActor`), whichever account delivers them. The account comes from the login
-   * (`decorators.authenticate`), never from the request. A handshake from a page of another origin is refused with a 403
-   * (`decorators.isSameOriginOrNone`; one with no Origin, which no browser sends, is let through to the login check), and one
-   * with no login with a 401, which clears a session cookie whose token was refused. A Library the account cannot see, or that
-   * does not exist, is a 404, as `requireLogin` answers it; a Guest's handshake, and that of an account without Import in the
-   * Library, a 403. A RawDecorator cannot wrap a WebSocket endpoint, whose result is no response, so all of it is checked here
-   * rather than by `requireLogin` and `requirePermission`. A stale token's rebuild is not set as a cookie, which the upgrade's
-   * answer cannot carry; the next page load sets it. The account's sockets close when its versions change
-   * (`ImportStatusWsActor.CloseAllFor`), as when a grant of it does, so a socket never outlives the Permission that opened it.
+   * The import status stream of the path's Library, for an account holding Import in it. A RawDecorator cannot wrap a WebSocket
+   * endpoint, whose result is no response, so what `requireLogin` and `requirePermission` check is checked here. A stale token's
+   * rebuild is not set as a cookie, which the upgrade's answer cannot carry; the next page load sets it. The account's sockets
+   * close when its versions change (`ImportStatusWsActor.CloseAllFor`), so a socket never outlives the Permission that opened it.
    */
   @cask.websocket("/import/r/:repoId/status")
   def pipelineStatus(repoId: String)(using request: cask.Request): cask.WebsocketResult =
@@ -206,7 +182,6 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
                 }
             }
 
-  /** A handshake's refusal in plain text */
   private def refused(status: Int, why: String): cask.WebsocketResult =
     WebsocketResult.Response(cask.Response(why, statusCode = status, headers = Seq("Content-Type" -> "text/plain")))
 

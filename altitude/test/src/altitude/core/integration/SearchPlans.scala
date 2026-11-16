@@ -11,10 +11,10 @@ import altitude.core.dao.sql.search.SearchDialect
 import altitude.core.dao.sql.search.SqliteSearchDialect
 
 /**
- * Reading the engine's plan for a statement, for the suites that check which index a search or a lookup reads.
+ * Reads the engine's plan for a statement, for the suites that check which index a search or a lookup reads.
  *
- * A planner costs a plan by the table's statistics, and over the handful of rows a test holds every index on the repository costs
- * the same, so its choice would be a tie. [[atScale]] gives it a library's worth of rows to choose by, and takes them back.
+ * Over the handful of rows a test holds, every index on the repository costs the same, so the planner's choice is a tie.
+ * [[atScale]] gives it a library's worth of rows to choose by, and takes them back.
  */
 trait SearchPlans { self: IntegrationTestCore =>
 
@@ -34,9 +34,8 @@ trait SearchPlans { self: IntegrationTestCore =>
   }
 
   /**
-   * The engine's plan for a hand-written statement with its bind values, read as [[planOf]] reads a typed one, inside a write
-   * transaction so a statement that locks its rows (`FOR UPDATE`) can be explained. PostgreSQL is told to scan only when nothing
-   * else answers, as [[lookupPlanOf]] does, since over a handful of rows every index on the repository costs the same.
+   * The plan of a hand-written statement with its bind values. It is read in a write transaction so a `FOR UPDATE` statement can
+   * be explained, and PostgreSQL is told to scan only when nothing else answers.
    */
   protected def lookupPlanOf(sql: String, values: List[Any]): String =
     testApp.txManager.withTransaction {
@@ -47,9 +46,9 @@ trait SearchPlans { self: IntegrationTestCore =>
     }
 
   /**
-   * `read` over the rows `seed` adds, with the tables analyzed, all in one transaction that is rolled back: the schema is shared
-   * by every suite that follows, so neither the rows nor their statistics may outlive the test. PostgreSQL writes a table's
-   * row-count estimate in place, which a rollback keeps, so its tables are analyzed again over the rows that are left.
+   * Runs `read` over the rows `seed` adds, with the tables analyzed, in one transaction that is rolled back: later suites share
+   * the schema, so neither the rows nor their statistics may outlive the test. A rollback keeps PostgreSQL's in-place row-count
+   * estimates, so its tables are analyzed again afterwards.
    */
   protected def atScale[T](seed: => Unit)(read: => T): T =
     try
@@ -62,16 +61,15 @@ trait SearchPlans { self: IntegrationTestCore =>
     finally if (isPostgres) testApp.txManager.withTransaction(update("ANALYZE"))
 
   /**
-   * `copies` copies of the asset, spread over `folders` folders it adds under the repository's root, each imported a minute
-   * before the last: a library for the planner to choose the asset's indexes by. `id`, `checksum`, `folder_id` and `created_at`
-   * are the copy's own.
+   * Adds `copies` copies of the asset, spread over `folders` new folders under the repository's root, each created a minute
+   * before the last. Each copy has its own `id`, `checksum`, `folder_id` and `created_at`.
    */
   protected def seedCopies(templateId: String, copies: Int, folders: Int): Unit = {
     val (copyId, checksum, createdAt) =
       if (isPostgres)
         ("lpad(g.n::text, 36, '0')", "lpad((1000000 + g.n)::text, 64, '0')", "created_at - g.n * interval '1 minute'")
       else ("printf('%036d', g.n)", "printf('%064d', 1000000 + g.n)", "datetime(created_at, '-' || g.n || ' minutes')")
-    // The folder of number `n`, an ID of 36 characters, as every ID is
+    // Padded to 36 characters, as every ID is
     def folderId(n: String): String =
       if (isPostgres) s"'seeded-folder-' || lpad(($n)::text, 22, '0')" else s"'seeded-folder-' || printf('%022d', $n)"
 
@@ -101,10 +99,10 @@ trait SearchPlans { self: IntegrationTestCore =>
   }
 
   /**
-   * The plan of a statement an index alone should answer, read inside [[atScale]] once the tables are analyzed. PostgreSQL is
-   * told that every page of each table is all-visible, as vacuuming would leave it (seeded rows are never vacuumed, and an
-   * index-only scan of them would be costed as a read of the table too), and to scan or bitmap the table only when nothing else
-   * answers: over narrow seeded rows it would otherwise read the whole table for less. SQLite names a covering index by itself.
+   * The plan of a statement an index alone should answer, read inside [[atScale]]. PostgreSQL is told each table's pages are
+   * all-visible, as vacuuming would leave them, since an index-only scan of unvacuumed rows is costed as a table read too. It is
+   * also told to scan or bitmap only when nothing else answers, since over narrow seeded rows a full read costs less. SQLite
+   * picks a covering index by itself.
    */
   protected def indexOnlyPlanOf(statement: SqlStr, tables: String*): String = {
     if (isPostgres) {
@@ -115,10 +113,9 @@ trait SearchPlans { self: IntegrationTestCore =>
   }
 
   /**
-   * The plan of a lookup that only an index can serve, so that the plan reads an index and never the whole table. SQLite has no
-   * statistics to weigh a scan against; PostgreSQL is told to scan only when nothing else answers. Over a handful of rows,
-   * PostgreSQL weighs the indexes that lead with the repository by their size: the plan of a lookup on a narrow key holds at any
-   * scale, while a lookup on a wide key runs inside [[atScale]], as the checksum lookup does, so the selective column decides.
+   * The plan of a lookup that only an index can serve. PostgreSQL is told to scan only when nothing else answers; SQLite has no
+   * statistics to weigh a scan against. Over a handful of rows PostgreSQL ranks the indexes that lead with the repository by
+   * size, so a lookup on a wide key, such as the checksum, runs inside [[atScale]] for the selective column to decide.
    */
   protected def lookupPlanOf(statement: SqlStr): String =
     if (isPostgres)

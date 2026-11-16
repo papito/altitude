@@ -25,10 +25,7 @@ import altitude.core.util.SequenceRule
   private val hash = PerceptualHash(0x5a5a_f00f_1234_abcdL)
   private val settings: Settings = TestSettings()
 
-  /**
-   * A unit vector of the model's dimensions at the given cosine to the frame's own embedding of that model, which is the first
-   * axis: `(cos θ, sin θ, 0, ...)`, so its similarity to the frame's is `cosine` (to float32 precision)
-   */
+  /** `(cos θ, sin θ, 0, ...)`: a unit vector at `cosine` (to float32 precision) to the frame's embedding, the first axis */
   private def atCosine(model: SceneModel, cosine: Double): SceneEmbedding = {
     val values = new Array[Float](model.dimensions)
     values(0) = cosine.toFloat
@@ -40,10 +37,7 @@ import altitude.core.util.SequenceRule
   private def alikeBy(dinov2: Double, siglip2: Double): SceneEmbeddings =
     SceneEmbeddings(dinov2 = Some(atCosine(SceneModel.Dinov2, dinov2)), siglip2 = Some(atCosine(SceneModel.Siglip2, siglip2)))
 
-  /**
-   * A frame as the pipeline hands it to the completion: a triaged still image with a camera time, a model, a hash and an
-   * embedding of each Scene model (the first axis of each model's space)
-   */
+  /** A triaged still image as the pipeline completes it: a camera time, a camera model, a hash and both Scene embeddings */
   private val frame = Asset(
     id = Some("frame-1"),
     ownerUserId = "u",
@@ -80,10 +74,9 @@ import altitude.core.util.SequenceRule
      *
      * Assertions:
      *
-     * The frame is eligible, and so is one whose time came from the digitized tag, XMP or the file name, one with no capture time
-     * at all (an undated frame), one with no Scene embedding at all (the hash is the floor) and one with no device model (a frame
-     * saved out of a messaging app names none). A Video, an animated image (a duration), a sorted asset, one whose time is the
-     * container's creation time and one without a hash are not.
+     * The frame is eligible, and so are copies with a time from the digitized tag, XMP or the file name, with no capture time,
+     * with no Scene embedding (the hash is the floor), or with no device model. A Video, an animated image, a sorted asset, one
+     * with the container's creation time and one without a hash are not.
      */
     SequenceRule.isEligible(frame) shouldBe true
     SequenceRule.isEligible(frame.copy(originalCreatedAtSource = Some(CaptureDateSource.ExifDigitized))) shouldBe true
@@ -105,15 +98,12 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * The frame; the undated copy of it; the frame with its time from the container's creation; and the undated copy as a Video,
-     * sorted, or without a hash.
+     * The frame, its undated copy, the frame with a container time, and the undated copy as a Video, sorted, or without a hash.
      *
      * Assertions:
      *
-     * The frame is dated and not undated; the undated copy is undated and not dated; each of the two is eligible by its own kind.
-     * A frame with a time from the container's clock has a time, so it is not undated, and not from the camera's clock, so it is
-     * not dated: it is not eligible. Having no time does not excuse the rest: an undated Video, an undated sorted asset and an
-     * undated frame without a hash are not undated frames either.
+     * The frame is dated and the undated copy undated, each eligible. A container time is a time but not the camera's, so that
+     * frame is neither kind and not eligible. An undated Video, sorted asset or hashless frame is not an undated frame.
      */
     SequenceRule.isDated(frame) shouldBe true
     SequenceRule.isUndated(frame) shouldBe false
@@ -138,19 +128,15 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * The undated frame and an undated candidate at its size, alike by DINOv2 (0.95) and unlike by SigLIP 2 (0.5), the other way
-     * round, or unlike by both (0.5); both with no embedding at all, the candidate's hash at the default
-     * `sequence.max_hash_distance` or one bit past it; the alike candidate at another width, another height, or the frame's size
-     * turned; the alike candidate naming a camera; and the dated frame, naming its camera or none, against the alike undated
-     * candidate.
+     * The undated frame and an undated candidate: alike by one model and unlike by the other, or unlike by both; with no
+     * embeddings and the hash at or one bit past `sequence.max_hash_distance`; at another size or turned; naming a camera; and
+     * the dated frame, naming a camera or none, against the candidate.
      *
      * Assertions:
      *
-     * The undated frames match by either model and not by neither, in both directions; with no model on both, the hash decides at
-     * the Setting's distance and no further; another width or height parts them, and a portrait and a landscape frame are two
-     * sizes. The camera model plays no part between undated frames (a frame stripped of its time is stripped of its camera too),
-     * so one naming a camera still matches. A dated frame and an undated one never match, either way round, however alike and
-     * whatever the dated one's camera: the kinds pair only with their own.
+     * Undated frames match by either model and not by neither, in both directions; without embeddings the hash decides up to the
+     * Setting's distance; another size or orientation parts them. The camera plays no part between undated frames, since a frame
+     * stripped of its time is stripped of its camera too. A dated and an undated frame never match, however alike.
      */
     val candidate = undated.copy(id = Some("frame-2"))
     SequenceRule.matches(undated, candidate, settings) shouldBe true
@@ -199,15 +185,14 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * The frame and a candidate shot a second later with the frame's embeddings (a similarity of 1 by either model) and the
-     * frame's hash, then that candidate with one condition broken at a time: a 60,001 ms gap either way, another camera, another
-     * width or height, both similarities just under their default thresholds (0.80 for DINOv2, 0.90 for SigLIP 2), a time that is
-     * the container's creation time.
+     * The frame and a candidate a second later with the frame's embeddings and hash, then with one condition broken at a time: a
+     * 60,001 ms gap either way, another camera, another size or orientation, both similarities just under their default
+     * thresholds, or a container time.
      *
      * Assertions:
      *
-     * The candidate matches at the default Settings, and at exactly the gap of a minute; each broken condition alone fails it, in
-     * both directions of the comparison. A portrait and a landscape frame of one scene are two sizes, so never one Sequence.
+     * The candidate matches at the default Settings, also exactly a minute apart; each broken condition alone fails it, in both
+     * directions.
      */
     val candidate = frame.copy(id = Some("frame-2"), originalCreatedAt = Some(after(1000)))
     SequenceRule.matches(frame, candidate, settings) shouldBe true
@@ -241,14 +226,13 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * The frame and a candidate a second later, each also as a copy that names no device model (as a frame saved out of a
-     * messaging app, or a metadata-stripped copy of the original, comes), and as that copy with its time from the file name.
+     * The frame and a candidate a second later, each also as a copy naming no device model, and as that copy with a file-name
+     * time.
      *
      * Assertions:
      *
-     * Two frames naming no camera match, in both directions, and so do two with file-name times; a frame that names a camera and
-     * one that names none do not, either way round, so an original and its metadata-stripped copy are never a burst; nor do two
-     * frames naming different cameras.
+     * Two frames naming no camera match, and so do two with file-name times. A frame naming a camera and one naming none do not,
+     * so an original and its metadata-stripped copy are never a burst; nor do frames of different cameras.
      */
     val candidate = frame.copy(id = Some("frame-2"), originalCreatedAt = Some(after(1000)))
     val unnamed = frame.copy(publicMetadata = PublicMetadata())
@@ -276,15 +260,13 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * For each Scene model, a candidate a second later whose embedding of that model is 0.02 above the model's default threshold
-     * (0.80 for DINOv2, 0.90 for SigLIP 2), or 0.02 below it, while its embedding of the other model is orthogonal to the frame's
-     * (a similarity of 0, far under either threshold).
+     * For each Scene model, a candidate whose similarity by that model is 0.02 above or below its default threshold, and 0 by the
+     * other.
      *
      * Assertions:
      *
-     * Just above its threshold the candidate matches by that model alone and just below it does not, in both directions; the
-     * other model's similarity of 0 neither helps nor hinders. The two thresholds differ, so a similarity of 0.85 by both models
-     * is in by DINOv2's threshold although out by SigLIP 2's: one model's likeness is enough.
+     * Above its threshold the candidate matches by that model alone and below it does not, in both directions. The thresholds
+     * differ (0.80 and 0.90), so 0.85 by both models is in by DINOv2's alone.
      */
     val candidate = frame.copy(id = Some("frame-2"), originalCreatedAt = Some(after(1000)))
     SceneModel.values.foreach {
@@ -312,14 +294,12 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * The frame and a candidate a second later with the frame's hash, alike by DINOv2 (0.95) and unlike by SigLIP 2 (0.5); one
-     * the other way round, alike by SigLIP 2 (0.95) and unlike by DINOv2 (0.5); and one unlike by both (0.5). The likenesses are
-     * past the default thresholds on the side they are meant to be.
+     * Candidates with the frame's hash: alike by DINOv2 (0.95) and unlike by SigLIP 2 (0.5), the reverse, and unlike by both.
      *
      * Assertions:
      *
-     * The first two candidates match, each by the model that finds them alike; the third does not. The hashes are identical
-     * throughout, so the hash is not what decides: two frames compared by any model are never rescued by their hashes.
+     * The first two match, each by the model that finds them alike; the third does not, so an identical hash never rescues frames
+     * a model compares.
      */
     val candidate = frame.copy(id = Some("frame-2"), originalCreatedAt = Some(after(1000)))
     SequenceRule.matches(frame, candidate.copy(sceneEmbeddings = alikeBy(0.95, 0.5)), settings) shouldBe true
@@ -332,17 +312,14 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * The frame and a candidate a second later, in these shapes: with both models' embeddings, a near hash (one bit away) and
-     * both similarities at 0.5, or a far hash (thirty bits away) and a DINOv2 similarity of 1; with a SigLIP 2 embedding only,
-     * alike by it (1.0) and the hash thirty bits away, or unlike by it (0.5) and the hash one bit away; the frame with a DINOv2
-     * embedding only against that SigLIP 2-only candidate, the hash ten or eleven bits away; and neither with any embedding.
+     * Candidates with both embeddings and a near hash but low similarities, or a far hash but high DINOv2 similarity; with SigLIP
+     * 2 only, alike with a far hash or unlike with a near one; a DINOv2-only frame against a SigLIP 2-only candidate; and neither
+     * embedded. The last two with the hash ten or eleven bits away.
      *
      * Assertions:
      *
-     * With both embeddings the similarities decide alone: the near hash with the low similarities is no match, the far hash with
-     * the high DINOv2 similarity is. A candidate the frame shares one model with is decided by that model, whatever its hash: in
-     * when alike by it, out when unlike. Where the two frames share no model (one embedded by DINOv2 alone, the other by SigLIP 2
-     * alone), and where neither has any embedding, the hash decides: ten bits match, eleven do not.
+     * A model both frames have decides alone, whatever the hash. Where they share no model, or have none, the hash decides: ten
+     * bits match, eleven do not.
      */
     val candidate = frame.copy(id = Some("frame-2"), originalCreatedAt = Some(after(1000)))
     val nearButUnlike = candidate.copy(perceptualHash = Some(farBy(1)), sceneEmbeddings = alikeBy(0.5, 0.5))
@@ -372,17 +349,14 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * The frame and a candidate a second later; Settings with a 500 ms gap; a DINOv2 threshold of 0.5 (exactly representable in
-     * float32, so the boundary itself can be tested) against candidates at a DINOv2 similarity of 0.5 and 0.49, unlike by SigLIP
-     * 2; a SigLIP 2 threshold of 0.97 against a candidate at a SigLIP 2 similarity of 0.94, unlike by DINOv2; and a hash distance
-     * of 0 against a candidate with no embedding at all whose hash is one bit away, or identical.
+     * The frame and a candidate a second later, under Settings with a 500 ms gap, a DINOv2 threshold of 0.5 (exact in float32, so
+     * the boundary itself is tested), a SigLIP 2 threshold of 0.97, and a hash distance of 0.
      *
      * Assertions:
      *
-     * The candidate matches at the defaults, not under the shorter gap. A DINOv2 similarity of 0.5 is out at the default
-     * threshold and in at a threshold of 0.5 (at least, not above), where 0.49 is out. A SigLIP 2 similarity of 0.94 is in at the
-     * default SigLIP 2 threshold and out at 0.97. Under the zero distance the embedding-less candidate matches only with an
-     * identical hash.
+     * The shorter gap parts the frames. A DINOv2 similarity of 0.5 is out at the default threshold and in at 0.5 (at least, not
+     * above), where 0.49 is out. A SigLIP 2 similarity of 0.94 is in at the default and out at 0.97. At distance 0 an unembedded
+     * candidate matches only with an identical hash.
      */
     val candidate = frame.copy(id = Some("frame-2"), originalCreatedAt = Some(after(1000)))
     SequenceRule.matches(frame, candidate, settings) shouldBe true

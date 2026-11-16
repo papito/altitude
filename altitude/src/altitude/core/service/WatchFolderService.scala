@@ -80,28 +80,25 @@ import altitude.core.util.Util
 object WatchFolderService:
   /** How a scan of a Watch folder ended */
   enum ScanResult:
-    /** Its directory was walked, and this many of its files were handed to the import pipeline */
+    /** This many files were handed to the import pipeline */
     case Scanned(offered: Int)
 
-    /** A scan of it was running already, or the server is stopping: nothing was done */
+    /** A scan was already running, or the server is stopping */
     case NotStarted
 
-    /** It is not scanned as it stands, for the reason: paused, its destination lost, its directory unavailable, or removed */
+    /** Not scanned, for the reason: paused, destination lost, directory unavailable, or removed */
     case Blocked(reason: String)
 
-  /**
-   * Why a path cannot be a Watch folder's, or cannot be scanned: `error` as the Watch folder dialog says it under the path's
-   * field, `reason` as the card says it beside the chip of a Watch folder that became unavailable
-   */
+  /** Why a path cannot be a Watch folder's, or be scanned: `error` for the dialog's path field, `reason` for the card */
   case class PathProblem(error: String, reason: String)
 
-  // A file of a Watch folder's directory as a walk finds it: its path under the directory, and where it is
+  // A file as a walk found it; `relPath` is under the watched directory
   private case class Found(relPath: String, path: Path, sizeBytes: Long, modifiedAt: FileTime)
 
-  // What a walk of a Watch folder's directory came to: its files in path order, the directories it could not read, which it
-  // went on past, and the directory of the app's own that it met, if it met one, at which it ended
+  // A walk's result: files in path order, the unreadable directories it went on past, and the app's own directory it stopped
+  // at, if any
   private case class Walked(files: List[Found], unreadable: List[Path], own: Option[Path]):
-    // What the Watch folder's card says of the directories that could not be read, if there are any
+    // The card's note on unreadable directories, if any
     def problem: Option[String] =
       unreadable match
         case Nil => None
@@ -109,10 +106,9 @@ object WatchFolderService:
         case first :: _ => Some(Const.WatchFolder.DIRECTORIES_UNREADABLE.format(unreadable.size, first))
 
   /**
-   * The directories the app stores into (`paths`, each where it really is, symbolic links resolved), which no Watch folder may
-   * read or delete from. A directory is told to be one of them by where it is and by what it is: its file key, the file system's
-   * identity of it (`Files.isSameFile` where the file system gives no key), which a second path to it shares that no symbolic
-   * link explains, such as a volume mounted twice.
+   * The directories the app stores into (`paths`, real paths), which no Watch folder may read or delete from. A directory matches
+   * by path or by file key (`Files.isSameFile` where there is none), which also catches a second path no symbolic link explains,
+   * such as a volume mounted twice.
    */
   private class OwnDirectories(val paths: List[Path]):
     private val keys: Set[AnyRef] = paths.flatMap(path => attributesOf(path).flatMap(read => Option(read.fileKey))).toSet
@@ -136,10 +132,7 @@ object WatchFolderService:
     def at(path: Path): Option[Path] =
       Iterator.iterate(path)(_.getParent).takeWhile(_ != null).find(step => attributesOf(step).exists(has(step, _)))
 
-    /**
-     * Whether the directory at the real path is one of them, lies inside one or holds one: by the paths, and by what the
-     * directory and each directory above it is, and what each directory above one of them is
-     */
+    /** Whether the real path is, lies inside or holds one of them, by path and by the identity of every directory above either */
     def overlaps(real: Path): Boolean =
       paths.exists(path => real.startsWith(path) || path.startsWith(real)) || at(real).isDefined || {
         val candidate = OwnDirectories(List(real))
@@ -149,8 +142,8 @@ object WatchFolderService:
   // A file of a Watch folder that is in the import pipeline, as it was when its copy was staged
   private case class InFlight(watchFolderId: String, relPath: String, source: Path, sizeBytes: Long, modifiedAt: FileTime)
 
-  // One scan past its walk: the Watch folder as the scan read it, its owner, its directory's real path, the files to hand to
-  // the pipeline, in path order, and the Import the scan opened, once it has
+  // A scan past its walk: the Watch folder as read, the directory's real path, the files to offer in path order, and the
+  // scan's Import once opened
   private class Run(
       val repository: Repository,
       val watchFolder: WatchFolder,
@@ -162,41 +155,35 @@ object WatchFolderService:
 
   // What handing one file to the pipeline came to
   private enum Taken:
-    // Staged and added to the scan's Import: to offer to the queue
+    // Staged and added to the scan's Import, to offer to the queue
     case Staged(element: TDataAssetWithContext, importFileId: String)
     // Left for a later scan, or recorded as failed: the scan goes on
     case Skipped
-    // The Watch folder is not scanned any more as it was: the scan ends
+    // The Watch folder changed or the server is stopping: the scan ends
     case Stop
 
-  // What a file's memory does with what became of the file in the pipeline
+  // The state a file's memory takes once the file settles in the pipeline
   private enum Settled:
     case Handled, Final, Failed, Untouched
 
-  // A scan stamps a remembered file as found again only once its stamp is this old, so a scan that finds nothing new writes
-  // nothing; what the forgetting of absent files allows for
+  // A remembered file's last-seen stamp is refreshed only once it is this old, so a scan that finds nothing new writes no file
+  // rows; forgetting absent files allows for it
   private val LAST_SEEN_STEP = java.time.Duration.ofDays(1)
 
-  // How long a file rests before it is read: a scan reads a file only when a scan saw it with the same size and modified time
-  // at least this long before, whoever asked for the two scans. Far shorter than the scan interval, so two scheduled scans in
-  // a row always span it, while two presses of "Scan now" do not shorten it
+  // How long a file must stay unchanged (size and modified time) between two scans before it is read. Far shorter than the
+  // scan interval, so two scheduled scans always span it, and manual scans in quick succession cannot shorten it
   private val REST = java.time.Duration.ofSeconds(Const.WatchFolder.REST_SECONDS)
 
   private val STOPPING = "the server is stopping"
   private val REMOVED = "the Watch folder was removed"
 
 /**
- * The Watch folders: directories on the server that the app scans, each for one Library, importing the files that arrive in them.
- * An Admin adds, edits, pauses, resumes and removes one; its path is held to the path rules, and its files are only ever copied
- * out of its directory, and deleted from it when it deletes imported files.
+ * Watch folders: server directories the app scans, each for one Library, importing the files that arrive. Files are only ever
+ * copied out, and deleted only when the Watch folder deletes imported files.
  *
- * A scan walks the directory, never following a symbolic link nor reading one, leaving out what imports ignore (`IgnoredFiles`)
- * and empty files, and remembers each file by its path under the directory, its size and its modified time (`watch_folder_file`).
- * A file is read once a scan finds it as a scan found it at least the rest before (5 seconds, so as the scheduled scan before
- * did, unless the two were asked for in quick succession): a copy is staged and offered to the import queue, under the queue's
- * backpressure, in path order, as a file of the scan's Import, which is opened with the scan's first file, expecting the files
- * the scan is about to offer, and closed once its last file settles. What becomes of a file in the pipeline is written to its
- * memory by the pipeline's last working stage ([[settled]]), which is also where the file is deleted.
+ * A scan walks the directory without following symbolic links and remembers each file by path, size and modified time
+ * (`watch_folder_file`). A file unchanged for `REST` between two scans is staged and offered to the import queue as a file of the
+ * scan's Import. The pipeline's last stage reports each outcome to [[settled]], which records it and deletes the source.
  */
 class WatchFolderService(val app: Altitude):
   import WatchFolderService.*
@@ -207,14 +194,14 @@ class WatchFolderService(val app: Altitude):
   private val txManager: TransactionManager = app.txManager
   private val F = FieldConst.WatchFolder
 
-  // A scan's own work runs on the import dispatcher, as the pipeline's stages do; nothing waits there for the queue
+  // Scan work runs on the import dispatcher, as the pipeline's stages do; nothing blocks there waiting for the queue
   private given ExecutionContext = app.importDispatcher
 
-  // The Watch folders a scan of which is running: one scan per Watch folder at a time
+  // Watch folders being scanned: one scan per Watch folder at a time
   private val scanning = ConcurrentHashMap.newKeySet[String]()
 
-  // The files in the import pipeline, by their Import file: a scan does not offer one again, and the pipeline's end finds what
-  // it settles here. In memory, as the pipeline is: nothing is in flight when the server starts.
+  // Files in the import pipeline, by Import file ID: a scan does not offer one again, and [[settled]] finds it here. In memory,
+  // as the pipeline is, so nothing is in flight at startup.
   private val inFlight = ConcurrentHashMap[String, InFlight]()
 
   // Why each Watch folder was last not scanned, so the log says it once per change
@@ -222,17 +209,14 @@ class WatchFolderService(val app: Altitude):
 
   private val listeners = CopyOnWriteArrayList[String => Unit]()
 
-  // The scheduled scan to come, once scanning has started
+  // The next scheduled round
   private val nextScan = AtomicReference[Option[Cancellable]](None)
   private val isStopping = AtomicBoolean(false)
 
   /**
-   * Adds a Watch folder to the context repository, owned by the context account. Its name is required; its path must be absolute
-   * and an existing directory the server can read, and write to when imported files are deleted, that overlaps neither one of the
-   * app's own directories ([[ownDirectories]]) nor another Watch folder of any Library (the same directory, or one inside the
-   * other), each compared by real path, symbolic links resolved; its destination, if it has one, must be a live folder of the
-   * repository. A refusal is a `ValidationException` naming every field refused; a destination that is no folder of the
-   * repository is not found.
+   * Adds a Watch folder to the context repository, owned by the context account. The path must be an absolute, readable directory
+   * (writable when it deletes imported files) that overlaps neither the app's own directories nor another Watch folder of any
+   * Library, by real path; the destination must not be in the Trash. A `ValidationException` names every refused field.
    */
   def add(spec: WatchFolderSpec): WatchFolder =
     txManager.withTransaction {
@@ -257,11 +241,10 @@ class WatchFolderService(val app: Altitude):
     if watchFolder.deletesImported then ", deleting imported files" else ""
 
   /**
-   * An Admin's edit of a Watch folder, held to the rules of [[add]]; the context account owns it from here on. A changed path is
-   * another directory, so what was remembered of the old one's files is forgotten. Switching the deletion of imported files on
-   * makes the files it had imported files to read again: each is then found to be in the Library, or imported once more if its
-   * asset is gone, and deleted, so nothing is deleted on the word of the memory alone. What the last scan found wrong with the
-   * directory is cleared, for the next scan to find again; a Watch folder paused for its owner stays paused, with no reason.
+   * Edits a Watch folder under the rules of [[add]]; the context account owns it from here on. A changed path forgets the old
+   * directory's files. Switching deletion on makes its handled files read again, so each is checked against the Library (and
+   * re-imported if its asset is gone) before it is deleted, never on the memory's word alone. The status reason is cleared for
+   * the next scan to find again; a paused Watch folder stays paused.
    */
   def update(id: String, spec: WatchFolderSpec): WatchFolder =
     txManager.withTransaction {
@@ -292,8 +275,8 @@ class WatchFolderService(val app: Altitude):
     }
 
   /**
-   * Removes a Watch folder with what it remembers. The files of its directory stay where they are, and its Imports stay in the
-   * Import history. A file of it still in the import pipeline is imported, and not deleted.
+   * Removes a Watch folder and its memory; its directory's files and its Imports stay. A file still in the pipeline is imported
+   * but not deleted.
    */
   def remove(id: String): Unit =
     txManager.withTransaction {
@@ -313,8 +296,8 @@ class WatchFolderService(val app: Altitude):
     }
 
   /**
-   * Resumes a paused Watch folder; the next scan reads it. One whose owner is no active Admin any more, which is what paused it,
-   * is owned by the context account from here on, since its assets need an owner.
+   * Resumes a paused Watch folder. One whose owner is no longer an active Admin (which paused it) passes to the context account,
+   * since its assets need an owner.
    */
   def resume(id: String): Unit =
     txManager.withTransaction {
@@ -328,10 +311,7 @@ class WatchFolderService(val app: Altitude):
       changed()
     }
 
-  /**
-   * Makes the files of a Watch folder that failed files to read again, never tried: those of an unsupported type or that could
-   * not be decoded, those to be retried and those parked. How many.
-   */
+  /** Makes the Watch folder's failed files (final, to retry and parked) read again, as never tried; returns how many */
   def retryFailed(id: String): Int =
     txManager.withTransaction {
       dao.getById(id): Unit
@@ -368,9 +348,8 @@ class WatchFolderService(val app: Altitude):
     }
 
   /**
-   * What a Watch folder is doing, with the reason beside it: paused, by an Admin or for its owner; paused while its destination
-   * folder is in the Trash, which nothing stores, so it resumes as the folder is restored or replaced; unavailable, as its last
-   * scan found its directory, or directories of it that it could not read while it scanned the rest; or watching.
+   * Status and reason. A destination in the Trash pauses it without storing anything, so it resumes once the folder is restored
+   * or replaced; a stored status reason means its last scan found the directory, or part of it, unavailable.
    */
   private def statusOf(watchFolder: WatchFolder, destination: Option[Folder]): (WatchFolderStatus, Option[String]) =
     if watchFolder.isPaused then (WatchFolderStatus.Paused, watchFolder.statusReason)
@@ -385,8 +364,8 @@ class WatchFolderService(val app: Altitude):
     }
 
   /**
-   * How many files a scan would find in the directory at the path now, for the Watch folder dialog to name before imported files
-   * are deleted; none for a path that cannot be a Watch folder's as it stands (`self` being the Watch folder edited)
+   * How many files a scan would find at the path now, to name before imported files are deleted; None for a path that cannot be a
+   * Watch folder's (`self` is the one being edited)
    */
   def fileCount(path: String, self: Option[String] = None): Option[Int] =
     val others = txManager.asReadOnly(dao.everywhere().filterNot(placed => self.contains(placed.watchFolder.persistedId)))
@@ -412,8 +391,8 @@ class WatchFolderService(val app: Altitude):
     }
 
   /**
-   * Forgets, in every repository, the files a Watch folder remembers that have been absent from its directory for `days`: last
-   * found that long ago, and not by the Watch folder's last scan. A Watch folder that is not scanned forgets nothing.
+   * Forgets, in every repository, remembered files absent for `days`. What a Watch folder's last scan found is never forgotten,
+   * so one that is not being scanned keeps its memory.
    */
   def forgetAbsent(days: Int): Unit =
     val cutoff = OffsetDateTime.now(ZoneOffset.UTC).minusDays(days)
@@ -437,10 +416,7 @@ class WatchFolderService(val app: Altitude):
         if forgotten > 0 then logger.info(s"Forgot $forgotten Watch folder files absent for $days days. Repo: ${repository.name}")
     }
 
-  /**
-   * Tells `listener` of every change to what a Library's Watch folders show from now on, with the repository's ID: one added,
-   * edited, paused, resumed or removed, and a scan of one started or ended
-   */
+  /** Calls `listener` with the repository ID on every change to a Library's Watch folders, scans starting and ending included */
   def onChange(listener: String => Unit): Unit = listeners.add(listener): Unit
 
   // Tells the listeners once the transaction that changes a Watch folder has committed
@@ -452,7 +428,7 @@ class WatchFolderService(val app: Altitude):
 
   // -- The path rules --------------------------------------------------------------------------------------------------------
 
-  // What an Admin entered, as it is stored, or a `ValidationException` with the error of every field refused
+  // The spec as stored, or a `ValidationException` naming every refused field
   private def validated(spec: WatchFolderSpec, self: Option[WatchFolder]): WatchFolderSpec =
     val refused = ValidationException()
 
@@ -496,11 +472,9 @@ class WatchFolderService(val app: Altitude):
     catch case _: IOException => path.toAbsolutePath.normalize()
 
   /**
-   * The directories the app stores into, each where it really is: the data directory, staging, the SQLite database's directory,
-   * and the file store, down to each Library's directory and the directories in it (its files, Previews and faces). Any of them
-   * may be a symbolic link that leads out of the data directory, a store kept on another volume, so each is resolved on its own
-   * rather than taken to lie under the data directory's real path. One that is not there is left out, but for the data directory,
-   * which is then taken as it is written.
+   * The directories the app stores into, down to each Library's directory and the ones in it. Each is resolved on its own, since
+   * any may be a symbolic link out of the data directory (a store on another volume). Missing ones are left out, except the data
+   * directory, which is then taken as written.
    */
   private def ownDirectories(): OwnDirectories =
     val data = Path.of(app.dataPath)
@@ -515,12 +489,7 @@ class WatchFolderService(val app: Altitude):
     try Using.resource(Files.newDirectoryStream(directory))(_.asScala.filter(Files.isDirectory(_)).toList)
     catch case _: IOException => Nil
 
-  /**
-   * What keeps the directory at the path from being a Watch folder's, if anything: it is missing, no directory, not readable, not
-   * writable when imported files are deleted, or it overlaps one of the app's own directories (`own`) or one of `others`, the
-   * other Watch folders of the instance: the same directory, or one inside the other, by real path, and for the app's own
-   * directories by what the directories are as well (`OwnDirectories.overlaps`)
-   */
+  /** What keeps the path from being a Watch folder's, if anything; overlap with `others` (any Library's) is by real path */
   private def pathProblem(
       path: Path,
       deletesImported: Boolean,
@@ -563,11 +532,9 @@ class WatchFolderService(val app: Altitude):
   // -- Scanning --------------------------------------------------------------------------------------------------------------
 
   /**
-   * Starts the scans: every Watch folder of every Library is scanned now, the startup scan, which catches up on what arrived
-   * while the server was down, and again every `watch_folder.scan_interval` minutes (a Live Setting, read as each round is
-   * scheduled, so a change takes effect from the round scheduled next). `App` calls it once the Imports a stop interrupted are
-   * failed and the Import history is pruned. `schedule` puts a round off by a delay: the actor system's scheduler, unless a
-   * caller drives the rounds itself.
+   * Starts the scans: a startup round now, catching up on what arrived while the server was down, then one every
+   * `watch_folder.scan_interval` minutes (a Live Setting, read as each round is scheduled). `schedule` defers a round; a caller
+   * may drive the rounds itself.
    */
   def start(schedule: (FiniteDuration, () => Unit) => Cancellable = onActorSystem): Unit =
     logger.info(
@@ -599,10 +566,7 @@ class WatchFolderService(val app: Altitude):
       _ => txManager.asReadOnly(dao.all()).filterNot(_.isPaused).foreach(watchFolder => scan(watchFolder.persistedId))
     }
 
-  /**
-   * "Scan now": a scan of the Watch folder, started at once ([[scan]]), unless it is paused, or its destination folder is in the
-   * Trash, either of which is an `IllegalOperationException` saying so. One that is not the context repository's is not found.
-   */
+  /** Starts a [[scan]] at once; one paused, or with its destination in the Trash, is an `IllegalOperationException` */
   def scanNow(id: String): Future[ScanResult] =
     txManager.asReadOnly {
       val watchFolder = dao.getById(id)
@@ -613,18 +577,12 @@ class WatchFolderService(val app: Altitude):
     scan(id)
 
   /**
-   * Scans a Watch folder of the context repository, one scan of it at a time: a scan asked for while one is running does nothing.
-   * The future ends when the scan has handed its last file to the import queue (`pipeline`), or found nothing to hand it; the
-   * files then settle in the pipeline, and the scan's Import closes with the last of them.
+   * Scans a Watch folder of the context repository, one scan of it at a time. The future completes once the last file is handed
+   * to the import queue; the scan's Import closes when the last of them settles.
    *
-   * A Watch folder that is paused, whose owner is no active Admin (which pauses it), or whose destination folder is in the Trash
-   * is not scanned, and neither is one whose directory is unavailable, by the path rules, which is stored as its status reason
-   * and logged at WARN when it changes; each is tried again by the next scan, and none touches what the Watch folder remembers.
-   *
-   * Otherwise the directory is walked ([[walk]]) and each file found is remembered ([[remember]]). A file found as a scan found
-   * it at least the rest before, by its size and modified time, and not read yet, or one to be read again, is staged and offered
-   * ([[take]]), unless it is in the pipeline still. The offers wait for the queue one after another without holding a thread of
-   * the import dispatcher, which the pipeline's stages need to make room in the queue.
+   * A Watch folder that is paused, whose owner is no active Admin (which pauses it), whose destination is in the Trash, or whose
+   * directory is unavailable is not scanned, and its memory is untouched; unavailability is stored as its status reason. Offers
+   * wait for the queue without holding an import dispatcher thread, which the pipeline's stages need to make room.
    */
   def scan(id: String, pipeline: ImportPipelineService = app.service.importPipeline): Future[ScanResult] =
     val repository = RequestContext.getRepository
@@ -712,7 +670,7 @@ class WatchFolderService(val app: Altitude):
     try Some(dao.getById(id))
     catch case _: NotFoundException => None
 
-  // Pauses a Watch folder whose owner cannot own it any more, as the account write that made it so does; the reason
+  // Pauses a Watch folder whose owner can no longer own it, as the account change would have; returns the reason
   private def pauseFor(watchFolder: WatchFolder, owner: User): String =
     val reason = if owner.isActive then Const.WatchFolder.OWNER_DEMOTED else Const.WatchFolder.OWNER_DEACTIVATED
     txManager.withTransaction {
@@ -721,8 +679,8 @@ class WatchFolderService(val app: Altitude):
     }
     reason
 
-  // Stores why the Watch folder's directory is unavailable, in whole or in part (the directories of it that a scan could not
-  // read and went on past), or that it is available again, when that changed, logged at WARN
+  // Stores and logs a change in the directory's availability: `problem` is why it is unavailable, in whole or in part
+  // (directories a scan went on past), or None
   private def available(watchFolder: WatchFolder, problem: Option[String]): Unit =
     if watchFolder.statusReason != problem then
       txManager.withTransaction {
@@ -735,14 +693,11 @@ class WatchFolderService(val app: Altitude):
         case None => logger.warn(s"$named is available again")
 
   /**
-   * The files of the directory and of the directories below it, in path order. A symbolic link is neither followed nor read, a
-   * file or a directory under a name imports ignore is left out, a directory with everything in it, and so are an empty file and
-   * anything that is no regular file. What cannot be read is left out, for a later scan, and the walk goes on: a file, and a
-   * directory that cannot be opened or whose listing an I/O error ends midway (a stale network handle), which the walk returns,
-   * so one unreadable directory keeps none of the others from being read.
+   * The non-empty regular files under the directory, in path order, without symbolic links or names imports ignore. What cannot
+   * be read is left for a later scan and the walk goes on; a directory that cannot be opened, or whose listing fails midway (a
+   * stale network handle), is returned as unreadable.
    *
-   * The walk never enters one of the app's own directories (`own`), whatever path it meets it under, the watched directory
-   * included: it ends there, with that directory, and whoever asked for the walk reads none of the files it found.
+   * The walk stops at one of the app's own directories, under whatever path it meets it, and the caller then reads nothing.
    */
   private def walk(root: Path, own: OwnDirectories): Walked =
     val found = List.newBuilder[Found]
@@ -772,8 +727,8 @@ class WatchFolderService(val app: Altitude):
           if Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS) then unreadable += file
           FileVisitResult.CONTINUE
 
-        // With the failure that ended the directory's listing midway, if one did: the default throws it, which would end the
-        // walk, and the scan, at one bad directory
+        // `failure` ended the listing midway; the default rethrows it, which would end the walk, and the scan, at one bad
+        // directory
         override def postVisitDirectory(directory: Path, failure: IOException): FileVisitResult =
           if failure != null then
             logger.debug(s"Cannot list all of $directory in a Watch folder: $failure")
@@ -788,25 +743,18 @@ class WatchFolderService(val app: Altitude):
     root.relativize(file).iterator.asScala.map(_.toString).mkString(RelPath.SEPARATOR)
 
   /**
-   * Writes what a walk found to the Watch folder's memory, in the caller's transaction, and returns the files to read, in path
-   * order. A file found for the first time is remembered as seen; one whose size or modified time changed is a new file, seen and
-   * never tried, whatever became of it before, stamped with this moment, after the walk. A file found as it is remembered is read
-   * when it is to be retried, or when it is seen (not read yet) and has rested: the stamp of its first sight with this size and
-   * modified time is at least `REST` older than `walkStarted`, the moment before this scan's walk, so the two looks at the file
-   * are that far apart whatever the walks took. A seen file that has not rested is left for a later scan, with nothing of it
-   * written. A file in the pipeline still is not read again, and a handled, final or parked one is left alone. A file is stamped
-   * as found again only once its stamp is a day old, so a scan that finds nothing new writes one row. The walk found the
-   * directory available: its last scan is now, and what a scan found wrong with it before gives way to `problem`, what this walk
-   * could not read of it, if anything.
+   * Records what a walk found, in the caller's transaction, and returns the files to read, in path order. A changed size or
+   * modified time makes a new file, whatever became of it before. A remembered file is read when it is to be retried, or when it
+   * is seen and has rested: last seen at least `REST` before `walkStarted`, so the two looks are that far apart however long the
+   * walks took. A file still in the pipeline is not read again. The status reason becomes `problem`.
    */
   private def remember(watchFolder: WatchFolder, found: List[Found], walkStarted: Instant, problem: Option[String]): List[Found] =
     val id = watchFolder.persistedId
     val now = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
     val stale = now.minus(LAST_SEEN_STEP).toInstant
     val restedBy = walkStarted.minus(REST)
-    // The files in the pipeline before the rows: a file leaves the pipeline only once its row is written ([[settled]]), so one
-    // that settles between the two reads is still taken to be in the pipeline. Read the other way round, such a file is no
-    // longer in the pipeline and not read yet by its row, and would be handed to the pipeline a second time.
+    // In-flight files are read before the rows: a file leaves the pipeline only after its row is written ([[settled]]), so one
+    // settling in between still counts as in flight. The other order could offer it twice.
     val flying = inFlight.values.asScala.filter(_.watchFolderId == id).map(_.relPath).toSet
     val remembered = fileDao.ofWatchFolder(id).map(file => file.relPath -> file).toMap
 
@@ -840,8 +788,8 @@ class WatchFolderService(val app: Altitude):
     available(watchFolder, problem)
     toRead.toList
 
-  // Hands the scan's files to the pipeline one after another, each offer waiting for the queue with no thread held, then marks
-  // the scan's Import complete, if it opened one: the Import closes once the last of its files settles
+  // Offers the files one after another, each waiting for the queue without holding a thread, then marks the scan's Import
+  // complete, if it opened one; it closes once its last file settles
   private def offerAll(run: Run): Future[ScanResult] =
     def next(remaining: List[Found], offered: Int): Future[Int] =
       remaining match
@@ -868,12 +816,10 @@ class WatchFolderService(val app: Altitude):
     }
 
   /**
-   * Hands one file of a scan to the pipeline, as the Watch folder's owner: a copy of it is staged, described and added to the
-   * scan's Import, which the scan's first file opens. The file is never moved: its source is the retry. Before anything is read,
-   * the scan ends if the server is stopping or the Watch folder is not scanned any more as the scan read it (paused, removed,
-   * edited, its destination lost). A file that is gone, or not as the walk found it, is left for a later scan, and so is one that
-   * changes while it is copied. A symbolic link put in the file's place meanwhile is not read. A file that cannot be read is
-   * recorded as failed in the scan's Import, and counts as an attempt.
+   * Stages one file as the Watch folder's owner and adds it to the scan's Import; the file is never moved, so its source is the
+   * retry. The scan ends if the server is stopping or the Watch folder changed since the scan read it. A file that is gone or
+   * changed since the walk, or while being copied, is left for a later scan; one that cannot be read fails in the Import and
+   * counts as an attempt.
    */
   private def take(run: Run, file: Found): Taken =
     asOwner(run) {
@@ -912,8 +858,7 @@ class WatchFolderService(val app: Altitude):
             Taken.Skipped
     }
 
-  // The scan's Import, opened by the first file that needs it: titled by the Watch folder's name, with its destination, and
-  // expecting the files the scan is about to offer
+  // The scan's Import, opened by the first file that needs it, expecting all the files the scan is about to offer
   private def importOf(run: Run): Import =
     run.opened.get.getOrElse {
       val opened = app.service.imports.open(
@@ -927,8 +872,7 @@ class WatchFolderService(val app: Altitude):
       opened
     }
 
-  // Whether the Watch folder is still to be scanned as the scan read it: there, not paused, with the path, the destination and
-  // the owner it had, and its destination not in the Trash
+  // Whether the Watch folder is still to be scanned as the scan read it
   private def isAsScanned(run: Run): Boolean =
     txManager.asReadOnly {
       find(run.watchFolder.persistedId).exists {
@@ -938,7 +882,7 @@ class WatchFolderService(val app: Altitude):
       }
     }
 
-  // Whether the file is, now, the regular file the walk found: there, no symbolic link, with that size and modified time
+  // Whether the file is still the regular file the walk found, not a symbolic link
   private def isAsFound(file: Found): Boolean = isUnchanged(file.path, file.sizeBytes, file.modifiedAt)
 
   private def isUnchanged(path: Path, sizeBytes: Long, modifiedAt: FileTime): Boolean =
@@ -947,7 +891,7 @@ class WatchFolderService(val app: Altitude):
       now.isRegularFile && now.size == sizeBytes && now.lastModifiedTime == modifiedAt
     catch case _: IOException => false
 
-  // A file that could not be staged or described: failed in the scan's Import, saying so, and one attempt of the file's
+  // A file that could not be staged or described: failed in the scan's Import and counted as an attempt
   private def unreadable(run: Run, file: Found, failure: Throwable): Unit =
     logger.warn(s"Cannot read ${file.path} of Watch folder [${run.watchFolder.persistedId}]", failure)
     val anImport = importOf(run)
@@ -962,8 +906,8 @@ class WatchFolderService(val app: Altitude):
         Const.WatchFolder.MAX_ATTEMPTS): Unit
     }
 
-  // A file the import queue refused, which the queue has logged: its Import file is failed, saying so, since nothing else would
-  // settle it, and what the Watch folder remembers of it stays, so a later scan reads it; no attempt of the file's is counted
+  // A file the queue refused: its Import file is failed, since nothing else would settle it, and its memory is untouched, so a
+  // later scan reads it with no attempt counted
   private def refused(run: Run, file: Found, importFileId: String, refusal: Throwable): Unit =
     inFlight.remove(importFileId): Unit
     logger.warn(s"The scan of Watch folder [${run.watchFolder.persistedId}] ends at ${file.relPath}: the import queue refused it")
@@ -974,23 +918,13 @@ class WatchFolderService(val app: Altitude):
   // -- The pipeline's end ----------------------------------------------------------------------------------------------------
 
   /**
-   * What became of a Watch folder's file in the import pipeline, told by the pipeline's last working stage once the file's
-   * import, or its drop, has committed: `cause` is why it was dropped, none for a file that was imported. The file's memory is
-   * written, while the file is remembered as it was staged (one that changed since is a new file):
+   * Records what became of a Watch folder's file, called by the pipeline's last working stage once its import or drop has
+   * committed (`cause` is why it was dropped). Imported files and duplicates of a completed asset are handled; files that can
+   * never import are final until they change; failures that are the Watch folder's fault rather than the file's leave the memory
+   * untouched; any other failure is an attempt, parked at `Const.WatchFolder.MAX_ATTEMPTS`.
    *
-   *   - imported, or a duplicate of an asset of the Library whose own import is complete: handled, and not read again;
-   *   - of an unsupported type, or an image or video that cannot be decoded: final, until the file changes; and so is a duplicate
-   *     that is the stored file of the asset it matches, under another path ([[isStoredFileOf]]): a file of the app's own, which
-   *     is never handled, so never deleted;
-   *   - failed for the Watch folder's sake rather than its own (the destination folder went to the Trash, the owner was
-   *     deactivated or deleted), or a duplicate of an asset whose import is not complete or that is gone since: untouched, so a
-   *     later scan reads it again;
-   *   - any other failure: one more attempt, to be retried, or parked at `Const.WatchFolder.MAX_ATTEMPTS`.
-   *
-   * Then, once that has committed, a handled file is deleted from the directory if the Watch folder deletes imported files
-   * ([[deleteSource]]). The Watch folder is read as it is now: one removed meanwhile remembers and deletes nothing, and one that
-   * deletes imported files and is paused deletes nothing and leaves the file's memory as it is, so the file is read again, and
-   * deleted then, once it is resumed.
+   * After commit, a handled file is deleted if the Watch folder deletes imported files. One removed meanwhile records nothing; a
+   * paused one that deletes leaves the memory as is, so the file is read again and deleted once it resumes.
    */
   def settled(origin: ImportOrigin, asset: Asset, cause: Option[Throwable]): Unit =
     // The file is in the pipeline until all of this is done
@@ -1020,7 +954,6 @@ class WatchFolderService(val app: Altitude):
     }
     deleting.foreach(deleteSource(_, file))
 
-  // What a file's memory does with what became of the file
   private def whatBecame(file: InFlight, asset: Asset, cause: Option[Throwable]): Settled =
     cause match
       case None => Settled.Handled
@@ -1040,9 +973,8 @@ class WatchFolderService(val app: Altitude):
       case Some(_) => Settled.Failed
 
   /**
-   * Whether a Watch folder's file is the stored file of the asset, the same file under another path (a hard link to it, or the
-   * store reached through a second mount), which deleting would take from the Library. A file that cannot be told from it, an I/O
-   * error, counts as it: nothing is deleted on a doubt.
+   * Whether the file is the asset's stored file under another path (a hard link, a second mount), which deleting would take from
+   * the Library. An I/O error counts as yes: nothing is deleted on a doubt.
    */
   private def isStoredFileOf(asset: Asset, source: Path): Boolean =
     val stored = app.service.fileStore.assetFile(asset.persistedId)
@@ -1053,12 +985,9 @@ class WatchFolderService(val app: Altitude):
         true
 
   /**
-   * Deletes a handled file from its Watch folder's directory, and then the directories it leaves empty, up to the watched
-   * directory, which stays. The file must be the one that was imported: under the directory's real path as it is now, below no
-   * symbolic link, a regular file, and with the size and the modified time it had when its copy was staged; anything else is left
-   * where it is, a changed file for the next scan to read as a new one. A file in one of the app's own directories, or below one,
-   * whatever path leads there, is never deleted. A directory that still holds anything, an ignored file included, stays. A delete
-   * that fails is logged at WARN, and the file stays remembered as handled.
+   * Deletes a handled file, then the directories it leaves empty, up to the watched directory. Only the file that was imported is
+   * deleted: under the directory's real path, below no symbolic link, unchanged since staging, and outside the app's own
+   * directories by any path. A failed delete is logged and the file stays remembered as handled.
    */
   private def deleteSource(watchFolder: WatchFolder, file: InFlight): Unit =
     val source = file.source
@@ -1081,8 +1010,7 @@ class WatchFolderService(val app: Altitude):
       case _: NoSuchFileException => logger.debug(s"$source is gone, or its directory is: nothing to delete")
       case NonFatal(failure) => logger.warn(s"Could not delete $source of Watch folder [${watchFolder.persistedId}]", failure)
 
-  // Removes the directory if it is empty, then the one above it, and so on, stopping below `root`, at a directory that holds
-  // anything, and at a symbolic link
+  // Removes empty directories upward, keeping `root` and stopping at a non-empty directory or a symbolic link
   @tailrec private def removeEmptied(directory: Path, root: Path): Unit =
     if directory != root && directory.startsWith(root) && !Files.isSymbolicLink(directory) then
       val removed =

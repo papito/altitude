@@ -12,9 +12,8 @@ object Album:
   given Conversion[ujson.Value, Album] = json => JsonCodec.read[Album](json)
 
 /**
- * A flat, named collection of pointers to assets. An album stores nothing itself: membership lives in the `album_asset` table and
- * an asset can be in any number of albums. `numOfAssets` is computed on read and never stored. `createdAt` is the row's, set by
- * the database when the album is added, and is what the results title shows as the album's creation day.
+ * A flat, named collection of pointers to assets. Membership lives in `album_asset`, and an asset can be in any number of albums.
+ * `numOfAssets` is computed on read and never stored; `createdAt` is set by the database.
  */
 case class Album(
     id: Option[String] = None,

@@ -1,51 +1,24 @@
 /**
- * The clipping of an image the browser has already loaded: the class of each of its pixels, a blown
- * highlight, a crushed shadow or neither, read from the image's own pixels, and a Clipping mask
- * painted from them. It knows nothing of the page it serves: `readClipping` takes any
- * `CanvasImageSource` with a size (a loaded `<img>`: Curation's stage panes; a canvas: the Edit
- * panel's live render, `edit/edit-panel.js`) and answers a class map with the fractions of each
- * class, and `clippingMask` paints that map into an `ImageData` for a canvas to draw.
+ * The Clipping of a loaded, same-origin image (a cross-origin one taints the canvas): each pixel's
+ * class, blown, crushed or neither, and a mask painted from them.
  *
- * The fit: the image is sampled at a size fitted to `fitBox` on its long side and never enlarged,
- * the way the import's measurement fits an image into its box (1280,
- * `ImageMeasurement.MEASUREMENT_BOX_SIZE`) before it counts, so the pixels marked here are close to
- * the ones the clipped and crushed fractions stored at import counted. The sampled size rounds the
- * natural size times the scale, as OpenCV's `resize` does. The decode and the downscale are
- * `createImageBitmap`'s, off the main thread, at `resizeQuality: "high"`, an area average close to
- * OpenCV's `INTER_AREA` but not the same one; and the bitmap is drawn converted to sRGB, so an
- * ICC-tagged original can differ a little more. The agreement is close, not to the pixel.
+ * The sampling mirrors the import's measurement (`ImageMeasurement`), so the pixels marked are close
+ * to the ones it counted: fitted into `fitBox` (1280 there) on the long side, never enlarged, gray by
+ * OpenCV's `BGR2GRAY` weights. The downscale is `createImageBitmap`'s "high" quality, close to
+ * OpenCV's `INTER_AREA` but not the same, and the bitmap is drawn converted to sRGB, so the agreement
+ * is close, not to the pixel.
  *
- * The gray: each pixel's gray is OpenCV's `BGR2GRAY`, `0.299 R + 0.587 G + 0.114 B` rounded to a
- * level of 0 to 255. A fully transparent pixel is no pixel of the image (the Edit's render leaves
- * what the image does not cover transparent): it is neither class and is not counted; an original,
- * being a photo, has none.
- *
- * The classes: a byte per sampled pixel, `BLOWN` at or over `clippedLevel`, `CRUSHED` at or under
- * `crushedLevel`, else `NEITHER`, so a read keeps a byte per pixel and the mask is painted only
- * when it is drawn. The mask is an `ImageData` of the sampled size, a blown pixel in `blownColor`,
- * a crushed one in `crushedColor` and every other fully transparent, so it lies over the image at
- * the same size and marks what the measurement counted. The two colors are CSS color strings as
- * `getComputedStyle` answers them (`rgb()`, `rgba()` or `color(srgb ...)`): each is painted onto a
- * one-pixel canvas and read back as bytes, so every syntax the browser parses is taken, at the
- * color's own alpha.
- *
- * The image must be same-origin: drawing a cross-origin image taints the canvas and
- * `getImageData` throws. The callers give the originals from the content route, which are, and the
- * Edit's canvas, drawn from them.
+ * A fully transparent pixel (what the Edit's render does not cover) is neither class and not counted.
  */
 
-/** A pixel's class in a read's `classes` */
 const NEITHER = 0
 const BLOWN = 1
 const CRUSHED = 2
 
 /**
- * Reads the Clipping classes of `source`, a same-origin `CanvasImageSource`: a loaded image, or a
- * canvas drawn. Answers `{ classes, width, height, blown, crushed }`: `classes` a `Uint8Array` of a
- * byte per pixel of the sampled `width` by `height`, and `blown` and `crushed` the fractions of the
- * image's pixels (the ones not fully transparent) in each class, 0 for an image with none. Rejects
- * on a source without a size (an image not loaded, or failed) rather than class a blank canvas as
- * crushed
+ * Answers `{ classes, width, height, blown, crushed }`: a class byte per sampled pixel, and the
+ * fractions of the counted pixels in each class. Rejects a source without a size (an image not
+ * loaded, or failed) rather than class a blank canvas as crushed.
  */
 export async function readClipping(
     source,
@@ -74,10 +47,7 @@ export async function readClipping(
     }
 }
 
-/**
- * The Clipping mask of a read, an `ImageData` of its `width` by `height` with its blown pixels in
- * `blownColor`, its crushed ones in `crushedColor` and every other transparent
- */
+/** Every other pixel transparent, so the mask lies over the image at the sampled size */
 export function clippingMask(
     { classes, width, height },
     { blownColor, crushedColor },
@@ -96,7 +66,6 @@ export function clippingMask(
     return mask
 }
 
-/** The source's own size: an image's natural size, a video's, or a canvas's or bitmap's */
 function sourceSize(source) {
     if ("naturalWidth" in source) {
         return { width: source.naturalWidth, height: source.naturalHeight }
@@ -107,7 +76,7 @@ function sourceSize(source) {
     return { width: source.width, height: source.height }
 }
 
-/** The size the source is sampled at: fitted to `fitBox` on its long side, never enlarged, at least a pixel each way */
+/** Rounds the size times the scale, as OpenCV's `resize` does */
 function sampledSize({ width, height }, fitBox) {
     const scale = Math.min(1, fitBox / Math.max(width, height))
     return {
@@ -116,7 +85,6 @@ function sampledSize({ width, height }, fitBox) {
     }
 }
 
-/** A 2D context of a fresh canvas of `width` by `height`, set up for reading its pixels back */
 function createCanvasContext(width, height) {
     const canvas = document.createElement("canvas")
     canvas.width = width
@@ -124,10 +92,7 @@ function createCanvasContext(width, height) {
     return canvas.getContext("2d", { willReadFrequently: true })
 }
 
-/**
- * `color`, in any CSS color syntax, as its `[r, g, b, a]` bytes: painted onto a one-pixel canvas
- * and read back, so the browser does the parsing
- */
+/** Painted onto a one-pixel canvas and read back, so the browser parses any CSS color syntax */
 function colorBytes(color) {
     const context = createCanvasContext(1, 1)
     context.fillStyle = color
@@ -135,11 +100,7 @@ function colorBytes(color) {
     return context.getImageData(0, 0, 1, 1).data
 }
 
-/**
- * The one pass over `pixels`, RGBA bytes: each pixel's class by its gray, a byte per pixel that
- * starts `NEITHER`, and the fractions of the counted pixels, the ones not fully transparent, that
- * are blown and crushed. The loop touches typed arrays only, a million pixels being usual
- */
+/** The loop touches typed arrays only: a million pixels is usual */
 function classesOf(pixels, { clippedLevel, crushedLevel }) {
     const classes = new Uint8Array(pixels.length / 4)
     let counted = 0
@@ -156,8 +117,7 @@ function classesOf(pixels, { clippedLevel, crushedLevel }) {
             0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2],
         )
 
-        // The measurement counts clipped as `fractionAbove(gray, CLIPPED_LEVEL - 1)` and crushed
-        // as `fractionAtMost(gray, CRUSHED_LEVEL)`: at or over 250, at or under 5
+        // As the measurement counts: clipped at or over 250, crushed at or under 5
         if (gray >= clippedLevel) {
             classes[pixel] = BLOWN
             blown++

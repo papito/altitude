@@ -4,9 +4,8 @@ import java.time.OffsetDateTime
 import scalasql.Table
 
 /**
- * The `metadata_parameter` table: one row per indexed user-metadata value, with the value living in the column of its type.
- *
- * A search only ever reads `asset_id` out of it, through a semi-join; the value columns are compared against, never selected.
+ * The `metadata_parameter` table: one row per indexed user-metadata value, in the column of its type. A search only reads
+ * `asset_id` out of it, through a semi-join; the value columns are compared against, never selected.
  */
 case class MetadataParameterRow[T[_]](
     repositoryId: T[String],

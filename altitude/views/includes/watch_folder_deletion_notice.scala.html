@@ -1,9 +1,8 @@
 @(fileCount: Option[Int])
 
-@* What the Watch folder dialog (htmx/watch_folder_form) says while "Delete imported files" is on, before anything is
-   saved: the number of files in the directory now, as a scan would find them (GET
-   /htmx/watch-folders/r/:repoId/deletion-notice, an Admin's), and what is deleted. None is a path that cannot be a
-   Watch folder's as it stands, whose error the save says under the path. *@
+@* What the Watch folder dialog says while "Delete imported files" is on: the number of files in the directory now, as
+   a scan would find them, and what is deleted. None is a path that cannot be a Watch folder's as it stands, whose error
+   the save gives under the path. *@
 @count(n: Int) = @{ f"$n%,d" }
 
 <p class="notice deletion" role="alert">

@@ -68,9 +68,8 @@ class SettingsService(app: Altitude):
     Settings.validate(merged(current, trimmed(values)), app.dataSourceType)
 
   /**
-   * Saves `values` over the current set, in one transaction, and replaces the snapshot. When any field fails, the
-   * [[ValidationException]] names every failing field and nothing is written. A value that spells the current one differently
-   * ("0.850" for "0.85") is not a change.
+   * Saves `values` over the current set and replaces the snapshot. On any failing field nothing is written, and the
+   * [[ValidationException]] names every one. A value that spells the current one differently ("0.850" for "0.85") is no change.
    */
   def save(values: Map[String, String]): Unit = synchronized {
     val before = current
@@ -106,6 +105,6 @@ class SettingsService(app: Altitude):
   // Whitespace around a submitted value is never meant
   private def trimmed(values: Map[String, String]): Map[String, String] = values.map((name, value) => name -> value.trim)
 
-  /** The current set with `values` over it, so a Setting that was not submitted keeps its value */
+  /** The current set with `values` over it */
   private def merged(current: Settings, values: Map[String, String]): Map[String, String] =
     Settings.all.map(d => d.name -> current.value(d.name)).toMap ++ values

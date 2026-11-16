@@ -19,8 +19,8 @@ class UserMetadataService(val app: Altitude):
   private val assetDao: AssetDao = app.DAO.asset
 
   /**
-   * Adds the field under its name in NFC once the name passes the name rule (`Validators.validName`, a `ValidationException`); a
-   * field whose name key the repository already holds is a `DuplicateException`
+   * Adds the field under its name in NFC once it passes the name rule; a name key the repository already holds is a
+   * `DuplicateException`
    */
   def addField(metadataField: UserMetadataField): UserMetadataField =
     val name =
@@ -38,7 +38,7 @@ class UserMetadataService(val app: Altitude):
       metadataFieldDao.add(field)
     }
 
-  /** Returns a lookup map (by ID) of all configured fields in this repository */
+  /** The repository's fields by ID */
   def getAllFields: Map[String, UserMetadataField] =
     txManager.asReadOnly {
       val allFields = metadataFieldDao.query(new Query()).records
@@ -51,20 +51,19 @@ class UserMetadataService(val app: Altitude):
       metadataFieldDao.getById(id)
     }
 
-  /** A field of another repository, or none, is a `NotFoundException` */
   def deleteFieldById(id: String): Int =
     txManager.withTransaction {
       logger.debug(s"Deleting metadata field [$id]")
       BaseService.requireFound(metadataFieldDao.tableName, id, metadataFieldDao.deleteById(id))
     }
 
-  /** The asset's metadata, empty when it has none; an asset of another repository, or none, is a `NotFoundException` */
+  /** The asset's metadata, empty when it has none */
   def getMetadata(assetId: String): UserMetadata =
     txManager.asReadOnly {
       assetDao.getUserMetadata(assetId)
     }
 
-  /** Replaces the asset's metadata; an asset of another repository, or none, is a `NotFoundException` */
+  /** Replaces all of the asset's metadata */
   def setMetadata(assetId: String, metadata: UserMetadata): Unit =
     logger.debug(s"Setting metadata for asset [$assetId]: $metadata")
 
@@ -81,7 +80,7 @@ class UserMetadataService(val app: Altitude):
     txManager.withTransaction {
       val cleanMetadata = cleanAndValidate(metadata)
 
-      /** If the cleaned metadata does not have fields found in the original - those are empty and should be deleted */
+      // A field that cleaning emptied is deleted
       val deletedFields = metadata.data.keys.filterNot(cleanMetadata.data.keys.toSet.contains).toSet
 
       val updated = assetDao.updateMetadata(assetId, cleanMetadata, deletedFields)
@@ -127,13 +126,12 @@ class UserMetadataService(val app: Altitude):
 
       val cleanValue = cleanMetadata.get(fieldId).get.head
 
-      // cannot add a second value to a single-value field
+      // A boolean field's value is replaced; any other field refuses a duplicate and appends
       val field: UserMetadataField = getFieldById(fieldId)
       val currentMetadata = app.service.metadata.getMetadata(assetId)
       val existingValues = currentMetadata.get(fieldId).getOrElse(Set[UserMetadataValue]())
 
       if field.fieldType != FieldType.BOOL then
-        // check duplicate
         if existingValues.contains(cleanValue) then
           val ex = ValidationException()
           ex.errors += (fieldId -> C.Msg.Err.DUPLICATE)
@@ -144,9 +142,7 @@ class UserMetadataService(val app: Altitude):
         else currentMetadata.get(fieldId).get
 
       val newValues = field.fieldType match {
-        // Boolean values replace existing values.
         case FieldType.BOOL => Set(cleanValue)
-        // non-boolean values are appended
         case _ => currentValues + cleanValue
       }
 
@@ -160,7 +156,7 @@ class UserMetadataService(val app: Altitude):
     txManager.withTransaction {
       val currentMetadata = getMetadata(assetId)
 
-      // find the field that has the value and filter it out
+      // Drop the value from whichever field holds it
       val newData = currentMetadata.data.map {
         item =>
           val oldValues = item._2
@@ -205,7 +201,7 @@ class UserMetadataService(val app: Altitude):
       // FIXME: NotFound
       require(existingMdVal.isDefined)
 
-      // bail if the new values is identical to the old one
+      // Nothing to do when the new value equals the old one
       if existingMdVal.get.value != newMdVal.value then
         // when checking for existing values, ignore the current ID
         if currentMdVals.filterNot(_.id.contains(valueId)).contains(cleamMdVal) then
@@ -230,10 +226,9 @@ class UserMetadataService(val app: Altitude):
     }
 
   private def clean(metadata: UserMetadata): UserMetadata =
-    // get all metadata fields configured for this repository
     val fields = getAllFields
 
-    // make sure all metadata field IDs given to us are known
+    // Every supplied field ID must be known
     val existingFieldIds = fields.keys.toSet
     val suppliedFieldIds = metadata.data.keys.toSet
 
@@ -244,7 +239,6 @@ class UserMetadataService(val app: Altitude):
         s"Fields [${missing.mkString(", ")}] are not supported by this repository"
       )
 
-    /** Clean the metadata to be ready for validation */
     val cleanData = metadata.data.foldLeft(Map[String, Set[UserMetadataValue]]()) {
       (res, m) =>
         val fieldId = m._1
@@ -255,27 +249,21 @@ class UserMetadataService(val app: Altitude):
         val trimmed: Set[UserMetadataValue] = field.fieldType match {
           case FieldType.KEYWORD =>
             mdVals
-              // trim leading/trailing
               .map(mdVal => UserMetadataValue(mdVal.id, mdVal.value.trim))
-              // compact multiple space characters into one
+              // compact runs of whitespace into one
               .map(mdVal => UserMetadataValue(mdVal.id, mdVal.value.replaceAll("[\\s]{2,}", " ")))
-              // force a space character to be vanilla whitespace
+              // any lone whitespace character becomes a plain space
               .map(mdVal => UserMetadataValue(mdVal.id, mdVal.value.replaceAll("\\s", " ")))
-              // and lose the blanks
               .filter(_.nonEmpty)
 
           case FieldType.TEXT =>
             mdVals
-              // trim leading/trailing
               .map(mdVal => UserMetadataValue(mdVal.id, mdVal.value.trim))
-              // and lose the blanks
               .filter(_.nonEmpty)
 
           case FieldType.NUMBER | FieldType.BOOL | FieldType.DATETIME =>
             mdVals
-              // trim leading/trailing
               .map(mdVal => UserMetadataValue(mdVal.id, mdVal.value.trim))
-              // and lose the blanks
               .filter(_.nonEmpty)
         }
 
@@ -287,13 +275,11 @@ class UserMetadataService(val app: Altitude):
   private def validate(metadata: UserMetadata): Unit =
     if metadata.data.isEmpty then return
 
-    // get all metadata fields configured for this repository
     // OPTIMIZE: only get the fields in the metadata
     val fields = getAllFields
 
     val ex = ValidationException()
 
-    // for each field
     metadata.data.foreach {
       m =>
         val fieldId = m._1
@@ -306,7 +292,6 @@ class UserMetadataService(val app: Altitude):
         else
           val illegalValues = collectInvalidTypeValues(field.fieldType, mdVals)
 
-          // add to the validation exception if any
           if illegalValues.nonEmpty then
             ex.errors += (field.persistedId ->
               C.Msg.Err.INCORRECT_VALUE_TYPE.format(field.name, illegalValues.mkString(", ")))
@@ -314,29 +299,15 @@ class UserMetadataService(val app: Altitude):
 
     ex.trigger()
 
-  /**
-   * Makes sure the metadata fields are configured in this system after common-sense data hygiene. Validates correct type for
-   * anything
-   *
-   * @return
-   *   clean, de-duplicated copy of the metadata
-   */
+  /** The metadata cleaned (unknown fields refused, values normalized and trimmed, blanks dropped) and type-checked */
   private def cleanAndValidate(metadata: UserMetadata): UserMetadata =
     val cleanMetadata = clean(metadata)
     validate(cleanMetadata)
     cleanMetadata
 
   /**
-   * Presentation-level JSON transformer for metadata. This augments the limiting metadata JSON object to supply the names of
-   * fields, pulled from field configuration that the Metadata domain object is not aware of.
-   *
-   * On the way in we get: { field id -> values field id -> values }
-   *
-   * We get out: [ VALUES -> values[] FIELD_TYPE -> ID -> field id NAME -> field name FIELD_TYPE -> field type
-   *
-   * VALUES -> values[] FIELD_TYPE -> ID -> field id NAME -> field name FIELD_TYPE -> field type ]
-   *
-   * Every field is listed, with its values or with none, in the order of the fields' name keys ([[UserMetadataField.nameKey]]).
+   * The metadata as a JSON array for presentation, each entry carrying its field's configuration, which `UserMetadata` lacks.
+   * Every field of the repository is listed, with its values or with none.
    */
   def toJson(metadata: UserMetadata, allMetadataFields: Option[Map[String, UserMetadataField]] = None): ujson.Arr =
     txManager.asReadOnly {
@@ -360,16 +331,7 @@ class UserMetadataService(val app: Altitude):
       ujson.Arr(sorted*)
     }
 
-  /**
-   * Given a field type and a set values, collect all the values that DO NOT pass type checks.
-   *
-   * @param fieldType
-   *   The type of field values for each we are validating
-   * @param values
-   *   Values that may or may note pass type validation
-   * @return
-   *   All values that FAIL type validation
-   */
+  /** The values that fail the field type's check */
   def collectInvalidTypeValues(fieldType: FieldType, values: Set[UserMetadataValue]): Set[String] =
     // FIXME: foldLeft is better-suited here
     values

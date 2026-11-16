@@ -1,50 +1,12 @@
 /**
- * Asset detail's stage for a still image (`views/htmx/view_image_detail_modal.scala.html`): which
- * source fills the media box, and Show original (`CONTEXT.md`).
+ * Asset detail's stage for a still image: which source fills the media box, and Show original.
  *
- * The source:
- * - **The original** in the `<img>`: an asset that is not edited (its Edit changes no pixel),
- *   and an edited one while Show original is on.
- * - **The Display image** in the `<img>` (`/content/r/:repo/display/:id?v=<rev>`): an edited asset
- *   whose Edit is rendered at its edit version, its natural size the edited aspect.
- * - **The canvas** (`#editCanvas`), drawn by the WebGL renderer (`renderer.js`) from the original,
- *   fetched once per asset and decoded upright: an edited asset whose render is pending (the edit version
- *   is not the one rendered), one the server could not render (rendered, with no revision: the
- *   Display image is never asked for at revision 0), and any asset while the Edit panel draws it
- *   (`setEditing`, `setLive`). A canvas that cannot be drawn (no WebGL2, an original the browser
- *   cannot decode, or one it turns a quarter turn from the server's upright size, whose Edit would be
- *   drawn on the wrong frame) falls back to the original, and a Display image that does not load to
- *   the canvas.
- *   The canvas is drawn at the device pixels of the box it is shown in, at most the size of what it
- *   shows (the crop, or the whole frame for the Crop tool, `wholeFrame`), from a source fitted to
- *   that size, and drawn again, refitted, when the stage's size changes; it is shown once drawn, so
- *   no earlier drawing is ever seen in the new box. While the Edit it draws is the identity and no
- *   change is on its way (`changing`), outside the Crop tool and Before/after, it draws behind the
- *   original's `<img>` (`isBehindImage`), which the browser shows color-managed.
+ * The source is the original in the `<img>` (not edited, or Show original on), the Display image in
+ * the `<img>` (edited and rendered at its edit version), or the WebGL canvas drawn from the original
+ * (a render pending or failed, and every asset while the Edit panel is open). A canvas that cannot
+ * draw falls back to the original, and a Display image that does not load to the canvas.
  *
- * Whatever is shown, the box is fitted to its size (`setAssetDetailSize`) and the Detail panel is
- * handed the upright original's size with the Edit the stage shows, if it changes a pixel
- * (`setShownSize`): its Dimensions row reads "W × H px · edited w × h" and its Face highlights are
- * mapped through the Edit's geometry (`geometry.mapBox`), or hidden while the whole frame is drawn.
- * The upright size is the decoded original's, or, for the Display image, the server's
- * (`uprightWidth`, `uprightHeight` of the Edit), since a browser turns the original by its EXIF
- * orientation while the stored size is the file header's.
- *
- * **Show original**, on an edited asset only, for every viewer: the toolbar's toggle
- * (`data-app-show-original-toggle`, `aria-pressed`), which stays on until pressed again, Asset
- * detail steps to another asset, the Edit panel opens (`releaseShowOriginal`) or a change is drawn
- * from it (`setLive`); and `\` held
- * (`global.js`, `Const.events.showOriginalHeld`, handled in `listeners/edit.js`), for as long as it is
- * held, released too when the window loses focus. While it is on, the original is in the `<img>` at
- * the upright size, the Face highlights are unmapped, the Dimensions row has the original's size
- * alone and the title's badge (`data-app-edit-badge`) reads "Original" in place of "Edited". The
- * toggle, the badge and the key legend's `\` entry (`data-app-show-original-key`) are shown on an
- * edited asset alone.
- *
- * Every presentation has a token, so one overtaken by a later one (a step, a toggle, a new Edit)
- * changes nothing; whoever waits for the asset to be shown waits for the latest presentation
- * (`settled`), and learns from its own `isCurrent` whether the asset is still the one Asset detail
- * shows.
+ * Every presentation has a token, so one overtaken by a later one changes nothing.
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
@@ -59,13 +21,11 @@ import { editedSize, frameSize, outputSize } from "./geometry.js"
 import { isIdentity, normalize } from "./recipe.js"
 import { createRenderer, decodeUpright } from "./renderer.js"
 
-// Why the Edit panel cannot edit an asset the browser turns otherwise than the server
 const ORIENTATION_REFUSAL =
     "This browser turns this photo otherwise than the server, so it cannot draw its Edit"
 
 const CANVAS_ID = "editCanvas"
 const STAGE_ID = "imageDetailStage"
-// How long the stage waits for its size to settle before drawing the canvas again
 const RESIZE_SETTLE_MS = 150
 
 export const Source = Object.freeze({
@@ -74,12 +34,7 @@ export const Source = Object.freeze({
     canvas: "canvas",
 })
 
-/**
- * An asset's Edit as Asset detail's fragment and JSON carry it
- * (`EditController.stateJson`: `editVersion`, `renderedVersion`, `rev`, `edited`, `width`, `height`,
- * `uprightWidth`, `uprightHeight`, `recipe`), from the fragment's `data-app-image-detail-edit`; null
- * for an asset never edited
- */
+/** An asset's Edit from its JSON (`EditController.stateJson`); null for an asset never edited */
 export function parseEdit(json) {
     if (!json) {
         return null
@@ -97,7 +52,7 @@ export function isEdited(edit) {
     return Boolean(edit?.edited)
 }
 
-/** Whether the Edit's edited images are stored: rendered at its edit version, at a revision (0 when the server could not render it) */
+/** Whether the edited images are stored: rendered at the edit version, and rev 0 means the server could not render it */
 export function hasDisplayImage(edit) {
     return (
         isEdited(edit) &&
@@ -106,10 +61,7 @@ export function hasDisplayImage(edit) {
     )
 }
 
-/**
- * The region the canvas shows of the upright original under `recipe`, in pixels: the crop (the
- * edited size), or the whole warped frame with `wholeFrame` (the Crop tool)
- */
+/** The region of the upright original the canvas shows: the crop, or the whole warped frame for the Crop tool */
 function regionOf(upright, recipe, { wholeFrame = false } = {}) {
     return wholeFrame
         ? frameSize(upright.width, upright.height, recipe)
@@ -117,24 +69,22 @@ function regionOf(upright, recipe, { wholeFrame = false } = {}) {
 }
 
 export function createEditStage({ context, detailPanel }) {
-    // The asset shown: its ID, its Edit, whether the account may edit it, the stored
-    // size, the original's URL and its request's `isCurrent`
+    // The asset shown, as `showImage` received it
     let subject = null
     // Show original: the toolbar's toggle, and `\` held
     let originalToggled = false
     let originalHeld = false
-    // The Edit panel: whether it is open, so the canvas draws every asset, and the Edit it draws now
-    // with the renderer's options
+    // Whether the Edit panel is open (the canvas then draws every asset), and the Edit it draws with
+    // the renderer's options
     let editing = false
     let live = null
-    // The original fetched and decoded for the canvas, once per asset: { assetId, bitmap: Promise }
+    // The original decoded for the canvas, once per asset: { assetId, bitmap: Promise }
     let decoded = null
-    // The renderer of the fragment's canvas, made on the first draw
+    // Made on the first draw into the fragment's canvas
     let renderer = null
-    // What the stage shows now, for a redraw on a resize: { source, recipe, upright }
+    // What the stage shows now, for a redraw on a resize: { source, recipe, upright, behind }
     let shown = null
-    // Why the canvas could not draw the asset shown (no WebGL2, an original the browser cannot decode), or null: the
-    // Edit panel cannot edit it
+    // Why the canvas could not draw the asset shown, or null; the Edit panel cannot edit such an asset
     let drawFailure = null
     // The latest presentation's token and its promise
     let presentToken = 0
@@ -154,9 +104,8 @@ export function createEditStage({ context, detailPanel }) {
         })
         // A key released while the window had no focus sends no keyup
         window.addEventListener("blur", () => holdOriginal(false))
-        // Closing Asset detail lets the decoded original go: on the change from Asset detail to
-        // another host or none alone, so an open of Asset detail while another host is active
-        // keeps its presentation. In a microtask, outside the effect's tracking
+        // Clears only on the change away from Asset detail, so showing an asset while another host is
+        // active keeps its presentation; in a microtask, outside the effect's tracking
         let wasActive = false
         Alpine.effect(() => {
             const active = getActiveModalHost() === ModalHost.assetDetail
@@ -168,10 +117,7 @@ export function createEditStage({ context, detailPanel }) {
         syncControls()
     }
 
-    /**
-     * A new Asset detail fragment arrived: its canvas is a new element, so the renderer of the last
-     * one goes, and the stage's size is watched so the canvas is drawn again at the size shown
-     */
+    /** A new fragment's canvas is a new element: the last renderer goes, and the stage's size is watched for redraws */
     function attach(fragmentEl) {
         renderer?.destroy()
         renderer = null
@@ -193,13 +139,9 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * Shows the still image `assetId` (Asset detail's coordinator, `detail-navigator.js`): its
-     * `edit` (`parseEdit`'s shape, or null), whether the account may edit it (`editable`, which the
-     * Edit panel reads through `current`), its stored `width` × `height` and its original's `url`;
-     * `isCurrent` tells whether the request is still the latest. Stepping to another asset releases
-     * the Show original toggle and drops the last asset's decoded original. Resolves once the latest
-     * presentation of the stage has settled, to whether the asset is still the one Asset detail
-     * shows; rejects when not even the original could be loaded.
+     * Shows a still image. Stepping to another asset releases the Show original toggle and drops the
+     * last decoded original. Resolves, once the latest presentation settles, to whether the asset is
+     * still the one shown; rejects when not even the original loads.
      */
     function showImage({
         assetId,
@@ -223,8 +165,8 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * Waits for the stage's latest presentation, following a later one that takes over, and answers
-     * whether the asset of `isCurrent` is still shown; a failure of the latest is thrown while it is
+     * Waits for the latest presentation, following any later one that takes over, and answers whether
+     * `isCurrent`'s asset is still shown; the latest's failure is thrown while that asset is current
      */
     async function settled(isCurrent) {
         for (;;) {
@@ -242,7 +184,7 @@ export function createEditStage({ context, detailPanel }) {
         }
     }
 
-    /** The shown asset's presentation awaited for a change of the stage's own, a failure logged: the stage keeps what it shows */
+    /** Presents the shown asset again after a change of the stage's own; a failure is logged and the stage keeps what it shows */
     function presentAgain() {
         if (!subject) {
             return Promise.resolve(false)
@@ -267,7 +209,6 @@ export function createEditStage({ context, detailPanel }) {
         return originalToggled || originalHeld
     }
 
-    /** The source the stage calls for now */
     function sourceNow() {
         const { edit } = subject
         if (live || editing) {
@@ -282,9 +223,8 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * The upright original's size as the server read it (the Edit's `uprightWidth` and
-     * `uprightHeight`), or null when the asset has no Edit (until the Edit panel's session reads it)
-     * or the server could not read it
+     * The upright original's size as the server read it, or null when the asset has no Edit yet or the
+     * server could not read it. The stored size is the file header's, before the EXIF orientation.
      */
     function serverUpright() {
         const { edit } = subject
@@ -301,10 +241,9 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * Throws when the browser turned the decoded original a quarter turn from the server's upright
-     * size (`imageOrientation: "from-image"` not applied, or applied where the server read no
-     * orientation): every Edit's geometry is in the server's upright original, so the canvas would
-     * draw it on the wrong frame. The error's `refusal` says why the Edit panel cannot edit it.
+     * Throws when the browser decoded the original a quarter turn from the server's upright size: an
+     * Edit's geometry is in the server's upright frame, so the canvas would draw it on the wrong one.
+     * The error's `refusal` says why the Edit panel cannot edit the asset.
      */
     function checkOrientation(bitmap) {
         const expected = serverUpright()
@@ -331,10 +270,9 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * Fills the stage with the source called for, falling back from the Display image to the
-     * canvas and from the canvas to the original, then fits the box and tells the Detail panel.
-     * Resolves to whether this presentation is still the latest; a load overtaken by a later one
-     * (an AbortError of `setMediaSrcAndWait`) is no failure.
+     * Fills the stage with the source called for (falling back Display image, canvas, original), then
+     * fits the box and tells the Detail panel. Resolves to whether this presentation is still the
+     * latest; a load overtaken by a later one is no failure.
      */
     async function presentNow(token) {
         const current = () =>
@@ -398,7 +336,7 @@ export function createEditStage({ context, detailPanel }) {
             return false
         }
 
-        // The Display image's natural size is at most 3840 on its long edge, so the upright size is the server's
+        // The Display image is downscaled (long edge at most 3840), so the upright size is the server's
         const upright =
             source === Source.display ? storedUpright() : result.upright
         const recipe = source === Source.original ? null : result.recipe
@@ -423,9 +361,8 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * Loads `url` into the `<img>` and shows it, hiding the canvas: its natural size is both the
-     * box's and, for the original, the upright size; `fallback` stands in for an image that reports
-     * none. Null when overtaken.
+     * Loads `url` into the `<img>` and shows it, hiding the canvas. Its natural size is the box's and,
+     * for the original, the upright size; `fallback` stands in when it reports none. Null when overtaken.
      */
     async function showInImg(url, current, fallback) {
         const img = imgEl()
@@ -446,7 +383,7 @@ export function createEditStage({ context, detailPanel }) {
         }
     }
 
-    /** The original, fetched and decoded upright once per asset */
+    /** The original, fetched and decoded upright, once per asset */
     function decodedOriginal() {
         const { assetId, url } = subject
         if (decoded?.assetId !== assetId) {
@@ -475,7 +412,7 @@ export function createEditStage({ context, detailPanel }) {
         return decoded.bitmap
     }
 
-    /** Lets the decoded original go, and clears the canvas, so nothing of the last asset is drawn again */
+    /** Lets the decoded original go and clears the renderer's source, so nothing of the last asset is drawn again */
     function dropDecoded() {
         if (!decoded) {
             return
@@ -486,9 +423,8 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * The canvas's draw size for a `region`: the box the stage fits it into (at the region's aspect,
-     * as the stylesheet fits the media) in device pixels, at most the region; null while the stage
-     * has no size, when a draw would be at the region's full size for nothing to see
+     * The canvas's draw size for `region`: the box the stage fits it into, in device pixels, at most
+     * the region; null while the stage has no size
      */
     function outputFor(region) {
         const stage = document.getElementById(STAGE_ID)?.getBoundingClientRect()
@@ -509,12 +445,9 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * Draws the Edit shown into the canvas from `bitmap` and shows it, hiding the `<img>`: the box
-     * takes the region's size, the source is fitted to the output's long edge first (the upright
-     * original's long edge in the proportion of the output's to the region's), and the Edit is read
-     * after that wait, so a change made meanwhile is the one drawn. Nothing is drawn while the stage
-     * has no size: the resize that gives it one draws. Answers the box's size and the Edit drawn,
-     * or null when overtaken.
+     * Draws the Edit shown from `bitmap` and shows the canvas. The source is fitted to the output
+     * first and the Edit read after that wait, so a change made meanwhile is the one drawn. Nothing is
+     * drawn while the stage has no size: the resize that gives it one draws. Null when overtaken.
      */
     async function drawCanvas(bitmap, current) {
         checkOrientation(bitmap)
@@ -575,12 +508,9 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * Whether the canvas draws `recipe` behind the original's `<img>`: the Edit is the identity and no change is on its
-     * way to it (`changing`, a drag or a change not saved yet), outside the Crop tool and Before/after. The browser
-     * manages the `<img>`'s colors (a Display P3 photo shows as it should), while the canvas draws the original's values
-     * as sRGB, as both renderers do; so an asset the panel has not changed looks as it does with the panel closed, and the
-     * canvas, drawn on behind it, still gives the Histogram and the Clipping blink their reads. The first change shows the
-     * canvas, and a change saved back to the identity the `<img>` again.
+     * Whether the canvas draws `recipe` behind the original's `<img>`: the identity with no change on its way, outside
+     * the Crop tool and Before/after. The browser color-manages the `<img>` while the canvas draws the values as sRGB, so
+     * an unchanged asset looks as it does with the panel closed; the canvas behind still feeds the Histogram and Clipping.
      */
     function isBehindImage(recipe, options) {
         return (
@@ -602,7 +532,7 @@ export function createEditStage({ context, detailPanel }) {
         }
     }
 
-    /** The Edit drawn on the canvas from the decoded original, the renderer made on the first draw. Null when overtaken. */
+    /** Draws the Edit on the canvas from the decoded original. Null when overtaken. */
     async function showInCanvas(current) {
         const bitmap = await decodedOriginal()
         if (!current()) {
@@ -618,10 +548,7 @@ export function createEditStage({ context, detailPanel }) {
         return drawCanvas(bitmap, current)
     }
 
-    /**
-     * Draws the canvas again at the size the stage gives it now, the source refitted, when it shows
-     * the Edit; a presentation that starts meanwhile takes over
-     */
+    /** Redraws the canvas at the stage's size now, when it shows the Edit; a presentation started meanwhile takes over */
     async function redraw() {
         if (
             !renderer ||
@@ -647,8 +574,8 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * The toggle, the badge and the key legend shown on an edited asset alone; the toggle pressed
-     * while it is on (a held `\` leaves it as it is), and the badge saying what the stage shows
+     * The toggle, the badge and the key legend show on an edited asset alone; a held `\` leaves the
+     * toggle unpressed, and the badge says what the stage shows
      */
     function syncControls() {
         const edited = isEdited(subject?.edit)
@@ -674,12 +601,10 @@ export function createEditStage({ context, detailPanel }) {
             .forEach((keyEl) => (keyEl.hidden = !edited))
     }
 
-    /** Whether Show original can act: an edited asset is shown */
     function canShowOriginal() {
         return Boolean(subject) && isEdited(subject.edit)
     }
 
-    /** The toolbar's toggle: the original until pressed again or Asset detail steps to another asset */
     function toggleShowOriginal() {
         if (!canShowOriginal()) {
             return
@@ -688,16 +613,12 @@ export function createEditStage({ context, detailPanel }) {
         presentAgain()
     }
 
-    /**
-     * The Show original toggle released, as the Edit panel opens, so the Edit is what the stage shows; a held `\` stays
-     * held. Nothing is presented: the opening presents.
-     */
+    /** Releases the toggle as the Edit panel opens; a held `\` stays held. Presents nothing: the opening presents. */
     function releaseShowOriginal() {
         originalToggled = false
         syncControls()
     }
 
-    /** `\` held or released: the original for as long as it is held */
     function holdOriginal(held) {
         if (originalHeld === held) {
             return
@@ -709,9 +630,8 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * The Edit panel opened or closed: while it is open the canvas draws every asset, from the
-     * asset's Edit until `setLive` gives another. Resolves as `showImage` does; with `present`
-     * false nothing is drawn now, for a caller about to show another asset, which draws.
+     * The Edit panel opened or closed: while open the canvas draws every asset. With `present` false
+     * nothing is drawn now, for a caller about to show another asset.
      */
     function setEditing(open, { present = true } = {}) {
         editing = open
@@ -722,11 +642,9 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * The Edit panel's Edit, drawn on the canvas (null: back to the asset's source), with the
-     * renderer's options (`wholeFrame` for the Crop tool, `split` for Before/after). A change
-     * releases the Show original toggle, so the change is seen. The decoded original and the
-     * fitted source are kept, so a change on the canvas is drawn within a few microtasks. Resolves
-     * as `showImage` does.
+     * Draws the Edit panel's Edit (null: back to the asset's source) with the renderer's options
+     * (`wholeFrame` for the Crop tool, `split` for Before/after). Releases the Show original toggle so
+     * the change is seen.
      */
     function setLive(recipe, options = {}) {
         live = recipe ? { recipe: normalize(recipe), options } : null
@@ -735,16 +653,14 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * The asset's Edit changed (a save, a render done), in
-     * `parseEdit`'s shape: the stage shows it as its source now calls for. With `present` false
-     * (the Edit panel draws its own Edit meanwhile) only the toggle, the badge and the key legend
-     * follow it, and the next presentation shows it.
+     * The asset's Edit changed (a save, a render done). With `present` false (the Edit panel draws its
+     * own meanwhile) only the controls follow it, and the next presentation shows it.
      */
     function adoptEdit(assetId, edit, { present = true } = {}) {
         if (subject?.assetId !== assetId) {
             return Promise.resolve(false)
         }
-        // The first Edit to carry the server's upright size has the canvas drawn again, so it is checked against it
+        // The first Edit to carry the server's upright size redraws the canvas, so the bitmap is checked against it
         const uprightLearned =
             !serverUpright() &&
             edit?.uprightWidth > 0 &&
@@ -758,11 +674,8 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * What the stage shows: the asset, its Edit, whether the account may edit it, the
-     * source, the Edit drawn, the upright size, and whether the canvas failed to draw the asset
-     * (`drawFailed`, which the Edit panel cannot edit, and `drawRefusal`, why, when the stage
-     * knows: a browser that turns the original otherwise than the server); null before an asset
-     * or once Asset detail closed
+     * What the stage shows, or null before an asset or once Asset detail closed. The Edit panel cannot
+     * edit a `drawFailed` asset; `drawRefusal` says why when the stage knows.
      */
     function current() {
         return subject
@@ -781,7 +694,6 @@ export function createEditStage({ context, detailPanel }) {
             : null
     }
 
-    /** The renderer of the fragment's canvas, made when the stage first drew into it; null until then */
     function rendererOf() {
         return renderer
     }

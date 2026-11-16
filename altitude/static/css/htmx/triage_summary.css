@@ -1,5 +1,3 @@
-/* The Triage summary (htmx/triage_summary): an info notice (.notice, core.css) with the info icon before its sentences, which
-   wrap beside it; its numbers above zero are the links that search what they count */
 .triage-summary {
   display: flex;
   align-items: baseline;

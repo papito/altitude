@@ -36,14 +36,14 @@ import altitude.core.util.Sha256
 
 /**
  * The downloader puts a set of files in a directory: what is missing is downloaded, resumed, retried and checked against its
- * pins, and what is in place is never asked for again. Every server here is a local one, so no test touches the network.
+ * pins, and what is in place is never asked for again. Every server is local, so no test touches the network.
  */
 @DoNotDiscover class ModelDownloaderTests extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfterEach {
 
   /**
-   * The downloader's loggers, the class's and its companion's, which `logback-test.xml` keeps at INFO so that a real first
-   * download in a test run shows its progress. This suite's own small downloads would print some 300 lines, so it turns them off
-   * while it runs, and puts back their levels after it; the unit suites run one at a time, so no real download is silenced.
+   * The downloader's loggers, which `logback-test.xml` keeps at INFO so a real first download shows its progress. This suite
+   * turns them off while it runs, since its small downloads would print some 300 lines; the unit suites run one at a time, so no
+   * real download is silenced.
    */
   private val downloaderLoggers =
     Seq(classOf[ModelDownloader].getName, ModelDownloader.getClass.getName)
@@ -56,16 +56,13 @@ import altitude.core.util.Sha256
 
   override def afterAll(): Unit = downloaderLoggers.zip(downloaderLevels).foreach((logger, level) => logger.setLevel(level))
 
-  /** One request the server saw: its path, its `Range` header, its `User-Agent` and its `Upgrade` header */
+  /** One request the server saw */
   private case class Request(path: String, range: Option[String], userAgent: Option[String], upgrade: Option[String])
 
   /**
-   * A stand-in for the release host (or its CDN) on localhost: it serves files by path, honouring `Range` with a 206 unless told
-   * not to, and can be told to redirect a path, to answer a path with a status a number of times first, to cut the next answer of
-   * a path short once the client has taken the part sent, to stall the next answer of a path (part of it sent, then nothing, the
-   * connection held open until the server stops), or to answer every request after a delay. It declares each body's length unless
-   * told not to (a chunked body, which ends where the server stops), and remembers every request and every path whose body it
-   * wrote to its end.
+   * A local stand-in for the release host or its CDN. It serves files by path, honouring `Range` with a 206 unless told not to,
+   * and can redirect a path, answer a status first a number of times, cut or stall the next answer of a path partway, and delay
+   * every answer. It records every request and every path whose body it wrote in full.
    */
   private class FileServer {
     private val executor: ExecutorService = Executors.newCachedThreadPool()
@@ -74,7 +71,7 @@ import altitude.core.util.Sha256
     private val redirects = ConcurrentHashMap[String, String]()
     // The answers a path is given before it is served, in order: a status and its headers
     private val statuses = ConcurrentHashMap[String, ConcurrentLinkedQueue[(Int, Map[String, String])]]()
-    // A cut answer's bytes, and what says the client has taken them
+    // A cut answer's byte count, and a check that the client has taken them
     private val cuts = ConcurrentHashMap[String, (Int, () => Boolean)]()
     private val stalls = ConcurrentHashMap[String, Integer]()
     // What a stalled answer waits for before its handler returns
@@ -145,15 +142,14 @@ import altitude.core.util.Sha256
         }
         (Option(cuts.remove(path)), Option(stalls.remove(path))) match {
           case (Some((afterBytes, taken)), _) =>
-            // Part of the body, then, once the client has taken all of it, the connection dropped before the rest; a cut with the
-            // part still in flight would leave the client with less of it, at a point no test could name
+            // Drops the connection only once the client has taken the part, so the cut lands at a byte a test can name
             exchange.getResponseBody.write(body, 0, afterBytes)
             exchange.getResponseBody.flush()
             val deadline = System.nanoTime() + 10.seconds.toNanos
             while !taken() && System.nanoTime() < deadline do Thread.sleep(5)
             throw IOException("cut short")
           case (_, Some(afterBytes)) =>
-            // Part of the body, then nothing more, the connection neither closed nor sent to until the server stops
+            // Part of the body, then nothing, the connection held open until the server stops
             exchange.getResponseBody.write(body, 0, afterBytes)
             exchange.getResponseBody.flush()
             stopped.await()
@@ -184,7 +180,7 @@ import altitude.core.util.Sha256
     servers = server :: servers
     server
 
-  /** The set's directory, laid out as `ModelFiles` lays it out */
+  /** The set's directory as `ModelFiles` lays it out */
   private def directory: Path = ModelFiles(root).directory
 
   private def downloader(
@@ -220,12 +216,11 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * One ensure downloads each file once, under its name and with its content, and leaves no `.part`; a second ensure sends no
-     * request at all.
+     * One ensure downloads each file once and leaves no `.part`; a second sends no request.
      *
      * Edge cases:
      *
-     * Every request names the generic `User-Agent`, `Altitude`, and the directory is created when it does not exist.
+     * Every request carries the generic `User-Agent` `Altitude`, and the missing directory is created.
      */
     val server = newServer()
     val first = content(300_000, 1)
@@ -254,8 +249,8 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * The request carries no `Upgrade` header: the client asks for HTTP/1.1 and never for HTTP/2, which it would over plain HTTP
-     * with `Upgrade: h2c`, so a connection whose body was cancelled is closed rather than kept for the retry.
+     * The request carries no `Upgrade: h2c`, so the client stays on HTTP/1.1 and a connection whose body was cancelled is closed
+     * rather than kept for the retry.
      */
     val server = newServer()
     val spec = served(server, "model.onnx", content(10_000, 28))
@@ -274,8 +269,8 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * An ensure that downloads both files builds one client for both and leaves it shut down; an ensure that finds every file in
-     * place builds none, so a start (every test instance) with the files in place makes no client and no selector thread.
+     * An ensure that downloads both files builds one client and leaves it shut down; one that finds every file in place builds
+     * none, so a start with the files in place makes no client and no selector thread.
      */
     val server = newServer()
     val specs = Seq(served(server, "first.onnx", content(30_000, 29)), served(server, "second.onnx", content(20_000, 30)))
@@ -294,7 +289,7 @@ import altitude.core.util.Sha256
     counting().ensure(specs)
 
     built.size shouldBe 1
-    // A shutdown ends the client's selector thread on its own time; a client never shut down would not end in the 5 seconds
+    // A shutdown client's selector thread ends on its own time; one never shut down would not end within the 5 seconds
     built.peek().awaitTermination(java.time.Duration.ofSeconds(5)) shouldBe true
 
     counting().ensure(specs)
@@ -307,11 +302,11 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server with one file, and a file under its name in the directory that is shorter than its pinned size.
+     * A local server with one file, and a file of that name in the directory shorter than its pin.
      *
      * Assertions:
      *
-     * The ensure downloads the file and replaces the short one with the served content.
+     * The ensure downloads the file again and replaces the short one.
      */
     val server = newServer()
     val bytes = content(120_000, 3)
@@ -357,13 +352,11 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server that sends the first 40,000 bytes of a file pinned to 50,000, in a body of no declared length that ends
-     * cleanly where they do.
+     * A local server that sends 40,000 bytes of a file pinned to 50,000, in a body of no declared length that ends cleanly.
      *
      * Assertions:
      *
-     * The ensure fails naming the 40,000 bytes that came and the 50,000 pinned, and the directory holds neither the file nor its
-     * `.part`.
+     * The ensure fails naming both sizes, and the directory holds neither the file nor its `.part`.
      *
      * Edge cases:
      *
@@ -390,13 +383,13 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server that sends the file's 100,000 pinned bytes and 64 MB more after them, in a body of no declared length, as a
-     * proxy or a replaced asset might.
+     * A local server that sends the file's 100,000 pinned bytes and 64 MB more, with no declared length, as a proxy or a replaced
+     * asset might.
      *
      * Assertions:
      *
-     * The ensure fails naming the pinned size as soon as the body runs past it: the server's write of the body breaks off before
-     * its end, and the directory holds neither the file nor its `.part`.
+     * The ensure fails naming the pinned size as soon as the body runs past it, so the server's write breaks off, and the
+     * directory holds neither the file nor its `.part`.
      *
      * Edge cases:
      *
@@ -423,17 +416,17 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server that serves 64 MB under the file's URL, with that length declared, for a file pinned to its first 100,000
-     * bytes; and a second file with 30,000 of its bytes in its `.part` whose served content is 1,000 bytes longer than its pin.
+     * A file pinned to 100,000 bytes served with 64 MB more and that length declared; and a second file with 30,000 bytes in its
+     * `.part` whose served content is 1,000 bytes longer than its pin.
      *
      * Assertions:
      *
-     * The first ensure fails naming the `Content-Length` and the size expected, before the body: the server's write breaks off
-     * before its end and no `.part` is written. The second fails naming the 206's `Content-Range`, whose total is not the pin.
+     * The first ensure fails on the `Content-Length` before the body, so the server's write breaks off and no `.part` is written.
+     * The second fails on the 206's `Content-Range`, whose total is not the pin.
      *
      * Edge cases:
      *
-     * Neither is retried: the downloader never sleeps, and the second file's `.part` keeps the 30,000 bytes it held.
+     * Neither is retried, and the second file's `.part` keeps its 30,000 bytes.
      */
     val server = newServer()
     val bytes = content(100_000, 22)
@@ -463,12 +456,11 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server with one file, and a `.part` 1,000 bytes longer than the file's pin, as a body that ran past its pin before
-     * the start was killed might leave it.
+     * A local server with one file, and a `.part` 1,000 bytes longer than the file's pin.
      *
      * Assertions:
      *
-     * The ensure drops the `.part`, asks for the whole file (no `Range`), and the file verifies; nothing fails.
+     * The ensure drops the `.part`, asks for the whole file with no `Range`, and the file verifies.
      */
     val server = newServer()
     val bytes = content(80_000, 24)
@@ -487,17 +479,16 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server with one file, and the file's first 100,000 bytes in its `.part`, as a start cut off mid-download leaves it.
+     * A local server with one file, and the file's first 100,000 bytes in its `.part`.
      *
      * Assertions:
      *
-     * The ensure asks for the rest alone (`Range: bytes=100000-`), appends the 206 answer to the `.part`, and the file verifies
-     * against its pins, which covers the bytes already on disk.
+     * The ensure asks for the rest alone (`Range: bytes=100000-`), appends it to the `.part`, and the whole file verifies.
      *
      * Edge cases:
      *
-     * A `.part` that is already whole (cut off between its last byte and its move) is verified and moved without a request, which
-     * a range past its end would only have the server refuse.
+     * A `.part` that is already whole (cut off before its move) is verified and moved without a request, since the server would
+     * refuse a range past its end.
      */
     val server = newServer()
     val bytes = content(250_000, 6)
@@ -521,12 +512,12 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server that ignores `Range` and always answers the whole file with a 200, and a `.part` of 100,000 bytes that are
-     * not the file's.
+     * A local server that ignores `Range` and answers the whole file with a 200, and a `.part` of 100,000 bytes that are not the
+     * file's.
      *
      * Assertions:
      *
-     * The ensure asks for the rest, takes the 200 as the whole file, drops what the `.part` held, and the file verifies.
+     * The ensure asks for the rest, takes the 200 as the whole file in place of the `.part`, and the file verifies.
      */
     val server = newServer()
     server.honoursRange = false
@@ -545,8 +536,8 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * Two local servers on different ports, so of different origins, as a release host and its CDN are: the first redirects the
-     * file's URL to the second, which serves it. The file's first 60,000 bytes are in its `.part`.
+     * Two local servers on different ports (different origins, as a release host and its CDN): the first redirects the file to
+     * the second. The file's first 60,000 bytes are in its `.part`.
      *
      * Assertions:
      *
@@ -572,13 +563,12 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * Two local servers on different ports: the first redirects the file's URL to a path and a signed query on the second, as a
-     * release host redirects to its CDN, and the second answers it with a 404.
+     * Two local servers: the first redirects the file to a signed path on the second, which answers a 404.
      *
      * Assertions:
      *
-     * The ensure fails with a message that names the 404, the pinned URL and the host and port that answered, but neither the
-     * path nor the query it was redirected to, which carry a CDN's signature.
+     * The message names the 404, the pinned URL and the host and port that answered, but not the redirected path or query, which
+     * carry a CDN's signature.
      */
     val origin = newServer()
     val cdn = newServer()
@@ -598,12 +588,11 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server whose first answer for the file drops the connection after 80,000 of its bytes, once the file's `.part`
-     * holds all of them.
+     * A local server whose first answer drops the connection after 80,000 bytes, once the `.part` holds them.
      *
      * Assertions:
      *
-     * The downloader sleeps 2 seconds (recorded, not waited), asks again for the rest alone (`Range: bytes=80000-`), and the file
+     * The downloader sleeps 2 seconds (recorded, not waited), asks for the rest alone (`Range: bytes=80000-`), and the file
      * verifies.
      */
     val server = newServer()
@@ -626,19 +615,18 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server whose first answer for the file sends 80,000 of its bytes and then nothing more, holding the connection
-     * open, and a downloader whose stall timeout is 500 ms rather than 60 seconds.
+     * A local server whose first answer sends 80,000 bytes and then nothing, holding the connection open, and a downloader with a
+     * 500 ms stall timeout.
      *
      * Assertions:
      *
-     * The stalled body is closed once no byte has come for the stall timeout, which is an I/O error: the downloader sleeps 2
-     * seconds (recorded, not waited), asks again for the rest alone (`Range: bytes=80000-`), and the file verifies.
+     * The stalled body is closed after the stall timeout as an I/O error: the downloader sleeps 2 seconds (recorded, not waited),
+     * asks for the rest alone, and the file verifies.
      *
      * Edge cases:
      *
-     * The client's own timeout covers the response headers alone, which came at once, so without the watchdog the read would wait
-     * for as long as the server held the connection. The watchdog's checks run on one thread for every download, a daemon, so it
-     * never keeps a process up.
+     * The client's own timeout covers only the response headers, so without the watchdog the read would wait as long as the
+     * server held on. The watchdog is one daemon thread for every download, so it never keeps a process up.
      */
     val server = newServer()
     val bytes = content(300_000, 20)
@@ -660,7 +648,7 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server that answers the file with a 503 three times before it serves it.
+     * A local server that answers a 503 three times before serving the file.
      *
      * Assertions:
      *
@@ -683,17 +671,17 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server that answers the file with a 429 three times, with `Retry-After: 3`, then `Retry-After: 3600`, then an
-     * HTTP-date 30 seconds ahead, before it serves it.
+     * A local server that answers a 429 three times, with `Retry-After: 3`, `Retry-After: 3600` and an HTTP-date 30 seconds
+     * ahead, before serving the file.
      *
      * Assertions:
      *
-     * The downloader waits what each answer asks rather than its own 2, 4 and 8 seconds (recorded, not waited): 3 seconds, then a
-     * minute, the most it waits, then the 30 seconds to the date; its fourth request is served and the file verifies.
+     * The downloader waits what each answer asks instead of its own backoff (recorded, not waited): 3 seconds, then the
+     * one-minute cap, then the time to the date; the fourth request is served and the file verifies.
      *
      * Edge cases:
      *
-     * The date is a whole second, so its wait is a little under 30 seconds by the time it is read.
+     * The date has whole seconds, so its wait is a little under 30 seconds by the time it is read.
      */
     val server = newServer()
     val bytes = content(40_000, 26)
@@ -718,7 +706,7 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server that answers the file with a 408, with no `Retry-After`, once before it serves it.
+     * A local server that answers a 408 with no `Retry-After` once before serving the file.
      *
      * Assertions:
      *
@@ -745,8 +733,8 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * The ensure fails with a message that names the 404 and, for the second and third files, their names, URLs, sizes and
-     * SHA-256, and the directory to put them in by hand; the first file is in place and not named.
+     * The message names the 404, the second and third files' names, URLs, sizes and SHA-256, and the directory to put them in by
+     * hand; the first file is in place and not named.
      *
      * Edge cases:
      *
@@ -780,12 +768,12 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server that answers the file with a 503 four times.
+     * A local server that answers a 503 four times.
      *
      * Assertions:
      *
-     * The downloader sleeps 2, 4 and 8 seconds, gives up after its fourth request, and fails with the files missing, the last
-     * error among them; the file is not in place.
+     * The downloader sleeps 2, 4 and 8 seconds, gives up after its fourth request, and fails naming the last error and the file
+     * missing; the file is not in place.
      */
     val server = newServer()
     val spec = served(server, "model.onnx", content(10_000, 15))
@@ -809,13 +797,13 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * After its three retries the ensure fails with a message that names the I/O error, the root of its cause chain and the host
-     * asked, and the exception carries the I/O error as its cause.
+     * After three retries the message names the I/O error, the root of its cause chain and the host, and the exception keeps the
+     * I/O error as its cause.
      *
      * Edge cases:
      *
-     * The JDK's client reports a refused connection as a `ConnectException` with no message of its own, what went wrong only in
-     * the exception at the root of its chain, so the error alone would say nothing.
+     * The JDK reports a refused connection as a `ConnectException` with no message, the detail only at the root of its chain, so
+     * the error alone would say nothing.
      */
     val port =
       val socket = java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))
@@ -841,8 +829,8 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * The ensure fails with a `ModelFilesException`, not the bare I/O error, whose message names the I/O error, the file missing
-     * with its URL, and the directory to put it in, and whose cause is the I/O error; the server sees no request.
+     * The ensure fails with a `ModelFilesException` naming the I/O error, the missing file with its URL and the directory, with
+     * the I/O error as its cause; the server sees no request.
      */
     val server = newServer()
     val spec = served(server, "model.onnx", content(10_000, 25))
@@ -863,18 +851,17 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server with two files that answers every request after 300 ms, so a download is still running when the second
-     * thread arrives, and two threads that start ensuring them at the same moment, each with a downloader of its own, as two test
-     * bundles' instances in one JVM would.
+     * A local server with two files that answers after 300 ms, and two threads, each with its own downloader, ensuring them at
+     * the same moment, as two test bundles in one JVM would.
      *
      * Assertions:
      *
-     * Both ensures succeed, each file is requested once, and both files verify: the thread that waited checked again once it had
-     * the lock and found them in place.
+     * Both ensures succeed and each file is requested once: the thread that waited checked again under the lock and found them in
+     * place.
      *
      * Edge cases:
      *
-     * Both threads take the same lock file, which one JVM cannot hold twice: the process-wide lock keeps the second from trying.
+     * One JVM cannot hold the same lock file twice, so a process-wide lock keeps the second thread from trying.
      */
     val server = newServer()
     server.delay = 300.millis
@@ -909,16 +896,16 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server with two files of 50,000 bytes, the first with 20,000 bytes already in its `.part`, and a directory whose
-     * file store reports 79,999 bytes free, one short of the 80,000 still to download.
+     * Two files of 50,000 bytes, the first with 20,000 already in its `.part`, and 79,999 bytes free, one short of the 80,000
+     * still to download.
      *
      * Assertions:
      *
-     * The ensure fails naming the space needed and free and the files missing, and the server sees no request.
+     * The ensure fails naming the space needed and free and the missing files, before any request.
      *
      * Edge cases:
      *
-     * With exactly 80,000 bytes free, the bytes a `.part` already holds not counted again, the same files download.
+     * With exactly 80,000 bytes free the files download: a `.part`'s bytes are not counted again.
      */
     val server = newServer()
     val first = content(50_000, 18)
@@ -947,13 +934,12 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * The six of the release are its assets at `.../releases/download/v1/<name>`, and ArcFace is its file at the pinned revision
-     * of `maze/faceX`; every name is distinct, every size positive, and every SHA-256 is 64 lowercase hex characters.
+     * Six are release assets at `.../releases/download/v1/<name>` and ArcFace is at a pinned revision of `maze/faceX`; every name
+     * is distinct, every size positive, and every SHA-256 64 lowercase hex characters.
      *
      * Edge cases:
      *
-     * The URLs are built while the enum's cases are, so a tag or a revision that was not yet set then would show in them as
-     * `null`.
+     * The URLs are built along with the enum's cases, so a tag or revision not yet initialized then would show as `null`.
      */
     val release = "https://github.com/renegade-otter/altitude-models/releases/download/v1"
     ModelFile.values.map(file => file -> file.spec.url.toString).toMap shouldEqual Map(
@@ -985,13 +971,13 @@ import altitude.core.util.Sha256
      *
      * Assertions:
      *
-     * An absolute `models.dir` is the root as it is; an empty one is `$XDG_CACHE_HOME/altitude/models`, else
-     * `~/.cache/altitude/models`. The set's files are under the root in the directory named by its tag, `v1`, by their names.
+     * An absolute `models.dir` is the root; an empty one is `$XDG_CACHE_HOME/altitude/models`, else `~/.cache/altitude/models`.
+     * The files are in the root's `v1` directory, by name.
      *
      * Edge cases:
      *
-     * A relative `models.dir` is under the application's root path, as the data directory is; an empty or relative
-     * `XDG_CACHE_HOME` is ignored, as the XDG spec says.
+     * A relative `models.dir` is under the application's root path; an empty or relative `XDG_CACHE_HOME` is ignored, as the XDG
+     * spec says.
      */
     val noEnv: String => Option[String] = _ => None
     def xdg(value: String): String => Option[String] = Map("XDG_CACHE_HOME" -> value).get
@@ -1013,19 +999,18 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * `models.dir` as `~`, as `~/models`, and empty, with a home directory that is absolute, that is `?` (the JVM's `user.home`
-     * for a user with no passwd entry), or that is not set at all.
+     * `models.dir` as `~`, `~/models` and empty, with a home directory that is absolute, `?` (the JVM's `user.home` for a user
+     * with no passwd entry), or unset.
      *
      * Assertions:
      *
-     * `~` and a leading `~/` are the home directory. With no absolute home, an empty `models.dir` and no absolute
-     * `XDG_CACHE_HOME`, the root fails with a message that asks for `models.dir` or `ALTITUDE_MODELS_DIR`, as does a `~` in
-     * `models.dir`, rather than a directory relative to the working directory.
+     * `~` and a leading `~/` are the home directory. With no absolute home, an empty `models.dir` (and no absolute
+     * `XDG_CACHE_HOME`) or one using `~` fails asking for `models.dir` or `ALTITUDE_MODELS_DIR`, rather than resolving against
+     * the working directory.
      *
      * Edge cases:
      *
-     * An absolute `XDG_CACHE_HOME` needs no home, and a `~` that is not followed by a slash (`~user`) is a name like any other,
-     * under the application's root path.
+     * An absolute `XDG_CACHE_HOME` needs no home, and `~user` is a plain name under the application's root path.
      */
     val noEnv: String => Option[String] = _ => None
 

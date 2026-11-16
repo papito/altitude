@@ -16,17 +16,10 @@ import altitude.core.routes.decorators.requireLogin
 
 object SettingsFormController:
 
-  /**
-   * A JSON number as the text of a Setting: in plain notation, with no exponent and no trailing zeros (`1280`, `0.85`,
-   * `0.00002`), where the number's own text would be `2.0E-5` for a small one. A Setting is stored and shown as its text.
-   */
+  /** A JSON number as a Setting's text, in plain notation (`0.00002`, not `2.0E-5`), as a Setting is stored and shown as text */
   private def plainText(number: Double): String = BigDecimal(number).bigDecimal.stripTrailingZeros.toPlainString
 
-  /**
-   * The Settings form over the saved values, or over `submitted` with its `errors` beside the fields under a validation
-   * replacement, each Setting that has one with a note on what the server makes of it. Only the Settings of this database engine
-   * are rendered.
-   */
+  /** The Settings form over the saved values, or over `submitted` with its `errors`; only this database engine's Settings */
   def form(submitted: Map[String, String] = Map.empty, errors: Map[String, String] = Map.empty): Html =
     val settings = App.altitude.settings
     val current = settings.current
@@ -40,7 +33,6 @@ object SettingsFormController:
       notes = Map(Settings.IMPORT_PARALLELISM -> s"Running ${App.altitude.importParallelismResolution.summary}")
     )
 
-/** The one form of the Settings screen: its save answers the form again, with its errors or with the saved values */
 class SettingsFormController(using logger: Logger) extends BaseController:
 
   @requireLogin()
@@ -50,8 +42,7 @@ class SettingsFormController(using logger: Logger) extends BaseController:
     val json = unscrubbedJson.get
     val typeErrors = ValidationException()
 
-    // A Setting is text. A flag or a number may arrive typed (JSON true, a JSON number, saved in plain notation); a checkbox
-    // left unchecked is not submitted at all, so a rendered flag with no value is false
+    // A flag or a number may arrive typed; an unchecked checkbox is not submitted at all, so a flag with no value is false
     val submitted: Map[String, String] = App.altitude.settings.applicable.flatMap {
       setting =>
         json.obj.get(setting.name) match

@@ -13,9 +13,9 @@ import altitude.core.models.*
 import altitude.core.util.*
 
 /**
- * Grouped search: date groups with full-day totals, page contents, and counts that honor every search filter; Location groups in
- * path order with an asset under each of its Locations; Sequence groups by the first capture of their matching frames; the
- * Location and bounding-box filters and the bare count.
+ * Grouped search: date groups with full-day totals and counts that honor every filter, Location groups in path order with an
+ * asset under each of its Locations, and Sequence groups by the first capture of their matching frames. Also the Location and
+ * bounding-box filters and the bare count.
  */
 @DoNotDiscover class SearchGroupingTests(override val testApp: Altitude)
   extends IntegrationTestCore
@@ -173,18 +173,17 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * Two undated assets - one in a folder with the keywords "beach" and "sunset" - and three assets taken over two days,
-     * searched in both group directions.
+     * Two undated assets, one in a folder with the keywords "beach" and "sunset", and three assets taken over two days, searched
+     * in both group directions.
      *
      * Assertions:
      *
-     * The No date group sits where the engine sorts nulls, first or last, holding and counting both undated assets among all
-     * five. A folder scope, Search text and a metadata filter together narrow the group, its count and the total to the one asset
-     * that matches all three.
+     * The No date group holds and counts both undated assets among all five. A folder scope, Search text and a metadata filter
+     * together narrow the group, its count and the total to the one asset matching all three.
      *
      * Edge cases:
      *
-     * The null group's position differs by engine: PostgreSQL leads with it descending, SQLite ascending.
+     * The No date group sits where the engine sorts nulls: first descending on PostgreSQL, first ascending on SQLite.
      */
     val folder = testApp.service.folder.add("undated")
     val keyword = testApp.service.metadata.addField(UserMetadataField(name = "keywords", fieldType = FieldType.KEYWORD))
@@ -220,8 +219,8 @@ import altitude.core.util.*
      *
      * Assertions:
      *
-     * Walking three pages by cursor returns every asset once in filename order, the No date group showing its full count of five
-     * on each page; the later pages continue the group and the last one ends the cursor.
+     * Three pages walked by cursor return every asset once in filename order, each showing the No date group's full count of
+     * five. The later pages continue the group, and the last ends the cursor.
      */
     val assets = (1 to 5).map(n => persistUndated(s"$n.jpg"))
     for (direction <- SortDirection.values.toList) {
@@ -247,14 +246,13 @@ import altitude.core.util.*
      *
      * Assertions:
      *
-     * Each page groups its assets by capture day with the whole day's count, not the page's share. The first page alone carries
-     * the overall total, a continuation knows it continues the day the previous page ended in, and the cursor walks to the last
-     * page and then ends.
+     * Each page groups its assets by capture day with the whole day's count, not the page's share. Only the first page carries
+     * the total, a continuation knows it continues the previous page's day, and the cursor ends after the last page.
      *
      * Edge cases:
      *
-     * A capture a second before midnight stays on its day, a day split across a page boundary, and a search that matches nothing,
-     * which is an empty first page with a zero total.
+     * A capture a second before midnight stays on its day, a day splits across a page boundary, and a search matching nothing is
+     * an empty first page with a zero total.
      */
     val a1 = persistDated("2026-09-06T10:00:00", "a1.jpg")
     val a2 = persistDated("2026-09-06T09:00:00", "a2.jpg")
@@ -269,7 +267,6 @@ import altitude.core.util.*
     page1.continuesGroup shouldBe false
     page1.nextCursor.isDefined shouldBe true
 
-    // A continuation completes the day and opens the next one; it knows the day it continues and skips the overall count
     val page2 = grouped(rpp = 2, cursor = page1.nextCursor)
     summary(page2) shouldEqual List((day("2026-09-06"), 3, List(a3.persistedId)), (day("2026-09-05"), 2, List(b1.persistedId)))
     page2.continuesGroup shouldBe true
@@ -279,7 +276,6 @@ import altitude.core.util.*
     summary(page3) shouldEqual List((day("2026-09-05"), 2, List(b2.persistedId)))
     page3.nextCursor shouldBe None
 
-    // Nothing matches: an empty first page with a zero count
     val none = grouped(text = Some("nothing"))
     none.isEmpty shouldBe true
     none.assets shouldBe empty
@@ -296,8 +292,7 @@ import altitude.core.util.*
      *
      * Assertions:
      *
-     * The direction of the days and the sort within a day apply independently: ascending days can hold assets in descending
-     * filename order, and descending days assets in ascending capture time.
+     * Ascending days can hold assets in descending filename order, and descending days assets in ascending capture time.
      */
     val a1 = persistDated("2026-09-06T10:00:00", "a1.jpg")
     val a2 = persistDated("2026-09-06T09:00:00", "a2.jpg")
@@ -327,8 +322,7 @@ import altitude.core.util.*
      *
      * Edge cases:
      *
-     * The zones at both ends of the offset range, UTC+14 and UTC-12, where any instant conversion would move the capture to
-     * another day.
+     * UTC+14 and UTC-12, the ends of the offset range, where any instant conversion would move the capture to another day.
      */
     val asset = persistDated("2026-09-06T00:10:00", "a.jpg")
 
@@ -349,8 +343,8 @@ import altitude.core.util.*
      *
      * Assertions:
      *
-     * Three pages return all seven in filename order, each showing the day with its full count of seven; the later pages continue
-     * the group and the last one ends the cursor.
+     * Three pages return all seven in filename order, each showing the day's full count of seven. The later pages continue the
+     * group, and the last ends the cursor.
      */
     val assets = (1 to 7).map(n => persistDated("2026-09-06T10:00:00", f"img$n%02d.jpg"))
 
@@ -375,13 +369,13 @@ import altitude.core.util.*
      * Setup:
      *
      * A keyword field and a number field, a folder with a subfolder, three assets taken on 2026-09-06 (in the subfolder, in the
-     * folder, and outside both with only the "beach" keyword) and one taken on 2026-09-05. An album of two of them and a person
-     * with a Face on a fresh asset dated 2026-09-04 are added along the way.
+     * folder, and outside both with only the "beach" keyword) and one on 2026-09-05. Later, an album of two of them and a person
+     * with a Face on a new asset dated 2026-09-04.
      *
      * Assertions:
      *
-     * Each filter - metadata values, Search text, a folder, a subfolder with text, an album and a person - returns only its
-     * matches, and the day groups' counts and the total count exactly those assets.
+     * Metadata values, Search text, a folder, a subfolder with text, an album and a person each return only their matches, and
+     * the day groups' counts and the total count exactly those assets.
      *
      * Edge cases:
      *
@@ -401,7 +395,6 @@ import altitude.core.util.*
     val elsewhere = persistDated("2026-09-06T12:00:00", "a3.jpg", metadata = keywordOnly)
     val older = persistDated("2026-09-05T12:00:00", "b1.jpg", metadata = both)
 
-    // Two matching metadata values per asset must not duplicate an asset or inflate a count
     val byMetadata = grouped(metadataFilters = Map(keywords.persistedId -> "beach", rating.persistedId -> 5))
     summary(byMetadata) shouldEqual List(
       (day("2026-09-06"), 2, List(inSub.persistedId, inFolder.persistedId)),
@@ -442,12 +435,12 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * An asset in the root folder, a triaged one and a recycled one, all taken on the same day, then a second user and repository
-     * with an asset of their own on that day.
+     * An asset in the root folder, a triaged one and a recycled one, all taken on one day, then a second user and repository with
+     * an asset of their own on that day.
      *
      * Assertions:
      *
-     * The root folder scope is the whole library - triaged assets included, recycled ones not - and the trash view holds the
+     * The root folder scope is the whole library, triaged assets included and recycled ones not, and the trash view holds the
      * recycled asset alone. Each repository's day groups and totals count its own assets only.
      */
     val sorted = persistDated("2026-09-06T10:00:00", "a1.jpg")
@@ -466,7 +459,6 @@ import altitude.core.util.*
     val trash = grouped(params = Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_PURGED -> false))
     summary(trash) shouldEqual List((day("2026-09-06"), 1, List(recycled.persistedId)))
 
-    // Another repository's asset on the same day is invisible to this repository's counts
     val otherUser = testContext.persistUser(Some(testContext.makeUser()))
     val otherRepo = testContext.persistRepository()
     switchContextRepo(otherRepo)
@@ -511,17 +503,13 @@ import altitude.core.util.*
       /**
        * Setup:
        *
-       * SQLite only: two assets taken on 2026-09-06, one of them with its import time (created_at) cleared to NULL as on a legacy
-       * row.
+       * SQLite only, since only its legacy rows can have a NULL import time: two assets taken on 2026-09-06, one with its
+       * `created_at` cleared to NULL.
        *
        * Assertions:
        *
-       * Sorted by import time, descending, both assets are still grouped under their capture day and counted in it and in the
-       * total, and the NULL import time sorts after the dated one, where SQLite puts nulls in a descending sort.
-       *
-       * Edge cases:
-       *
-       * The NULL import time, which only SQLite's legacy rows can have, so the test is registered on SQLite only.
+       * Sorted by import time descending, both are grouped and counted under their capture day and in the total, and the NULL
+       * import time sorts last, where SQLite puts nulls in a descending sort.
        */
       val dated = persistDated("2026-09-06T10:00:00", "a1.jpg")
       val undated = persistDated("2026-09-06T11:00:00", "a2.jpg")
@@ -529,7 +517,6 @@ import altitude.core.util.*
         update("UPDATE asset SET created_at = NULL WHERE id = ?", undated.persistedId)
       }
 
-      // The row is grouped by its capture day and counted like any other; sorted by import time it sits where SQLite puts nulls
       val byCapture = grouped(sort = SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
       ids(byCapture) shouldEqual List(dated.persistedId, undated.persistedId)
       byCapture.total shouldBe Some(2)
@@ -548,15 +535,14 @@ import altitude.core.util.*
      *
      * Assertions:
      *
-     * A single statement reads the page. The groups follow the sidebar's path order and end with No location, an asset appears
-     * under each of its Locations while the total counts assets, and each group's key carries the Location's ID and path key for
-     * the cursor. The request's direction does not change the order, the sort applies within each group, and a search matching
-     * nothing is an empty page with a zero count.
+     * One statement reads the page. The groups follow path order and end with No location, an asset appears under each of its
+     * Locations while the total counts assets, and each group's key carries the Location's ID and path key for the cursor. The
+     * request's direction does not change the order, the sort applies within each group, and a search matching nothing is an
+     * empty page with a zero count.
      *
      * Edge cases:
      *
-     * A category's Locations sort at the category's name, so Italy's Alba and Rome fall between Berlin and Kyoto; an asset in two
-     * Locations.
+     * A category's Locations sort at the category's name, so Italy's Alba and Rome fall between Berlin and Kyoto.
      */
     val italy = testApp.service.location.addCategory("Italy")
     val rome = addLocation("Rome", Some(italy.persistedId))
@@ -576,7 +562,6 @@ import altitude.core.util.*
     val page = grouped(by = GroupBy.Location)
     RequestContext.readQueryCount.value - before shouldBe 1
 
-    // A category's Locations sort at the category's name, by their own; an asset in two Locations is under both; the total counts assets
     locationSummary(page) shouldEqual List(
       (Some("Berlin"), None, 1, List(a1.persistedId)),
       (Some("Alba"), Some("Italy"), 2, List(a2.persistedId, a4.persistedId)),
@@ -591,10 +576,8 @@ import altitude.core.util.*
     page.continuesGroup shouldBe false
     page.nextCursor shouldBe None
 
-    // The direction of the request is ignored: the order is fixed
     locationSummary(grouped(by = GroupBy.Location, direction = SortDirection.ASC)) shouldEqual locationSummary(page)
 
-    // The sort applies within each group
     val newestFirst = grouped(by = GroupBy.Location, sort = SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.DESC))
     locationSummary(newestFirst).map(_._4) shouldEqual List(
       List(a1.persistedId),
@@ -603,7 +586,6 @@ import altitude.core.util.*
       List(a4.persistedId),
       List(a3.persistedId))
 
-    // Nothing matches: an empty first page with a zero count
     val none = grouped(by = GroupBy.Location, text = Some("nothing"))
     none.isEmpty shouldBe true
     none.total shouldBe Some(0)
@@ -614,19 +596,18 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * Rome under the Italy category and top-level Berlin; six assets - three in Berlin, three in Rome (two of them shared with
-     * Berlin) and two in no Location - read at several page sizes.
+     * Rome under the Italy category and top-level Berlin, and six assets: three in Berlin, three in Rome (two shared with Berlin)
+     * and two in no Location, read at several page sizes.
      *
      * Assertions:
      *
-     * Walking by cursor visits every group in path order, each group showing the same full count on every page it spans;
-     * continuation flags mark the pages that carry a group over, only the first page has the total, and the cursor ends after No
-     * location.
+     * The cursor visits every group in path order, each showing its full count on every page it spans. Continuation flags mark
+     * the pages that carry a group over, only the first page has the total, and the cursor ends after No location.
      *
      * Edge cases:
      *
-     * A Location that runs out exactly at a page boundary, a page that ends inside No location, and a page that crosses from the
-     * last Location into No location.
+     * A Location runs out exactly at a page boundary, a page ends inside No location, and a page crosses from the last Location
+     * into No location.
      */
     val italy = testApp.service.location.addCategory("Italy")
     val rome = addLocation("Rome", Some(italy.persistedId))
@@ -647,10 +628,8 @@ import altitude.core.util.*
     val page4 = grouped(by = GroupBy.Location, rpp = 2, cursor = page3.nextCursor)
 
     locationSummary(page1) shouldEqual List((Some("Berlin"), None, 3, List(a1, a2)))
-    // Berlin completes and Rome opens; the count of a group is the same on every page it spans
     locationSummary(page2) shouldEqual List((Some("Berlin"), None, 3, List(a3)), (Some("Rome"), Some("Italy"), 3, List(a2)))
     locationSummary(page3) shouldEqual List((Some("Rome"), Some("Italy"), 3, List(a3, a4)))
-    // Rome ran out exactly at a page boundary: the next page is the trailing group alone
     locationSummary(page4) shouldEqual List((None, None, 2, List(a5, a6)))
     page2.continuesGroup shouldBe true
     page3.continuesGroup shouldBe true
@@ -658,7 +637,6 @@ import altitude.core.util.*
     List(page2, page3, page4).map(_.total) shouldEqual List(None, None, None)
     page4.nextCursor shouldBe None
 
-    // A page ending inside No location continues there, with the group's count unchanged
     val page5 = grouped(by = GroupBy.Location, rpp = 7)
     page5.nextCursor.map(cursor => (cursor.key, cursor.groupId, cursor.id)) shouldBe Some((None, None, a5))
     val tail = grouped(by = GroupBy.Location, rpp = 7, cursor = page5.nextCursor)
@@ -666,7 +644,6 @@ import altitude.core.util.*
     tail.continuesGroup shouldBe true
     tail.nextCursor shouldBe None
 
-    // A page can cross from the last Location into No location
     val page6 = grouped(by = GroupBy.Location, rpp = 4)
     locationSummary(grouped(by = GroupBy.Location, rpp = 4, cursor = page6.nextCursor)) shouldEqual
       List((Some("Rome"), Some("Italy"), 3, List(a3, a4)), (None, None, 2, List(a5, a6)))
@@ -678,19 +655,18 @@ import altitude.core.util.*
      * Setup:
      *
      * In triage: a burst whose frames run past those of a later burst, a Sequence with one undated frame, a later Sequence, a
-     * Sequence of one frame, two Sequences with the same first capture, a Sequence with no capture time at all, and two frames in
-     * no Sequence, one of them captured before all the others. One frame of the later burst is recycled.
+     * Sequence of one frame, two Sequences with the same first capture, a Sequence with no capture time, and two frames in no
+     * Sequence, one captured before all the others. One frame of the later burst is recycled.
      *
      * Assertions:
      *
-     * The groups run oldest first capture first, then by the Sequence's ID, a frame in one group, whichever way the request asks
-     * for: the direction has no say. A Sequence with no capture time follows those with one on either engine, and No sequence is
-     * last whatever its frames' times. Each group's count is its own, the cursor's two values are the first capture and the
-     * Sequence, and it is all one statement.
+     * One statement reads the page. The groups run by first capture, oldest first, then by Sequence ID, whatever the requested
+     * direction. A Sequence with no capture time follows the dated ones on either engine, and No sequence is last whatever its
+     * frames' times. Each group has its own count, and the cursor's two values are the first capture and the Sequence.
      *
      * Edge cases:
      *
-     * A recycled frame neither counts nor sets the first capture, an undated frame in a Sequence does not make its group undated,
+     * A recycled frame neither counts nor sets the first capture, an undated frame does not make its Sequence's group undated,
      * and a search matching nothing is an empty first page.
      */
     val spreadOldest = persistFrame(Some("2026-09-06T09:00:00"), "a.jpg")
@@ -742,11 +718,9 @@ import altitude.core.util.*
       List(Some(spread), Some(partly), Some(later), Some(single), Some(lowTie), Some(highTie), Some(undated), None)
     page.groups.head.key.cursorKey shouldBe at("09:00:00")
 
-    // The direction of the request is ignored: the order is fixed
     sequenceSummary(grouped(by = GroupBy.Sequence, params = inTriage, direction = SortDirection.ASC)) shouldEqual
       sequenceSummary(page)
 
-    // The sort applies within each group, and does not move the groups
     val byNameDescending =
       grouped(by = GroupBy.Sequence, params = inTriage, sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.DESC))
     sequenceSummary(byNameDescending).map(group => (group._1, group._4)) shouldEqual List(
@@ -770,15 +744,14 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * A Sequence of three frames, 8:00, 9:00 and 10:00, and a second of two, 8:30 and 8:40; an album holds the first Sequence's
+     * A Sequence of three frames, at 8:00, 9:00 and 10:00, and one of two, at 8:30 and 8:40. An album holds the first Sequence's
      * last two frames, the second's two and a frame in no Sequence.
      *
      * Assertions:
      *
-     * Over the album the first Sequence's group has the first capture of its matching frames, 9:00, and comes after the second,
-     * though the whole Sequence captured first; its count is the frames shown. Over everything the order is the other way round.
-     *
-     * The Curation set of that Sequence holds all three frames, whatever a search shows of them.
+     * Over the album the first Sequence's group takes the first capture of its matching frames, 9:00, and so follows the second,
+     * with a count of the frames shown. Over everything the order is the other way round. The Sequence's Curation set holds all
+     * three frames whatever a search shows.
      *
      * Edge cases:
      *
@@ -813,7 +786,6 @@ import altitude.core.util.*
     sequenceSummary(grouped(by = GroupBy.Sequence, params = inTriage, albumIds = Set(onlyOne.persistedId))) shouldEqual
       List((Some(first), at("10:00:00"), 1, List(f3.persistedId)))
 
-    // The set the group's Curate opens is the whole Sequence, whatever the search shows of it
     testApp.service.curation.sequenceSet(first).map(_.frames.map(_.asset.persistedId).toSet) shouldBe
       Some(Set(f1.persistedId, f2.persistedId, f3.persistedId))
   }
@@ -824,12 +796,12 @@ import altitude.core.util.*
      * Setup:
      *
      * Triaged frames of two Sequences and two in none, named "beach"; an album named "Beach days" holds one frame of the first
-     * Sequence and one of those in none. The first Sequence's oldest frame has no such name, so the text leaves it out.
+     * Sequence and one of those in none. The first Sequence's oldest frame is not named "beach", so the text leaves it out.
      *
      * Assertions:
      *
-     * Groups run by the first capture of the frames the text finds, and each group's count is theirs. Within a group the frame
-     * matched in the album leads, and frames of one Relevance read newest capture first.
+     * Groups run by the first capture of the frames the text finds, and count only those. Within a group the album match leads,
+     * and frames of equal Relevance read newest capture first.
      */
     val album = testApp.service.album.add("Beach days")
     val a1 = persistFrame(Some("2026-09-06T09:00:00"), "beach_a1.jpg")
@@ -862,8 +834,8 @@ import altitude.core.util.*
      *
      * Assertions:
      *
-     * Grouped by Location, the frames are under their Location and "No location", however their Sequences lie. Grouped by day,
-     * they are under their day.
+     * Grouped by Location or by day, the frames fall under their Location (or No location) and their day, whatever their
+     * Sequences.
      */
     val rome = addLocation("Rome")
     val frame1 = persistFrame(Some("2026-09-06T10:00:00"), "a.jpg")
@@ -887,13 +859,12 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * A Sequence of two frames in triage and one frame in none, seeded into 5,000 copies with no Sequence, analyzed and rolled
-     * back once the plans are read: a library the planner has rows to choose by, in which the frames with a Sequence are few.
+     * A Sequence of two frames in triage, and a frame in none seeded into 5,000 copies, so frames with a Sequence are few.
      *
      * Assertions:
      *
-     * The plan of a first page and of a continuation inside the group each name `asset_sequence` twice: once for the candidates
-     * and once for the count of the page's group, so neither costs the library.
+     * The plans of a first page and of a continuation inside the group each use `asset_sequence` at least twice, for the
+     * candidates and for the group's count, so neither reads the whole library.
      */
     val template = persistFrame(Some("2026-09-06T09:00:00"), "loose.jpg")
     val frame1 = persistFrame(Some("2026-09-06T10:00:00"), "a.jpg")
@@ -924,20 +895,19 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * Assets named with "beach" on two days and one undated, two assets whose names do not match but whose album "Beach days"
-     * does, and an unrelated asset; later the Locations Rome and Berlin with overlapping members. Everything is searched for
-     * "beach" under the Relevance sort, two to a page.
+     * Assets named "beach" on two days and one undated, two assets matching only through their album "Beach days", and an
+     * unrelated asset; later the Locations Rome and Berlin with overlapping members. Searched for "beach" under the Relevance
+     * sort, two to a page.
      *
      * Assertions:
      *
-     * In every day group and every Location group the album matches lead the file-name matches and ties go to the newest capture.
-     * Walking the pages by cursor returns the same assets in the same order as the unpaged search, with each group's full count
-     * on every page it spans.
+     * In every day and Location group, album matches lead file-name matches, and ties go to the newest capture. The pages walked
+     * by cursor return the unpaged search's order, with each group's full count on every page it spans.
      *
      * Edge cases:
      *
-     * The No date group's engine-dependent position, an undated asset ranking last within its Relevance in a Location group, and
-     * an asset in two Locations.
+     * The No date group's position depends on the engine, an undated asset is last of its Relevance in a Location group, and an
+     * asset in two Locations is under both.
      */
     val album = testApp.service.album.add("Beach days")
     val a1 = persistDated("2026-09-06T10:00:00", "beach-1.jpg").persistedId
@@ -965,14 +935,12 @@ import altitude.core.util.*
     val dayPages = pages(GroupBy.DateTaken)
     dayPages.flatMap(ids) shouldEqual byDay.flatMap(_._3)
     dayPages.map(_.total) shouldEqual List(Some(6), None, None)
-    // A day's count is the whole day's on every page it spans
     dayPages.flatMap(summary).map(group => group._1 -> group._2).distinct shouldEqual byDay.map(group => group._1 -> group._2)
 
     val rome = addLocation("Rome")
     val berlin = addLocation("Berlin")
     testApp.service.location.addAssets(rome.persistedId, Set(a1, a2, undated))
     testApp.service.location.addAssets(berlin.persistedId, Set(a3, b2, a2))
-    // In a group the undated asset is the last of its Relevance on both engines; an asset in two Locations is in both
     val byLocation =
       List((Some("Berlin"), None, 3, List(a2, b2, a3)), (Some("Rome"), None, 3, List(a2, a1, undated)), (None, None, 1, List(b1)))
     locationSummary(grouped(by = GroupBy.Location, sort = SearchSort.Relevance, text = beach)) shouldEqual byLocation
@@ -992,9 +960,9 @@ import altitude.core.util.*
      *
      * Assertions:
      *
-     * A folder scope narrows the Location groups and their counts, and scoped to a Location the groups are the Locations of its
-     * assets with no trailing No location group. The Location filter bounds a flat search, a day grouping and the bare count
-     * alike, also combined with a folder, and recycling an asset drops it from its Locations' groups and counts.
+     * A folder scope narrows the Location groups and their counts. Scoped to a Location, the groups are the Locations of its
+     * assets, with no No location group. The Location filter bounds a flat search, a day grouping and the bare count alike, with
+     * or without a folder, and recycling an asset drops it from its Locations' groups and counts.
      */
     val rome = addLocation("Rome")
     val berlin = addLocation("Berlin")
@@ -1010,13 +978,11 @@ import altitude.core.util.*
       List((Some("Rome"), None, 1, List(inFolder.persistedId)), (None, None, 1, List(unlocated.persistedId)))
     byFolder.total shouldBe Some(2)
 
-    // Scoped to a Location, the groups are the Locations of its assets and there is no trailing group
     val byLocation = grouped(by = GroupBy.Location, locationIds = Set(berlin.persistedId))
     locationSummary(byLocation) shouldEqual
       List((Some("Berlin"), None, 1, List(elsewhere.persistedId)), (Some("Rome"), None, 1, List(elsewhere.persistedId)))
     byLocation.total shouldBe Some(1)
 
-    // The Location filter on a flat search, on a day grouping, and on the bare count
     val query = flat(locationIds = Set(rome.persistedId))
     search(query).records.map(_.persistedId) should contain theSameElementsAs
       List(inFolder.persistedId, elsewhere.persistedId)
@@ -1025,7 +991,7 @@ import altitude.core.util.*
       List((day("2026-09-06"), 1, List(inFolder.persistedId)))
     count(flat(locationIds = Set(rome.persistedId), folderIds = Set(folder.persistedId))) shouldBe 1
 
-    // Recycling drops the memberships, and with them the asset from the Location's group and count
+    // Recycling drops the asset's memberships
     testApp.service.library.recycleAssets(Set(elsewhere.persistedId))
     locationSummary(grouped(by = GroupBy.Location)) shouldEqual
       List((Some("Rome"), None, 1, List(inFolder.persistedId)), (None, None, 1, List(unlocated.persistedId)))
@@ -1037,18 +1003,18 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * A Sydney Location and assets with their own points in Paris, Tokyo and on either side of the antimeridian; an asset without
-     * a point is in Sydney, the Tokyo one is in Sydney too, and one with no point is added to Sydney and removed again.
+     * A Sydney Location, and assets with their own points in Paris, Tokyo and either side of the antimeridian. A pointless asset
+     * and the Tokyo one are in Sydney, and another pointless asset is added to Sydney and removed again.
      *
      * Assertions:
      *
-     * A box finds an asset by its own point, or by a Location's pin only when it has no point of its own, and the same predicate
-     * bounds the count and a grouped page.
+     * A box finds an asset by its own point, or by a Location's pin only when it has none, and the same predicate bounds the
+     * count and a grouped page.
      *
      * Edge cases:
      *
-     * A box across the antimeridian (its west edge greater than its east edge) covers both sides while the same edges the other
-     * way round find nothing, and an asset whose only membership was removed is plotted nowhere.
+     * A box across the antimeridian (west edge greater than east) covers both sides, while the same edges the other way round
+     * find nothing. An asset whose only membership was removed is plotted nowhere.
      */
     val sydney = addLocation("Sydney", pin = (-33.8688, 151.2093))
     val own = persistDated("2026-09-06T10:00:00", "paris.jpg")
@@ -1068,15 +1034,12 @@ import altitude.core.util.*
       search(flat(bbox = Some(BoundingBox.parse(box)))).records.map(_.persistedId).sorted
 
     found("48,2,49,3") shouldEqual List(own.persistedId)
-    // An asset with a point of its own is never plotted at its Location's pin
     found("-34,151,-33,152") shouldEqual List(pinned.persistedId)
     found("35,139,36,140") shouldEqual List(pointAndPin.persistedId)
-    // A box across the antimeridian covers both sides of it; the same edges the other way round do not
     found("-1,179,1,-179") shouldEqual List(east.persistedId, west.persistedId).sorted
     found("-1,-179,1,179") shouldEqual Nil
     found("-90,-180,90,180") shouldEqual List(own, pinned, pointAndPin, east, west).map(_.persistedId).sorted
 
-    // The same predicate bounds the count and a grouped page
     count(flat(bbox = Some(BoundingBox.parse("-1,179,1,-179")))) shouldBe 2
     summary(grouped(bbox = Some(BoundingBox.parse("-34,151,-33,152")))) shouldEqual
       List((day("2026-09-06"), 1, List(pinned.persistedId)))

@@ -29,7 +29,6 @@ case class Folder(
 
   override def canEqual(other: Any): Boolean = other.isInstanceOf[Folder]
 
-  // Folders are equal by ID, parent and name key, and hash by the same fields
   private def equalityKey = (id, parentId, nameKey)
 
   override def equals(that: Any): Boolean = that match

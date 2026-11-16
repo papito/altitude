@@ -10,10 +10,7 @@ import { getHttpErrorMessage, http } from "../http/client.js"
 import { cellsOf } from "../search-results/cells.js"
 import { decrementDateGroupOf } from "../search-results/date-groups.js"
 
-/**
- * Reports a restore's outcome: an asset whose content was imported again after it was recycled
- * stays in the trash, and the server names both. Shared with Curation's Undo.
- */
+/** An asset whose content was imported again after it was recycled stays in the trash; the server names both */
 export function reportRestore({ restored, duplicates }) {
     const restoredMessage = `${
         restored.length > 1 ? `${restored.length} assets` : "Asset"
@@ -41,12 +38,8 @@ export function createAssetActions({
 }) {
     const selectedAssets = () => Alpine.store(Const.state.selectedAssets)
 
-    // Every successful mutation refreshes the nav counts, the folder tree counts, the album and
-    // Location counts (recycling drops an asset from its albums and Locations), the number of
-    // Sequences to curate, and each person's number on the People tab (`peopleChanged`, which
-    // the People tab hears only while it is mounted). In Triage the nav's reload, the Location
-    // counts' and `peopleChanged` each ask for the Triage summary, which they reload once
-    // (listeners/triage.js)
+    // After every successful mutation. Album and Location counts too: recycling drops an asset from
+    // its albums and Locations
     function refreshCounts() {
         reloadNav()
         reloadFolderCounts()
@@ -67,10 +60,9 @@ export function createAssetActions({
     }
 
     /*
-     * Marks cells as having a move in flight. The triage marker stays
-     * hidden for the duration (see the `.move-pending` rule in
-     * search_results.scala.html) so that on a successful move it is never
-     * repainted between the drop and `removeTriageStyling()` deleting it.
+     * While a move is in flight the triage marker stays hidden (`.move-pending` in
+     * search_results.css), so a successful move never repaints it between the drop and
+     * `removeTriageStyling()` deleting it.
      */
     function setMovePending(assetIds, isPending) {
         for (const assetId of assetIds) {
@@ -81,10 +73,8 @@ export function createAssetActions({
     }
 
     /**
-     * The one place cells leave the grid (a move out of scope, recycle, purge, restore, removal from
-     * an album or a Location). Every cell of the asset goes, each leaving its group's header count;
-     * the footer total counts assets, so it drops by one per asset that had a cell. The detail modal,
-     * which walks the grid, forgets a cell with it.
+     * The one place cells leave the grid. Each cell leaves its group's header count, but the footer
+     * total counts assets, so it drops by one per asset that had a cell.
      */
     function removeAssetsFromGrid(assetIds) {
         let removedCount = 0
@@ -140,8 +130,8 @@ export function createAssetActions({
         const newParentFolderName = Folder.find(folderId)?.name() ?? folderId
         const payload = { assetIds, folderId }
 
-        // Runs in the same synchronous turn as the drop, before the drag
-        // handler drops `.dragging` off the cell - so it never flashes back.
+        // In the drop's synchronous turn, before the drag handler drops `.dragging` off the cell,
+        // so the marker never flashes back
         setMovePending(assetIds, true)
 
         try {
@@ -168,8 +158,7 @@ export function createAssetActions({
                 `Error moving assets: ${getHttpErrorMessage(error)}`,
             )
         } finally {
-            // On success the marker element is already gone; on failure this
-            // brings it back, since the asset is still triaged.
+            // On failure this brings the marker back, since the asset is still triaged
             setMovePending(assetIds, false)
         }
     }
@@ -256,10 +245,9 @@ export function createAssetActions({
     }
 
     /**
-     * The outcome of adding assets to an album, by a drop or the Add to album dialog: the server
-     * skips assets already in it and reports how many it `added`, so nothing added is a warning
-     * rather than a success. The dialog passes the album's `name`, since its row is not rendered
-     * while another explorer tab is displayed, nor yet for an album the dialog has just created.
+     * The server skips assets already in the album, so nothing `added` is a warning. The dialog
+     * passes `name`: the album's row is not rendered under another explorer tab, nor yet for an
+     * album the dialog has just created.
      */
     function reportAddedToAlbum({ albumId, added, name }) {
         const label = name ?? albumName(albumId)
@@ -274,10 +262,7 @@ export function createAssetActions({
         )
     }
 
-    /**
-     * Albums only point at assets: adding leaves the assets where they are, so the grid does not
-     * change.
-     */
+    /** Albums only point at assets, so the grid does not change */
     async function addAssetsToAlbum({ albumId, assetIds }) {
         const payload = { albumId, assetIds }
 
@@ -300,7 +285,7 @@ export function createAssetActions({
         }
     }
 
-    /** Removes the pointers only; the assets leave the displayed album results and nothing else */
+    /** Removes the pointers only: the assets leave the displayed album results and nothing else */
     async function removeAssetsFromAlbum({ albumId, assetIds }) {
         const payload = { albumId, assetIds }
 
@@ -330,12 +315,7 @@ export function createAssetActions({
         )
     }
 
-    /**
-     * The outcome of adding assets to a Location, by a drop or the Add to location dialog: the
-     * server skips assets already in it and reports how many it `added`, so nothing added is a
-     * warning rather than a success. The dialog passes the Location's `name` from its select,
-     * since its row is not rendered while another explorer tab is displayed.
-     */
+    /** As `reportAddedToAlbum`; the dialog passes `name` from its select */
     function reportAddedToLocation({ locationId, added, name }) {
         const label = name ?? locationName(locationId)
 
@@ -349,10 +329,7 @@ export function createAssetActions({
         )
     }
 
-    /**
-     * Locations point at assets like albums do: adding leaves the assets where they are, so the
-     * grid does not change.
-     */
+    /** Locations only point at assets, so the grid does not change */
     async function addAssetsToLocation({ locationId, assetIds }) {
         const payload = { locationId, assetIds }
 
@@ -375,7 +352,7 @@ export function createAssetActions({
         }
     }
 
-    /** Removes the pointers only; the assets leave the displayed Location results and nothing else */
+    /** Removes the pointers only: the assets leave the displayed Location results and nothing else */
     async function removeAssetsFromLocation({ locationId, assetIds }) {
         const payload = { locationId, assetIds }
 

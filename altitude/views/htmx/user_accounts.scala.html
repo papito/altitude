@@ -4,20 +4,15 @@
 @import altitude.core.models.User
 @import altitude.core.routes.web.partial.UserActionController.AccountCard
 
-@* The account cards of the Users page (users.scala.html, and GET /htmx/users/r/:repoId/accounts, which reloads them after a
-   change): the toggle group of the three tabs, Admins, Users and Guests, each with its count, then one grid of cards per tab,
-   the tab shown being the page component's (`usersPage`, js/alpine/components/users-page.js), which keeps it through a reload
-   and starts on `startTab` (`UserActionController.startTab`: the first tab holding a card, else Users, or Guests for a creator
-   of Guests alone),
-   as it keeps the filter that hides the cards not matching it. An Admin sees every account, each card with its ⋯ menu (Edit, Set
-   password, Deactivate or Reactivate, Delete; neither of the last two on its own card); anyone else sees the accounts it
-   created, read-only, each listing the Libraries it sees alone. *@
+@* The account cards of the Users page, also reloaded after a change. `usersPage` keeps the tab and the filter through a
+   reload and starts on `startTab`. An Admin sees every account, each with its ⋯ menu; anyone else sees the accounts it
+   created, read-only. *@
 @(cards: List[AccountCard], viewer: User, startTab: AccountType)
 
 @repoId = @{ RequestContext.getRepository.persistedId }
 @isAdmin = @{ viewer.accountType == AccountType.Admin }
 
-@* The initials of a name: the first character of its first two words, in capitals *@
+@* The first character of a name's first two words, in capitals *@
 @initials(name: String) = @{
   name.trim.split("\\s+").filter(_.nonEmpty).take(2).map(word => new String(Character.toChars(word.codePointAt(0)))).mkString.toUpperCase(java.util.Locale.ROOT)
 }

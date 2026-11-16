@@ -1,22 +1,14 @@
 @()
 
-@* The Edit panel (CONTEXT.md), in Asset detail's fragment for a holder of Edit images (htmx/view_image_detail_modal): an
-   `aside#editPanel` docked opposite the Detail panel, whose state is the `editPanel` Alpine component
-   (js/alpine/components/edit-panel.js) over the coordinator js/edit/edit-panel.js, which keeps the Edit, its session and
-   the stage. Every change is held until Done or Cancel, on the stage's bar (includes/edit_stage_tools). The header holds
-   Undo, Redo (the panel's session's), Before/after and Reset all; the body the Histogram of
-   the edited image (includes/histogram), a button switching the Clipping blink with the crushed and blown fractions in its
-   corners, the four tabs (a dot on a section with changes) and the shown section, its heading with a reset; the footers
-   the save status (while changes are held, a notice of how to save or cancel them) with Revert to original, and the keys. A slider is the `.edit-slider` of core.css, rendered from the sliders of
-   js/edit/recipe.js. Docked top or bottom (includes/edit_panel.css), the section flows into columns, the Histogram sits
-   at the left, the status row joins the header and the keys are left out.
+@* The Edit panel, docked opposite the Detail panel. Its state is the `editPanel` Alpine component over the coordinator
+   js/edit/edit-panel.js, which keeps the Edit, its session and the stage. Every change is held until Done or Cancel on the
+   stage's bar. Docked top or bottom, the section flows into columns, the Histogram sits at the left, the status row joins
+   the header and the keys are left out.
 
-   After the panel, `dialog#editLeaveDialog` is the warning of changes not saved (js/edit/leave-dialog.js), a native modal
-   dialog over Asset detail: its message, and Keep editing, Discard and Save, which has the initial focus. *@
+   After the panel, `dialog#editLeaveDialog` is the native modal warning of changes not saved. *@
 
-@* A section's sliders, by the keys of its specs in js/edit/recipe.js (the component's `slidersOf`), each a label row (the
-   label, the value's field, which Enter sets) over its range, which counts as one change on release; a double-click on
-   the label or the track resets it *@
+@* A section's sliders, by the keys of its specs in js/edit/recipe.js. Enter sets the value's field, a range counts as one
+   change on release, and a double-click on the label or the track resets it *@
 @sliders(keys: String) = {
 <template x-for="spec in slidersOf('@keys')" x-bind:key="spec.key">
     <div class="edit-slider" x-bind:class="sliderClass(spec.key)" x-bind:style="sliderStyle(spec.key)">

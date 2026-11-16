@@ -15,27 +15,23 @@ import scalasql.dialects.TableOps
 import altitude.core.dao.sqlite.SqliteOverrides
 
 /**
- * SQLite for this schema.
- *
- * ScalaSql's stock SQLite temporal mappers go through `getObject(idx, classOf[LocalDateTime])`, which is not the format this
- * schema stores: timestamps are `yyyy-MM-dd HH:mm:ss` wall-clock text with an optional fraction of a second (camera-local for
- * capture times, UTC for import times) and a calendar day is ISO text. They are read and written through [[SqliteOverrides]]'
- * formatter so a value never round-trips through an instant in the JVM zone.
+ * ScalaSql's stock SQLite temporal mappers do not read this schema's format: timestamps are `yyyy-MM-dd HH:mm:ss[.fraction]`
+ * wall-clock text (camera-local capture times, UTC import times) and a day is ISO text. They go through [[SqliteOverrides]]'
+ * formatter, so a value never round-trips through an instant in the JVM zone.
  */
 object AltitudeSqliteDialect extends SqliteDialect:
 
-  /** A wall-clock timestamp: exactly the text the column stores, with no zone attached */
+  /** A wall-clock timestamp: the stored text, with no zone */
   implicit override def LocalDateTimeType: TypeMapper[LocalDateTime] = localDateTimeType
 
-  /** An instant: stored as its UTC wall clock, so it is read back as that same moment at UTC */
+  /** An instant: stored as its UTC wall clock, read back at UTC */
   implicit override def OffsetDateTimeType: TypeMapper[OffsetDateTime] = offsetDateTimeType
 
   implicit override def LocalDateType: TypeMapper[LocalDate] = localDateType
 
   /**
-   * ScalaSql's own `SqliteDialect.TableOps` resolves its dialect from the library's `SqliteDialect` object rather than from the
-   * dialect in scope, so a table built through it would read and write every column with the stock mappers - silently ignoring
-   * the ones above. The base `TableOps` threads the dialect it is given, and is otherwise identical.
+   * ScalaSql's `SqliteDialect.TableOps` takes its dialect from the library's `SqliteDialect` object, not the one in scope, so it
+   * would silently use the stock mappers instead of the ones above. The base `TableOps` threads the dialect it is given.
    */
   implicit override def TableOpsConv[V[_[_]]](t: Table[V]): TableOps[V] = new TableOps(t)(using this)
 

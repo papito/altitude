@@ -5,17 +5,9 @@
 
 @(listed: ImportFiles, shown: Int)
 
-@* The Import files of an expanded Import of the Import history (GET /htmx/import/r/:repoId/imports/:importId/files, a holder
-   of Import's; htmx/import_history holds its empty host): the outcome filter, a chip for every file and one per outcome
-   that has files, each with its number, the one shown pressed; then the first `shown` files of the filter in path order,
-   each with its path, its outcome and, on a second line, its reason when it has one (a duplicate's is where the Library
-   has it); then how many of the filter's files are shown and a control for a step more, up to the most the list shows
-   (Const.ImportHistory). An imported file links to its asset's page, in a new tab since leaving the page ends an upload,
-   while its asset exists.
-
-   The root carries the route of the view it shows (`data-app-view-url`), and a filter chip and "Show more" the route of
-   the view they ask for (`data-app-view`): the page's script reads the view again as the Import changes, and shows
-   another on a click (js/import-status.js). *@
+@* The Import files of an expanded Import in the Import history. An imported file links to its asset in a new tab, since
+   leaving the page ends an upload. The root's `data-app-view-url` is the view shown and a control's `data-app-view` the one
+   it asks for; js/import-status.js reads the view again as the Import changes. *@
 
 @repoId = @{ RequestContext.getRepository.persistedId }
 @importId = @{ listed.anImport.persistedId }

@@ -32,13 +32,13 @@ import altitude.core.Const
 import altitude.core.Environment
 import altitude.core.ModelFilesException
 
-/** One file the downloader puts in place: its name in the directory, where it is downloaded from, and its pinned size and SHA-256 */
+/** One file the downloader puts in place, with its pinned size and SHA-256 */
 final case class ModelFileSpec(name: String, url: URI, size: Long, sha256: String)
 
 /**
- * The model files of the set the application pins, release `TAG` of `renegade-otter/altitude-models`, and ArcFace from the
- * revision of `maze/faceX` the face code was tuned with (its licence forbids re-hosting it). The URL, size and SHA-256 here are
- * the trust anchor: a new set is a new tag and new pins.
+ * The pinned model files: release `TAG` of `renegade-otter/altitude-models`, and ArcFace from the revision of `maze/faceX` the
+ * face code was tuned with (its licence forbids re-hosting it). These URLs, sizes and SHA-256s are the trust anchor: a new set is
+ * a new tag and new pins.
  */
 enum ModelFile(val spec: ModelFileSpec):
 
@@ -114,8 +114,8 @@ enum ModelFile(val spec: ModelFileSpec):
 
 object ModelFile:
 
-  // The enum's cases are built, URLs and all, as this object is, before a plain `val` here would be set: the two constants are
-  // `inline`, written into the URLs where they are used, so they can never be read as null
+  // The enum's cases, URLs included, are built while this object initializes, before a plain `val` here would be set; the two
+  // constants are `inline`, so they are never read as null
 
   /** The release tag of the set, and the name of its directory under `models.dir` */
   inline val TAG = "v1"
@@ -123,7 +123,6 @@ object ModelFile:
   /** The revision of `maze/faceX` on Hugging Face that ArcFace is downloaded from */
   inline val FACEX_REVISION = "e010b5098c3685fd00b22dd2aec6f37320e3d850"
 
-  /** An asset of release `TAG` of `altitude-models` */
   private def release(name: String, size: Long, sha256: String): ModelFileSpec =
     ModelFileSpec(
       name,
@@ -131,13 +130,12 @@ object ModelFile:
       size,
       sha256)
 
-  /** A file of `maze/faceX` at `FACEX_REVISION` */
   private def faceX(name: String, size: Long, sha256: String): ModelFileSpec =
     ModelFileSpec(name, URI.create(s"https://huggingface.co/maze/faceX/resolve/$FACEX_REVISION/$name"), size, sha256)
 
 /**
- * Where the model files of the pinned set are, under a root (`models.dir`): in the set's own directory, named by its tag, so two
- * sets never mix and an older set's directory is left alone. The lock file is the root's, shared by every set.
+ * The pinned set's files sit under the root in a directory named by its tag, so two sets never mix and an older set's directory
+ * is left alone. The lock file is the root's, shared by every set.
  */
 final class ModelFiles(root: Path):
   val directory: Path = root.resolve(ModelFile.TAG)
@@ -148,10 +146,7 @@ final class ModelFiles(root: Path):
 object ModelFiles:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  /**
-   * The instance's model files, under `models.dir` or the per-user cache, the missing ones downloaded first. Throws
-   * `ModelFilesException`, naming the files missing, their URLs and the directory to put them in, when they cannot be.
-   */
+  /** The instance's model files, the missing ones downloaded first */
   def ensure(config: Config): ModelFiles =
     val models = ModelFiles(root(config.getString(Const.Conf.MODELS_DIR), sys.env.get, System.getProperty("user.home")))
     logger.info(s"Model files: ${models.directory}")
@@ -159,13 +154,12 @@ object ModelFiles:
     models
 
   /**
-   * The root of the model files: `models.dir` as configured, `~` or a leading `~/` the home directory, a relative one under the
-   * application's root path as the data directory is; empty, the per-user cache, `$XDG_CACHE_HOME/altitude/models`, else
-   * `~/.cache/altitude/models`. The XDG spec says an empty or relative `XDG_CACHE_HOME` is ignored.
+   * `models.dir`, with `~` as the home directory and a relative one under the application's root path, as the data directory is.
+   * Empty, the per-user cache: `$XDG_CACHE_HOME/altitude/models`, else `~/.cache/altitude/models`; the XDG spec says an empty or
+   * relative `XDG_CACHE_HOME` is ignored.
    *
-   * Throws `ModelFilesException`, asking for `models.dir`, when the root needs the home directory and the JVM has no absolute one
-   * (`user.home` is `?` for a user with no passwd entry, as in some containers): it would otherwise be a relative directory under
-   * whatever the working directory is.
+   * Throws `ModelFilesException` when the root needs the home directory and the JVM has no absolute one (`user.home` is `?` for a
+   * user with no passwd entry, as in some containers), rather than resolve under whatever the working directory is.
    */
   def root(configured: String, env: String => Option[String], home: String): Path =
     def absoluteHome(why: String): Path =
@@ -185,34 +179,21 @@ object ModelFiles:
       cache.resolve("altitude").resolve("models")
 
 /**
- * Puts a list of files in the directory of a set of model files, downloading the ones not in place: a file is in place when it is
- * there under its name with its pinned size, so a start never reads a file to hash it. A download holds the lock file against
- * every other process and thread, checks the free space against the bytes missing, streams each file to `<name>.part` hashing it
- * as it is written, resumes a `.part` with a `Range` request, retries an I/O error, a server error, a 429 or a 408 after each of
- * the retry delays (or the wait the answer's `Retry-After` names), checks the size and the SHA-256, and moves the file to its
- * name at once. A file whose size or SHA-256 is not its pin fails at once, as does a body declared other than the bytes missing
- * or running past the pin, before a byte past it is written.
+ * Puts a set's files in place, downloading the missing ones. A file is in place when its name holds its pinned size, so a start
+ * never hashes a file. A download holds the lock file against every other process and thread, checks the free space, streams each
+ * file to `<name>.part` hashing as it writes, resumes a `.part` with a `Range` request, retries an I/O error, a 5xx, a 429 or a
+ * 408 after each retry delay (or the answer's `Retry-After`), checks the size and SHA-256, and moves the file to its name. A size
+ * or SHA-256 off the pin fails at once, as does a body declared other than the missing bytes or running past the pin, before a
+ * byte past it is written.
  *
- * The client's timeout covers the answer's headers alone: a body streamed after them has none, and a connection that stops
- * delivering without closing would hold the start forever. A watchdog therefore closes a body that has delivered no byte for the
- * stall timeout, which the read sees as an I/O error, retried and resumed as any other.
+ * The client's timeout covers the headers alone, so a connection that stops delivering without closing would hold the start
+ * forever. A watchdog therefore closes a body that delivers nothing for `stallTimeout`; the read sees an I/O error, retried and
+ * resumed as any other.
  *
- * @param models
- *   where the files go: the set's directory, and the lock file
- * @param newClient
- *   builds the HTTP client, at the first request rather than with the downloader, which shuts it down once its downloads are
- *   over: HTTP/1.1, so a body cancelled mid-file (a stall, a body past its pin) closes its connection, where an HTTP/2 one might
- *   stay pooled, dead, for the retry to reuse; redirects followed (a release host and Hugging Face both redirect to a CDN, of
- *   another origin, which `Redirect.NORMAL` follows; it refuses only HTTPS to HTTP); the JVM's proxy settings (the default proxy
- *   selector)
  * @param retryDelays
- *   the waits before each retry of a file, as many retries as there are delays
+ *   as many retries of a file as there are delays
  * @param sleep
- *   how a wait is waited, which a test records instead
- * @param freeSpace
- *   the bytes free in the file store of a directory
- * @param stallTimeout
- *   how long a body may deliver no byte before the watchdog closes it
+ *   which a test records instead
  */
 final class ModelDownloader(
     models: ModelFiles,
@@ -225,8 +206,8 @@ final class ModelDownloader(
 
   private val directory = models.directory
 
-  // Built by the first request and shut down once the downloads are over, so an ensure that finds every file in place (every
-  // start but the first) builds none, nor the selector thread a client starts
+  // Built at the first request and shut down after the downloads, so an ensure that finds every file in place (every start but
+  // the first) builds no client, nor the selector thread it starts
   private var client: Option[HttpClient] = None
 
   private def http: HttpClient =
@@ -237,9 +218,8 @@ final class ModelDownloader(
     }
 
   /**
-   * Throws `ModelFilesException`, naming the files missing, their URLs and the directory, when they cannot be put in place: an
-   * I/O error anywhere on the way (the directory, the lock file, the file store, a download) is one, with the I/O error as its
-   * cause.
+   * Throws `ModelFilesException`, naming the missing files, their URLs and the directory, when they cannot be put in place; an
+   * I/O error anywhere on the way is its cause.
    */
   def ensure(files: Seq[ModelFileSpec]): Unit =
     if files.forall(inPlace) then logger.debug(s"The model files are in place in $directory")
@@ -287,20 +267,19 @@ final class ModelDownloader(
     val part = partOf(spec)
     if Files.isRegularFile(part) then Files.size(part) else 0L
 
-  /** The bytes of the `.part` a download keeps: none of one longer than the pin, which `transfer` starts over */
+  /** None of a `.part` longer than the pin, which `transfer` starts over */
   private def resumable(spec: ModelFileSpec): Long =
     val held = partSize(spec)
     if held > spec.size then 0L else held
 
-  /** Why the files are not in place, and what an instance with no route to them needs to put them in place by hand */
+  /** With what an instance with no route to the files needs to put them in place by hand */
   private def failure(reason: String, missing: Seq[ModelFileSpec]): String =
     val files = missing.map(spec => s"  ${spec.name} (${spec.size} bytes, SHA-256 ${spec.sha256}): ${spec.url}")
     (s"The model files could not be put in place: $reason. Download them by hand into $directory:" +: files).mkString("\n")
 
   /**
-   * One file, tried once and then again after each of the retry delays (or the wait an answer's `Retry-After` names), each try
-   * resuming what the one before it wrote. An I/O error still failing it after the last retry is a `ModelFilesException`, with
-   * the I/O error as its cause.
+   * Retried after each retry delay, or after the wait a `Retry-After` names, each try resuming what the last one wrote. An I/O
+   * error after the last retry becomes a `ModelFilesException`.
    */
   private def download(spec: ModelFileSpec, attempt: Int = 0): Unit =
     try transfer(spec)
@@ -308,7 +287,6 @@ final class ModelDownloader(
       case e: IOException =>
         val reason = s"${ModelDownloader.describe(e)}, downloading ${spec.name} from ${spec.url.getHost}"
         if attempt == retryDelays.size then throw ModelFilesException(reason, Some(e))
-        // A host that names its wait is waited for that long rather than the retry delay
         val delay = e match {
           case unavailable: ModelDownloader.Unavailable => unavailable.retryAfter.getOrElse(retryDelays(attempt))
           case _ => retryDelays(attempt)
@@ -318,9 +296,8 @@ final class ModelDownloader(
         download(spec, attempt + 1)
     }
 
-  /** One try at a file: the rest of its `.part`, or all of it, then the checks and the move to its name */
   private def transfer(spec: ModelFileSpec): Unit =
-    // A `.part` longer than the pin holds no file to resume, whatever left it: it is dropped and the file starts over
+    // A `.part` longer than the pin holds no file to resume, whatever left it
     if partSize(spec) > spec.size then
       logger.info(s"${spec.name}.part holds ${partSize(spec)} bytes, more than its pinned ${spec.size}: starting it over")
       Files.delete(partOf(spec))
@@ -334,9 +311,8 @@ final class ModelDownloader(
     Files.move(partOf(spec), fileOf(spec), StandardCopyOption.ATOMIC_MOVE)
 
   /**
-   * Asks for the file from byte `held` on and writes what comes to its `.part`. A 206 is the rest, appended to the `held` bytes
-   * that `digest` covers; a 200 is the whole file, which a server that ignores the range sends: the `.part` starts over, with a
-   * new digest. Returns the digest of the `.part` and its size.
+   * A 206 is the rest, appended to the `held` bytes that `digest` covers; a 200 is the whole file from a server that ignores the
+   * range, so the `.part` starts over with a new digest. Returns the `.part`'s digest and size.
    */
   private def receive(spec: ModelFileSpec, digest: Sha256.Digest, held: Long): (Sha256.Digest, Long) =
     val response = send(spec, held)
@@ -352,7 +328,7 @@ final class ModelDownloader(
       (partDigest, from + write(spec, body, partDigest, from))
     finally body.close()
 
-  /** The request for the file from byte `from` on, answered with the file or a part of it; any other status fails here */
+  /** Any status but 200 and 206 fails here */
   private def send(spec: ModelFileSpec, from: Long): HttpResponse[InputStream] =
     val request = HttpRequest.newBuilder(spec.url).header("User-Agent", "Altitude").timeout(ModelDownloader.HEADERS_TIMEOUT)
     if from > 0 then request.header("Range", s"bytes=$from-")
@@ -374,8 +350,8 @@ final class ModelDownloader(
     response
 
   /**
-   * A body declared other than the file's bytes from `from` on will not become the file: it fails before it is read. A header the
-   * answer leaves out is not checked (an HTTP/2 answer may declare no length), and `write` bounds the body by the pin anyway.
+   * A body declared other than the file's bytes from `from` on fails before it is read. A header the answer leaves out is not
+   * checked (an HTTP/2 answer may declare no length); `write` bounds the body by the pin anyway.
    */
   private def checkDeclared(spec: ModelFileSpec, response: HttpResponse[?], from: Long): Unit =
     val headers = response.headers()
@@ -391,9 +367,8 @@ final class ModelDownloader(
         s"${spec.name} was answered with Content-Length ${length.getAsLong}, not the ${spec.size - from} bytes expected")
 
   /**
-   * Reads the body to its end into the `.part`, appended past its first `from` bytes or, when `from` is 0, from its start, and
-   * into `digest`, under the stall watchdog. Returns the bytes written. A body that runs past the pin is read no further and
-   * fails, no byte past the pin written: a CDN or a proxy streaming more than the file would otherwise fill the disk.
+   * Appends past the `.part`'s first `from` bytes, or writes it anew at 0, under the stall watchdog; returns the bytes written. A
+   * body running past the pin fails with no byte past it written: a CDN or a proxy streaming more would otherwise fill the disk.
    */
   private def write(spec: ModelFileSpec, body: InputStream, digest: Sha256.Digest, from: Long): Long =
     val part = partOf(spec)
@@ -434,12 +409,11 @@ final class ModelDownloader(
         spec,
         s"${spec.name} came as $size bytes with SHA-256 $sha256, not its pinned ${spec.size} bytes with ${spec.sha256}")
 
-  /** The failure of a file that came as something other than its pin: its `.part` holds no file to resume, and is deleted */
+  /** Its `.part` holds no file to resume, so it is deleted */
   private def rejected(spec: ModelFileSpec, reason: String): ModelFilesException =
     Files.deleteIfExists(partOf(spec))
     ModelFilesException(reason)
 
-  /** A file's download as it goes: logged at every tenth of the file, and at its end with its time and rate */
   private class Progress(spec: ModelFileSpec, from: Long):
     private val started = System.nanoTime()
     var transferred = 0L
@@ -462,7 +436,11 @@ final class ModelDownloader(
 object ModelDownloader:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  /** The downloader's HTTP client, as its `newClient` says */
+  /**
+   * HTTP/1.1, so a body cancelled mid-file (a stall, a body past its pin) closes its connection rather than staying pooled, dead,
+   * for the retry. Redirects are followed: the release host and Hugging Face both redirect to a CDN of another origin, and
+   * `Redirect.NORMAL` refuses only HTTPS to HTTP.
+   */
   def newClient(): HttpClient =
     HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).followRedirects(HttpClient.Redirect.NORMAL).build()
 
@@ -472,13 +450,10 @@ object ModelDownloader:
   /** The longest wait a `Retry-After` is followed for: a host that asks for more is asked again after this */
   private val MAX_RETRY_AFTER: FiniteDuration = 60.seconds
 
-  /** An answer that is the host's passing trouble (a 5xx, a 429, a 408), and the wait it asks for before the next try, if any */
+  /** The host's passing trouble (a 5xx, a 429, a 408), with the wait it asks for, if any */
   final private class Unavailable(message: String, val retryAfter: Option[FiniteDuration]) extends IOException(message)
 
-  /**
-   * The wait an answer's `Retry-After` asks for, in seconds or until an HTTP-date, at most `MAX_RETRY_AFTER`; none when the
-   * header is absent or reads as neither.
-   */
+  /** In seconds or until an HTTP-date, at most `MAX_RETRY_AFTER`; none when the header is absent or reads as neither */
   private def retryAfter(response: HttpResponse[?]): Option[FiniteDuration] =
     val header = Option(response.headers().firstValue("Retry-After").orElse(null)).map(_.trim)
     val wait = header.flatMap {
@@ -491,9 +466,8 @@ object ModelDownloader:
     wait.map(_.min(MAX_RETRY_AFTER))
 
   /**
-   * An error as a reason: itself and the root of its cause chain, each by its class and its message. The JDK's client reports a
-   * refused connection or a name that does not resolve as a `ConnectException` of no message, what went wrong only in the root it
-   * wraps (a `ClosedChannelException`, an `UnresolvedAddressException`), so the error alone would say nothing.
+   * The error and the root of its cause chain. The JDK's client reports a refused connection or an unresolved name as a
+   * `ConnectException` with no message, what went wrong only in the root it wraps, so the error alone would say nothing.
    */
   private def describe(e: Throwable): String =
     def named(t: Throwable) =
@@ -501,10 +475,7 @@ object ModelDownloader:
     val root = Iterator.iterate(e)(_.getCause).takeWhile(_ != null).toSeq.last
     if root eq e then named(e) else s"${named(e)} (${named(root)})"
 
-  /**
-   * The one thread every download's watchdog runs its checks on. A daemon, so it never keeps the process up, and a check that is
-   * cancelled is taken out of its queue at once.
-   */
+  /** A daemon, so it never keeps the process up; a cancelled check leaves its queue at once */
   private lazy val watchdogs: ScheduledExecutorService =
     val executor = ScheduledThreadPoolExecutor(
       1,
@@ -517,8 +488,8 @@ object ModelDownloader:
     executor
 
   /**
-   * Watches a body as it is read: checked ten times a stall timeout, it closes the stream once no byte has been delivered for the
-   * stall timeout, which fails the read blocked on it with an I/O error. Cancelled once the body is read, or its read has failed.
+   * Checked ten times a stall timeout, it closes the stream once no byte has come for the stall timeout, which fails the read
+   * blocked on it with an I/O error.
    */
   private class Watchdog(stream: InputStream, stallTimeout: FiniteDuration):
     @volatile private var lastDelivery = System.nanoTime()
@@ -529,7 +500,6 @@ object ModelDownloader:
     private val period = (stallTimeout / 10).toNanos.max(1)
     private val check = watchdogs.scheduleWithFixedDelay(() => checkStall(), period, period, TimeUnit.NANOSECONDS)
 
-    /** The body delivered bytes now */
     def delivered(): Unit = lastDelivery = System.nanoTime()
 
     def cancel(): Unit = check.cancel(false): Unit
@@ -547,10 +517,7 @@ object ModelDownloader:
    */
   private val processLocks = ConcurrentHashMap[Path, ReentrantLock]()
 
-  /**
-   * Runs `body` holding the lock file, against every other process and thread putting files in place under it. A wait for either
-   * lock is logged, since a download can take minutes.
-   */
+  /** Against every other process and thread; a wait for either lock is logged, since a download can take minutes */
   private def locked[A](lockFile: Path)(body: => A): A =
     // The same file reached by two spellings is one lock
     val key = lockFile.getParent.toRealPath().resolve(lockFile.getFileName)

@@ -44,15 +44,14 @@ import altitude.core.util.RelPath
 import altitude.core.util.Util
 
 /**
- * The Import record: every Import of a Library and every one of its Import files, with what became of each. An Import is opened,
- * given its files as they are offered to the import pipeline (each pending until the pipeline settles it), and closed: marked
- * complete by whoever delivers it, once no more files will come, and closed for good when it is complete and none of its files is
- * pending. Its five counters are its files by outcome, written by the same transaction that sets a file's outcome.
+ * The Import record: every Import of a Library and its Import files, with what became of each. An Import is opened, given its
+ * files as they are offered to the pipeline (each pending until settled), marked complete by whoever delivers it once no more
+ * will come, and closed when complete with none pending. Its five counters count its files by outcome, written by the transaction
+ * that settles a file.
  */
 object ImportService:
-  // An Import file's reason reads as the pipeline's do (`PipelineUtils.dropReason`): a phrase in sentence case with no full
-  // stop, which the Import history shows as it is stored. A duplicate's reason is a place, which the history leads with
-  // "Already in the Library: ".
+  // An Import file's reason is shown as stored, so it reads as the pipeline's do (`PipelineUtils.dropReason`): sentence case, no
+  // full stop. A duplicate's reason is a place, which the history prefixes.
 
   // Where the asset a duplicate matches is, when it is in no folder below the root
   private val TRIAGE = "Triage"
@@ -61,11 +60,9 @@ object ImportService:
   private val INTERRUPTED = "Interrupted by a restart"
   // Why a file the page could not send is failed
   private val UPLOAD_FAILED = "Upload failed"
-  // How much of a file's path a log line holds
   private val MAX_LOGGED_PATH_LENGTH = 512
 
-  // An Import's name and a file's path are what a client sent: in a log line their control characters are escaped, so a line
-  // break in one cannot start a line of its own, and the path is cut
+  // Names and paths come from a client: control characters are escaped in a log line, so a line break cannot forge a log line
   private def logged(name: Option[String]): String =
     name.fold("")(n => s" \"${Util.printable(n, Api.Constraints.MAX_IMPORT_NAME_LENGTH)}\"")
 
@@ -79,12 +76,8 @@ class ImportService(val app: Altitude):
   private val listeners = CopyOnWriteArrayList[(String, Import) => Unit]()
 
   /**
-   * Opens an Import delivered by the context account, if there is one: in progress, with no file yet. `name` is the uploaded
-   * folder's or the Watch folder's name, none for an upload of files; `destFolderId` the folder its files are sorted into, none
-   * for Triage; `watchFolderId` the Watch folder whose scan it is; `expectedFiles` how many files it is about to be given, when
-   * whoever opens it knows (`Import.expectedTotal`). A destination that is no folder of the context repository, and a Watch
-   * folder that is none of its Watch folders, is a `NotFoundException`, a destination in the Trash an
-   * `IllegalOperationException`, and a negative number of files a `ValidationException`; none opens anything.
+   * Opens an Import delivered by the context account, in progress with no files. `name` is the uploaded folder's or the Watch
+   * folder's name; `destFolderId` is none for Triage; `expectedFiles` is how many files are coming, when the opener knows.
    */
   def open(
       source: ImportSource,
@@ -119,9 +112,8 @@ class ImportService(val app: Altitude):
     }
 
   /**
-   * Opens the Import of an upload from a browser ([[open]]). A destination takes Organize as well as the Import Permission the
-   * upload routes take, since its files arrive sorted: an account without it is refused (`ForbiddenException`) once the folder is
-   * read, so a folder that is not the repository's is not found rather than refused.
+   * Opens the Import of a browser upload. A destination also takes Organize, since its files arrive sorted; it is checked after
+   * the folder is read, so another repository's folder is not found rather than refused.
    */
   def openUpload(name: Option[String] = None, destFolderId: Option[String] = None, expectedFiles: Option[Int] = None): Import =
     txManager.withTransaction {
@@ -133,17 +125,15 @@ class ImportService(val app: Altitude):
       open(ImportSource.Upload, name, destFolderId, expectedFiles = expectedFiles)
     }
 
-  // What an upload with a destination takes of the context account, beside Import: its files arrive sorted
   private def requireOrganize(): Unit =
     if !RequestContext.holds(Permission.Organize) then
       throw ForbiddenException(Const.Msg.Err.FORBIDDEN_PERMISSION.format(Permission.Organize.label))
 
   /**
-   * The folder the Import of the file sorts its files into, none for Triage, as the completion of the file's import reads it. A
-   * destination recycled since the Import was opened is an `ImportDestinationException`: the file fails, and so does every file
-   * of the Import after it, while the folder stays in the Trash. A destination is read in the completion's turn with the deletes
-   * of folders (`FolderService.lockTree`), which it holds until it ends: a delete that committed is seen here, and one that comes
-   * after sees the asset and the folders the completion sorts it into.
+   * The folder the file's Import sorts into, none for Triage, as the file's completion reads it. A destination recycled since is
+   * an `ImportDestinationException`, failing this and every later file of the Import. It is read under `FolderService.lockTree`,
+   * held to the end of the transaction, so a folder delete either committed first and is seen here, or sees what the completion
+   * sorted.
    */
   def destinationOf(importFileId: String): Option[Folder] =
     txManager.asReadOnly {
@@ -154,9 +144,8 @@ class ImportService(val app: Altitude):
     }
 
   /**
-   * Why the files of the Import cannot be sorted any more, when its destination was recycled since it was opened; none for an
-   * Import whose destination is live, and for one to Triage. A folder is never deleted, only recycled, so there is no other way
-   * to lose one.
+   * Why the Import's files can no longer be sorted: its destination was recycled. A folder is never deleted, only recycled, so
+   * there is no other way to lose one.
    */
   private def lostDestination(anImport: Import): Option[String] =
     anImport.destFolderId
@@ -164,9 +153,8 @@ class ImportService(val app: Altitude):
       .map(_ => Const.Msg.Err.DESTINATION_IN_TRASH)
 
   /**
-   * The Import, when it is an upload the context account opened: the only Import the upload routes add a file to or close, so no
-   * account sends files into another's upload, whose destination it may not hold Organize for, nor into a Watch folder's scan.
-   * Any other Import of the repository is a `ForbiddenException`; one that is not the repository's is not found.
+   * The Import, if it is an upload the context account opened: the upload routes touch no other, so no account sends files into
+   * another's upload (whose destination it may not hold Organize for) or into a Watch folder's scan.
    */
   private def ownUpload(importId: String): Import =
     val found = importDao.getById(importId)
@@ -175,10 +163,9 @@ class ImportService(val app: Altitude):
     found
 
   /**
-   * [[ownUpload]] for what gives the Import a file. An upload with a destination sorts its files, and creates the folders their
-   * paths name, so it takes a file only while the account holds Organize, as opening it did: an account whose Organize was taken
-   * away since is refused (`ForbiddenException`) from its next file on, and the page stops sending. Closing the Import takes
-   * [[ownUpload]] alone, so such an upload does not stay open.
+   * [[ownUpload]] for adding a file. An upload with a destination sorts its files and creates folders, so it takes a file only
+   * while the account still holds Organize. Closing takes [[ownUpload]] alone, so an upload whose account lost Organize can
+   * close.
    */
   private def ownUploadTakingFiles(importId: String): Import =
     val found = ownUpload(importId)
@@ -186,11 +173,8 @@ class ImportService(val app: Altitude):
     found
 
   /**
-   * Whether the Import takes a file under the path from the context account, before anything of the file is read: a path the
-   * uploads refuse (`RelPath.segments`) is a `ValidationException`, an Import that is not the context repository's a
-   * `NotFoundException`, one that is not the account's own upload, or that sorts its files while the account holds no Organize, a
-   * `ForbiddenException` ([[ownUploadTakingFiles]]), and one marked complete an `IllegalOperationException`. [[upload]] decides
-   * for good: an Import can be marked complete between the two.
+   * Checks, before anything of the file is read, that the Import takes a file under the path from the context account. [[upload]]
+   * decides for good, since the Import can be marked complete in between.
    */
   def requireTakes(importId: String, relPath: String): Unit =
     RelPath.segments(relPath): Unit
@@ -199,12 +183,9 @@ class ImportService(val app: Altitude):
     }
 
   /**
-   * Fails a file sent to an upload's Import whose destination is in the Trash, by its path and size alone, before its content is
-   * read: the file is added to the Import and failed with the reason its completion would fail with
-   * (`Const.Msg.Err.DESTINATION_IN_TRASH`), in one transaction, and returned, so every remaining file of such an upload is
-   * recorded and none is staged or run through the pipeline for nothing. None, recording nothing, for an Import whose destination
-   * is live or that has none: the file is then staged and uploaded ([[upload]], which fails it the same way should the
-   * destination be lost by then). The path and the Import are held to what [[upload]] holds them to.
+   * Fails a file sent to an upload whose destination is in the Trash, by its path and size alone, so the rest of such an upload
+   * is recorded without staging or queuing anything. None for a live destination or none; [[upload]] then fails the file the same
+   * way should the destination be lost by then.
    */
   def failForLostDestination(importId: String, relPath: String, sizeBytes: Long): Option[ImportFile] =
     RelPath.segments(relPath): Unit
@@ -212,7 +193,7 @@ class ImportService(val app: Altitude):
       lostDestination(ownUploadTakingFiles(importId)).map(addFailed(importId, relPath, sizeBytes, _))
     }
 
-  /** Adds a file to the Import and fails it with the reason, in the caller's transaction; the file as failed */
+  /** Adds a file to the Import and fails it with the reason, in the caller's transaction */
   private def addFailed(importId: String, relPath: String, sizeBytes: Long, reason: String): ImportFile =
     val file = addFile(importId, relPath, sizeBytes)
     settle(file.persistedId, ImportOutcome.Failed, reason = Some(reason))
@@ -223,20 +204,12 @@ class ImportService(val app: Altitude):
   private def complete(importId: String) = IllegalOperationException(s"Import [$importId] is complete and takes no more files")
 
   /**
-   * Takes one uploaded file of an Import, staged, under its relative path: the file is added to the Import, pending, described
-   * (`LibraryService.stagedFileToAsset`, under the name that ends the path) and offered to the import queue with its origin, the
-   * Import file and the folder names of the path, waiting while the queue is full. The staged file is the pipeline's from then
-   * on, and the Import file is returned as it stands.
+   * Takes one staged upload of an Import under its relative path: adds it to the Import, pending, describes it and offers it to
+   * the import queue with its origin, waiting while the queue is full. The staged file is then the pipeline's.
    *
-   * A file that is not added is not staged any longer either, and fails the call: a path the uploads refuse or an empty file
-   * (`ValidationException`), an Import that is not the context account's own upload, or whose destination the account holds no
-   * Organize for any more ([[ownUploadTakingFiles]]), and one that is not the repository's or that takes no more files, as
-   * [[addFile]] refuses them. A file of an Import whose destination is in the Trash is added and failed at once, saying so, its
-   * staged file deleted, and is never offered to the queue ([[lostDestination]]; the upload route asks [[failForLostDestination]]
-   * first, so such a file is usually not even staged). Once the file is added, nothing else settles it until the pipeline has it,
-   * so a failure from there on is settled here: a file that cannot be described, or that the queue refuses
-   * (`QueueRefusedException`), is failed with that as its reason (`PipelineUtils.dropReason`), its staged file deleted, and
-   * returned as failed rather than thrown, the file having been delivered and recorded.
+   * A file refused before it is added is unstaged and the call throws. A file of an Import whose destination is in the Trash is
+   * added and failed at once, never queued. Once added, nothing else settles the file until the pipeline has it, so a failure to
+   * describe or queue it fails it here, returned as failed rather than thrown: the file was delivered and recorded.
    */
   def upload(
       importId: String,
@@ -284,11 +257,7 @@ class ImportService(val app: Altitude):
         settle(file.persistedId, ImportOutcome.Failed, reason = Some(reason))
         file.copy(outcome = ImportOutcome.Failed, reason = Some(reason))
 
-  /**
-   * Records a file of an upload that the page could not send, after its retries: added to the Import and failed, "Upload failed",
-   * in one transaction, under the path and the size the page gives, so the Import's record holds every file of the upload. The
-   * path and the Import are held to what [[upload]] holds them to.
-   */
+  /** Records, added and failed, a file the page could not send after its retries, so the Import holds every file of the upload */
   def addFailedFile(importId: String, relPath: String, sizeBytes: Long): ImportFile =
     RelPath.segments(relPath): Unit
     txManager.withTransaction {
@@ -296,10 +265,7 @@ class ImportService(val app: Altitude):
       addFailed(importId, relPath, sizeBytes, ImportService.UPLOAD_FAILED)
     }
 
-  /**
-   * Adds a file to an Import that is still taking files, pending, and counts it. An Import marked complete takes no more
-   * (`IllegalOperationException`), and one that is not the context repository's is not found; neither stores the file.
-   */
+  /** Adds a pending file to an Import still taking files, and counts it */
   def addFile(importId: String, relPath: String, sizeBytes: Long): ImportFile =
     txManager.withTransaction {
       // The counter first: the Import's row is held from here, so the Import cannot be marked complete under the new file
@@ -314,11 +280,9 @@ class ImportService(val app: Altitude):
     }
 
   /**
-   * Gives a pending Import file its outcome and, in the same transaction, moves it from pending to that outcome in its Import's
-   * counters, closing the Import when it is marked complete and this was its last pending file. `assetId` is the asset an
-   * imported file became, or the asset a duplicate matches, and must be an asset of the context repository; `reason` says why,
-   * where there is something to say. A file settled already keeps its first outcome and is counted once. A file, or an asset,
-   * that is not the context repository's is a `NotFoundException` that writes nothing.
+   * Gives a pending Import file its outcome and moves it between its Import's counters in the same transaction, closing the
+   * Import when it is complete and this was its last pending file. `assetId` is the asset an imported file became or a duplicate
+   * matches. A file settled already keeps its first outcome and is counted once.
    */
   def settle(fileId: String, outcome: ImportOutcome, reason: Option[String] = None, assetId: Option[String] = None): Unit =
     require(outcome != ImportOutcome.Pending, "A file settles with an outcome other than pending")
@@ -340,13 +304,10 @@ class ImportService(val app: Altitude):
     }
 
   /**
-   * Settles the Import file of a file the import pipeline dropped, by the cause it was dropped for. A duplicate points at the
-   * asset of the context repository that has its content, with where that asset is as the reason. It is a duplicate only of an
-   * asset whose own import is complete: the pipeline settles a repository's files in the order they came, so by now the copy the
-   * file matched, an earlier file of the same queue, has completed or was dropped and discarded, and there is nothing to wait
-   * for. When no completed asset has the content (the copy's import failed for a reason that is not the content's, or the asset
-   * was recycled since), the content is in no Library, and the file is failed, saying so, rather than recorded as already there.
-   * An unsupported media type is unsupported. Anything else is failed, with the cause as the reason (`PipelineUtils.dropReason`).
+   * Settles the Import file of a dropped file by its cause. A duplicate points at the completed asset with its content, with that
+   * asset's place as the reason. Nothing need be waited for: the pipeline settles a repository's files in order, so the earlier
+   * copy it matched has completed or been discarded. When no completed asset holds the content (the copy failed for another
+   * reason, or was recycled since), the content is in no Library and the file is failed instead.
    */
   def settleDropped(fileId: String, asset: Asset, cause: Option[Throwable]): Unit =
     txManager.withTransaction {
@@ -361,21 +322,18 @@ class ImportService(val app: Altitude):
         case _ => settle(fileId, ImportOutcome.Failed, reason = Some(PipelineUtils.dropReason(cause)))
     }
 
-  /** Where an asset is, for the Import file of a duplicate of it: Triage, the path of its folder, or the top level of the Library */
+  /** Where an asset is, as a duplicate's reason: Triage, its folder's path, or the Library's top level */
   private def placeOf(asset: Asset): String =
     if asset.isTriaged then ImportService.TRIAGE else pathOf(asset.folderId)
 
-  /**
-   * A folder as an Import file names it, and as the Import history and a Watch folder's card name a destination under their own
-   * `separator`: its path, or the top level of the Library for the root
-   */
+  /** A folder's path joined by `separator`, or the Library's top level for the root */
   def pathOf(folderId: String, separator: String = RelPath.SEPARATOR): String =
     if app.service.folder.isRootFolder(folderId) then ImportService.TOP_LEVEL
     else app.service.folder.getPath(folderId).map(_.name).mkString(separator)
 
   /**
-   * Marks the Import complete: no more files will be added. It closes at once when none of its files is pending, and otherwise
-   * when the last of them settles. An Import closed already stays as it is.
+   * Marks the Import complete: no more files will be added. It closes at once when none is pending, otherwise when the last one
+   * settles. An Import closed already stays as it is.
    */
   def close(importId: String): Unit =
     txManager.withTransaction {
@@ -384,7 +342,7 @@ class ImportService(val app: Altitude):
       changed(importId)
     }
 
-  /** [[close]] for the upload routes: the Import is closed by the account that opened it, as an upload ([[ownUpload]]) */
+  /** [[close]] for the upload routes, by the account that opened the upload */
   def closeUpload(importId: String): Unit =
     txManager.withTransaction {
       ownUpload(importId): Unit
@@ -392,18 +350,16 @@ class ImportService(val app: Altitude):
     }
 
   /**
-   * The Import record's startup steps, which `App` runs before anything is offered to the import queue: the Imports a stop
-   * interrupted are failed and closed ([[failInterrupted]]), then the Import history is pruned ([[pruneOrLog]]), so a server
-   * restarted more often than daily, which never reaches the daily prune, still keeps its history within the Setting.
+   * Startup steps, run before anything is queued. The history is pruned here too, so a server restarted more often than daily,
+   * never reaching the daily prune, still keeps its history within the Setting.
    */
   def startup(): Unit =
     failInterrupted()
     pruneOrLog()
 
   /**
-   * Startup's step for the Imports a server that stopped left behind, in every repository. Nothing is in the import pipeline when
-   * a server starts and staged files are not resumed, so every Import file still pending is failed, "Interrupted by a restart",
-   * and every Import still in progress is closed, counting those files as failed.
+   * Nothing is in the pipeline at startup and staged files are not resumed, so in every repository each pending Import file is
+   * failed and each Import in progress closed.
    */
   def failInterrupted(): Unit =
     app.service.library.forEachRepository {
@@ -417,11 +373,9 @@ class ImportService(val app: Altitude):
     }
 
   /**
-   * The prune of the Import history, in every repository: the closed Imports opened more than `import.history.days` days ago (a
-   * Live Setting, read as the prune runs) are deleted with their Import files; the assets they imported stay. At 0 the history is
-   * kept forever. An Import in progress is never pruned, however old. The Watch folders forget, with it, the files absent from
-   * their directories for as long (`WatchFolderService.forgetAbsent`), or for `Const.WatchFolder.FORGET_AFTER_DAYS` when the
-   * history is kept forever: what a Watch folder remembers is a table of its own, so pruning an Import never makes a file new.
+   * Deletes, in every repository, the closed Imports opened more than `import.history.days` ago, with their files; the assets
+   * stay, and 0 keeps the history forever. Watch folders forget files absent as long, or `Const.WatchFolder.FORGET_AFTER_DAYS`
+   * when the history is kept forever; what a Watch folder remembers is its own table, so a prune never makes a file new.
    */
   def prune(): Unit =
     val days = app.settings.current.importHistoryDays
@@ -437,10 +391,7 @@ class ImportService(val app: Altitude):
           else logger.debug(s"No Import older than $days days to prune. Repo: ${repository.name}")
       }
 
-  /**
-   * [[prune]] for the startup and the daily schedule, neither of which a failed prune may stop: a failure is logged at ERROR and
-   * not thrown
-   */
+  /** [[prune]] for startup and the daily schedule, which a failed prune must not stop: logged, not thrown */
   def pruneOrLog(): Unit =
     try prune()
     catch case NonFatal(e) => logger.error("Pruning the Import history failed", e)
@@ -451,10 +402,8 @@ class ImportService(val app: Altitude):
     }
 
   /**
-   * The top of the context repository's Import history, its first `shown` Imports, the ones in progress first and then the newest
-   * first (`ImportDao.list`), each with what the history says of it beside its record: the name of the account that delivered it,
-   * the path of its destination folder, and whether a restart failed files of it, which only an Import closed with failed files
-   * is asked.
+   * The context repository's first `shown` Imports (in progress first, then the newest), each with its account's name, its
+   * destination's path, and whether a restart failed files of it (asked only of closed Imports with failures)
    */
   def history(shown: Int): ImportHistory =
     txManager.asReadOnly {
@@ -481,26 +430,18 @@ class ImportService(val app: Altitude):
       ImportHistory(entries, listed.total)
     }
 
-  /**
-   * The Import with its first `shown` files in path order, those of one outcome when `outcome` is given, read in one transaction,
-   * so the Import's counters are the numbers of the files the outcomes hold
-   */
+  /** The Import and its first `shown` files in path order, of one outcome if given, in one transaction so the counters match */
   def filesShown(importId: String, outcome: Option[ImportOutcome], shown: Int): ImportFiles =
     txManager.asReadOnly {
       ImportFiles(importDao.getById(importId), outcome, fileDao.ofImport(importId, outcome, shown))
     }
 
-  /**
-   * Tells `listener` of every change to an Import from now on, with the repository's ID and the Import as the change committed
-   * it: one opened, given a file, a file of it settled, or marked complete. A change that rolls back is not told.
-   */
+  /** Tells `listener` of every committed change to an Import from now on, with the repository's ID and the Import as committed */
   def onChange(listener: (String, Import) => Unit): Unit = listeners.add(listener): Unit
 
   /**
-   * Tells the listeners that the Import changed, once the transaction that changes it has committed
-   * (`TransactionManager.afterCommit`): the Import is read then, so what is told is what was committed, never a state inside a
-   * transaction that changes it twice. Changes committed at once may be told out of order, each with an Import at least as far
-   * along as its own change left it.
+   * Tells the listeners after the commit, reading the Import then, so they never see a state inside a transaction. Changes
+   * committed at once may be told out of order, each with an Import at least as far along as its own change left it.
    */
   private def changed(importId: String): Unit =
     val repositoryId = RequestContext.getRepository.persistedId

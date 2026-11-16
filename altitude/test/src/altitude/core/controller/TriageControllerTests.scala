@@ -17,8 +17,7 @@ import altitude.core.util.TriageSubset
 /** The Triage routes: the Triage summary, the scope dialog of an explorer click in Triage, and Quick view */
 @DoNotDiscover class TriageControllerTests extends ControllerTestCore {
 
-  // Through the first repository, the one the login opens. Identity encoding because the client cannot read a compressed empty
-  // body (the 204)
+  // Identity encoding, since the client cannot read a compressed empty body (the 204)
   private def get(host: String, path: String, params: Map[String, String] = Map.empty) =
     requests.get(
       s"$host/htmx/triage/r/${testContext.repositories.head.persistedId}/$path",
@@ -68,15 +67,13 @@ import altitude.core.util.TriageSubset
     /**
      * Setup:
      *
-     * A logged-in user's repository with three triaged assets: one with a Face of an unnamed person, one with a Face of that
-     * person in the Location "Beach", and one with neither. Outside triage, a sorted asset with a Face of the unnamed person, and
-     * a triaged asset with one recycled.
+     * A logged-in user's repository with three triaged assets: one with a Face of an unnamed person, one with such a Face in a
+     * Location, and one with neither. Also a sorted asset with such a Face, and a recycled triaged one.
      *
      * Assertions:
      *
-     * The summary reads "There are 3 items in triage. 2 have unknown people. 2 have no Locations." The 3 is plain text. Each
-     * count of a Triage subset is a search trigger: 2 with unknown people searches the `unknownPeople` subset, and 2 with no
-     * Locations the `noLocation` subset; each link has a name that says what it shows.
+     * The summary counts 3 items in triage, 2 with unknown people and 2 in no Location. The total is plain text; each subset
+     * count is a search trigger for its Triage subset, with an accessible name saying what it shows.
      *
      * Edge cases:
      *
@@ -124,8 +121,7 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * The summary reads "There is 1 item in triage. 1 has unknown people. 1 has no Location.", the 1 item in triage plain text
-     * and each count of a Triage subset a search trigger.
+     * The summary is in the singular, the total plain text and each subset count a search trigger.
      */
     testContext.persistRepository()
     login()
@@ -152,7 +148,7 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * The summary reads "There are 2 items in triage. None have unknown people. All have a Location." with no link.
+     * The summary says none have unknown people and all have a Location, with no link.
      */
     testContext.persistRepository()
     login()
@@ -178,7 +174,7 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * The summary reads "There are no items in triage." and nothing else, with no link.
+     * The summary is the one sentence that triage is empty, with no link.
      */
     testContext.persistRepository()
     login()
@@ -203,9 +199,8 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * Bob's scope dialog is a 204 with no body: the click searches Triage. Alice's is a popover dialog fragment titled with her
-     * name, reading "This person has no assets assigned in Triage", with "Show person in new tab", a link opening Browse scoped
-     * to her in a new tab, and Close.
+     * Bob's scope dialog is an empty 204, so the click searches Triage. Alice's is a dialog titled with her name saying she has
+     * nothing in Triage, with a link opening Browse scoped to her in a new tab, and Close.
      */
     testContext.persistRepository()
     login()
@@ -244,13 +239,12 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * Beach's scope dialog is a 204 with no body. Park's reads "This Location has no assets in Triage", with "Show Location in
-     * new tab", a link opening Browse scoped to it in a new tab, and Close.
+     * Beach's scope dialog is an empty 204. Park's says it has nothing in Triage, with a link opening Browse scoped to it in a
+     * new tab, and Close.
      *
      * Edge cases:
      *
-     * Lake, empty everywhere, reads "This Location has no assets" and offers Close alone, with no link. A Category, which holds
-     * no assets, is a 400.
+     * Lake, empty everywhere, says it has no assets and offers Close alone. A Category, which holds no assets, is a 400.
      */
     testContext.persistRepository()
     login()
@@ -298,14 +292,13 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * Trips' scope dialog is a popover dialog fragment titled "Trips", reading "This folder has 3 results in the library", with
-     * "Show in new tab", a link opening Browse scoped to the folder in a new tab, "Quick view", a button that loads Quick view
-     * into the general modal host, and Close.
+     * Trips' scope dialog, titled "Trips", counts 3 results, with a link opening Browse scoped to the folder in a new tab, a
+     * Quick view button loading into the general modal host, and Close.
      *
      * Edge cases:
      *
-     * The recycled and the triaged assets are not counted. Empty reads "This folder has no assets" and offers Close alone. The
-     * root folder is a 400, and so is a request naming no scope or two.
+     * The recycled and the triaged assets are not counted. Empty says it has no assets and offers Close alone. The root folder is
+     * a 400, and so is a request naming no scope or two.
      */
     testContext.persistRepository()
     login()
@@ -381,20 +374,18 @@ import altitude.core.util.TriageSubset
     /**
      * Setup:
      *
-     * A logged-in user's repository with the folder Trips, its subfolder Italy and Italy's subfolder Rome: 100 sorted assets in
-     * Italy, the oldest import of them dated 2020, and one in Rome imported last, in 2030, so Italy holds 101. Rome is also asked
-     * for alone.
+     * A logged-in user's repository with the folders Trips › Italy › Rome: 100 sorted assets in Italy, the oldest imported in
+     * 2020, and one in Rome imported last, in 2030, so Italy holds 101.
      *
      * Assertions:
      *
-     * Italy's Quick view is a general modal fragment titled "Quick view", headed by the path Trips › Italy as plain crumbs, with
-     * the Previews of 100 assets, newest import first: Rome's first, the 2020 one left out. The footer reads "Showing 100 of 101"
-     * with "Show in new tab", a link opening Browse scoped to Italy in a new tab.
+     * Italy's Quick view is a modal headed by the path Trips › Italy as plain crumbs, with 100 Previews, newest import first:
+     * Rome's first, the 2020 one left out. Its footer shows 100 of 101 with a link opening Browse scoped to Italy in a new tab.
      *
      * Edge cases:
      *
-     * Nothing in it is a search trigger, opens Asset detail, or carries the hooks of the grid's selection and drag. Rome's Quick
-     * view of one asset has no footer. The root folder is a 400.
+     * Nothing in it is a search trigger, opens Asset detail, or carries the grid's selection and drag hooks. Rome's Quick view of
+     * one asset has no footer. The root folder is a 400.
      */
     testContext.persistRepository()
     login()
@@ -447,8 +438,8 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * Asked through the first repository, the scope dialog for a folder, a Person or a Location, and Quick view, answer 404 for
-     * an ID that does not exist and for each of the second repository's, and no answer carries the other repository's names.
+     * Through the first repository, the scope dialog of a folder, a Person or a Location, and Quick view, answer 404 for an
+     * unknown ID and for the second repository's, and no answer carries its names.
      */
     val repo = testContext.persistRepository()
     login()
@@ -491,8 +482,7 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * The scope dialog asked for with Bob's ID, and with Carl's, answers 404 and no dialog naming them, while Tessa's is her
-     * dialog.
+     * The scope dialog answers 404 for Bob and for Carl without naming them, while Tessa gets her dialog.
      */
     testContext.persistRepository()
     login()

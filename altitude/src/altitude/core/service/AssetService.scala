@@ -85,10 +85,8 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
     }
 
   /**
-   * Marks the import of the asset complete and, in the same update, stores the Image quality, the perceptual hash, the Histogram
-   * and the Scene embeddings the pipeline put on it, so an asset is never complete without them. The metrics, the hash and the
-   * Histogram stay NULL for a Video, an animated image, or a still image the pipeline did not measure; an embedding also for a
-   * still image its model could not embed.
+   * Stores the pipeline's measurements and embeddings in the same update that marks the import complete, so an asset is never
+   * complete without them. Each stays NULL where the pipeline did not measure or embed.
    */
   def markAsCompleted(asset: Asset): Asset =
     txManager.withTransaction {
@@ -97,14 +95,10 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
     }
 
   /**
-   * The asset with its Image quality, perceptual hash, Histogram and Scene embeddings, and its detected faces each with its
-   * sharpness, measured over the staged file: one decode, upright, that `ImageMeasurement` measures and the instance's Scene
-   * embedder (`app.sceneEmbedder`: the ONNX Runtime one, or in a test the switchable one, which embeds nothing unless the suite
-   * turns the models on) then embeds. Only a still image is measured: a Video, an animated image (one with a duration) and any
-   * other type come back as they are. The metrics are derived data and NULL is a state every reader handles, so a measurement
-   * that fails (a file OpenCV decodes for detection but not here, an image of a channel count it does not take) is logged at WARN
-   * and leaves the asset and its faces unmeasured, with no embedding, rather than dropping the import; the ONNX embedder handles
-   * its own failures the same way, a model at a time, so an image can carry one embedding and not the other. Touches no database.
+   * Measures and embeds a still image, and its detected faces' sharpness, over one upright decode of the staged file; any other
+   * asset comes back as is. The metrics are derived and NULL is a state every reader handles, so a failed measurement is logged
+   * and the asset imports unmeasured rather than being dropped. The embedder fails a model at a time the same way, so an image
+   * can carry one embedding and not the other. Touches no database.
    */
   def measureImage(dataAsset: AssetWithData): AssetWithData =
     val asset = dataAsset.asset
@@ -140,17 +134,15 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       case "image" =>
         makeImageThumbnail(dataAsset.bytes, C.AssetView.PREVIEW_BOX_PIXELS)
       case "video" =>
-        // The Preview of a Video is one of its Sampled frames, upright already, thumbnailed like a decoded image
+        // One of the Video's Sampled frames, upright already
         val frame = app.service.video.previewFrame(dataAsset.path, videoDuration(dataAsset))
         try makeImageThumbnail(frame.image, orientation = 1, C.AssetView.PREVIEW_BOX_PIXELS)
         finally frame.image.release()
       case _ => new Array[Byte](0)
 
   /**
-   * The display size and, for a Video or an animated GIF, the length. An image's size is read from its header, without decoding
-   * it, which face detection and the preview each do, and so is an animated GIF's playing time; a Video's size has the
-   * container's rotation applied, so a portrait phone recording is portrait. An image no reader takes, or whose header it cannot
-   * read, is an [[ImageException]], a Video FFmpeg cannot open a [[altitude.core.VideoException]].
+   * The display size and, for a Video or an animated GIF, the length. An image's are read from its header, without decoding it; a
+   * Video's size has the container's rotation applied, so a portrait phone recording is portrait.
    */
   def getDimensionsAndDuration(dataAsset: AssetWithData): (Int, Int, Option[Long]) /* width, height, duration */ =
     dataAsset.asset.assetType.mediaType match
@@ -161,7 +153,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
           if !readers.hasNext then throw ImageException(s"No image reader takes ${dataAsset.path}")
           val reader = readers.next()
           try
-            // Seekable and with its metadata, so a GIF's frames can be counted and their delays read
+            // Seekable and with metadata, so a GIF's frames can be counted and their delays read
             reader.setInput(input)
             // GIF alone: a multi-page TIFF also holds several images, and is no animation
             val durationMs = if reader.getFormatName == "gif" then ImageUtil.gifPlayingTimeMs(reader) else None
@@ -173,10 +165,9 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
         val info = app.service.video.probe(dataAsset.path)
         (info.width, info.height, Some(info.durationMs))
       case _ =>
-        // Default to 0, 0 for unsupported media types
         (0, 0, None)
 
-  /** A Video's length: the asset's once the pipeline has extracted it, else probed from the file */
+  /** The asset's once the pipeline has extracted it, else probed from the file */
   def videoDuration(dataAsset: AssetWithData): Long =
     dataAsset.asset.durationMs.getOrElse(app.service.video.probe(dataAsset.path).durationMs)
 
@@ -197,10 +188,8 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
         None
 
   /**
-   * The size of the asset's upright original, its original turned by its EXIF orientation, as browsers show it and the Preview is
-   * made: its stored size, which is the file's as written, with the width and height swapped for the orientations 5 to 8, which
-   * turn it a quarter. The orientation is read from the original's metadata: metadata that cannot be read is taken as upright
-   * (logged at WARN), and an original that is missing is an [[IllegalOperationException]]. An Edit's geometry is in this frame.
+   * The size of the original turned by its EXIF orientation, the frame an Edit's geometry is in: the stored size, swapped for
+   * orientations 5 to 8, which turn it a quarter. Unreadable metadata is taken as upright.
    */
   def uprightSize(asset: Asset): (Int, Int) =
     val file = app.service.fileStore.assetFile(asset.persistedId)
@@ -216,13 +205,9 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
   def getPreview(assetId: String): MimedPreviewData =
     app.service.fileStore.getPreviewById(assetId)
 
-  // The rows a library operation may change, locked for the caller's transaction, so each is a write: see `AssetDao`
+  // The `getAssetsTo*` reads below lock the rows a library operation may change for the caller's transaction, so each is a write
 
-  /**
-   * What the Detail panel shows of an asset, read in one snapshot: the asset, in the trash or not (another repository's, or one
-   * gone, is not found), its Faces with their people as the panel lists them, the path of its folder (nothing for the root or for
-   * triage), its albums and Locations, and how many frames its Sequence has
-   */
+  /** What the Detail panel shows of an asset, in the trash or not, read in one snapshot */
   def detailOf(assetId: String): DetailPanelData =
     txManager.asReadOnly {
       val asset: Asset = dao.queryAll(new Query().add(FieldConst.ID -> assetId)).records.headOption.getOrElse {

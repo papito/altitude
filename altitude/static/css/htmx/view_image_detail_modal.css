@@ -1,9 +1,7 @@
-/* Asset detail's fragment: a grid of the media stage, the divider and the Detail panel, shaped by the panel's Dock side
-   (`data-detail-dock-side` and `--detail-panel-share`, written on the root by js/search-results/detail-panel.js through
-   js/common/dock.js) as pages/index.css shapes the main page by the explorer's. Closed (no `data-app-detail-panel-open`),
-   the stage is the whole grid and the panel and its divider take no room, so the box is as core.css fits it to the media;
-   open, the box fills the viewport (core.css) and the panel's track is its share of the width (left, right) or of the
-   height (top, bottom), bounded by the minimums of core.css, with the divider's track as thick as the divider */
+/* A grid of the media stage, the divider and the Detail panel, shaped by the panel's Dock side (`data-detail-dock-side`,
+   `--detail-panel-share`) as pages/index.css shapes the main page by the explorer's. Closed, the stage is the whole grid,
+   so the box fits the media; open, the box fills the viewport and the panel's track is its share of the width or height,
+   bounded by the minimums */
 #imageDetailView {
     display: grid;
     min-height: 0;
@@ -36,9 +34,8 @@
     grid-template-areas: "stage" "gutter" "panel";
 }
 
-/* The Edit panel (includes/edit_panel, for a holder of Edit images) docks opposite the Detail panel, its share
-   `--edit-panel-share` (js/edit/edit-panel.js), with its divider in the `egutter` area: one rule per Detail panel side for
-   the Edit panel alone, and one for both open, the stage between them. Closed, it and its divider take no room */
+/* The Edit panel docks opposite the Detail panel, its divider in the `egutter` area: one rule per side for the Edit
+   panel alone and one per side with both open, the stage between them */
 #imageDetailView:not([data-app-edit-panel-open]) > :is(#editPanelDivider, #editPanel) {
     display: none;
 }
@@ -93,9 +90,8 @@
 #imageDetailView[data-edit-dock-side="top"] #editPanel { border-bottom: var(--border-hairline) var(--panel-border-color); }
 #imageDetailView[data-edit-dock-side="bottom"] #editPanel { border-top: var(--border-hairline) var(--panel-border-color); }
 
-/* The stage is a size container, so the media fits it from the asset's ratio in container units, centered, less a gutter
-   on each side (`--stage-gutter`): none, but while the Crop tool is open (js/edit/crop-tool.js), when the gutter around the
-   frame is where a drag turns the image, and the stage clips the crop's dimming */
+/* A size container, so the media fits it in container units. `--stage-gutter` is zero except while the Crop tool is
+   open: a drag in the gutter around the frame then turns the image, and the stage clips the crop's dimming */
 #imageDetailStage {
     --stage-gutter: 0rem;
     grid-area: stage;
@@ -111,12 +107,10 @@
     overflow: hidden;
 }
 
-/* The media take the stage's width or, when that is too tall for the stage, the width the stage's height allows at the
-   asset's ratio (`--asset-width` and `--asset-height`, set on the box by setAssetDetailSize from the shown element). The
-   caps hold for an asset without a size. A Video's player is the media-chrome controller: its slotted <video> fills it and
-   letterboxes itself (the user agent's `object-fit: contain` for video), and its control bar overlays the video's bottom.
-   The Edit's canvas (js/edit/edit-stage.js, drawn at the box's device pixels) and the Face highlights' layer take the same
-   box in the stage's one cell, so they lie over the shown element */
+/* The media take the stage's width or, when that is too tall, the width the stage's height allows at the asset's ratio
+   (`--asset-width` / `--asset-height`, from setAssetDetailSize); the caps hold for an asset without a size. A Video's
+   <video> letterboxes itself in the media-chrome controller. The Edit's canvas, its overlays and the Face highlights share
+   the stage's one cell and box, so they lie over the shown element */
 #imageDetailStage img,
 #imageDetailStage media-controller,
 #editCanvas,
@@ -131,9 +125,8 @@
     aspect-ratio: var(--asset-width) / var(--asset-height);
 }
 
-/* The layer paints above the player and takes no pointer events itself, so the control bar under it stays usable; each
-   Face highlight's box takes them, its badge none (js/search-results/face-highlights.js). It is an inline-size container,
-   so a badge's width is capped at the layer's */
+/* The layer takes no pointer events, so the player's control bar under it stays usable; each highlight takes them back.
+   An inline-size container, so a badge's width is capped at the layer's */
 #faceHighlights {
     position: relative;
     z-index: 1;
@@ -141,9 +134,7 @@
     container-type: inline-size;
 }
 
-/* A Face highlight: the Face's box as fractions of the shown element's size (`--face-x`, `--face-y`, `--face-width`,
-   `--face-height`, set on it by the script), a hairline outline in the light neutral with rounded corners over a
-   transparent box, a toggle button of its People row's selection; the selected one wears the heavy edge */
+/* A Face highlight: the Face's box as fractions of the shown element's size, a toggle of its People row's selection */
 .face-highlight {
     position: absolute;
     left: calc(var(--face-x) * 100%);
@@ -162,11 +153,9 @@
     border: var(--border-heavy) var(--theme-neutral-1);
 }
 
-/* The badge under a Face highlight: the Person's name at the body size, light on the scrim, anchored to its box
-   (`position-anchor`, set by the script) and centered under it, kept inside the layer: above the box when there is no
-   room below, and inside the box's bottom edge when there is none above either. On one line, cut with an ellipsis at the
-   layer's width, so a long name leaves the media box as fitted; it takes no pointer events, the box being the button, so
-   the player's control bar under it stays usable */
+/* The Person's name, anchored under its highlight's box (the script sets `position-anchor`): flipped above when there is
+   no room below, and inside the box's bottom edge when there is none above either. Cut at the layer's width so a long
+   name does not refit the media box; no pointer events, so the control bar under it stays usable */
 .face-highlight-badge {
     position: absolute;
     position-area: bottom;
@@ -196,7 +185,7 @@
     font-weight: var(--font-weight-semibold);
 }
 
-/* A Hidden person's mark in the badge, dimmed as it is in the People row */
+/* Dimmed as in the People row */
 .face-highlight-badge .hidden-mark {
     color: var(--theme-neutral-3);
 }
@@ -215,9 +204,8 @@
     display: none;
 }
 
-/* A control the browser cannot perform is left out (picture-in-picture in Firefox, volume on iOS), as
-   media-chrome's themes do, and the volume slider gives way on a player narrower than media-chrome's `sm`
-   breakpoint (384 px), so the timeline keeps its room */
+/* A control the browser cannot perform is left out (picture-in-picture in Firefox, volume on iOS), as media-chrome's
+   themes do; the volume slider also goes below the `sm` breakpoint (384 px), so the timeline keeps its room */
 #imageDetailStage media-pip-button[mediapipunavailable],
 #imageDetailStage media-fullscreen-button[mediafullscreenunavailable],
 #imageDetailStage media-volume-range[mediavolumeunavailable],
@@ -225,14 +213,11 @@
     display: none;
 }
 
-/* The divider between the stage and the panel, in the grid's gutter area: a .divider of core.css with its orientation
-   class, which the dock writes on each side change */
 #detailPanelDivider {
     grid-area: gutter;
 }
 
-/* The panel: its header, holding the Dock side menu at its end, stays put while its content scrolls; a hairline on the
-   edge facing the divider, one rule per side */
+/* The header stays put while the content scrolls; the hairline faces the divider */
 #detailPanel {
     grid-area: panel;
     min-width: 0;
@@ -265,16 +250,16 @@
     user-select: none;
 }
 
-/* The canvas drawing the identity behind the original's <img>, which the browser shows color-managed: it still draws, for
-   the Edit panel's Histogram and Clipping blink, and keeps its box (js/edit/edit-stage.js) */
+/* With no edit the original's <img> shows color-managed in the canvas's place; the canvas still draws, for the Histogram
+   and the Clipping blink, and keeps its box */
 #editCanvas[data-app-edit-canvas-behind] {
     visibility: hidden;
 }
 
-/* The Edit's Clipping blink over the canvas (js/edit/edit-panel.js): its bitmap is the sampled size at the canvas's aspect,
-   so it lies over the picture pixel for pixel. Its two colors are read from here by the script, which holds no literal:
-   `color` the blown highlights, `border-color` the crushed shadows (`border-style` stays none, so nothing paints). It
-   blinks at 1 Hz in steps, held steady under reduced motion, and goes with the canvas: Show original, the Crop tool */
+/* The Clipping blink's bitmap is the sampled size at the canvas's aspect, so it lies over the picture pixel for pixel.
+   The script reads its colors from here: `color` for blown highlights, `border-color` for crushed shadows (no
+   border-style, so nothing paints). It blinks at 1 Hz, steady under reduced motion, and hides with the canvas and under
+   the Crop tool */
 #editClipping {
     position: relative;
     z-index: 1;
@@ -301,8 +286,8 @@
     }
 }
 
-/* Before/after over the canvas: "Before" and "After" in its top corners on the scrim, and the divider at `--edit-split`
-   (js/edit/edit-panel.js), a heavy light line with a knob, dragged or stepped with the arrows; it goes with the canvas */
+/* Before/after over the canvas: the labels in its top corners and the divider at `--edit-split`; it hides with the
+   canvas */
 #editSplit {
     position: relative;
     z-index: 1;
@@ -368,12 +353,10 @@
     }
 }
 
-/* The Crop tool (includes/edit_stage_tools, js/edit/crop-tool.js): a layer over the whole stage, where a drag outside the
-   crop turns the image (a rotate cursor, an SVG data URI, which cannot read a token, so its light and dark strokes are
-   literals, the same exception as the selected cell's check in includes/search_results.css), the
-   frame at the canvas's box, and the crop in it, which dims the rest of the stage, its guide and its handles; with the
-   Level tool on, the layer draws a line and the crop takes no pointer, and with the tool closed (`data-level-only`) the
-   layer holds no frame. interact.js leaves the cursors to these rules */
+/* The Crop tool's layer covers the stage; a drag outside the crop turns the image. The rotate cursor is an SVG data URI,
+   which cannot read a token, so its strokes are literals. With the Level tool on, the layer draws a line and the crop
+   takes no pointer; with the Crop tool closed (`data-level-only`) it holds no frame. interact.js leaves the cursors to
+   these rules */
 #cropLayer {
     grid-area: 1 / 1;
     place-self: stretch;
@@ -469,8 +452,7 @@
     vector-effect: non-scaling-stroke;
 }
 
-/* The floating bar at the bottom of the stage, above the Crop tool's layer, on the menus' frosted surface: the Crop tool's
-   guide and crop size while it is open, Cancel, how many edits are pending and Done */
+/* The floating bar at the bottom of the stage, above the Crop tool's layer */
 #editBar {
     grid-area: 1 / 1;
     place-self: end center;
@@ -509,7 +491,7 @@
     font-size: var(--font-size-xs);
 }
 
-/* Done is the bar's call to action: the accent fill, which a small button's own fill would replace */
+/* Done keeps the accent fill, which the small button's own fill would replace */
 #editBar .action-button.primary {
     --button-fill: var(--theme-accent);
 }

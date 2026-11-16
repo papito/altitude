@@ -58,11 +58,8 @@ export function parseFragmentDetail(jsonValue) {
  *   data-app-success-event="FOLDER_ADDED_EVENT"          the event name, verbatim (Const.events)
  *   data-app-success-detail='{"parentId": "..."}'         the detail, as JSON
  *   data-app-success-detail-target-attr-face-id="data-face-id"
- *                                                         a detail value read from an attribute of the
- *                                                         element that issued the request (`sourceEl`)
- *
- * A dialog declares them on its fragment root, for every request submitted from it; a plain
- * request element declares them on itself.
+ *                                                         a detail value read from an attribute of
+ *                                                         `sourceEl`, the element that issued the request
  */
 export function readSuccessEvent(el, sourceEl) {
     const name = el?.dataset.appSuccessEvent
@@ -92,10 +89,9 @@ export function readSuccessEvent(el, sourceEl) {
 }
 
 /**
- * The literals an element declares under a prefix, keyed by what follows it: the
- * `data-app-search-<param>` values of a search trigger (`prefix` `appSearch`, the dataset's own
- * spelling) are `{ personId: "abc" }` for `data-app-search-person-id="abc"`. The marker itself (the
- * attribute that is the prefix alone) and the `reserved` dataset keys are no literal.
+ * The literals an element declares under a dataset `prefix`, keyed by what follows it: with prefix
+ * `appSearch`, `data-app-search-person-id="abc"` gives `{ personId: "abc" }`. The bare prefix and
+ * the `reserved` keys are skipped.
  */
 export function literalsOf(el, prefix, reserved = new Set()) {
     const literals = {}

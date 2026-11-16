@@ -16,14 +16,12 @@ import altitude.core.util.NameKey
     /**
      * Setup:
      *
-     * Names in German with a sharp s and a capital sharp s, in Greek with a final sigma, in full width, with a ligature, with a
-     * combining accent, as a circled digit, as the ohm and kelvin signs, and as a title-case digraph.
+     * Names with a sharp s and a capital sharp s, a Greek final sigma, a full-width letter, a ligature, a combining accent, a
+     * circled digit, the ohm and kelvin signs, and a title-case digraph.
      *
      * Assertions:
      *
-     * Each name's key is its lowercase, case-folded, NFKC form: "ß" and "ẞ" fold to "ss", every sigma to a final sigma at the end
-     * of a word, a full-width letter, a ligature, a circled digit and a digraph to their plain letters and digits, a combining
-     * accent to the precomposed letter, and the ohm and kelvin signs to "ω" and "k".
+     * Each name's key is its lowercase, case-folded NFKC form, with a sigma at a word's end written final.
      */
     val expected = List(
       "Straße" -> "strasse",
@@ -57,9 +55,7 @@ import altitude.core.util.NameKey
      *
      * Assertions:
      *
-     * The names of each group share one key: "Straße", "STRASSE" and "STRAẞE"; "σοφος", "σοφοσ" and "ΣΟΦΟΣ"; full-width "Ａlbum"
-     * and "album"; "ﬁle" and "FILE"; "e" with a combining acute and "É"; "①" and "1"; "Ω" and the ohm sign; "K" and the kelvin
-     * sign; "ǅ" and "ǆ".
+     * The names of each group share one key.
      *
      * Edge cases:
      *
@@ -91,7 +87,7 @@ import altitude.core.util.NameKey
     /**
      * Setup:
      *
-     * The JVM's default locale is Turkish, whose lowercase of "I" is the dotless "ı"; the default locale is restored afterwards.
+     * The JVM's default locale set to Turkish, whose lowercase of "I" is the dotless "ı", and restored afterwards.
      *
      * Assertions:
      *
@@ -113,7 +109,7 @@ import altitude.core.util.NameKey
      *
      * Assertions:
      *
-     * The key of each name's key is that key, so a key can be folded again safely.
+     * Each key is its own key, so folding it again is safe.
      */
     val notIdempotent = (0 to Character.MAX_CODE_POINT).iterator
       .filterNot(cp => cp >= Character.MIN_SURROGATE && cp <= Character.MAX_SURROGATE)
@@ -138,7 +134,7 @@ import altitude.core.util.NameKey
      *
      * Assertions:
      *
-     * The first is returned precomposed, in NFC; the second is returned as it is, since NFC leaves compatibility forms alone.
+     * The first comes back precomposed; the second unchanged, since NFC leaves compatibility forms alone.
      */
     NameKey.normalized("Caf" + "é") shouldBe "Café"
     Normalizer.isNormalized(NameKey.normalized("Caf" + "é"), Normalizer.Form.NFC) shouldBe true

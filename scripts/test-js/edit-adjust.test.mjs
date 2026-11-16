@@ -1,7 +1,5 @@
 /**
- * The Edit panel's changes to an Edit (`altitude/static/js/edit/adjust.js`): the crop kept inside the image as the
- * geometry changes, a quarter turn and a flip carried into the new frame, the aspect lock, the section resets, the Level
- * tool's and the rotating drag's Straighten, and the curve editor's rules on its points. Run by `make test-js`.
+ * The Edit panel's changes to an Edit (`altitude/static/js/edit/adjust.js`). Run by `make test-js`.
  */
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -230,7 +228,7 @@ test("The Level tool levels the line drawn or makes it plumb, whichever is neare
     assert.ok(Math.abs(adjust.levelStraighten(0, dx, dy) + 3) < 1e-9)
     // Drawn right to left, the same line
     assert.ok(Math.abs(adjust.levelStraighten(0, -dx, -dy) + 3) < 1e-9)
-    // A near-vertical line, 2° off plumb
+    // A near-vertical line 2° off plumb, from a Straighten of 1
     const plumb = adjust.levelStraighten(
         1,
         Math.tan((2 * Math.PI) / 180) * 100,

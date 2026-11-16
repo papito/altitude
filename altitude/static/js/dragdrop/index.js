@@ -8,18 +8,14 @@ import { Const } from "../constants.js"
 import { context } from "../context.js"
 
 export function bindAppDragDrop(app) {
-    // Recalculate dropzone rects on every dragmove instead of caching them at
-    // drag start. Required for autoScroll to work correctly: without this,
-    // elements that scroll into view during a drag are never recognised as
-    // valid drop targets because interact.js is still using their stale
-    // (pre-scroll) bounding rectangles.
+    // Recompute dropzone rects on every move rather than at drag start: with autoScroll, a zone that
+    // scrolls into view mid-drag would otherwise keep its stale rect and never take the drop
     interact.dynamicDrop(true)
 
     const dispatch = app.dispatch.bind(app)
 
-    // A drag is bound only where the account holds what its drop does: Organize for every move, add
-    // to an album or a Location, folder move and People merge, and for the trash what recycling takes
-    // in this view (Recycle in Browse, a Curate Permission in Triage; the server checks each asset)
+    // A drag is bound only where the account may do what its drop does: Organize for moves, album and
+    // Location adds and People merges; for the trash, recycling in this view (the server checks each asset)
     const organizes = context.holds(Const.permission.organize)
     const recycles = context.recyclesHere()
 

@@ -59,7 +59,7 @@ abstract class AuditEventDao(override val config: Config) extends BaseDao[AuditE
     """
 
     val id = event.id.getOrElse(BaseDao.genId)
-    // Bound in UTC rather than left to the engine default, and to the microsecond, as `AssetDao.add` binds an asset's
+    // Bound in UTC to the microsecond rather than left to the engine default, as `AssetDao.add` binds an asset's
     val createdAt = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
 
     addRecord(

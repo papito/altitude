@@ -41,17 +41,13 @@ import altitude.core.util.SortDirection
 object BaseDao:
   final def genId: String = UUID.randomUUID.toString
 
-  /**
-   * What a streaming read ([[BaseDao.collectBySqlQuery]]) hands back: the rows its mapper kept, in the result's order, and how
-   * many rows it scanned in all, so a caller reading up to a limit can tell when the limit was reached
-   */
+  /** The rows a streaming read kept, and how many it scanned, so a caller reading up to a limit can tell it reached the limit */
   final case class Collected[T](kept: List[T], scanned: Int)
 
   /**
-   * How many rows a streaming read asks the driver for at a time. The PostgreSQL driver buffers a whole result unless the fetch
-   * size is positive (and autocommit off, which every transaction sets), and the rows of such a read are large (a Sequence
-   * candidate carries two Scene embeddings, about 6 KB); a few hundred of them keep the buffer around a megabyte while a round
-   * trip still brings many. SQLite's driver reads row by row whatever the size is.
+   * The PostgreSQL driver buffers a whole result unless the fetch size is positive (with autocommit off). Streamed rows are large
+   * (a Sequence candidate carries two Scene embeddings, about 6 KB), so a few hundred keep the buffer near a megabyte. SQLite's
+   * driver reads row by row regardless.
    */
   private val STREAMING_FETCH_SIZE = 256
 
@@ -69,65 +65,50 @@ abstract class BaseDao[Model <: BaseModel]:
   val tableName: String
 
   /**
-   * Whether the table holds rows of one repository each (`repository_id`): then every generic read and write here ([[matching]],
-   * [[updateByQuery]], [[deleteByQuery]], [[increment]] and the by-ID methods built on them) is limited to the context repository
-   * and throws when there is none, so another repository's row is out of reach just as a row that does not exist. Only the DAOs
-   * of the tables with no `repository_id` opt out. A hand-written statement on a scoped table carries `repository_id = ?` itself.
+   * Whether rows belong to one repository each (`repository_id`). If so, every generic read and write here is limited to the
+   * context repository and throws when there is none, so another repository's row is as unreachable as a missing one. A
+   * hand-written statement on a scoped table binds `repository_id = ?` itself.
    */
   protected val repositoryScoped: Boolean = true
 
-  /** The query limited to the context repository, for a scoped DAO; as given otherwise */
   private def scoped(q: Query): Query =
     if repositoryScoped then q.add(FieldConst.REPO_ID -> RequestContext.getRepository.persistedId) else q
 
-  /** A write by a query with no parameters would change every row (every row of the repository, for a scoped DAO) */
+  /** A write by an empty query would change every row (of the repository, for a scoped DAO) */
   private def requireParams(q: Query, operation: String): Unit =
     if q.params.isEmpty then throw IllegalArgumentException(s"Cannot $operation all of '$tableName' with an empty query")
 
-  /**
-   * The hand-written `SELECT`s that name their columns through this are `RepositoryDao.getAll` and `getGrantedTo`; everywhere
-   * else [[table]] does
-   */
+  /** The columns of `RepositoryDao`'s hand-written `SELECT`s; typed reads go through [[table]] */
   protected def columnsForSelect: List[String] = List("*")
 
-  /** The ScalaSql row class behind this DAO's table */
   type Row[T[_]]
 
   protected def table: Table[Row]
 
-  /**
-   * A row as the model wants it. This is the typed twin of [[makeModel]]: the two must agree for as long as both a typed and a
-   * hand-written SQL path can return the same record.
-   */
+  /** The typed twin of [[makeModel]]: the two must agree while both a typed and a hand-written path return the same record */
   protected def toModel(row: Row[Sc]): Model
 
-  // if supported, DB function to store native JSON data
+  // The placeholder of a bound JSON text: cast to jsonb on PostgreSQL, plain on SQLite
   protected def jsonFunc: String
 
   /**
-   * The text of a top-level key of a JSON object column, spelled as an index on it is (`asset_importer`), so a statement that
-   * compares it reads the index: `(column->>'key')` on PostgreSQL, `json_extract(column, '$.key')` on SQLite
+   * A top-level key of a JSON object column, spelled as its index is (`asset_importer`) so a comparison uses the index:
+   * `(column->>'key')` on PostgreSQL, `json_extract(column, '$.key')` on SQLite
    */
   protected def jsonText(column: String, key: String): String
 
   protected def nativeBool(value: Boolean): Any
 
-  /**
-   * The placeholder of a bound vector (a Scene embedding) in a hand-written statement: `?::vector` on PostgreSQL, whose column is
-   * pgvector's type, and a plain `?` on SQLite, whose column is a BLOB
-   */
+  /** The placeholder of a bound Scene embedding: `?::vector` on PostgreSQL (pgvector), plain `?` on SQLite (a BLOB) */
   protected def vectorPlaceholder: String
 
   /**
-   * The bind value of a Scene embedding for [[vectorPlaceholder]]: the pgvector literal (`[v1,v2,...]`) on PostgreSQL, the raw
-   * little-endian float32 values as bytes on SQLite; `None` binds SQL NULL on both
+   * The bind value for [[vectorPlaceholder]]: the pgvector literal on PostgreSQL, little-endian float32 bytes on SQLite; `None`
+   * binds NULL
    */
   protected def vectorBind(embedding: Option[SceneEmbedding]): Any
 
-  /**
-   * A vector column as the result row hands it back: a `PGobject` whose value is the `[v1,v2,...]` text on PostgreSQL, the BLOB's
-   * bytes on SQLite; `null` is `None`
-   */
+  /** A vector column as read: a `PGobject` holding the literal on PostgreSQL, the BLOB's bytes on SQLite */
   protected def getVectorField(value: AnyRef): Option[SceneEmbedding]
 
   /** Bind value for a wall-clock timestamp column (no zone): stored and read back verbatim, never converted through an instant */
@@ -140,30 +121,27 @@ abstract class BaseDao[Model <: BaseModel]:
   protected def nativeLocalDate(value: LocalDate): Any
 
   /**
-   * The calendar day of a wall-clock timestamp column, spelled as the capture-day indexes spell it, so a statement that compares
-   * it reads the index: the engine's `SearchDialect.dayOf`, the one spelling the typed searches render too
+   * The calendar day of a wall-clock timestamp column, spelled as the capture-day indexes are (`SearchDialect.dayOf`) so a
+   * comparison uses the index
    */
   protected def dayOf(column: String): String
 
-  /** Converts result set rows to maps; engines override it to read temporal columns without an instant round trip */
+  /** Engines override it to read temporal columns without an instant round trip */
   protected def rowProcessor: RowProcessor = new BasicRowProcessor()
 
   protected def getBooleanField(value: AnyRef): Boolean
 
-  /** The ScalaSql dialect this engine's typed queries are written against */
   protected val dialect: Dialect
 
   /**
-   * An instant column as the model wants it. The two engines already disagree: PostgreSQL stores a `timestamptz` and shows it in
-   * the JVM zone, SQLite stores UTC wall-clock text and hands it back verbatim. Row classes type these columns the same way, so
-   * the engine decides here what the `LocalDateTime` on the model means, exactly as `getDateTimeField` does for the raw paths.
+   * An instant column as the model's `LocalDateTime`. The engines differ: PostgreSQL stores a `timestamptz` and shows it in the
+   * JVM zone, SQLite stores UTC wall-clock text verbatim. The engine decides here, as `getDateTimeField` does for the raw paths.
    */
   protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime
 
   /**
-   * The instant an instant column's `LocalDateTime` stands for, read back the way this engine wrote it (`toLocalDateTime`,
-   * `getDateTimeField`): in the JVM zone on PostgreSQL, as UTC on SQLite. What a model's moment needs before it leaves the
-   * server, which shows it in the viewer's zone.
+   * The instant a model's `LocalDateTime` stands for, read the way this engine wrote it: in the JVM zone on PostgreSQL, as UTC on
+   * SQLite. Needed before a moment leaves the server, which shows it in the viewer's zone.
    */
   def instantOf(value: LocalDateTime): Instant
 
@@ -173,7 +151,6 @@ abstract class BaseDao[Model <: BaseModel]:
     case l: java.lang.Long => l.toInt
     case _ => throw IllegalArgumentException(s"Invalid type for integer field: $value")
 
-  // A nullable floating-point column; both engines hand a REAL / DOUBLE PRECISION back as a boxed number
   protected def getDoubleField(value: AnyRef): Option[Double] = Option(value).map {
     case n: java.lang.Number => n.doubleValue
     case other => throw IllegalArgumentException(s"Invalid type for double field: $other")
@@ -194,30 +171,27 @@ abstract class BaseDao[Model <: BaseModel]:
   protected val forUpdate: String
 
   /**
-   * The lock a row is read under so that it stays as it is until the transaction ends, without waiting on, or holding up, a write
-   * of it that leaves its key alone: `FOR KEY SHARE` on PostgreSQL, the lock a foreign key's check takes, which a delete of the
-   * row or a `FOR UPDATE` of it waits for; nothing on SQLite, whose one write connection serializes the writers
+   * Keeps a read row from being deleted or changed in its key until the transaction ends, without blocking writes that leave the
+   * key alone: `FOR KEY SHARE` (a foreign key check's lock) on PostgreSQL; nothing on SQLite, whose one write connection
+   * serializes the writers
    */
   protected val forKeyShare: String
 
   /**
-   * The lock a row is read under to write it, short of its key, before the transaction ends: `FOR NO KEY UPDATE` on PostgreSQL,
-   * which waits for, and holds up, another such lock, a `FOR UPDATE` and a delete, but not a foreign key's check of the row (`FOR
-   * KEY SHARE`), so a writer of a row that references it never waits for it; nothing on SQLite
+   * Locks a row to write it, short of its key: `FOR NO KEY UPDATE` on PostgreSQL, which does not block a foreign key's check, so
+   * a writer of a referencing row never waits on it; nothing on SQLite
    */
   protected val forNoKeyUpdate: String
 
   /**
-   * Makes the transactions that take the same key take turns until they end, where row locks cannot: a row one of them will
-   * insert is in no row the other can lock. `pg_advisory_xact_lock` on PostgreSQL, which conflicts with nothing else any
-   * statement takes; nothing on SQLite, whose one write connection serializes the writers.
+   * Serializes the transactions that take the same key until they end, where row locks cannot: a row one of them will insert is
+   * not there to lock yet. `pg_advisory_xact_lock` on PostgreSQL; nothing on SQLite.
    */
   protected def advisoryLock(key: String): Unit
 
   /**
-   * The test of a hand-written statement for a column being one of a set of IDs, `column $inIdSet`, whose one placeholder takes
-   * the whole set as [[idSet]] binds it, so a selection of any size neither grows the statement nor reaches the engine's
-   * parameter limit. The typed twin is `Columns.isInSet`.
+   * `column $inIdSet` tests a column against a set of IDs bound as one [[idSet]] parameter, so any selection size neither grows
+   * the statement nor hits the engine's parameter limit. The typed twin is `Columns.isInSet`.
    */
   protected val inIdSet: String
 
@@ -275,10 +249,7 @@ abstract class BaseDao[Model <: BaseModel]:
 
   def query(q: Query): QueryResult[Model] = queryRecords(q)
 
-  /**
-   * The generic read behind [[query]]. It is separate because some DAOs close the public method off - an asset is only ever
-   * queried through one of its view-scoped variants - and still need the implementation.
-   */
+  /** The generic read behind [[query]], kept separate for DAOs that close [[query]] off (assets are read view-scoped) */
   protected def queryRecords(q: Query): QueryResult[Model] =
     import dialect.*
 
@@ -319,11 +290,9 @@ abstract class BaseDao[Model <: BaseModel]:
     executeAndGetMany(sql, values)
 
   /**
-   * A read whose rows are judged one by one and mostly dropped: `f` sees each row as it is fetched, as [[makeModel]] would see it
-   * (the same row processor as [[manyBySqlQuery]], so the keys are spelled the same), and only what it returns is kept, so at
-   * most the kept rows are alive at once however large the result. [[BaseDao.STREAMING_FETCH_SIZE]] is what keeps the driver from
-   * buffering the whole result on PostgreSQL. A failure is rethrown with the statement and its values in the message, as
-   * `QueryRunner` reports one for the other hand-written reads.
+   * A read whose rows are judged as they are fetched and mostly dropped: `f` sees each row as [[manyBySqlQuery]] would return it,
+   * and only what it keeps stays in memory, however large the result. A failure is rethrown with the statement and values in the
+   * message, as `QueryRunner` reports it for the other reads.
    */
   def collectBySqlQuery[T](sql: String, values: List[Any] = List())(f: Map[String, AnyRef] => Option[T]): BaseDao.Collected[T] =
     BaseDao.incrReadQueryCount()
@@ -391,7 +360,7 @@ abstract class BaseDao[Model <: BaseModel]:
     if csv == null || csv.isEmpty then return List()
     csv.split(",").map(_.asInstanceOf[T]).toList
 
-  /** Adds `count` to a numeric column of the row, returning how many rows it changed: 0 for none, as a scoped DAO's foreign row */
+  /** Returns the rows changed: 0 for a missing row or, for a scoped DAO, another repository's */
   def increment(id: String, field: String, count: Int = 1): Int =
     val repositoryClause = if repositoryScoped then s" AND ${FieldConst.REPO_ID} = ?" else ""
     val sql = s"""
@@ -402,7 +371,6 @@ abstract class BaseDao[Model <: BaseModel]:
     val values = if repositoryScoped then List(id, RequestContext.getRepository.persistedId) else List(id)
     updateByBySql(sql, values)
 
-  /** Every row of this table the query selects, of the context repository for a scoped DAO, as a typed relation */
   private def matching(q: Query) =
     import dialect.*
     val filter = scoped(q)
@@ -419,7 +387,7 @@ abstract class BaseDao[Model <: BaseModel]:
 
   protected given rowQueryable: Queryable.Row[Row[Expr], Row[Sc]] = table.containerQr(using dialect)
 
-  /** Built from a result-set row map by the paths that are still hand-written SQL. See [[toModel]] for the typed twin. */
+  /** A result-set row map as the model, for the hand-written SQL paths; [[toModel]] is the typed twin */
   protected def makeModel(rec: Map[String, AnyRef]): Model
 
   protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime]

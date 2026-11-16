@@ -1,13 +1,7 @@
 /**
- * Builds every choice menu of a fragment: a `[data-choice-menu]` host the server renders with its
- * options (the grid toolbar's Group and Sort, `includes/search_results.scala.html`; the nav's
- * Library menu, `includes/library_menu.scala.html`) becomes a trigger and a popover panel through
- * `buildChoiceMenuCtrl`. The results fragment is re-swapped on every search, so each one arrives as
- * a fresh host; the nav's host is built with the page (by the main app's first hydration, or
- * `nav-page.js` on Import and Settings) and is `hx-preserve`, so a nav reload keeps the built one.
- * The guard keeps a re-hydration of the same DOM from building twice. Alpine's mutation observer
- * initializes the new component, and the options' search triggers are bound by the same hydration
- * pass (`search-triggers.js`).
+ * Builds each server-rendered `[data-choice-menu]` host of a fragment into a trigger and a popover
+ * panel. The nav's host is `hx-preserve`, so a nav reload keeps the built one; the guard keeps a
+ * re-hydration of the same DOM from building twice.
  */
 import { buildChoiceMenuCtrl } from "./context-menu-markup.js"
 

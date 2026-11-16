@@ -2,9 +2,8 @@ import { Const } from "../constants.js"
 import { dropzoneListeners, isBatchMoverElement } from "./helpers.js"
 
 /**
- * Album rows accept assets: a single thumbnail, or the batch mover when assets are selected.
- * Dropping adds pointers to the album and leaves the assets where they are, so nothing in the
- * grid moves. Albums themselves are not draggable: they are a flat list with nothing to move into.
+ * Album rows accept a thumbnail or the batch mover. A drop adds the assets to the album without
+ * moving them, so the grid stays as it is. Albums are not draggable: a flat list has nowhere to move.
  */
 export function bindAlbumDragDrop({ dispatch }) {
     interact("#albumList .dropzone").dropzone({

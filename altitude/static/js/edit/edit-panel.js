@@ -1,37 +1,10 @@
 /**
- * The Edit panel's coordinator (`CONTEXT.md`: Edit panel, Edit, Crop tool): Asset detail's `aside#editPanel`
- * (`includes/edit_panel`), whose controls are the `editPanel` Alpine component (`alpine/components/edit-panel.js`), which
- * reads and writes through this module (`connectEditPanelView`). It holds what the component does not:
- *
- * - **Open or closed** (`e`, the toolbar's toggle `data-app-edit-panel-toggle`), remembered per browser under
- *   `Const.localStore.assetDetailView` as `editOpen`, written as `data-app-edit-panel-open` on the fragment, which
- *   `view_image_detail_modal.css` lays the grid out from. The toggle is in the page for a holder of Edit images alone,
- *   and disabled, with a title saying why, on an asset no Edit may change: a Video or an animated image, an asset in the
- *   trash (the server's `editRefusal`), an original the browser could not decode, or a browser without WebGL2. Open on
- *   such an asset, the panel says why and draws nothing.
- * - **The dock:** the Detail panel's opposite side (`common/dock.js` with `followSide`), laid out again when that one
- *   moves or opens; 28 % of the width or 42 % of the height until a drag, remembered as `editDock`.
- * - **The stage:** while the panel is open the canvas draws the Edit shown (`edit-stage.js`: `setEditing`, `setLive`),
- *   the whole frame in the Crop tool and Before left of the divider with Before/after; the Histogram of each drawing
- *   (`renderer.readHistogram`) and, a moment after the last one, its crushed and blown fractions and, while the Clipping
- *   blink is on, its mask (`common/clipping.js` over the canvas, at the measurement's levels and box, which the fragment
- *   carries as Curation's set does).
- * - **The session** of each asset (`edit-session.js`): a change is shown at once and held; Done (the stage's bar, Enter)
- *   saves the Edit shown as one change and Cancel (the bar, Escape) shows the saved Edit again. The bar (`#editBar`) is
- *   shown while changes are held or the Crop tool is open. Undo and Redo are the session's, stepping through the changes
- *   held, forgotten as the panel closes or Asset detail steps away; a session still saving then finishes in the
- *   background. Every state the session adopts (a save's answer, a read's, a conflict's) the stage and the badge take at
- *   once, and the render of its edit version is waited for (`render-status.js`), after which the grid's cells show the new
- *   Preview and the stage, once the panel is closed, the Display image.
- * - **The Crop tool** (`crop-tool.js`): a view of the changes held, its gestures each one change; opening and closing it
- *   saves nothing. **The Level tool** works in it, or over the edited image with it closed.
- * - **The warning** (`leave-dialog.js`): closing Asset detail (its close guard, `modal.js`), stepping to another asset
- *   (`beforeLeave`, which the navigator awaits) or closing the panel while a change is pending (changes held, a save not
- *   answered yet) asks to save, discard or stay; so does Escape with changes held. A save on its way alone is waited for
- *   a moment first. Reloading or leaving the page with a change pending has the browser ask (`beforeunload`); nothing is
- *   saved as the page goes.
- * - **The keys' handlers** (`listeners/edit.js`): the toggle, the Crop tool's, Done, Undo and Redo; and the warning's and
- *   the panel's part in `global.js`'s Escape chain, registered with `common/edit-keys.js` as the coordinator starts.
+ * The Edit panel's coordinator in Asset detail; the `editPanel` Alpine component reads and writes through it
+ * (`connectEditPanelView`). It owns the panel's open state and its dock (opposite the Detail panel), what the stage
+ * draws while the panel is open, with the Histogram and clipping read from each drawing, and one Edit session per
+ * asset. A session still saving when Asset detail steps away finishes in the background, and every state it adopts is
+ * followed until the server has rendered it. Leaving an asset or closing the panel with a change pending asks to save,
+ * discard or stay; leaving the page has the browser ask, and nothing is saved as the page goes.
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
@@ -108,8 +81,8 @@ const SAVE_SETTLE_MS = 1000
 const NOTHING_TO_LEVEL_MESSAGE = "No straight lines to level the image by"
 const AUTO_FAILED_MESSAGE = "Could not level the image"
 
-// How long a change made with a control's keys (a slider's arrows, a curve point's, the crop's) or by a click on a slider's
-// track waits before it is one change, so a held key is one step of Undo and a double-click resets without a step between
+// How long a change by a control's keys, or by a click on a slider's track, waits before it is one change, so a held
+// key is one Undo step and a double-click's reset makes no step in between
 const KEY_COMMIT_DELAY_MS = 400
 const CLICK_COMMIT_DELAY_MS = 300
 const NO_WEBGL_REFUSAL = "This browser cannot draw an Edit: it has no WebGL2"
@@ -119,17 +92,14 @@ const UNDECODABLE_REFUSAL = "The browser could not decode this image"
 let controller = null
 
 /**
- * Connects the Edit panel's Alpine component (`view`, with its `sync(snapshot)`) to the coordinator, which syncs it now
- * and on every change; answers the coordinator's actions and the disconnection, or null on a page without one
+ * Connects the Alpine component (`view`, with its `sync(snapshot)`), synced now and on every change; returns the
+ * coordinator's actions and `disconnect`, or null on a page without a coordinator
  */
 export function connectEditPanelView(view) {
     return controller?.connect(view) ?? null
 }
 
-/**
- * The upright original's size as the server read it, from an Edit's state (`uprightWidth`,
- * `uprightHeight`), or null when it carries none
- */
+/** The upright original's size as the server read it, from an Edit's state, or null when it carries none */
 function uprightOf(state) {
     return state?.uprightWidth > 0 && state?.uprightHeight > 0
         ? { width: state.uprightWidth, height: state.uprightHeight }
@@ -155,8 +125,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     let unsubscribe = null
     // Every session still saving or following a render, by asset, so stepping back to one picks it up
     const sessions = new Map()
-    // The Edit shown, and the last one the session itself showed, so a change it makes (Undo, a conflict) is told
-    // from a change of the panel's not saved yet (a slider being dragged)
+    // The Edit shown, and the last one the session showed, to tell a session's change (Undo, a conflict) from the
+    // panel's own change on its way (a slider being dragged)
     let working = null
     let sessionRecipe = null
     let sessionSnapshot = null
@@ -177,15 +147,15 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     let clippingToken = 0
     let drawScheduled = false
     let autoBusy = false
-    // The latest of the Edit's states each asset's session adopted and its render left, by asset, dropped once Asset detail
-    // brings one as new
+    // The latest Edit state each asset's session adopted or its render produced, dropped once Asset detail brings one
+    // as new
     const latestEdit = new Map()
-    // The render each asset waits for: { token, editVersion }, the token one of `renderFollows`, never used twice
+    // The render each asset waits for: { token, editVersion }, a token never reused
     const renderTokens = new Map()
     let renderFollows = 0
     let view = null
-    // The answer to a leave being asked about (`beforeLeave`), which a leave asked for meanwhile does not wait for, and
-    // whether Asset detail's close has been answered, so its guard lets it through
+    // The pending answer of `beforeLeave` (a leave asked meanwhile does not wait for it), and whether Asset detail's
+    // close was approved, so its guard lets it through
     let leaving = null
     let closeApproved = false
 
@@ -232,7 +202,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     /** Binds the page-wide controls once: the toolbar's toggle, the stage's bar, Asset detail's closing */
     function start() {
         controller = { connect }
-        // `global.js`'s Escape chain and keys reach the warning, the Crop tool and the changes held through these
+        // How `global.js`'s Escape chain and keys reach the warning, the Crop tool and the changes held
         registerEditKeys({
             isLeaveDialogOpen,
             closeLeaveDialog,
@@ -263,8 +233,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
             }
         })
 
-        // Closing Asset detail with a change pending asks first; a close nothing asks about (another dialog's open
-        // replacing Asset detail) ends what is open on its asset, the changes held saved as Done
+        // Closing Asset detail with a change pending asks first; a close that bypasses the guard (another dialog
+        // replacing Asset detail) ends the asset below, saving held changes as Done
         setCloseGuard(ModalHost.assetDetail, guardClose)
         // Leaving the page asks too, also for a save another asset's session still has on its way
         window.addEventListener("beforeunload", (event) => {
@@ -303,10 +273,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * Asset detail shows, or starts loading, an asset (`detail-navigator.js`, before its media): `edit` its Edit (or
-     * null), `editable` whether the account may edit it and `refusal` why not. What was open on the last asset ends
-     * (`leaveAsset`), and while the panel is open the stage is told to draw the coming asset's Edit and its session
-     * starts.
+     * Asset detail shows, or starts loading, an asset, before its media: what was open on the last asset ends, and
+     * while the panel is open the stage draws the coming asset's Edit and its session starts
      */
     function showAsset({ assetId, mediaType, edit, editable, refusal }) {
         if (subject && subject.assetId !== assetId) {
@@ -336,9 +304,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * The stage showed `assetId` (`detail-navigator.js`, once `edit-stage.js` settled): while the panel edits it, the
-     * size the canvas drew is the upright original's, a canvas that could not draw makes the asset one the panel cannot
-     * edit, and an Edit of the session the stage did not draw (one still saving) is drawn
+     * The stage showed `assetId`: while the panel edits it, the canvas's size is the upright original's, a canvas that
+     * could not draw makes the asset uneditable, and a session Edit the stage did not draw (one still saving) is drawn
      */
     function afterShown(assetId) {
         if (subject?.assetId !== assetId) {
@@ -375,7 +342,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
 
     /**
      * A canvas that could not draw `assetId` (no WebGL2, an original the browser cannot decode or turns otherwise than the
-     * server) makes it one the panel cannot edit, saying why; answers whether it did
+     * server) makes it one the panel cannot edit, saying why; returns whether it did
      */
     function refuseIfUndrawable(assetId) {
         const shown = editStage.current()
@@ -393,9 +360,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * What was open on the asset shown ends: the Crop and Level tools close, Undo and Redo forget it, Before/after and the
-     * blink go. Changes still held, which the warning did not ask about (another dialog's open replacing Asset detail), are
-     * saved as Done
+     * Ends what was open on the asset shown: the tools, Undo and Redo, Before/after and the blink. Changes still held,
+     * which the warning did not ask about (another dialog replacing Asset detail), are saved as Done
      */
     function leaveAsset() {
         done()
@@ -435,8 +401,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * The toolbar's toggle: pressed while the panel is open; on an asset no Edit may change, `aria-disabled` with the reason
-     * as its title, so a keyboard or a screen reader still reaches the reason, and its press does nothing
+     * The toolbar's toggle: on an asset no Edit may change, `aria-disabled` rather than disabled, so a keyboard or
+     * screen reader still reaches the reason in its title
      */
     function syncToggle() {
         const refusal = refusalOf()
@@ -459,8 +425,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * `e` (`fromKey`) and the toolbar's toggle: opens the panel on an asset it can edit, or closes it. On an asset it cannot
-     * edit, the toggle's press does nothing (its title says why), and `e` says why in the snackbar
+     * `e` (`fromKey`) and the toolbar's toggle: opens or closes the panel. On an asset it cannot edit, the toggle does
+     * nothing (its title says why) and `e` says why in the snackbar
      */
     function toggle({ fromKey = false } = {}) {
         if (
@@ -565,10 +531,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         }
     }
 
-    /**
-     * A new session of `assetId`, which leaves the map of sessions as soon as it is idle and not the one shown (stepping
-     * away while it reads or saves, a failure, a conflict), so no idle session is kept but for a render
-     */
+    /** A new session of `assetId`, forgotten whenever it goes idle unless shown or following a render */
     function createSession(assetId, edit) {
         const created = createEditSession({
             assetId,
@@ -594,7 +557,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         return created
     }
 
-    /** The Edit routes of an asset (`EditController`), each answering the state; a 409's state rejects as `conflictState` */
+    /** The Edit routes of an asset, each resolving to the state; a 409's state rejects as `conflictState` */
     function apiFor(assetId) {
         const url = `/api/edit/r/${context.getRepoId()}/asset/${assetId}`
         const answer = (request) =>
@@ -618,11 +581,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * A state of the server's the session of `assetId` adopted (a save's answer, a read's, a conflict's, the read after a
-     * failure, the read of a page shown again): the asset's latest Edit, which the stage's badge and toggle follow at once
-     * (and the stage shows, when the panel does not draw this asset). A state rendered at its edit version points the grid's
-     * cells at its Preview now; one not rendered yet has its render waited for, after which the grid's cells show the new
-     * Preview and the stage, with the panel closed, the Display image.
+     * A server state the session of `assetId` adopted, now the asset's latest Edit: the stage takes it at once (and
+     * shows it, unless the panel draws this asset), and the grid's cells follow its render
      */
     function adopted(assetId, state) {
         if (isNewerEditState(latestEdit.get(assetId) ?? state, state)) {
@@ -700,8 +660,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * The session changed: its own change of the Edit (Undo, Redo, Cancel, a conflict's or a failure's state) is drawn, the
-     * Crop tool's crop following it; the panel's own change on its way stays on screen
+     * The session changed: its own change of the Edit (Undo, Redo, Cancel, a conflict, a failure) is drawn; the panel's
+     * own change on its way stays on screen
      */
     function onSessionChange(snapshot) {
         sessionSnapshot = snapshot
@@ -725,8 +685,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * The options the stage draws the Edit with: the whole frame in the Crop tool, Before/after's divider, and whether a
-     * change is on its way (`changing`: shown, not saved yet), so the identity mid-drag stays on the canvas
+     * The stage's drawing options; `changing` (a change shown, not yet the session's) keeps the identity mid-drag on
+     * the canvas
      */
     function liveOptions() {
         return {
@@ -951,7 +911,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         resetAll: () => resetAll(working, upright),
     }
 
-    /** The Edit shown with a change of `kind` made to it, not shown or saved: the Edit shown before the asset is drawn */
+    /** The Edit shown with a change of `kind` applied, neither shown nor saved; unchanged before the asset is drawn */
     function changeOf(kind, ...args) {
         return working && upright ? changes[kind](...args) : working
     }
@@ -1083,11 +1043,9 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * Asked before Asset detail closes or steps to another asset, or the panel closes: resolves true to go on, at once
-     * with nothing pending. With a change pending, the warning asks to save it (Done, a save on its way left to finish),
-     * to discard it (Cancel, or with nothing held the session's `discard`, which takes back a save on its way) or to stay
-     * (false); a save on its way alone is waited for a moment first, and asks nothing once answered. A leave asked for
-     * while one is being asked about stays.
+     * Asked before Asset detail closes or steps away, or the panel closes: resolves true to go on. A save on its way
+     * alone is waited for a moment first; a change still pending makes the warning ask. A leave asked while another is
+     * being asked about stays.
      */
     function beforeLeave() {
         if (leaving) {
@@ -1203,9 +1161,9 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * Auto-level: the server levels the image's lines (`auto-straighten`) as the Edit shown turns and mirrors it; when
-     * no lines agree on a level (`angle` null) Straighten stays and the snackbar says so. A refusal the server explains (a 503
-     * while every auto-straighten slot is taken, a 400 for an original it cannot read) is shown in its words
+     * Auto-level: the server finds the Straighten that levels the image's lines under the Edit shown's turn and flips;
+     * with no agreeing lines (`angle` null) nothing changes. A refusal the server explains (a 503 while every slot is
+     * taken, a 400 for an unreadable original) is shown in its words
      */
     async function autoStraighten() {
         if (!drawsAsset(subject?.assetId) || autoBusy || !changeable()) {

@@ -14,9 +14,9 @@ object DeletePersonFilesFlow:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   /**
-   * Moves every cover off the asset's Faces, then deletes their files. An asset whose covers cannot be moved goes no further down
-   * the purge: its row, its files and its Faces stay, still marked for purging, for the startup job to queue again, since the
-   * row's delete would drop a cover through the cover's key without a repick, and the cover Face's files would be lost.
+   * Moves every cover off the asset's Faces, then deletes their files. An asset whose covers cannot be moved stops here, still
+   * purge-pending for the startup job: deleting its row would drop a cover through its key without a repick and lose the cover
+   * Face's files.
    */
   def apply(app: Altitude): Flow[TAssetWithContext, TAssetWithContext, NotUsed] =
     Flow[TAssetWithContext].mapConcat {

@@ -23,9 +23,8 @@ object VideoService:
   case class SampledFrame(timeMs: Long, image: Mat)
 
   /**
-   * The Frame times of a Video's Sampled frames: evenly spaced from its start at whichever is longer, `intervalMs` or the
-   * duration divided by `maxFrames`, so no video yields more than `maxFrames` of them. A video with no duration yields its first
-   * frame.
+   * Frame times evenly spaced from the start at the longer of `intervalMs` and the duration / `maxFrames`, so never more than
+   * `maxFrames`. A video with no duration yields its first frame.
    */
   def sampleTimes(durationMs: Long, intervalMs: Long, maxFrames: Int): Seq[Long] =
     if durationMs <= 0 then return Seq(0L)
@@ -49,9 +48,8 @@ object VideoService:
     ((clockwise % 360) + 360) % 360
 
 /**
- * Decodes Videos through FFmpeg (javacv). Probes a container for its display size and duration, and reads its Sampled frames as
- * OpenCV images, rotated upright, for the Preview and for face detection. A grabber is opened per call and nothing is shared
- * across threads.
+ * Decodes Videos through FFmpeg (javacv): probes size and duration and reads Sampled frames as upright OpenCV images. A grabber
+ * is opened per call, so nothing is shared across threads.
  */
 class VideoService(settings: () => Settings):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -78,17 +76,16 @@ class VideoService(settings: () => Settings):
       info
   }
 
-  /** The Frame times of the Video's Sampled frames for a duration, see [[VideoService.sampleTimes]]; the spacing is Settings */
+  /** [[VideoService.sampleTimes]] with the spacing from Settings */
   def sampleTimes(durationMs: Long): Seq[Long] = sampleTimes(durationMs, settings())
 
   private def sampleTimes(durationMs: Long, settings: Settings): Seq[Long] =
     VideoService.sampleTimes(durationMs, settings.videoFacesSampleIntervalMs, settings.videoFacesMaxSampledFrames)
 
   /**
-   * Opens the Video once and hands `consume` a decoder: given Frame times, it decodes the frame at each, in order, as an iterator
-   * that decodes as it is advanced; a time past the last frame yields nothing. The decoder may be called again, and seeks either
-   * way. The Video stays open for the duration of the call, so neither the decoder nor an iterator must escape it. Each frame's
-   * image is released by the consumer.
+   * Opens the Video once and hands `consume` a lazy decoder of Frame times; a time past the last frame yields nothing, and the
+   * decoder may be called again, seeking either way. Neither the decoder nor its iterators may escape the call. The consumer
+   * releases each frame's image.
    */
   def withFrames[A](path: Path)(consume: (Seq[Long] => Iterator[VideoService.SampledFrame]) => A): A =
     withGrabber(path) {
@@ -117,9 +114,8 @@ class VideoService(settings: () => Settings):
     withFrames(path)(decode => consume(decode(times)))
 
   /**
-   * The Video's Preview: the first Sampled frame whose mean brightness clears the floor (`video.preview.min_luminance`), which
-   * skips a black leader, or the frame at a tenth of the duration when none does. The duration is the asset's, so the Video is
-   * opened once. A Video no frame of which decodes is a [[VideoException]].
+   * The Video's Preview: the first Sampled frame bright enough to skip a black leader (`video.preview.min_luminance`), else the
+   * frame at a tenth of the duration. The duration is passed in so the Video is opened only once.
    */
   def previewFrame(path: Path, durationMs: Long): VideoService.SampledFrame = withFrames(path) {
     decode =>

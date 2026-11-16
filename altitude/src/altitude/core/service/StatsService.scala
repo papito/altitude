@@ -34,9 +34,8 @@ class StatsService(val app: Altitude):
     }
 
   /**
-   * The one write of the stats: the non-zero deltas, by dimension, applied in one transaction in the order of their dimension
-   * names. Every write takes the stat rows it changes in that one order, so on PostgreSQL two operations wait for each other
-   * instead of deadlocking, and a dimension that does not change is not written.
+   * The one write of the stats: the non-zero deltas, applied in one transaction in dimension-name order. Every write takes the
+   * stat rows in that order, so on PostgreSQL two operations wait for each other instead of deadlocking.
    */
   def adjust(deltas: Map[String, Long]): Unit =
     txManager.withTransaction {
@@ -59,10 +58,7 @@ class StatsService(val app: Altitude):
       dao.add(stat)
     }
 
-  /**
-   * Repairs the context repository's stats from its assets: a stat that differs is logged and set to what the assets are. The
-   * stats that were wrong are returned, with the values they had.
-   */
+  /** Repairs the context repository's stats from its assets, returning the stats that were wrong with the values they had */
   def reconcile(): Map[String, Long] =
     txManager.withTransaction {
       val repository = RequestContext.getRepository.name

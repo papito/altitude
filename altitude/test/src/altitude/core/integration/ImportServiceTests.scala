@@ -76,13 +76,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Four Imports opened by the context account: one expecting 24 files, an upload opened expecting 3, one expecting no file at
-     * all, and one opened with no number.
+     * Four Imports opened expecting 24, 3 (through `openUpload`), 0 and no number of files.
      *
      * Assertions:
      *
-     * Each is stored with the number it was opened with, or with none, as read by its ID, in the list of the Library's Imports
-     * and in the Import history. Files given to the first, and its close, leave the number as it is.
+     * Each keeps its number, read by ID, in the Library's Imports and in the Import history. A file and the close leave it as it
+     * is.
      *
      * Edge cases:
      *
@@ -117,18 +116,16 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A folder of the context repository, and two Imports opened by the context account: an upload of a folder named "Holiday"
-     * into that folder, and an upload of files with no name and no destination.
+     * Two uploads by the context account: one named "Holiday" into a folder, one with no name or destination.
      *
      * Assertions:
      *
-     * Each is stored as opened: an upload, of the context account, in progress (not complete, not closed), with every counter at
-     * zero and no file. The first carries its name and destination, the second neither.
+     * Each is stored as an upload of the context account, in progress, with zero counters and no file; the first with its name
+     * and destination, the second with neither.
      *
      * Edge cases:
      *
-     * An Import whose destination is no folder of the repository (unknown, or another repository's) is not found and nothing is
-     * opened.
+     * A destination that is no folder of the repository is not found, and nothing is opened.
      */
     val folder = testApp.service.folder.add("Sorted")
 
@@ -170,13 +167,11 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Both files are stored pending, with their paths and sizes and no reason or asset, the Import counts two pending files, and
-     * its files are listed in path order, all of them and by the pending outcome alike; no file has any other outcome.
+     * Both are stored pending with their paths and sizes, the Import counts two pending, and the files list in path order.
      *
      * Edge cases:
      *
-     * A file added to an Import marked complete is refused, and one added to an Import that does not exist is not found; neither
-     * is stored or counted.
+     * A file added to an Import marked complete is refused, and to an unknown Import not found; neither is stored or counted.
      */
     val (opened, List(second, first)) = importOf("b/second.jpg", "a/first.jpg"): @unchecked
 
@@ -206,19 +201,16 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An asset of the repository, and an Import of four pending files, settled one after another: the first imported as that
-     * asset, the second a duplicate of it with where it is as the reason, the third unsupported, the fourth failed with a reason.
+     * An Import of four pending files settled in turn: imported as an asset, a duplicate of it, unsupported, failed.
      *
      * Assertions:
      *
-     * After each settle the Import's counters have moved one file from pending to the outcome, and at the end each file carries
-     * its outcome, reason and asset, and is the one file listed for its outcome. The Import, not marked complete, is still in
-     * progress with nothing pending.
+     * Each settle moves one file from pending to its outcome in the counters, and each file keeps its outcome, reason and asset.
+     * The Import, not marked complete, stays in progress with nothing pending.
      *
      * Edge cases:
      *
-     * Settling a file again leaves its first outcome and the counters as they were. A file that does not exist is not found, and
-     * pending is no outcome to settle with.
+     * Settling a file again changes nothing. An unknown file is not found, and pending is no outcome to settle with.
      */
     val asset = testContext.insertAsset()
     val (opened, List(imported, duplicate, unsupported, failed)) = importOf("1.jpg", "2.jpg", "3.txt", "4.jpg"): @unchecked
@@ -260,22 +252,18 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An asset of the repository in Triage, and an Import of pending files, each settled as a file the pipeline dropped for one
-     * cause: a duplicate of that asset, a duplicate of an asset that is not there (any more), an unsupported media type, an image
-     * and a Video that do not decode, a storage error, an importer that is gone, a failure of no expected kind whose message
-     * names a path, and no cause at all.
+     * An asset in Triage, and an Import's files each dropped for one cause: a duplicate of that asset, a duplicate of an asset
+     * not there, an unsupported type, an undecodable image and Video, a storage error, a gone importer, an unexpected exception
+     * whose message names a path, and no cause.
      *
      * Assertions:
      *
-     * The duplicate of the asset is settled as a duplicate, pointing at the asset with "Triage" as its reason. The duplicate of
-     * an asset that is not there is settled failed, saying that the copy it matched is not in the Library, and points at none:
-     * its content is in no Library. The unsupported type is settled unsupported. Every other cause is settled failed, with the
-     * reason the cause has a name for. The Import counts one duplicate, one unsupported and seven failed.
+     * The duplicate points at the asset with "Triage" as reason. The duplicate of nothing is failed, its copy not in the Library.
+     * The unsupported type is unsupported, and every other cause failed with its named reason.
      *
      * Edge cases:
      *
-     * A failure of no expected kind is recorded by its exception's class alone, never by its message, and a drop with no cause as
-     * an unknown error.
+     * An unexpected exception is recorded by its class alone, never its message, and no cause as an unknown error.
      */
     val existing = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
     val copy = testContext.makeAsset().copy(checksum = existing.checksum)
@@ -308,18 +296,16 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Three Imports. The first has two pending files and is marked complete before either settles, then the files settle one by
-     * one. The second has one file, which settles before the Import is marked complete. The third has no file at all, as an
-     * upload cancelled before it sent anything.
+     * Three Imports: one marked complete before its two files settle, one whose file settles before it is marked complete, and
+     * one with no file, as a cancelled upload leaves it.
      *
      * Assertions:
      *
-     * The first stays in progress, though complete, until its last file settles, which closes it. The second is in progress after
-     * its file settles and closes when it is marked complete. The third closes as it is marked complete.
+     * The first closes when its last file settles, the second and third when marked complete.
      *
      * Edge cases:
      *
-     * Marking a closed Import complete again leaves the moment it closed at, and an Import that does not exist is not found.
+     * Marking a closed Import complete again keeps its closing time, and an unknown Import is not found.
      */
     val (first, List(one, two)) = importOf("1.jpg", "2.jpg"): @unchecked
     imports.close(first.persistedId)
@@ -354,14 +340,16 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An Import marked complete with two pending files. Two transactions settle one file each, the first held open until the
-     * second waits for it: for the Import's row on PostgreSQL, for the write connection on SQLite.
+     * An Import marked complete with two pending files, settled in two transactions, the first held open until the second waits
+     * on the Import's row.
      *
      * Assertions:
      *
-     * Both settles are counted: nothing is pending, one file is imported and one failed, and the Import is closed. A write that
-     * set the counters from a read of its own would lose the first settle on PostgreSQL, where the second read the Import before
-     * the first committed.
+     * Both settles are counted and the Import is closed.
+     *
+     * Edge cases:
+     *
+     * Counters set from a read of their own would lose the first settle on PostgreSQL.
      */
     val (opened, List(one, two)) = importOf("1.jpg", "2.jpg"): @unchecked
     imports.close(opened.persistedId)
@@ -382,14 +370,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Four Imports of the context repository, opened in order: the first closed, the second left in progress, the third closed,
-     * the fourth left in progress. Another repository has an Import of its own.
+     * Four Imports opened in turn, alternately closed and left in progress, and an Import of another repository.
      *
      * Assertions:
      *
-     * Asked for two, the history holds the two Imports in progress, the newer first; asked for three, the newer of the closed
-     * ones after them; asked for more than there are, all four, the closed ones after those in progress, the newer first. Each
-     * reports the four Imports of the repository.
+     * The history lists those in progress first, then the closed ones, newest first within each, cut at the number asked for, and
+     * always counts four.
      *
      * Edge cases:
      *
@@ -419,16 +405,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A closed Import seeded into 5,000 closed copies, each opened a minute before the last, and one Import in progress, analyzed
-     * and rolled back once the plans are read: a history the planner has rows to choose by, in which the Imports in progress are
-     * few.
+     * 5,000 closed Imports a minute apart and one in progress, analyzed, then rolled back once the plans are read.
      *
      * Assertions:
      *
-     * The engine's plan for each statement the history's listing runs reads an index and holds no sort of all the rows it reads:
-     * at the most the Imports of one moment are put in order. The statement of the Imports in progress names `import_03`, the
-     * index of those alone, and the statement of the closed ones `import_01`, the history by age; the count is read off an index
-     * alone.
+     * Each of the history's statements reads an index and sorts at most the Imports of one moment: the in-progress statement
+     * reads `import_03`, the closed one `import_01`, and the count is read off an index alone.
      */
     val template = imports.open(ImportSource.Upload)
     imports.close(template.persistedId)
@@ -448,8 +430,7 @@ import altitude.core.util.Query
         template.persistedId
       )
     } {
-      // The table as vacuuming leaves it, every page all-visible, which seeded rows never are: the count is then read off an
-      // index alone, as it is in a database that has run for a while
+      // Every page all-visible, as vacuuming leaves a table and seeded rows never are, so the count reads an index alone
       if (isPostgres) {
         update("UPDATE pg_class SET relallvisible = relpages WHERE relname = ?", "import")
         update("SET LOCAL enable_bitmapscan = off")
@@ -457,7 +438,7 @@ import altitude.core.util.Query
       dao.listStatements(shown = 20).map((sql, values) => lookupPlanOf(sql, values))
     }
 
-    // PostgreSQL's node for a sort of everything below it, and SQLite's; a sort within one moment's Imports reads otherwise
+    // A sort of everything below the node; a sort within one moment's Imports reads otherwise
     val sortOfAll = if (isPostgres) """(?m)^\s*(->\s+)?Sort\s+\(""".r else "USE TEMP B-TREE FOR ORDER BY".r
     plans.foreach {
       plan =>
@@ -466,7 +447,7 @@ import altitude.core.util.Query
           sortOfAll.findFirstIn(plan) shouldBe None
         }
     }
-    // The Imports in progress, the closed ones, and the count, which any index that holds the repository answers
+    // In progress, closed, and the count, which any index holding the repository answers
     val List(inProgress, closed, _) = plans: @unchecked
     withClue(inProgress)(inProgress should include("import_03"))
     withClue(closed)(closed should include("import_01"))
@@ -477,22 +458,18 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A repository with a folder Clients and its subfolder Wedding, and an Admin. A second account uploads a folder into Wedding
-     * and leaves one of its two files pending; a Watch folder's scan, which no account delivers, imports a file to Triage and
-     * closes. The restart's step then runs. After it the context account opens an upload of files, left in progress. Another
-     * repository has an Import of its own.
+     * A second account's upload into Clients/Wedding left with a pending file, a Watch folder scan closed, then a restart, then
+     * the context account's upload in progress. Another repository has an Import.
      *
      * Assertions:
      *
-     * The history holds the repository's three Imports: the one in progress first, then the closed ones, the newest first. The
-     * upload of files names the context account, no destination, and no interruption. The scan names nobody, no destination and
-     * no interruption. The folder upload names the account that delivered it, its destination by the folder's path, and that a
-     * restart interrupted it. Each carries the moment it was opened, as an instant: within the last minute.
+     * The history holds the three Imports, in progress first. The context account's upload names it, with no destination or
+     * interruption; the scan names nobody; the folder upload names its account, its destination path, and the restart that
+     * interrupted it. Each was opened within the last minute.
      *
      * Edge cases:
      *
-     * Once the Admin deletes the second account, the folder upload names nobody. Asked for two Imports, the history holds the
-     * first two and still counts three. The other repository's Import is in neither.
+     * Once its account is deleted, the folder upload names nobody. Asked for two, the history still counts three.
      */
     val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
     val uploader = testContext.persistUser()
@@ -543,14 +520,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An Import with five files, added out of path order: a.jpg and c.jpg imported, b.jpg failed, d.jpg and e.jpg pending.
-     * Another repository has an Import with a file.
+     * An Import of five files added out of path order, of mixed outcomes, and another repository's Import.
      *
      * Assertions:
      *
-     * Asked for three files of any outcome, the Import gives a.jpg, b.jpg and c.jpg, of five in all. Asked for its imported files
-     * it gives a.jpg and c.jpg, of two; asked for one pending file, d.jpg, of two; and for its duplicates none, of none. Each
-     * answer carries the Import with its counters.
+     * Each read gives the first files in path order, of all outcomes or one, with the total for that outcome and the Import with
+     * its counters.
      *
      * Edge cases:
      *
@@ -586,20 +561,17 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A listener of the Import record's changes, kept to the Imports of this test's repository. An Import is opened, given a
-     * file, and the file is settled as imported twice: first inside a transaction that then fails, then on its own. The Import is
-     * closed.
+     * A listener of the repository's Import changes. An Import is opened and given a file, which is settled inside a transaction
+     * that fails, then on its own; then the Import is closed.
      *
      * Assertions:
      *
-     * The listener hears of the opening with every counter at zero, of the file with one pending, of the settle that committed
-     * with one imported and none pending, and of the close with the Import closed, each once, in that order and under the
-     * repository's ID. The settle that rolled back is not heard of, and left the file pending.
+     * The listener hears the opening, the file, the committed settle and the close, each once and in order, with the counters as
+     * committed. The rolled-back settle is not heard, and left the file pending.
      *
      * Edge cases:
      *
-     * A file that is added and failed in one transaction, as one the page could not send is, is never told as pending: what is
-     * heard is the Import as that transaction committed it.
+     * A file added and failed in one transaction is never heard as pending.
      */
     val repositoryId = testContext.repository.persistedId
     val heard = new java.util.concurrent.CopyOnWriteArrayList[Import]()
@@ -637,13 +609,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An Import with two files settled against one asset of the repository, one imported as it and one a duplicate of it. The
-     * asset is then recycled and purged.
+     * An Import with two files settled against one asset, imported and duplicate. The asset is then purged.
      *
      * Assertions:
      *
-     * Once the purge queue has deleted the asset, both files are still there with their paths, outcomes and reasons, and neither
-     * points at an asset. The Import's counters are as they were.
+     * Both files keep their paths, outcomes and reasons but point at no asset, and the counters are unchanged.
      */
     val asset: Asset = testContext.insertAsset()
     val (opened, List(imported, duplicate)) = importOf("kept.jpg", "copy.jpg"): @unchecked
@@ -668,20 +638,17 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Four Imports of the context repository as a server that stopped mid-import leaves them: one in progress with one imported
-     * and two pending files; one marked complete with a pending file; one in progress with no file; and one closed, its one file
-     * imported. A second repository has an Import in progress with a pending file. Then the startup's step runs.
+     * Imports as a server stopped mid-import leaves them, in progress, marked complete, empty or closed, in two repositories.
+     * Then the restart's step runs.
      *
      * Assertions:
      *
-     * Every pending file, in both repositories, is failed with the reason "Interrupted by a restart", and every Import that was
-     * in progress is complete and closed, counting its pending files as failed and none pending. The context is the first
-     * repository again.
+     * Every pending file, in both repositories, is failed as "Interrupted by a restart", and every Import in progress is closed,
+     * counting them failed. The context is the first repository again.
      *
      * Edge cases:
      *
-     * A file settled before the restart keeps its outcome, and the Import closed before it keeps its counters and the moment it
-     * closed at.
+     * Files settled earlier, and the Import closed earlier, are unchanged.
      */
     val first = testContext.repository
     val (interrupted, List(done, lostOne, lostTwo)) = importOf("done.jpg", "lost-1.jpg", "lost-2.jpg"): @unchecked
@@ -724,7 +691,7 @@ import altitude.core.util.Query
     stored(theirs).closedAt should not be empty
   }
 
-  /** Rewrites the moment the Import was opened to `days` days and `minutes` minutes ago, in the engine's storage form */
+  /** Sets the Import's opening to `days` days and `minutes` minutes ago */
   private def age(anImport: Import, days: Int, minutes: Int = 0): Unit = {
     val createdAt = OffsetDateTime.now(ZoneOffset.UTC).minusDays(days).minusMinutes(minutes).truncatedTo(ChronoUnit.MICROS)
     val value: Any = testApp.dataSourceType match {
@@ -753,14 +720,13 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * The Import history Setting at its default of 90 days. In the context repository: a closed Import opened 90 days and a
-     * minute ago, a closed one opened a minute short of 90 days ago, and one opened 200 days ago that is still in progress, with
-     * a pending file. In a second repository: a closed Import opened 200 days ago. Each has one Import file. Then the prune runs.
+     * The Import history Setting at 90 days. Closed Imports a minute past and a minute short of 90 days, one in progress opened
+     * 200 days ago, and a closed one 200 days old in a second repository, each with a file. Then the prune runs.
      *
      * Assertions:
      *
-     * The two closed Imports past 90 days are gone, in both repositories, and so are their Import files. The Import just inside
-     * the 90 days is still there with its file. The context is the first repository again.
+     * The closed Imports past 90 days are gone with their files, in both repositories; the one just inside stays. The context is
+     * the first repository again.
      *
      * Edge cases:
      *
@@ -797,13 +763,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two closed Imports with a file each, opened 10 and 4000 days ago. The prune runs with the Import history Setting saved as
-     * 0, and then as 30.
+     * Closed Imports opened 10 and 4000 days ago, pruned with the Setting saved as 0, then as 30.
      *
      * Assertions:
      *
-     * At 0 the prune deletes nothing: both Imports and their files are still there. At 30 it deletes the one opened 4000 days ago
-     * with its file, and keeps the one opened 10 days ago.
+     * At 0 nothing is deleted; at 30 the 4000-day-old Import goes with its file.
      */
     val (recent, recentFile) = closedImport(days = 10)
     val (ancient, ancientFile) = closedImport(days = 4000)
@@ -828,20 +792,17 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * The Import history Setting at its default of 90 days, and four Imports with a file each: one in progress with a pending
-     * file; one in progress with a pending file that was opened 200 days ago; a closed one opened 200 days ago; and a closed one
-     * opened 10 days ago. Then the Import record's startup step runs, as `App` runs it.
+     * The Setting at 90 days, and Imports with a file each: in progress, in progress and 200 days old, closed and 200 days old,
+     * and closed 10 days ago. Then the startup step runs.
      *
      * Assertions:
      *
-     * The pending file of the recent Import is failed, "Interrupted by a restart", and its Import is closed, counting it failed.
-     * The closed Import opened 200 days ago is gone with its file, though no daily prune ran. The closed Import opened 10 days
-     * ago is as it was.
+     * The recent pending file is failed and its Import closed. The closed 200-day-old Import is pruned with its file; the
+     * 10-day-old one is unchanged.
      *
      * Edge cases:
      *
-     * The Import opened 200 days ago that the restart interrupted is closed by the first step and so pruned by the second: it is
-     * gone with its file too.
+     * The 200-day-old Import in progress is closed by the first step and so pruned by the second.
      */
     val (interrupted, List(lost)) = importOf("lost.jpg"): @unchecked
     val (stale, _) = importOf("stale.jpg")
@@ -869,13 +830,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An Import in progress with a pending file, and a closed Import opened 200 days ago whose row the database refuses to
-     * delete, as a failing statement would. Then the Import record's startup step runs.
+     * An Import in progress with a pending file, and a 200-day-old closed Import whose delete the database refuses. Then the
+     * startup step runs.
      *
      * Assertions:
      *
-     * The prune on its own fails with the database's refusal. The startup step does not: it returns, having failed the pending
-     * file and closed its Import, and the Import the prune could not delete is still there with its file.
+     * The prune alone fails, but the startup returns, having closed the interrupted Import; the undeletable one stays.
      */
     val (interrupted, List(lost)) = importOf("lost.jpg"): @unchecked
     val (expired, expiredFile) = closedImport(days = 200)
@@ -902,8 +862,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The Import names the account that delivered it until the account is deleted, and no account after. It is still there, with
-     * its file pending and counted.
+     * The Import names its account until the account is deleted, and none after; it stays, its file pending and counted.
      */
     val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
     val uploader = testContext.persistUser()
@@ -924,15 +883,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two repositories. The second has an asset and an Import with one pending file; the first has an Import with one pending
-     * file. The context is the first repository.
+     * Two repositories, each with an Import of one pending file, the second with an asset too. The context is the first.
      *
      * Assertions:
      *
-     * From the first repository, the second's Import is not found to read, to list its files, to add a file to or to close, and
-     * its file is not found to settle. Settling the first repository's own file as the second repository's asset is not found
-     * either, and leaves the file pending. Every row of the second repository is as it was, and the first repository's Import
-     * still counts its one pending file.
+     * The second's Import and file are not found to read, list, add to, close or settle, and settling the first's own file as the
+     * second's asset is not found either. Nothing changes in either repository.
      */
     val first = testContext.repository
     val (mine, List(myFile)) = importOf("mine.jpg"): @unchecked
@@ -960,7 +916,7 @@ import altitude.core.util.Query
   private def eventually[T](f: => T): T =
     Eventually.eventually(Eventually.timeout(Span(60, Seconds)), Eventually.interval(Span(100, Millis)))(f)
 
-  /** A random image staged as an upload's request stages it */
+  /** A random image staged as an upload stages it */
   private def stagedImage(): Path =
     testApp.service.staging.stage(IntegrationTestUtil.generateRandomImagBytesBgr(dimensions = 150))
 
@@ -973,8 +929,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Opening an Import with that folder as its destination is refused, saying that the destination folder is in the Trash, and
-     * opens nothing.
+     * Opening an Import into it is refused, saying the destination is in the Trash, and opens nothing.
      */
     val folder = testApp.service.folder.add("Gone")
     testApp.service.library.deleteFolderById(folder.persistedId)
@@ -990,18 +945,15 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A folder of the context repository, and a folder of another repository. An account holding Import alone, and one holding
-     * Import and Organize.
+     * A folder here and one in another repository; an account holding Import alone, and one holding Import and Organize.
      *
      * Assertions:
      *
-     * The account with Import alone opens an upload's Import to Triage, under the name it gives, and is refused one into the
-     * folder, which opens nothing. The account with Organize too opens one into the folder.
+     * Import alone opens an upload to Triage but is refused one into the folder; with Organize too, the folder is allowed.
      *
      * Edge cases:
      *
-     * Another repository's folder is not found for the account with Import alone, rather than refused: the folder is read in the
-     * repository before the Permission is checked.
+     * Another repository's folder is not found rather than refused: the folder is read before the Permission is checked.
      */
     val folder = testApp.service.folder.add("Sorted")
     val otherRepository = testContext.persistRepository()
@@ -1031,14 +983,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An account holding Import and Organize opens two uploads: one into a folder, one to Triage. Its Organize is then taken
-     * away, so it holds Import alone, as its requests do from the next one on.
+     * An account with Import and Organize opens an upload into a folder and one to Triage, then loses Organize.
      *
      * Assertions:
      *
-     * The upload into the folder takes nothing more from the account: asking whether it takes a file, sending one, whose staged
-     * file is deleted, failing one for a lost destination and recording one the page could not send are each refused as
-     * forbidden, naming Organize, and the Import has no file. The account still closes it, so the Import does not stay open.
+     * Every way of adding a file to the upload into the folder is forbidden, naming Organize, and its staged file is deleted; the
+     * account can still close it.
      *
      * Edge cases:
      *
@@ -1074,15 +1024,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * The Import record's log captured at DEBUG. An upload opened under a name that holds a line break followed by what reads as
-     * a log line of its own, and three files of it whose paths hold a line break or a carriage return: one recorded as the page
-     * could not send it, then settled a second time; and one sent to an import queue that is shut down, which refuses it.
+     * The Import log captured at DEBUG. An upload named with a line break and a forged log line, and files whose paths hold line
+     * breaks or carriage returns: one failed on arrival then settled again, one refused by a shut-down queue.
      *
      * Assertions:
      *
-     * No line logged holds a control character. The lines that name the Import or a path, at INFO, WARN and DEBUG, hold the break
-     * as its escape: the Import's opening, a file added, failed on arrival, settled, settled already, and failed before the
-     * pipeline.
+     * No logged line holds a control character, and every line naming the Import or a path, at every level, holds the escape.
      */
     val logger = LoggerFactory.getLogger(classOf[ImportService]).asInstanceOf[Logger]
     val capture = ListAppender[ILoggingEvent]()
@@ -1122,14 +1069,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An upload's Import with the folder Clients as its destination, and two staged images uploaded to it: one under the path
-     * Ceremony/vows.jpg and one under its bare name.
+     * An upload into Clients of two staged images, one at Ceremony/vows.jpg and one at the top.
      *
      * Assertions:
      *
-     * Each upload returns its Import file, pending, under the path it was uploaded with and with the staged file's size, and the
-     * Import counts it. The import queue then imports both: each file is settled imported, the first as an asset named vows.jpg
-     * in Clients/Ceremony, the second in Clients itself, and the Import, once closed, counts two imported.
+     * Each upload returns its pending Import file with its path and size. The queue imports both, into Clients/Ceremony and
+     * Clients, and the closed Import counts two imported.
      */
     val clients = testApp.service.folder.add("Clients")
     val opened = imports.openUpload(name = Some("Wedding"), destFolderId = clients.id)
@@ -1159,13 +1104,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An upload's Import, and an import queue of the test's own, shut down. A staged image is uploaded to the Import through that
-     * queue.
+     * A staged image uploaded through a shut-down import queue.
      *
      * Assertions:
      *
-     * The upload returns the Import file as failed, saying that the import queue is unavailable, and it is stored so: the Import
-     * counts one failed and none pending. The staged file is gone.
+     * The Import file is stored failed, the queue unavailable, the Import counts it failed, and the staged file is gone.
      */
     val opened = imports.openUpload()
     val pipeline = ImportPipelineService(testApp)
@@ -1189,8 +1132,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The upload returns the Import file as failed, with the failure's class as its reason, and it is stored so: the Import
-     * counts one failed and none pending. What was staged is gone.
+     * The Import file is stored failed with the exception's class as reason, the Import counts it failed, and the staged
+     * directory is gone.
      */
     val opened = imports.openUpload()
     val unreadable = Files.createDirectories(testApp.service.staging.dir.resolve(java.util.UUID.randomUUID.toString))
@@ -1209,18 +1152,16 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An upload's Import, and a staged image for each path: one with a name starting with a dot, as a file and as a folder, the
-     * operating systems' and the NAS's own names in any case, the names a download in progress leaves, a path with "..", and
-     * paths with an empty name (empty, a leading, a doubled and a trailing separator). And an empty staged file under a fine
-     * name.
+     * Uploads at refused paths (dot names, system and NAS names in any case, partial-download names, "..", empty names), and an
+     * empty file at a fine path.
      *
      * Assertions:
      *
-     * Every one is refused as a bad request, and its staged file is deleted. The Import has no file and counts nothing.
+     * Each is refused and its staged file deleted; the Import has no file.
      *
      * Edge cases:
      *
-     * A name that only holds an ignored name (a dot inside it, "thumbs.db.jpg", "apart") is fine: the file is added, pending.
+     * Names that merely contain an ignored name ("my.photo.jpg", "thumbs.db.jpg", "apart") are added, pending.
      */
     val opened = imports.openUpload()
     val refusedPaths = List(
@@ -1270,8 +1211,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The upload to the complete Import is refused as an illegal operation and the one to the unknown Import is not found. Each
-     * staged file is deleted, and the complete Import has no file.
+     * The first is an illegal operation and the second not found. Each staged file is deleted.
      */
     val opened = imports.openUpload()
     imports.close(opened.persistedId)
@@ -1290,18 +1230,16 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An upload's Import into the folder Sorted, opened by one account, and a Watch folder's Import. A second account of the
-     * repository is then the context account.
+     * An upload opened by one account, and a Watch folder's Import. A second account is then the context account.
      *
      * Assertions:
      *
-     * From the second account, a file uploaded to the first account's Import, a failed file recorded for it and its close are
-     * each refused as forbidden: the Import has no file and stays in progress, and the staged file is deleted. The same goes, for
-     * either account, for the Watch folder's Import, which is no upload.
+     * The second account cannot add files to or close the upload, and neither account can for the Watch folder's Import; nothing
+     * is stored and staged files are deleted.
      *
      * Edge cases:
      *
-     * The account that opened the upload still uploads to it and closes it.
+     * The opening account still uploads to it and closes it.
      */
     val sorted = testApp.service.folder.add("Sorted")
     val opener = testContext.user
@@ -1337,21 +1275,17 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An upload's Import into the folder Sorted. While Sorted is live, a file is announced to it by its path and size, before its
-     * content is read. Sorted is then deleted, which recycles it; a second file is announced the same way, and a third is
-     * uploaded, staged, through an import queue of the test's own that is shut down.
+     * An upload into Sorted. A file is announced by path and size while Sorted is live; then Sorted is deleted, another file is
+     * announced, and a third uploaded through a shut-down queue.
      *
      * Assertions:
      *
-     * With the destination live nothing is recorded for the announced file: its content is to be staged and uploaded. Once the
-     * destination is in the Trash, the announced file is recorded failed at once, under its path and size, saying that the
-     * destination folder is in the Trash. The uploaded one is recorded failed with that reason too, not with the queue's refusal,
-     * so it was never offered to the queue, and its staged file is deleted. The Import counts two failed and none pending, and
-     * the repository holds no asset.
+     * While the destination is live nothing is recorded. Once it is in the Trash, the announced file and the uploaded one are
+     * recorded failed for it, the latter never reaching the queue, whose refusal would say otherwise. No asset is left.
      *
      * Edge cases:
      *
-     * An upload to Triage has no destination to lose. A path the uploads refuse is refused here too, and records nothing.
+     * An upload to Triage has no destination to lose, and a refused path records nothing.
      */
     val sorted = testApp.service.folder.add("Sorted")
     val opened = imports.openUpload(destFolderId = sorted.id)
@@ -1394,12 +1328,11 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Recording a file that was not received adds it to the Import as failed, under its path and size, saying that the upload
-     * failed, and the Import counts it failed, with its one file still pending.
+     * The unsent file is added failed under its path and size, saying the upload failed, and counted.
      *
      * Edge cases:
      *
-     * A path the uploads refuse is refused here too, and a complete Import takes no such file either; neither records anything.
+     * A refused path, or a complete Import, records nothing.
      */
     val (opened, _) = importOf("sent.jpg")
 
@@ -1425,18 +1358,16 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An asset persisted by an import that has not completed it, and never will: one whose discard failed, or that another stream
-     * is importing. A second copy of it dropped as a duplicate in an Import whose destination is the folder Wedding under
-     * Clients.
+     * An asset whose import is not complete (its discard failed, or another stream is importing it), and a copy of it dropped as
+     * a duplicate in an Import into Clients/Wedding.
      *
      * Assertions:
      *
-     * The Import file is failed, saying that the copy it matched is not in the Library, and points at no asset: only a completed
-     * asset makes a file a duplicate. The Import counts it as failed.
+     * The Import file is failed, its copy not in the Library, with no asset: only a completed asset makes a duplicate.
      *
      * Edge cases:
      *
-     * Once the copy's import completes, the next file with its content is a duplicate of it, naming where it is: Triage.
+     * Once the copy completes, the next copy is a duplicate of it, in Triage.
      */
     val clients = testApp.service.folder.add("Clients")
     val wedding = testApp.service.folder.add("Wedding", clients.id)

@@ -3,11 +3,8 @@
 @import altitude.core.models.Stats
 @import play.twirl.api.Html
 
-@* The Users page (/users/r/:repoId, UsersController), for an Admin or a holder of Create Users or Create Guests in the Library:
-   shaped like Settings (the nav outside the main app, html_common, json-enc.js for its dialogs, and its page module). `main`
-   is the `usersPage` component (js/alpine/components/users-page.js): the header (the title, the filter box, which narrows the
-   cards by name, username or email with no request, and Add User, which opens the Add User modal), then the account cards
-   under their tabs (htmx/user_accounts, `accounts`), which the page reloads after every change it makes. *@
+@* The Users page, for an Admin or a holder of Create Users or Create Guests in the Library. The filter box narrows the
+   cards by name, username or email with no request; the page reloads the account cards after every change it makes. *@
 @(stats: Stats, accounts: Html)
 
 <!DOCTYPE html>

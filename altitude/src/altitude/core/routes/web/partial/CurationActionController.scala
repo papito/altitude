@@ -14,10 +14,7 @@ import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.decorators.requirePermission
 
-/**
- * Curation's partials: the modal's shell, the rows of its queue, and the fragment of a Curation set from one Sequence or a
- * selection
- */
+/** Curation's partials: the modal's shell, its queue, and a Curation set from one Sequence or a selection */
 class CurationActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/curation"
 
@@ -26,14 +23,14 @@ class CurationActionController(using logger: Logger) extends BaseController:
   @cask.get(f"/$prefix/r/:repoId")
   def shell(repoId: String)(using request: Request): Response[String] = htmlResponse(htmx.html.curation())
 
-  /** The queue's rows, which the shell's Sequence rail lists, in the order Curation walks them */
+  /** The queue's rows, in the order Curation walks them */
   @requireLogin()
   @requirePermission(Permission.CurateOwn, Permission.CurateAll)
   @cask.get(f"/$prefix/r/:repoId/queue")
   def queue(repoId: String)(using request: Request): Response[String] =
     htmlResponse(htmx.html.curation_queue(App.altitude.service.curation.queue()))
 
-  /** No content when too few frames are left: a queue's Sequence gone meanwhile is passed over without comment */
+  /** No content when too few frames are left, so a Sequence gone meanwhile is passed over silently */
   @requireLogin()
   @requirePermission(Permission.CurateOwn, Permission.CurateAll)
   @cask.get(f"/$prefix/r/:repoId/sequence/:sequenceId")
@@ -44,10 +41,7 @@ class CurationActionController(using logger: Logger) extends BaseController:
       case None => noContentResponse
       case set => htmlResponse(htmx.html.curation_set(set))
 
-  /**
-   * The set of the selection in the body (`selectionIds`, which refuses an empty one). The user asked for this set, so too few
-   * frames left is a fragment saying so, not silence.
-   */
+  /** The user asked for this set, so too few frames left is a fragment saying so, not silence */
   @requireLogin()
   @requirePermission(Permission.CurateOwn, Permission.CurateAll)
   @cask.post(f"/$prefix/r/:repoId/selection")

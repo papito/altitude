@@ -15,46 +15,24 @@ const { repository, triage } = Const.views
 import { runSearch } from "./search.js"
 
 /**
- * The advanced search panel of the nav (`#searchPanel` in `includes/nav`, views/AGENTS.md
- * **Advanced search panel**): a native `popover="auto"` panel under the quick search form, which the
- * form's filter button opens (`popovertarget`). The browser owns its visibility; this module loads
- * its form, counts the filters on the button, and runs the search its form asks for. The button
- * counts the filters of the search in force while the panel is closed and the fields its form fills
- * while it is open (`showFormFilterCount`), so a field emptied in the panel, or its Clear, shows on
- * the button before anything is searched. The form's own
- * behaviour is its components' (`alpine/components/search-panel.js`, `filter-combobox.js`,
- * `date-range.js`).
- *
- * The panel and the quick search form are `hx-preserve`, so they are bound once and outlive a nav
- * reload. The nav is on every page: in Browse and in Triage the panel shows the search in force and
- * searches in place when its search is that view's, and opens the other of the two, whose page is
- * laid out for its view, when its "Search in" row picks it; on a page with no search of its own
- * (Import, Settings, Users, the style guide), and in the Trash, it opens the view its search is of
- * with the search as the query string.
- *
- * Opening loads the form (`GET /htmx/search/r/:repoId/panel`, the host's `data-panel-url`) filled
- * in from the search parameters in force, its description included, so the server names the chips,
- * with the view and the triage filter of the search it will run (`pickOfPanelSearch`), which the
- * form's "Search in" row opens on and its People options count by. The text is the quick
- * search input's, typed or not yet searched, so the form's field for it and the input hold one
- * value: the input's is copied to the panel as it opens, and the panel's to the input as it
- * searches. The form is read through the axios client and put in the panel here, not by htmx, so
- * that only the answer of the latest opening is shown; the panel is emptied as it closes, and stays
- * invisible until its form arrives (`htmx/search_panel.css`).
+ * The nav's advanced search panel: a native popover holding a server-rendered form, plus the
+ * filter count on its button. The panel and the quick search form are `hx-preserve`, so they are
+ * bound once and survive a nav reload. The form is fetched with axios rather than htmx so only the
+ * latest opening's answer is shown; the panel is emptied as it closes.
  */
 
 const PANEL_ID = "searchPanel"
 
-// The form's first field, Describe (htmx/search_panel), which takes focus once the form is in, the caret after its text
+// Focused once the form loads
 const DESCRIBE_ID = "searchPanelDescribe"
 
 // The latest load of the form; an earlier one's answer is dropped
 let loadToken = 0
 
-// The filters the next opening shows over the ones in force (`openSearchPanel`)
+// Filters the next opening shows over the ones in force
 let openingFilters = null
 
-/** Binds the panel and the filter button of the page's nav, once; a page without the nav binds nothing */
+/** Binds once; a page without the nav binds nothing */
 export function bindSearchPanel() {
     const panelEl = document.getElementById(PANEL_ID)
 
@@ -62,15 +40,14 @@ export function bindSearchPanel() {
         return
     }
 
-    // `beforetoggle` fires for every opening, where the `toggle` of a fast close and reopen is one event
+    // `beforetoggle` fires on every opening, while a fast close and reopen make a single `toggle`
     panelEl.addEventListener("beforetoggle", (event) => {
         if (event.newState === "open") {
             loadForm(panelEl)
         }
     })
 
-    // A closed panel's form is gone, and the button counts the search in force again: what was
-    // changed in the panel and not searched is dropped
+    // Closing drops unsearched changes, so the button counts the search in force again
     panelEl.addEventListener("toggle", () => {
         if (!panelEl.matches(":popover-open")) {
             emptyPanel(panelEl)
@@ -84,16 +61,14 @@ export function bindSearchPanel() {
     }
 }
 
-/** How many filters the search in force has; none on a page with no search of its own, which has no store */
+/** 0 on a page with no search of its own */
 function filterCountInForce() {
     return Alpine.store(Const.state.searchParams)?.filterCount() ?? 0
 }
 
 /**
- * The search `formEl` holds, each entry under its search parameter's name: its filters and, in a
- * member's form, its pick of the assets to search, the view and the triage filter. A folder holds
- * no triaged asset, so a form that searches Triage hides its Folder field and holds no folder,
- * whatever the field kept from another pick.
+ * A folder holds no triaged asset, so a Triage search drops the folder the hidden field may have
+ * kept from another pick.
  */
 export function searchOfForm(formEl) {
     const search = Object.fromEntries(new FormData(formEl))
@@ -105,11 +80,7 @@ export function searchOfForm(formEl) {
     return search
 }
 
-/**
- * Counts on the filter button the fields `formEl` fills, as the store counts those of a search
- * (`countSearchFilters`): the panel's form calls it as it loads and whenever a field's value
- * changes. A form outside the nav's panel (the style guide's specimen) counts nothing.
- */
+/** Counts the filled fields as the store counts a search's; a form outside the panel counts nothing */
 export function showFormFilterCount(formEl) {
     if (!formEl.closest(`#${PANEL_ID}`)) {
         return
@@ -125,13 +96,9 @@ export function showFormFilterCount(formEl) {
 }
 
 /**
- * Opens the panel on the search in force with `filters` laid over it (`{ folderId }` for a folder's
- * Search here), each under its search parameter's name; an open panel is loaded again with them.
- * Nothing is searched until its Search.
- *
- * A closing panel hands focus back to what had it as the panel opened: a filtered title's Edit keeps
- * it, but an entry of a menu is gone by then, since the panel's opening closes the menu, so from
- * inside another popover the focus goes to the filter button first.
+ * Opens the panel on the search in force with `filters` over it; an open panel reloads. A closing
+ * panel returns focus to what had it on opening, and a menu entry is gone by then, so from inside
+ * another popover focus moves to the filter button first.
  */
 export function openSearchPanel(filters = {}) {
     const panelEl = document.getElementById(PANEL_ID)
@@ -150,7 +117,7 @@ export function openSearchPanel(filters = {}) {
     panelEl.showPopover({ source: buttonEl })
 }
 
-/** Closes the panel, if it is open, and returns whether it was: Escape's job in `global.js` */
+/** Returns whether the panel was open */
 export function closeOpenSearchPanel() {
     const panelEl = document.getElementById(PANEL_ID)
 
@@ -163,13 +130,8 @@ export function closeOpenSearchPanel() {
 }
 
 /**
- * Runs the search of the panel's `filters`, each under its search parameter's name, which replace
- * the ones in force (`applySearchFilters`), with the panel's pick of the assets to search, a `view`
- * and a `triaged`, when they carry one; a chip removed from a filtered search's title carries none,
- * and keeps the view. Where the page shows the view the search is of, Browse or Triage, the store
- * takes the filters and the results are read again in place, the panel closed and the quick search
- * input showing the text searched; from anywhere else the window goes to that view with the search
- * as its query string, which seeds the store there.
+ * Runs a search with `filters` replacing the ones in force: in place on the page's own view,
+ * otherwise by navigating there. Filters without `view` (a removed chip) keep the view.
  */
 export function searchByFilters(filters) {
     const searchParams = Alpine.store(Const.state.searchParams)
@@ -195,20 +157,15 @@ export function searchByFilters(filters) {
     )
 }
 
-/** The view the page is laid out for: none on a page with no search of its own, which has no view */
+/** The view the page is laid out for; null on a page with no search of its own */
 function pageView() {
     return Alpine.store(Const.state.currentView)?.view ?? null
 }
 
 /**
- * The view and the triage filter of the search the panel will run, which its "Search in" row opens
- * on. In Triage it is the Triage view, which holds no filter. In Browse it is the repository view
- * with the triage filter in force: the "Show triaged items" choice, or the pick of the search in
- * force. Anywhere else the search opens Browse, which holds no filter yet (a page with no search
- * has no store, and the Trash's holds none) and will be seeded the choice remembered in this
- * browser, so that choice is the one: for an account that sees triaged items alone, since a Guest
- * is refused the filter. A search of a folder (a folder's Search here) is Browse's from Triage
- * too, since a folder holds no triaged asset.
+ * The view and triage filter the panel opens on. A folder's search goes to Browse even from Triage,
+ * since a folder holds no triaged asset. Off Browse, the triage filter is the one remembered in this
+ * browser, as Browse will be seeded with it.
  */
 function pickOfPanelSearch(filters) {
     const view = pageView()
@@ -237,12 +194,7 @@ function filterButtonEl() {
     return document.querySelector(`[popovertarget="${PANEL_ID}"]`)
 }
 
-/**
- * Loads the panel's form for the search in force, with the quick search input's text as its text
- * and the filters of `openSearchPanel` over both, and with the view and the triage filter of the
- * search the panel will run (`pickOfPanelSearch`). The panel shows nothing meanwhile; a failure
- * closes it.
- */
+/** The server fills the form and names its chips; the panel is empty meanwhile, and a failure closes it */
 async function loadForm(panelEl) {
     const token = ++loadToken
     const searchParams = Alpine.store(Const.state.searchParams)
@@ -280,11 +232,7 @@ async function loadForm(panelEl) {
     }
 }
 
-/**
- * Puts focus in the text field with the caret after its text. A field filled in by its markup
- * takes focus with the caret before its text, where typing would go ahead of a description in
- * force instead of adding to it.
- */
+/** A prefilled field otherwise gets the caret first, so typing would go ahead of its text */
 function focusAtEnd(fieldEl) {
     if (!fieldEl) {
         return
@@ -294,7 +242,7 @@ function focusAtEnd(fieldEl) {
     fieldEl.setSelectionRange(fieldEl.value.length, fieldEl.value.length)
 }
 
-/** A closed panel holds nothing: its components go with their form, and a load still out is dropped */
+/** Its components go with the form, and a load still out is dropped */
 function emptyPanel(panelEl) {
     loadToken++
     panelEl.replaceChildren()
@@ -308,10 +256,7 @@ function withoutEmpty(filters) {
     )
 }
 
-/**
- * The number of filters on the filter button, those in force or those the open panel's form holds:
- * its badge, shown from one up, and its accessible name
- */
+/** The badge shows from one up; the accessible name carries the count too */
 function showFilterCount(count) {
     const buttonEl = filterButtonEl()
     const name = buttonEl.title

@@ -18,12 +18,7 @@ import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.decorators.requirePermission
 
-/**
- * The Albums tab and its dialogs. The tab shell is a Twirl partial; the list itself is rendered client-side from
- * `AlbumController.getAlbumList`. Add is a modal dialog, rename and delete are inline dialogs in the album's menu, all following
- * the folder dialog flow (a validation failure replaces the form in place). Add to album is the batch ops' modal dialog: it adds
- * the selection to an album, or to a new one it creates.
- */
+/** The Albums tab shell and the album dialogs. The list itself is rendered client-side from `AlbumController.getAlbumList`. */
 class AlbumActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/album"
 
@@ -49,7 +44,6 @@ class AlbumActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.add_album_dialog()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-  /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-album")
@@ -64,7 +58,6 @@ class AlbumActionController(using logger: Logger) extends BaseController:
         ))
     }
 
-  /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-album")
@@ -91,15 +84,13 @@ class AlbumActionController(using logger: Logger) extends BaseController:
 
     try App.altitude.service.album.add(jsonIn(Api.Field.Album.NAME).str)
     catch
-      // The name rule the stored name is held to, once normalized (`Validators.validName`)
+      // The name rule applied to the normalized name (`Validators.validName`)
       case ex: ValidationException => return responseWithValidationErrors(ex.errors.toMap)
       case ex: DuplicateException =>
         return responseWithValidationErrors(Map(Api.Field.Album.NAME -> ex.message.getOrElse("Album name already exists")))
 
-    // The client reloads the album list off the "albumAdded" event - no markup needed here
     cask.Response("", 200, Seq(("Content-Type", "text/html")))
 
-  /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/rename")
@@ -128,7 +119,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
         App.altitude.service.album.rename(albumId = albumId, newName = newName)
         cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
       catch
-        // The name rule the stored name is held to, once normalized (`Validators.validName`)
+        // The name rule applied to the normalized name (`Validators.validName`)
         case ex: ValidationException => responseWithValidationErrors(ex.errors.toMap, albumId = albumId)
         case ex: DuplicateException =>
           responseWithValidationErrors(
@@ -145,10 +136,8 @@ class AlbumActionController(using logger: Logger) extends BaseController:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   /**
-   * The Add to album dialog's submission: the selection (`selectionIds`) goes to the chosen album, or, when no album is chosen,
-   * to a new album by the submitted name, created in the same transaction. The success detail names the album and says how many
-   * assets the server added (members already are skipped) and whether it created the album, which the client's list must then
-   * show.
+   * Adds the selection to the chosen album or, when none is chosen, to a new album by the submitted name, created in the same
+   * transaction. `added` counts only assets that were not already members.
    */
   @requireLogin()
   @requirePermission(Permission.Organize)
@@ -179,7 +168,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
       albumId match
         case Some(id) =>
           ApiRequestValidator(uuid = List(Api.Field.Album.ALBUM_ID)).validate(jsonIn)
-          // Fails with NotFoundException for an album of another repository or none at all
+          // An unknown album, or another repository's, is a field error here rather than a 404
           val album: Album = App.altitude.service.album.getById(id)
           success(album, App.altitude.service.album.addAssets(id, ids), created = false)
         case None =>
@@ -192,7 +181,6 @@ class AlbumActionController(using logger: Logger) extends BaseController:
         responseWithValidationErrors(Map(Api.Field.Album.NAME -> ex.message.getOrElse("Album name already exists")))
       case ex: NotFoundException => responseWithValidationErrors(Map(Api.Field.Album.ALBUM_ID -> ex.getMessage))
 
-  /** An unknown album, or another repository's, is a 404, and its memberships stay */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.delete(f"/$prefix/r/:repoId/")

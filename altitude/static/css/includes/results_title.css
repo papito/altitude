@@ -1,8 +1,6 @@
-/* The results title (includes/results_title.scala.html, views/AGENTS.md **Results title**): the scope of the results shown,
-   above the toolbar, set off by a hairline below. It sticks to the top of the scrolling pane, so it paints the pane's own
-   background (the pane's tint, if any, over the page background) rather than letting the grid show through. Its rendered
-   height is written to --results-title-height on the fragment (js/search-results/sticky-offsets.js), the offset the toolbar
-   sticks at; the grouped grid's headers stick below both (includes/search_results.css). */
+/* The scope of the results shown, above the toolbar. It sticks to the top of the scrolling pane, so it paints the pane's
+   background (its tint over the page's) rather than letting the grid show through. Its height, written to
+   --results-title-height by js/search-results/sticky-offsets.js, is the offset the toolbar sticks at */
 .results-title {
   position: sticky;
   top: 0;
@@ -38,8 +36,8 @@
   font-size: var(--font-size-xl);
 }
 
-/* A kind's icon struck through (No Location): Font Awesome 5 Free has no slashed marker, so its own slash glyph (fa-slash,
-   made to be laid over another icon) is centered over the marker */
+/* A kind's icon struck through (No Location): Font Awesome 5 Free has no slashed marker, so its slash glyph (fa-slash)
+   is centered over the marker */
 .results-title .kind-icon.slashed {
   position: relative;
 }
@@ -52,7 +50,7 @@
   translate: -50% 0;
 }
 
-/* A long title truncates rather than wrapping; the folder path is the exception (`.crumbs` below) */
+/* A long title truncates rather than wrapping; the folder path (`.crumbs`, core.css) is the exception */
 .results-title .name,
 .results-title .query,
 .results-title #personName {
@@ -61,7 +59,7 @@
   white-space: nowrap;
 }
 
-/* The way back to the whole result set: a round × that fills on hover */
+/* The way back to the whole result set */
 .results-title .clear-scope {
   flex: none;
   display: grid;
@@ -82,17 +80,14 @@
   background: hsl(from var(--theme-neutral-3) h s l / 0.15);
 }
 
-/* The subtitle, and what a described search that found nothing says after Edit, in the subtitle's place */
+/* The subtitle, and in its place the line a described search that found nothing shows after Edit */
 .results-title .subtitle,
 .results-title .filters .empty {
   font-size: var(--font-size-small);
   color: var(--theme-neutral-3);
 }
 
-/* A folder's path wears the shared crumbs (.crumbs, core.css): the ancestors dimmed, each a link to its own folder, and
-   the folder itself (.leaf) in the title style */
-
-/* The Search text, in curly quotes, as the title and as a filtered search's chip */
+/* The Search text in curly quotes, as the title and as a filtered search's chip */
 .results-title .query::before,
 .results-title .query::after,
 .results-title .chip.search-text .name::before,
@@ -110,9 +105,7 @@
   content: "\201D";
 }
 
-/* A filtered search's filters under its title (includes/search_filter_chips): a wrapping row of chips, the chosen filter's
-   chip of core.css, each led by its kind's icon or a Person's cover Face, then Edit, then, for a description that nothing
-   looks like, the line that says so */
+/* A filtered search's filters under its title: the chips, then Edit */
 .results-title .filters {
   display: flex;
   flex-wrap: wrap;
@@ -132,13 +125,12 @@
   list-style: none;
 }
 
-/* A chip's kind, dimmed before its name */
 .results-title .chip > .fas {
   color: var(--theme-neutral-3);
   font-size: var(--font-size-xs);
 }
 
-/* How several people combine, before their chips: "all of" or "any of" */
+/* How several people combine, before their chips */
 .results-title .chips .match {
   color: var(--theme-neutral-3);
   font-size: var(--font-size-small);

@@ -1,40 +1,15 @@
 /**
- * Single owner of the four dialog hosts in `views/includes/html_common.scala.html`: the general
- * modal (`#modalContent`), the popover dialog (`#popoverContent`), asset detail
- * (`#imageDetailModalContent`) and Curation (`#curationModalContent`).
+ * Single owner of the four dialog hosts: the general modal, the popover dialog, asset detail and
+ * Curation. The active host lives in the Alpine `modal` store; the three modal hosts bind `x-show`
+ * and `x-trap.inert` to it. Decided here: one host is active at a time; a close guard may hold a
+ * host's close; only one of the general and popover hosts holds a fragment, so two dialogs never
+ * share an ID; focus on open and close; and open identities, so a slow response or async work for
+ * a dismissed open never touches the modal.
  *
- * The active host lives in the Alpine `modal` store (registered with everything else `html_common`
- * binds by `registerHtmlCommonBindings` in `stores/html-common.js`).
- * The three modal hosts bind to it declaratively: `x-show` toggles a host and
- * `x-trap.inert.noscroll` from the official `@alpinejs/focus` plugin contains focus and hides the
- * rest of the page from assistive technology while a host is active. Everything the hosts must
- * agree on is decided here instead:
- *
- * - only one host is active at a time; a new open replaces whatever is active,
- * - a host's close may be held by its close guard (`setCloseGuard`): Asset detail's, while the
- *   Edit panel has a change pending,
- * - only one of the general and popover hosts holds a dialog fragment: a host keeps its last one
- *   after closing, and opening the other empties it, so two dialogs never share an ID,
- * - initial focus and focus restoration on close,
- * - the identity of the latest "open a dialog" request, so a slow response for an earlier open can
- *   never display a dialog after the user dismissed or replaced it,
- * - the identity of each displayed open (`openId`), so asynchronous work started for one open
- *   (form submissions, image loads) can tell whether that open is still the active one.
- *
- * The popover dialog is a native `<dialog popover="auto">` with no scrim and no focus trap. The
- * browser owns its visibility (`:popover-open`, changed here only through the popover API; nothing binds
- * `x-show` to it), and CSS anchor positioning places it below the control its request names in
- * `data-app-dialog-anchor`. The store still names it while it is open, for the shared title and the
- * one-active-host rule. The browser dismisses it on an outside click (light dismiss), leaving focus
- * where the click put it; Tab moving focus to a control outside it closes it too, leaving focus on
- * that control. Escape, its close control and a completed operation close it here and restore focus
- * as they do for a modal.
- *
- * The general modal is centered; asset detail is fitted to its asset by CSS; Curation fills the
- * window.
- *
- * `global.js` imports this module on every page, including pages without the hosts or the store,
- * so every entry point tolerates a missing store.
+ * The popover dialog is a native `<dialog popover="auto">`, unscrimmed and untrapped, anchored by
+ * CSS to the control its request names. The browser owns its visibility and light dismiss; Tab out
+ * of it closes it too. Pages without the hosts or the store import this module, so every entry
+ * point tolerates a missing store.
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
@@ -72,22 +47,20 @@ const trappedHosts = [
     ModalHost.curation,
 ]
 
-// Identity of each displayed open; the store mirrors the current value for reactive consumers.
+// The store mirrors the current open identity for reactive consumers
 let lastOpenId = 0
 
-// The latest request that loads a modal fragment, from `htmx:before:request` until the fragment is
-// displayed, dismissed, or superseded. Carries the element focused when the user triggered it.
+// The latest request that loads a modal fragment, until it is displayed, dismissed or superseded
 let pendingOpen = null
 
-// Where focus goes when the active modal closes.
 let returnFocus = null
 
-// The open that waits for the host it replaces to be released (`openModal`, across one Alpine tick):
-// already the displayed open for the work started for it, though no host is active yet
+// An open waiting one Alpine tick for the host it replaces to be released: work started for it
+// already counts as the displayed open's
 let activatingOpenId = null
 
-// The element that issued the request whose fragment the displayed open shows, when it was an htmx
-// request: a results cell's thumbnail for asset detail, which is where its navigation starts from
+// The element whose htmx request loaded the displayed fragment: for asset detail, the results cell
+// its navigation starts from
 let openSource = null
 
 export function createModalStore() {
@@ -123,10 +96,9 @@ export function getModalOpenId() {
 }
 
 /**
- * Whether the open identified by `openId` is the one currently displayed, or about to be: an open
- * over another host is displayed one Alpine tick after it is made, and a load that finishes in
- * that tick (a cached image) is still its own. Asynchronous work that started for an open must
- * check this before touching the modal.
+ * Whether `openId` is displayed or about to be: an open over another host is displayed one Alpine
+ * tick later, and a load finishing in that tick (a cached image) is still its own. Async work for an
+ * open checks this before touching the modal.
  */
 export function isModalOpenActive(openId) {
     return (
@@ -136,16 +108,14 @@ export function isModalOpenActive(openId) {
 }
 
 /**
- * The container of the active host when that host traps focus (the general modal, asset detail or
- * Curation): its `x-trap.inert` hides the rest of the page from assistive technology. Null while no
- * host, or the popover dialog, is active.
+ * The active host's container when it traps focus, which hides the rest of the page from assistive
+ * technology; null for none or the popover dialog.
  */
 export function getActiveTrapContainer() {
     const host = getActiveModalHost()
     return trappedHosts.includes(host) ? getContainer(host) : null
 }
 
-/** Whether `el` is inside one of the hosts */
 export function isInModalHost(el) {
     return Object.values(ModalHost).some((host) =>
         getContainer(host)?.contains(el),
@@ -153,20 +123,10 @@ export function isInModalHost(el) {
 }
 
 /**
- * Displays `host` with `title`, replacing any active modal, and returns the new open identity.
- *
- * Initial focus goes to `focusSelector` (resolved inside the host content, optionally selecting the
- * field's text) or else to the host's close control, which is never a destructive action.
- * On close, focus goes to `returnFocusSelector` - the control the fragment declares as the
- * relevant one to return to, chosen to survive the page update its operation triggers - or, without
- * one, back to the element that was focused when the open was requested, or to the control that
- * stands for it when the open takes it away (`openerOf`).
- *
- * The popover host is shown below the control its request names (`data-app-dialog-anchor`), or
- * placed like the general host (`data-unanchored`) when that control is gone or not displayed.
- *
- * An open context menu (folder, album, or Location) is closed first, so a dialog
- * never appears over one.
+ * Displays `host`, replacing any active modal, and returns the new open identity. Initial focus
+ * goes to `focusSelector`, else to the close control, never a destructive action. On close, focus
+ * goes to `returnFocusSelector`, a control chosen to survive the page update the operation
+ * triggers, else back to the opener (`openerOf`).
  */
 export function openModal({
     host,
@@ -181,9 +141,8 @@ export function openModal({
     const openId = ++lastOpenId
     store.openId = openId
 
-    // Validation re-hydrates a form inside the active host without a new open request. Keep the
-    // original return control instead of remembering the field that the response just removed,
-    // and leave the popover where it is.
+    // Validation re-hydrates a form in the active host without an open request: keep the original
+    // return control, not the field the response just removed, and leave the popover in place
     const isReplacement =
         !pendingOpen && store.activeHost === host && returnFocus !== null
     if (!isReplacement) {
@@ -223,9 +182,8 @@ export function openModal({
 
         const anchorEl = isReplacement ? null : anchorPopover(anchorId)
 
-        // `showPopover()` displays the host synchronously, so focus can move in right away. The
-        // anchor as its source puts the popover next in the Tab order after it, so Tab out of the
-        // popover goes on from the trigger.
+        // `showPopover()` displays the host synchronously, so focus can move in at once. The anchor
+        // as `source` puts the popover next after it in the Tab order
         const popoverEl = getContainer(ModalHost.popover)
         if (!popoverEl.matches(":popover-open")) {
             popoverEl.showPopover(anchorEl ? { source: anchorEl } : undefined)
@@ -235,11 +193,10 @@ export function openModal({
 
     const activeHost = store.activeHost
     if (activeHost && activeHost !== host) {
-        // Release the active host in its own reactive flush before activating the other one. The
-        // modal hosts' `x-trap.inert` effects mark the rest of the page aria-hidden and undo that
-        // on release; running the release first keeps the new host's marks from being undone, and
-        // the popover from opening under the old host's. The popover host is hidden here, after
-        // the store has released it, so its `beforetoggle` listener leaves it alone.
+        // Release the active host in its own reactive flush first: `x-trap.inert` marks the rest of
+        // the page aria-hidden and undoes that on release, which would otherwise undo the new
+        // host's marks. The popover is hidden after the store released it, so its `beforetoggle`
+        // listener leaves it alone.
         store.activeHost = null
         if (activeHost === ModalHost.popover) {
             hidePopoverHost()
@@ -253,31 +210,28 @@ export function openModal({
     return openId
 }
 
-/** The element whose htmx request loaded the displayed open's fragment, or null (a page-held dialog, a programmatic open) */
+/** Null for a page-held dialog or a programmatic open */
 export function getModalOpenSource() {
     return openSource
 }
 
-// By host, what `closeModal` asks before closing it (`setCloseGuard`), and the answer to the last
-// close a guard held (`takeHeldClose`)
+// By host, the guard `closeModal` asks first, and the answer to the last close a guard held
 const closeGuards = new Map()
 let heldClose = null
 
 /**
- * Registers `guard` for `host`: `closeModal` asks it before closing the host. It answers true for
- * the close to go ahead, or holds it by answering a promise of whether the host closed after all:
- * the guard then closes the host itself, with `closeModal` again, once it may, answering true that
- * time. The Edit panel holds Asset detail's close this way while a change is pending
- * (`edit/edit-panel.js`). An open of another host replaces the active one unasked.
+ * `guard` answers true to let the close go ahead, or holds it with a promise of whether the host
+ * closed after all, and later closes the host itself with `closeModal`, answering true that time.
+ * An open of another host replaces the active one without asking.
  */
 export function setCloseGuard(host, guard) {
     closeGuards.set(host, guard)
 }
 
 /**
- * The promise of whether the host closed after all, for the last `closeModal` its guard held, or
- * null when the last one was not held; taken once. A caller that changed the page for the close (a
- * Back that closed Asset detail) puts it back when the host stays.
+ * For the last `closeModal` a guard held, the promise of whether the host closed after all; null if
+ * not held. Taken once: a caller that changed the page for the close (a Back) restores it if the
+ * host stays.
  */
 export function takeHeldClose() {
     const held = heldClose
@@ -286,11 +240,8 @@ export function takeHeldClose() {
 }
 
 /**
- * Closes the active dialog and restores focus. Returns false when nothing was open, and true when
- * the host's close guard holds the close.
- *
- * Focus stays put when the popover host is closed while focus already sits on a control outside
- * it.
+ * Returns false when nothing was open, and true when a close guard holds the close. Focus stays put
+ * when the popover closes while focus is already outside it.
  */
 export function closeModal() {
     const guard = closeGuards.get(getActiveModalHost())
@@ -312,14 +263,9 @@ export function closeModal() {
 }
 
 /**
- * Binds the popover host's own dismissals, once per page. A page without the host binds nothing.
- *
- * The browser hides the popover by itself on an outside click (and on its own Escape handling,
- * which `global.js` consumes first). `beforetoggle` reports that synchronously, at the pointerup,
- * before the click that dismissed it can request another dialog, so dropping the pending open here
- * never cancels the one that click requests; the `toggle` that follows is a queued task, which runs
- * after the click. `closeModal()` releases the store before it hides the host, so its own hiding
- * finds nothing to do here.
+ * Binds the popover host's own dismissals, once per page. `beforetoggle` fires synchronously at the
+ * pointerup of a light dismiss, before the click can request another dialog, so dropping the pending
+ * open here never cancels the one that click requests (the queued `toggle` would run after it).
  */
 export function bindPopoverHost() {
     const popoverEl = getContainer(ModalHost.popover)
@@ -335,16 +281,15 @@ export function bindPopoverHost() {
             return
         }
 
-        // Focus moves only when the popover hid around it; a click elsewhere keeps the focus it
-        // gave, or left on the page
+        // Focus moves only when the popover hid around it; a click elsewhere keeps its focus
         releaseActiveHost({
             reason: "dismissed by the browser",
             keepFocus: !popoverEl.contains(document.activeElement),
         })
     })
 
-    // Tab, or Shift+Tab from the first control, moving focus out. A null related target is a click,
-    // which light dismiss handles, or a validation swap removing the focused field.
+    // Tab moving focus out. A null related target is a click, which light dismiss handles, or a
+    // validation swap removing the focused field
     popoverEl.addEventListener("focusout", (event) => {
         if (
             getActiveModalHost() !== ModalHost.popover ||
@@ -360,9 +305,8 @@ export function bindPopoverHost() {
 }
 
 /**
- * Releases the active host from the store and, unless `keepFocus`, restores focus. Hiding the
- * popover host is the caller's: the browser may already be hiding it. Returns false when nothing
- * was open.
+ * Hiding the popover host is the caller's, since the browser may already be hiding it. Returns false
+ * when nothing was open.
  */
 function releaseActiveHost({ reason, keepFocus }) {
     const store = modalStore()
@@ -375,24 +319,22 @@ function releaseActiveHost({ reason, keepFocus }) {
     console.debug(
         `Closing ${store.activeHost} modal (open ${store.openId})${reason ? `: ${reason}` : ""}`,
     )
-    // A video keeps playing in a hidden host otherwise, and a paused one that still has its source
-    // keeps the browser's media overlay, whose play button would resume it there
+    // A video would keep playing in a hidden host, and a paused one with its source keeps the
+    // browser's media overlay, whose play button would resume it
     const containerEl = getContainer(store.activeHost)
     containerEl?.querySelectorAll("video").forEach(unloadVideo)
     clearMediaSession()
-    // A host in fullscreen (Asset detail's `f`) leaves it on every close path, or the screen would
-    // stay on the hidden host
+    // Leave fullscreen on every close path, or the screen would stay on the hidden host
     if (containerEl?.contains(document.fullscreenElement)) {
         document.exitFullscreen().catch(() => {})
     }
-    // The title stays, so the popover keeps it while it fades out; a modal host is hidden at once
-    // (`x-show`), and the next open sets its own
+    // The title stays, so the popover keeps it while it fades out
     store.activeHost = null
 
     const focusTarget = returnFocus
     returnFocus = null
-    // Restore after a focus trap has released, and after the browser's own focus restoration when
-    // the popover hides around the focused control
+    // After the focus trap has released, and after the browser's own restoration when the popover
+    // hides around the focused control
     if (!keepFocus) {
         Alpine.nextTick(() => restoreFocus(focusTarget))
     }
@@ -401,11 +343,10 @@ function releaseActiveHost({ reason, keepFocus }) {
 }
 
 /**
- * Empties the other of the general and popover hosts when `host` is one of them, so only one dialog
- * fragment exists at a time: a host keeps its last fragment after closing, and the dialogs share
- * field IDs, so a hidden form there would shadow the opened dialog's (a `<label for>`, an autofocus
- * selector). The fragment goes once its host has faded out, so a closing popover keeps its content,
- * and only that fragment goes: one swapped in meanwhile stays.
+ * Empties the other of the general and popover hosts: a host keeps its last fragment after closing,
+ * and dialogs share field IDs, so a hidden form would shadow the opened one's (`<label for>`,
+ * autofocus). The fragment goes once its host has faded out, and a fragment swapped in meanwhile
+ * stays.
  */
 function clearOtherDialogHost(host) {
     if (host !== ModalHost.general && host !== ModalHost.popover) {
@@ -434,10 +375,9 @@ function hidePopoverHost() {
 }
 
 /**
- * Points the popover host's `position-anchor` at the trigger `anchorId` names (each trigger carries
- * `anchor-name: --<its id>`), so a list rebuild that renders the trigger again re-anchors it, which
- * the implicit anchor of `showPopover({ source })`, a reference to one element, would not. With no
- * such trigger displayed, the host is placed like the general one. Returns the trigger, or null.
+ * Anchors by name rather than through `showPopover({ source })`, which holds one element, so a list
+ * rebuild that renders the trigger again re-anchors it. With no trigger displayed the host is
+ * placed like the general one. Returns the trigger, or null.
  */
 function anchorPopover(anchorId) {
     const popoverEl = getContainer(ModalHost.popover)
@@ -455,9 +395,8 @@ function anchorPopover(anchorId) {
 }
 
 /**
- * Hands the asset's stored size to the asset-detail box, which CSS fits into the viewport below the
- * toolbar and refits when the viewport changes (core.css). Without dimensions the box falls back to
- * the whole viewport, which is what the host shows while the first asset loads.
+ * The CSS fits the asset-detail box to this size within the viewport; without one it fills the
+ * viewport, as while the first asset loads.
  */
 export function setAssetDetailSize({ width, height } = {}) {
     const box = getContainer(ModalHost.assetDetail).querySelector(".modal-box")
@@ -475,11 +414,7 @@ function getContainer(host) {
     return document.getElementById(hostContainerIds[host])
 }
 
-/**
- * `htmx:before:request` hook: records a request that loads a fragment into a dialog host as the
- * latest open request, with the trigger a popover open is anchored to. Returns whether the event
- * was such a request.
- */
+/** `htmx:before:request` hook. Returns whether the request loads a fragment into a dialog host */
 export function trackModalOpenRequest(event) {
     const host = getModalOpenRequestHost(event)
     if (!host) {
@@ -498,11 +433,9 @@ export function trackModalOpenRequest(event) {
 }
 
 /**
- * The control focus returns to when the dialog `sourceEl` requests closes. A control that the open
- * takes away hands over the one it stands for: a menu action, hidden as the dialog opens, its
- * visible ⋯ trigger, and a control of the open popover dialog, which the new dialog replaces (Quick
- * view, opened from the Triage scope dialog into the general modal), the control the popover dialog
- * would have returned to. Otherwise it is the control focused as the open was requested.
+ * Where focus returns when the dialog closes. A control the open takes away hands over the one it
+ * stands for: a menu action its ⋯ trigger, and a control of a replaced popover dialog that dialog's
+ * opener. Otherwise it is the control focused as the open was requested.
  */
 function openerOf(sourceEl) {
     const panel = sourceEl?.closest(".context-menu")
@@ -519,12 +452,9 @@ function openerOf(sourceEl) {
 }
 
 /**
- * `htmx:after:request` hook for modal open requests. Cancels the swap when the request is no
- * longer the latest open (the user dismissed or requested another modal meanwhile) and reports
- * failed opens. An open answered with no content (204, which htmx does not swap) opens nothing: it
- * stops being the pending open, and `onNoContent` gets its context, so its source can act instead
- * (a search trigger of the Triage explorer searches). Returns whether the event was a modal open
- * request.
+ * `htmx:after:request` hook. Cancels the swap of a superseded open and reports failed ones. A 204,
+ * which htmx does not swap, opens nothing, and `onNoContent` lets its source act instead. Returns
+ * whether the event was a modal open request.
  */
 export function settleModalOpenRequest(event, { onFailure, onNoContent }) {
     const host = getModalOpenRequestHost(event)
@@ -566,10 +496,8 @@ function getModalOpenRequestHost(event) {
 }
 
 /**
- * Runs `callback` once the host is displayed, as long as `openId` is still the current open.
- * `x-show` reveals a host in a macrotask of its own (Alpine's click-away compatible show), and a
- * hidden element cannot take focus, so this polls the computed display instead of relying on the
- * relative order of Alpine's ticks and timers.
+ * `x-show` reveals a host in a macrotask of its own, and a hidden element cannot take focus, so this
+ * polls the computed display rather than rely on the order of Alpine's ticks and timers.
  */
 function whenHostDisplayed(host, openId, callback, attempt = 0) {
     const container = getContainer(host)
@@ -609,13 +537,11 @@ function restoreFocus({ opener, fallbackSelector } = {}) {
     target?.focus()
 }
 
-// The document body is what `activeElement` reports when nothing focusable was clicked, so it is
-// never a meaningful place to return to.
+// `activeElement` is the body when nothing focusable was clicked: never a place to return to
 function isFocusRestorable(el) {
     return Boolean(el && el !== document.body && el.isConnected)
 }
 
-// Focus already sits on a control outside the popover host: Tab or a click put it there
 function isOutsidePopoverHost(el) {
     return (
         isFocusRestorable(el) && !getContainer(ModalHost.popover).contains(el)

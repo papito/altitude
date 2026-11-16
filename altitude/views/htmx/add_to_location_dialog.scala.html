@@ -4,8 +4,7 @@
 
 @(title: String, locations: List[Location], fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
-@* js/fragments/add-to-location.js fills the hidden assetIds field from the current selection on the first render
-   and keeps the success detail naming the chosen Location. *@
+@* js/fragments/add-to-location.js fills the hidden assetIds from the selection. *@
 <form id="addToLocation" data-app-fragment="modal"
       data-app-modal-title="@{title}"
       data-app-dialog-kind="add-to-location"
@@ -13,9 +12,9 @@
       data-app-success-event="ASSETS_ADDED_TO_LOCATION_EVENT"
       hx-target="this" hx-swap="none" hx-json-enc
       hx-put="/htmx/location/r/@{RequestContext.getRepository.persistedId}/assets">
-  @* The hidden selection is filled by the client, so its error is a general one; the Location's sits by its select *@
+  @* The client fills the selection, so its error is a general one *@
   @if(fieldErrors.contains(Api.Field.ASSET_IDS)) {<div class="error">@{fieldErrors(Api.Field.ASSET_IDS)}</div>}
-  @* The title says "location", so the select has no visible label, only its aria-label *@
+  @* The title names the Location, so the select has only an aria-label *@
   <div>
     <select id="field-locationId" name="@{Api.Field.Location.LOCATION_ID}" aria-label="Location">
       @for(location <- locations) {

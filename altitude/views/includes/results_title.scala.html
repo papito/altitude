@@ -1,8 +1,6 @@
-@* The results title: the scope of the results shown, as a block above the toolbar of includes/search_results. Every scope
-   renders the same block (views/AGENTS.md **Results title**): a folder's path, an album, a Location, the Search text or a
-   filtered search's filters (`filters`, the row of chips under its title) through this template, and a person through
-   htmx/person, whose block is also the drop zone and swap target of the person actions.
-   Styled by static/css/includes/results_title.css. *@
+@* The results title, a block above the results toolbar. Every scope renders the same block: a folder's path, an album,
+   a Location, the Search text or a filtered search's filters (`filters`, the chips under its title) through this
+   template, and a person through htmx/person. *@
 @(icon: String, subtitle: Option[String] = None, filters: Option[Html] = None)(title: Html)
 
 <div class="results-title" x-data>

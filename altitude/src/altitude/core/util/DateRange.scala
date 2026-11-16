@@ -14,11 +14,9 @@ case class DateRange(from: Option[LocalDate], to: Option[LocalDate]):
     throw IllegalArgumentException("A date range's first day must not be after its last")
 
   /**
-   * The range as a filtered search's results title reads it, and as the advanced search panel's date field shows it (`rangeLabel`
-   * in js/alpine/components/date-range.js, which this has to agree with): `1 Jun – 30 Jun 2024`, each end with its year when the
-   * two differ (`28 Dec 2023 – 3 Jan 2024`), a single day once (`8 Jun 2024`), and an open end as `from 8 Jun 2024` or
-   * `until 21 Jun 2024`. A month is its first three letters in English (`Util.humanReadableShortDate`), which the panel reads
-   * from a table of its own, so neither side depends on a locale's abbreviations.
+   * The range as the results title shows it (`1 Jun – 30 Jun 2024`, `28 Dec 2023 – 3 Jan 2024`, `from 8 Jun 2024`). It must agree
+   * with `rangeLabel` in `js/alpine/components/date-range.js`, which spells months from its own English table, so neither side
+   * depends on a locale's abbreviations.
    */
   def label: String = (from, to) match
     case (Some(first), None) => s"from ${Util.humanReadableShortDate(first)}"

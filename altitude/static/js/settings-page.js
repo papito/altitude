@@ -3,13 +3,8 @@ import { registerSettingsListeners } from "./listeners/settings.js"
 import { startNavPage } from "./nav-page.js"
 
 /**
- * The Settings page. Its one form submits through htmx, so its outcome follows the one rule for every request
- * (`listeners/htmx-requests.js`): a failure goes to the snackbar, a validation replacement swaps the form back in with its
- * errors, a save dispatches the form's declared success event.
- *
- * The page starts as every page with the nav outside the main app does (`startNavPage`): Alpine for what `html_common`
- * renders and for the nav's Library menu, and the dialog wiring of the New library dialog that menu opens. The form carries no
- * bindings.
+ * The Settings page. Its one form submits through htmx, so its outcome follows the shared request rules
+ * (`listeners/htmx-requests.js`); the form carries no bindings of its own.
  */
 startNavPage()
 registerSettingsListeners()

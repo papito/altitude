@@ -112,8 +112,8 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * A search scoped to the album renders only its member, marks the results with the album as their scope, and keeps the album
-     * in the URL the browser is told to show.
+     * A search scoped to the album renders only its member, marks the results with the album, and keeps the album in the replaced
+     * URL.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -149,8 +149,8 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * Through the first repository, adding the user's asset to "Eve's album" and removing her asset from it answer a JSON 404, as
-     * both do for an album ID that does not exist, and no answer carries the album's name. No row of either repository changes.
+     * Through the first repository, adding an asset to "Eve's album" or removing one from it answers a JSON 404, as for an
+     * unknown album ID, and no answer carries the album's name. No row of either repository changes.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId

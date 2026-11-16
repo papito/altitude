@@ -17,16 +17,15 @@ import altitude.core.routes.decorators.forbidden
 
 object BaseController:
 
-  /** The address the request came from, which an account event records (`AuditService`) */
+  /** The client's address, which an account event records */
   def clientIpOf(request: Request): Option[String] =
     Option(request.exchange.getSourceAddress).map(_.getAddress.getHostAddress)
 
 abstract class BaseController(using logger: Logger) extends cask.Routes:
 
   /**
-   * Get the unscrubbed JSON from the request body. This validates that the content type is application/json if specified. Returns
-   * an empty JSON object if the request body is empty. A body that is not JSON, or not a JSON object, is a `ValidationException`
-   * as a wrong content type is: the client's mistake, not the route's failure.
+   * The request body as a JSON object, `{}` when empty. A wrong content type, or a body that is not a JSON object, is a
+   * `ValidationException`: the client's mistake, not the route's failure.
    */
   def unscrubbedJson(using request: Request): Option[ujson.Obj] =
     // The header's media type, its parameters (a charset) left off; `Request.httpContentType` is geny's and always empty
@@ -43,24 +42,23 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
       case obj: ujson.Obj => Some(obj)
       case _ => throw ValidationException(C.Msg.Err.MALFORMED_JSON)
 
-  /** A JSON API response; `jsonError` is the `{"error": ...}` shape every JSON route uses for a client or upstream failure */
   def jsonResponse(value: ujson.Value, status: Int = 200): Response[String] =
     cask.Response(value.toString, status, Seq(("Content-Type", "application/json")))
 
+  // The shape every JSON route uses for a client or upstream failure
   def jsonError(message: String, status: Int): Response[String] = jsonResponse(ujson.Obj("error" -> message), status)
 
-  /** An HTMX partial's response: the rendered template as an HTML document, with any further headers */
   def htmlResponse(payload: Html, headers: (String, String)*): Response[String] =
     cask.Response("<!doctype html>" + payload, 200, ("Content-Type", "text/html") +: headers)
 
-  /** A 204 for an HTMX request: nothing to swap */
+  /** Nothing for HTMX to swap */
   def noContentResponse: Response[String] = cask.Response("", 204, Seq(("Content-Type", "text/html")))
 
-  /** A plain-text refusal, which the snackbar reports: the shape of every refusal `answering` makes */
+  /** A plain-text refusal, which the snackbar reports */
   def textError(message: String, status: Int): Response[String] =
     cask.Response(message, status, Seq(("Content-Type", "text/plain")))
 
-  /** What a restore did: the shape the client reads to report a duplicate, wherever assets leave the trash */
+  /** The shape the client reads to report duplicates, wherever assets leave the trash */
   def restoreResponse(result: RestoreResult): Response[String] =
     jsonResponse(
       ujson.Obj(
@@ -69,8 +67,8 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
       ))
 
   /**
-   * The selection a batch dialog submits: its hidden `Api.Field.ASSET_IDS` field is a comma-separated list, unlike the array the
-   * JSON API takes. Every ID must be a UUID, and an empty selection is an error on that field (`ValidationException`).
+   * A batch dialog's hidden `ASSET_IDS` field is comma-separated, unlike the JSON API's array. Every ID must be a UUID, and an
+   * empty selection is an error on that field.
    */
   def selectionIds(json: ujson.Obj): Set[String] =
     val ids = json.obj
@@ -89,11 +87,7 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
       errors.trigger()
     ids
 
-  /**
-   * The answer of a route whose refusals are plain text the snackbar reports: a bad request (`ValidationException`, its message
-   * or its field errors) is a 400, an asset the account's Permissions do not reach (`ForbiddenException`) a 403, something not
-   * found a 404 and a conflict (`IllegalOperationException`) a 409; any other failure is the route's own.
-   */
+  /** Turns a route's expected failures into plain-text refusals the snackbar reports; any other failure is the route's own */
   def answering(f: => Response[String]): Response[String] =
     try f
     catch
@@ -102,12 +96,7 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
       case ex: NotFoundException => textError(ex.getMessage, 404)
       case ex: IllegalOperationException => textError(ex.getMessage, 409)
 
-  /**
-   * [[answering]] for a JSON route, in the `{"error": ...}` shape (`jsonError`): a bad request (`ValidationException`, saying why
-   * as [[answering]] says it) and a refused operation (`IllegalOperationException`) are a 400, an asset the account's Permissions
-   * do not reach (`ForbiddenException`) a 403, and something not found, an unknown ID or another repository's, a 404; any other
-   * failure is the route's own.
-   */
+  /** [[answering]] for a JSON route, except that a refused operation is a 400 rather than a 409 */
   def answeringJson(f: => Response[String]): Response[String] =
     try f
     catch
@@ -121,13 +110,11 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
     if ex.message.nonEmpty then ex.message else ex.errors.values.mkString(", ")
 
   /**
-   * Response for a dialog form that failed validation: the rendered form (with errors and the submitted values) replaces the
-   * submitting form itself, instead of going to the form's normal target. The client treats a retargeted response as a validation
-   * replacement rather than a completed operation.
+   * For a dialog form that failed validation: the rendered form replaces the submitting form itself rather than the normal
+   * target, which the client takes as a validation replacement, not a completed operation.
    *
-   * The swap does not settle; `settle:0` restates the global `defaultSettleDelay: 0` (`includes/header_common`). A settle would
-   * briefly give the new form's fields the old ones' attributes, and for a text field that copy writes the old (empty) value
-   * attribute over the submitted value, which the field then keeps once it has focus.
+   * `settle:0` restates the global `defaultSettleDelay: 0`. A settle would copy the old text field's empty value attribute over
+   * the submitted value, which the field then keeps once it has focus.
    */
   def dialogFormValidationResponse(payload: String): Response[String] =
     cask.Response(
@@ -140,10 +127,9 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
       ))
 
   /**
-   * Response for a dialog operation that completed with an outcome only the server knows (how many assets a membership change
-   * applied): an empty body, as for any completed operation, and `detail` as JSON in `Api.Field.SUCCESS_DETAIL_HEADER`, which the
-   * client merges into the success detail the dialog declares (js/fragments/dialog-operations.js). A header value is Latin-1
-   * bytes, so the JSON escapes every non-ASCII character.
+   * For a dialog operation whose outcome only the server knows (how many assets a membership change applied): `detail` goes as
+   * JSON in a header, merged by the client into the dialog's success detail. A header value is Latin-1, so the JSON escapes every
+   * non-ASCII character.
    */
   def dialogSuccessResponse(detail: ujson.Obj): Response[String] =
     cask.Response(

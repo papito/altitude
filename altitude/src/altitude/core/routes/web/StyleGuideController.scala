@@ -20,7 +20,6 @@ import altitude.core.routes.decorators.requireLogin
 import altitude.core.util.StyleGuideScan
 
 object StyleGuideController:
-  /** The sample dialog's one field */
   object Field:
     val NAME = "name"
 
@@ -28,11 +27,9 @@ object StyleGuideController:
   def scanRoots(moduleDir: Path): Seq[Path] =
     Seq("css", "js").map(moduleDir.resolve("static").resolve(_)) :+ moduleDir.resolve("views")
 
-  // The vendored stylesheets (the icon font, Leaflet's, Flatpickr's), whose literals are no app's to tokenize; the guide
-  // itself, whose specimens would count as uses of what they demonstrate; the setup page's stylesheet, whose `--setup-*`
-  // palette is that page's own, not a token of the app; and the design tweaks panel's adapter (static/js/design-tweaks.js),
-  // which names tokens to configure the panel (its sections, scale and seed targets), not to use them. The panel itself is
-  // the vendored tokentweak package under static/js/lib, which the scan skips with every other library
+  // Left out of the scan: vendored stylesheets, whose literals are not the app's; the guide's own files, whose specimens would
+  // count as uses; the setup page's private `--setup-*` palette; and the design tweaks adapter, which names tokens to
+  // configure the panel rather than to use them. Everything under a `lib/` directory is skipped by the scan itself
   val excludedFiles: Set[String] = Set(
     "font-awesome.min.css",
     "leaflet.css",
@@ -44,10 +41,7 @@ object StyleGuideController:
     "design-tweaks.js"
   )
 
-/**
- * The style guide: a page of the design tokens, the shared primitives and a live sample dialog, and the source scan as JSON for
- * the design tweaks panel. `App` registers it in dev only, so in any other environment these routes do not exist.
- */
+/** The style guide page and the source scan behind it. `App` registers these routes in dev only. */
 class StyleGuideController(using logger: Logger) extends BaseController:
   import StyleGuideController.{ excludedFiles, scanRoots, Field }
 
@@ -59,7 +53,7 @@ class StyleGuideController(using logger: Logger) extends BaseController:
   private val nameScrubber = DataScrubber(trim = List(Field.NAME))
   private val nameValidator = ApiRequestValidator(required = List(Field.NAME))
 
-  /** The page. The source tree is scanned on every request, so an edit to a stylesheet or a template shows on reload. */
+  /** Scans the source tree on every request, so an edit shows on reload */
   @requireLogin()
   @rememberRepository()
   @cask.get("/style-guide/r/:repoId")
@@ -67,17 +61,15 @@ class StyleGuideController(using logger: Logger) extends BaseController:
     val scan = StyleGuideScan.scan(scanRoots(moduleDir), excludedFiles)
     logger.debug(s"Style guide scanned ${scan.filesScanned} source files")
 
-    // Embedded in a script element, which a "</" in a scanned value would otherwise be able to close
+    // Embedded in a script element, which a "</" in a scanned value could otherwise close
     val scanJson = ujson.write(scan.toJson).replace("</", "<\\/")
     val stats = App.altitude.service.stats.getStats
     val payload = "<!doctype html>" + html.style_guide(stats = stats, scanJson = scanJson)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   /**
-   * The source scan as JSON: the sources of the design tweaks panel (the tokentweak package, `static/js/lib/tokentweak.js`, which
-   * the adapter `static/js/design-tweaks.js` points here). The package reads its sources schema v1 from it, `version`,
-   * `rootTokens` (each token's location and note for the CSS export), `literals` and `lengthLiterals` (the Not reachable tab);
-   * the other keys are the style guide's and ignored. The tokens themselves the panel reads from the served stylesheet.
+   * The source scan for the design tweaks panel (`static/js/lib/tokentweak.js`), which reads its sources schema v1 from it:
+   * `version`, `rootTokens`, `literals` and `lengthLiterals`. The other keys are the style guide's.
    */
   @requireLogin()
   @cask.get("/style-guide/scan.json")
@@ -92,10 +84,7 @@ class StyleGuideController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.style_guide_sample_dialog()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-  /**
-   * The New library dialog as the style guide shows it, in error: a name typed that a Library already holds, its form posting to
-   * the sample's operation below rather than the create route
-   */
+  /** The New library dialog in its name-taken error state, posting to the sample operation below rather than the create route */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/new-library")
   def showNewLibrarySample(repoId: String): Response[String] =
@@ -106,10 +95,7 @@ class StyleGuideController(using logger: Logger) extends BaseController:
         postUrl = newLibrarySampleUrl(repoId)
       ))
 
-  /**
-   * The New library sample's operation: the Library name rule's errors under the field, as the create route answers them, and an
-   * empty answer to a valid name, which creates nothing. Whether a Library holds the name is not asked.
-   */
+  /** Validates the name as the create route does, except for whether it is taken, and creates nothing */
   @requireLogin()
   @cask.post(f"/$prefix/r/:repoId/new-library")
   def htmxSubmitNewLibrarySample(repoId: String)(using request: Request): Response[String] =
@@ -130,7 +116,7 @@ class StyleGuideController(using logger: Logger) extends BaseController:
 
   private def newLibrarySampleUrl(repoId: String) = s"/$prefix/r/$repoId/new-library"
 
-  /** The sample dialog's operation: validates as a real dialog does, and persists nothing */
+  /** Validates as a real dialog does and persists nothing */
   @requireLogin()
   @cask.post(f"/$prefix/r/:repoId/sample")
   def htmxSubmitSample(repoId: String)(using request: Request): Response[String] =

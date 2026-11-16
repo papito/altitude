@@ -1,6 +1,5 @@
-/* The Import history (htmx/import_history): the timeline of a Library's Imports, scoped by the ID of its root */
+/* The Import history: a timeline of a Library's Imports */
 
-/* A group's heading: "In progress", "Earlier" */
 #importHistoryList h3 {
   margin: var(--space-7) 0 var(--space-4);
   color: var(--theme-neutral-3);
@@ -24,7 +23,7 @@
   list-style: none;
 }
 
-/* An Import: its header, its status, its files, with its node on the line beside the header's first line */
+/* An Import, its node on the line beside the header's first line */
 #importHistoryList .import {
   position: relative;
   display: grid;
@@ -47,13 +46,13 @@
   box-sizing: content-box;
 }
 
-/* An Import in progress glows: the accent, in a halo of it */
+/* An Import in progress glows in the accent */
 #importHistoryList .import.in-progress::before {
   background-color: var(--theme-accent);
   box-shadow: 0 0 0 var(--space-2) hsl(from var(--theme-accent) h s l / 0.3);
 }
 
-/* The header: the kind's icon, the title, then who delivered it, when and where it went, which wrap under the title */
+/* The kind's icon and the title; who delivered it, when and where it went wrap under the title */
 #importHistoryList header {
   display: flex;
   flex-wrap: wrap;
@@ -100,8 +99,7 @@
   text-align: center;
 }
 
-/* How many of the Imports are shown, and the control for the earlier ones; the files' count line is the same
-   (htmx/import_files) */
+/* How many Imports are shown, and the control for earlier ones; the Import files' count line shares it */
 #importHistory .shown {
   display: flex;
   flex-wrap: wrap;

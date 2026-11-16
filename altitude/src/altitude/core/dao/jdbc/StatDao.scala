@@ -36,10 +36,7 @@ abstract class StatDao(override val config: Config) extends BaseDao[Stat] with a
     addRecord(sql, values)
     stat
 
-  /**
-   * Changes a stat of the context repository by `count`, which can be negative. The write fails for a stat the repository has no
-   * row for, and for a change that would take the stat below zero, which the table's CHECK refuses.
-   */
+  /** `count` can be negative. Fails for a stat with no row, and for a change below zero, which the table's CHECK refuses. */
   def incrementStat(statName: String, count: Long = 1): Unit =
     val sql = s"""
       UPDATE $tableName
@@ -59,10 +56,9 @@ abstract class StatDao(override val config: Config) extends BaseDao[Stat] with a
     requireOneRow(statName, updated)
 
   /**
-   * The stat rows are locked first, in the order every stat write takes them, then the assets are counted: an operation that
-   * changed assets and has yet to write its stats either committed before the count or adds its change to the values set here.
-   * The assets that count are the completed ones not marked for purging, bucketed as `StatsService.transition` buckets an asset:
-   * recycled when recycled, else triage when triaged, else sorted.
+   * The stat rows are locked first, in the order every stat write takes them, then the assets counted: an operation yet to write
+   * its stats either committed before the count or adds its change to the values set here. Completed, unpurged assets are
+   * bucketed as `StatsService.transition` buckets them.
    */
   override def reconcile(): Map[String, Long] =
     val storedSql = s"""

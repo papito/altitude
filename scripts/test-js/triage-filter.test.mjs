@@ -1,9 +1,8 @@
 /**
  * The search parameters' rules for the triage filter (`altitude/static/js/stores/search-params.js`):
- * what Browse shows of the triaged items on a first visit, the choice the View settings dialog's
- * switch leaves in `localStorage`, and what a URL, a Guest and another view make of it. The store's
- * module is the browser's as it is, behind the stand-ins `search-params.test.mjs` describes. Run by
- * `make test-js`.
+ * what Browse shows of the triaged items, the choice remembered in `localStorage`, and what a URL, a
+ * Guest and another view make of it. The module loads behind the same stand-ins as in
+ * `search-params.test.mjs`. Run by `make test-js`.
  */
 import { beforeEach, test } from "node:test"
 import assert from "node:assert/strict"

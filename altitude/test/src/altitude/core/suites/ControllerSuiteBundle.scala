@@ -7,8 +7,7 @@ import org.slf4j.LoggerFactory
 
 import altitude.core.{ Altitude, RequestContext }
 
-// Why is this Postgres and not both?
-// See: https://github.com/papito/altitude/wiki/How-the-tests-work#controller-tests-and-the-forced-postgres-config
+// Controller tests run on one engine, SQLite: `ControllerTestCore` uses `SqliteSuiteBundle.testApp`
 class ControllerSuiteBundle extends AllControllerTestSuites() with BeforeAndAfterAll {
 
   final protected val log: Logger = LoggerFactory.getLogger(getClass)

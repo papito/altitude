@@ -51,8 +51,8 @@ object TestContext {
   val ASSET_SIZE = 652084
 
   /**
-   * Numbers the fixture Libraries of the test JVM, "Test Repository 1", "Test Repository 2", ...: a Library name is unique
-   * instance-wide (`repository_01`), and an integration bundle's database keeps every test's Libraries
+   * Numbers the test JVM's fixture Libraries: a Library name is unique instance-wide (`repository_01`), and an integration
+   * bundle's database keeps every test's Libraries
    */
   private val repositoryNumber = new AtomicInteger(0)
 
@@ -77,10 +77,7 @@ object TestContext {
   def between(vector: Array[Float], other: Array[Float], parts: Int): Array[Float] =
     FaceRecognitionService.meanNormalized(Seq.fill(parts)(vector) :+ other)
 
-  /**
-   * A Scene embedding at `cosine` to `embedding`, a unit vector: that much of it, and the rest of a direction at a right angle to
-   * it, random by `seed`. Two seeds give embeddings that differ, each at the cosine asked for.
-   */
+  /** A Scene embedding at `cosine` to the unit vector `embedding`, the rest along a random orthogonal direction by `seed` */
   def atCosine(embedding: SceneEmbedding, cosine: Double, seed: Int): SceneEmbedding = {
     val along = embedding.values.map(_.toDouble)
     val random = new Random(seed)
@@ -142,7 +139,6 @@ class TestContext(val testApp: Altitude) {
     val persistedUser: User = testApp.service.user.add(userModel, password = password)
     users = users ::: persistedUser :: Nil
 
-    // if this is the only (or the first user), set current request context
     if (users.length == 1) {
       testApp.service.user.switchContextToUser(persistedUser)
     }
@@ -163,7 +159,6 @@ class TestContext(val testApp: Altitude) {
       testApp.service.repository.addRepository(name = TestContext.nextRepositoryName(), fileStoreType = C.StorageEngineName.FS)
     repositories = repositories ::: persistedRepo :: Nil
 
-    // if this is the only (or the first repo), set current request context
     if (repositories.length == 1) {
       testApp.service.repository.switchContextToRepository(persistedRepo)
     }
@@ -256,11 +251,9 @@ class TestContext(val testApp: Altitude) {
 
     val imported: Asset = testApp.service.library.addAsset(dataAsset)
 
-    // The random image is undated and of one size, so in triage, in a suite that turns the Scene models on, the import may pair
-    // it by likeness with an earlier one as it would the frames of one scene; with the models off it pairs by the hash alone, and
-    // two random images' hashes never come near. A persisted asset is a plain fixture: the Sequence the import gave it is cleared
-    // from every asset that took it, and a test that wants Sequences stamps them (`setAssetSequence`). An import that paired with
-    // a stamped Sequence would wipe that stamp off every member with the clear, so it fails the test instead
+    // With the Scene models on, the import may pair this undated random image with an earlier one by likeness (random hashes
+    // never pair). A fixture stays plain, so the Sequence it got is cleared from every member. That would wipe a stamped
+    // Sequence (`setAssetSequence`), so pairing with one fails the test instead
     val persistedAsset = imported.sequenceId.fold(imported) {
       sequenceId =>
         if (stampedSequences.contains(sequenceId)) {
@@ -283,10 +276,9 @@ class TestContext(val testApp: Altitude) {
   }
 
   /**
-   * A fixture without the import pipeline: the asset persisted, indexed and completed (`persistAndIndex`, then `completeImport`),
-   * and counted in the stats, as an import's database stages leave it. It has no file, Preview, faces, Image quality, perceptual
-   * hash or Scene embeddings, so a test reading any of them persists its asset through the pipeline (`persistAsset`). With no
-   * hash it is no frame, and the completion puts it in no Sequence; a test that wants one stamps it (`setAssetSequence`).
+   * A fixture without the import pipeline: persisted, indexed, completed and counted as the import's database stages leave it,
+   * but with no file, Preview, faces, Image quality, hash or Scene embeddings (`persistAsset` has those). With no hash it is no
+   * frame, so it joins no Sequence unless stamped (`setAssetSequence`).
    */
   def insertAsset(asset: Asset = makeAsset()): Asset = {
     val completed = testApp.service.library.completeImport(testApp.service.library.persistAndIndex(asset))
@@ -320,10 +312,7 @@ class TestContext(val testApp: Altitude) {
   /** The context repository's Imports as the Import history lists them: the ones in progress first, then the newest first */
   def imports: List[Import] = testApp.service.imports.history(shown = Int.MaxValue).entries.map(_.anImport)
 
-  /**
-   * The files of an Import of the context repository in path order, those of one outcome when `outcome` is given; an Import that
-   * is not the repository's is not found
-   */
+  /** The files of an Import of the context repository in path order, only those of `outcome` when given */
   def importFiles(importId: String, outcome: Option[ImportOutcome] = None): List[ImportFile] =
     testApp.service.imports.filesShown(importId, outcome, shown = Int.MaxValue).files
 
@@ -332,10 +321,8 @@ class TestContext(val testApp: Altitude) {
     testApp.txManager.asReadOnly(testApp.DAO.watchFolderFile.ofWatchFolder(watchFolderId))
 
   /**
-   * Whether a scan of the Watch folder is running in the instance of `service`, or a file one handed to the import pipeline is in
-   * it still: the pipeline's last stage has not told the Watch folder what became of it. The service keeps both in memory, for
-   * itself, with nothing stored to read the second from, and its cards show the first for the context repository's Watch folders
-   * alone, so both are read off its fields, whatever Library the Watch folder is in.
+   * Whether `service` is scanning the Watch folder or still has a file of it in the import pipeline, not yet settled. Both live
+   * only in the service's memory, so they are read off its private fields, whatever Library the Watch folder is in.
    */
   def isWatchFolderWorking(watchFolderId: String, service: WatchFolderService = testApp.service.watchFolder): Boolean = {
     // A field of the service by its name in the source; the compiler prefixes the name of one a closure reads
@@ -358,9 +345,8 @@ class TestContext(val testApp: Altitude) {
   }
 
   /**
-   * Lets the rest of the Watch folders' files pass without waiting for it: every file not read yet, of every Watch folder, is
-   * remembered as first seen a minute ago, so the next scan may read it. What a scan does within the rest is
-   * `WatchFolderServiceTests`' to wait for.
+   * Skips the Watch folders' rest: every file not read yet, of every Watch folder, is remembered as last seen a minute ago, so
+   * the next scan may read it.
    */
   def letWatchedFilesRest(): Unit = {
     val aMinuteAgo = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1)
@@ -410,8 +396,8 @@ class TestContext(val testApp: Altitude) {
   private val stampedSequences = mutable.Set.empty[String]
 
   /**
-   * Puts assets still in triage in a Sequence, as assignment would for a burst, whatever their files look like. A fixture
-   * persisted after the stamp fails if the import pairs it with the Sequence, so stamps come after the fixtures
+   * Puts assets still in triage in a Sequence, whatever their files look like. Stamp after persisting the fixtures: a later one
+   * the import pairs with the Sequence fails
    */
   def setAssetSequence(assets: List[Asset], sequenceId: String): Unit = {
     stampedSequences += sequenceId
@@ -449,8 +435,8 @@ class TestContext(val testApp: Altitude) {
   }
 
   /**
-   * A Face of the person in the asset with the given embedding, so recognition can be exercised on known vectors; `withFiles`
-   * writes its four images to the file store, as an import would, for a test of what becomes of them
+   * A Face of the person in the asset with a known embedding, for recognition tests; `withFiles` also writes its four images to
+   * the file store, as an import would
    */
   def addTestFace(
       person: Person,
@@ -531,8 +517,8 @@ class TestContext(val testApp: Altitude) {
   }
 
   /**
-   * Every row of every scoped table in the repository, each as text, read by hand-written SQL that no scoping touches: two reads
-   * that are equal saw no row of the repository change in between
+   * Every row of every scoped table in the repository as text, read by hand-written SQL that no scoping touches: two equal reads
+   * saw no row of the repository change in between
    */
   def rowsOf(repository: Repository): Map[String, List[String]] =
     testApp.txManager.asReadOnly {

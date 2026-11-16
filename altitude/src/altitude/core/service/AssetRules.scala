@@ -12,24 +12,21 @@ import altitude.core.models.Permissions
 
 /**
  * The Permission rules that depend on the asset, which no route decorator can decide: Curate own against the asset's owner, and
- * recycling and restoring against a triaged or a sorted asset (`Permissions.mayCurate`, `mayRecycle`). A service checks them in
- * the transaction of its write, over the assets it has read scoped to the context Library, so another Library's ID is never
- * refused but not found, as an unknown one is. One refused asset fails the whole operation with `ForbiddenException`, a 403 at
- * the route. The Permissions and the account are the context's (`RequestContext`): a request's, from its login token, or a
- * pipeline stage's, from its `PipelineContext`; no pipeline reaches these rules today.
+ * recycling and restoring against a triaged or a sorted asset. A service checks them in its write's transaction over assets read
+ * scoped to the Library, so another Library's ID is not found rather than refused. One refused asset fails the whole operation.
  */
 object AssetRules:
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  /** Refuses the operation unless every asset may be curated (resolved or reopened in Curation) */
+  /** Curating is resolving or reopening in Curation */
   def requireCurate(assets: Iterable[Asset]): Unit = require(assets, "curate")(_.mayCurate(_, _))
 
-  /** Refuses the operation unless every asset may be recycled; `action` names it, a restore taking what a recycle does */
+  /** A restore takes what a recycle does; `action` names it */
   def requireRecycle(assets: Iterable[Asset], action: String = "recycle"): Unit = require(assets, action)(_.mayRecycle(_, _))
 
   /**
-   * Whose frames Curation shows the context's account: everyone's (None) with Curate all, and with Curate own alone its own, so a
-   * set it is shown holds no frame it may not keep or recycle, and the queue counts only Sequences it can curate
+   * Whose frames Curation shows the account: everyone's (None) with Curate all, else its own, so a set holds no frame it may not
+   * keep or recycle
    */
   def curatedOwner: Option[String] = Option.unless(RequestContext.permissions.value.has(Permission.CurateAll))(accountId)
 

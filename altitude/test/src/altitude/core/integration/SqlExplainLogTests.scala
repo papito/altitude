@@ -18,7 +18,7 @@ import altitude.core.transactions.TransactionManager
 
 /**
  * The SQL explain log: each new query a transaction sends is explained once, on the transaction's own connection, and written to
- * a file with where it comes from.
+ * a file with its origin.
  */
 @DoNotDiscover class SqlExplainLogTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -74,8 +74,12 @@ import altitude.core.transactions.TransactionManager
      *
      * Assertions:
      *
-     * The log has one entry: a read, numbered 1, with the line of this test as its origin and no caller, the statement with the
-     * first values in place of its placeholders, and the engine's plan - on PostgreSQL, one that was executed.
+     * The log has one entry: a read numbered 1, with this test's line as its origin and no caller, the statement with its first
+     * values inlined, and the engine's plan, an executed one on PostgreSQL.
+     *
+     * Edge cases:
+     *
+     * Other values and a longer IN list count as the same query.
      */
     val asset = testContext.persistAsset()
     val repoId = testContext.repository.persistedId
@@ -135,8 +139,7 @@ import altitude.core.transactions.TransactionManager
     /**
      * Setup:
      *
-     * A read transaction that offers the explainer a statement selecting a column that does not exist, twice, and then counts the
-     * assets.
+     * A read transaction that twice offers the explainer a statement selecting a missing column, then counts the assets.
      *
      * Assertions:
      *
@@ -184,8 +187,8 @@ import altitude.core.transactions.TransactionManager
      *
      * Assertions:
      *
-     * The log has three entries. The DAO's read names the DAO line as its origin and the service as its caller; the batch is
-     * explained once, with the values of its first row, and both of its rows are inserted.
+     * Each of the three statements is logged, and so is the count that checks the batch. The DAO's read names the DAO line as its
+     * origin and the service as its caller. The batch is explained once, with its first row's values, and both rows are inserted.
      */
     val asset = testContext.persistAsset()
     val repoId = testContext.repository.persistedId
@@ -233,8 +236,8 @@ import altitude.core.transactions.TransactionManager
      *
      * Assertions:
      *
-     * The log stays empty: the plain statement, the DDL and the manager's own housekeeping at the start of a transaction never
-     * reach the explainer.
+     * The log stays empty: neither the plain statement, the DDL nor the manager's housekeeping at a transaction's start is
+     * explained.
      */
     withExplainingManager {
       manager =>
@@ -289,8 +292,8 @@ import altitude.core.transactions.TransactionManager
      *
      * Assertions:
      *
-     * The test application's connection is the pooled one, the explaining manager's is a proxy, and the failing statement throws
-     * the driver's SQL exception rather than a wrapper of the proxy.
+     * The test application's connection is not a proxy, the explaining manager's is, and the failing statement throws the
+     * driver's SQL exception rather than the proxy's wrapper.
      */
     def isProxied(manager: TransactionManager): Boolean = {
       val conn = manager.connection(readOnly = true)

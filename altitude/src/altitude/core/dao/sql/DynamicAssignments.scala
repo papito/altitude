@@ -11,11 +11,7 @@ object DynamicAssignments:
   def one(table: Table.Base, columns: Map[String, Expr[?]], name: String, value: Any, dialect: Dialect): Column.Assignment[?] =
     val column = Columns.required(columns, table, name)
 
-    /*
-     * The column is typed and the value came out of an untyped map, so this pairing is checked by the engine rather than by the
-     * compiler - exactly as it was when the same map was bound positionally into a hand-built UPDATE. The cast is confined to
-     * this line.
-     */
+    // The value comes from an untyped map, so the engine, not the compiler, checks it against the column's type
     Column.Assignment(
       column.asInstanceOf[Column[Any]],
       Expr[Any](_ => Columns.literal(value, dialect))

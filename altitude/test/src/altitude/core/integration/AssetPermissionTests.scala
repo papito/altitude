@@ -124,9 +124,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Restoring the other Library's recycled asset is not found (`NotFoundException`), as an unknown asset is, never refused for
-     * a Permission, and recycling the other Library's live asset changes nothing and is not refused either: the assets are read
-     * in the context Library before any is checked.
+     * Restoring the other Library's recycled asset is not found, like an unknown one, and recycling its live asset changes
+     * nothing; neither is refused for a Permission, since the assets are read in the context Library before any check.
      */
     val home = RequestContext.getRepository
     val otherLibrary = testContext.persistRepository()
@@ -245,10 +244,9 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Holding Curate own alone, the account's queue holds the first Sequence alone, counted by its own two frames; the first
-     * Sequence's set holds its two frames, the second has too few to compare, a selection of all six frames holds its three, the
-     * Detail panel's set size of its frame in the first Sequence is two, and the grouped grid's counts of its frames are two and
-     * one, a Sequence with none of them left out.
+     * Holding Curate own, every Curation read counts only the account's frames: the queue holds the first Sequence with two
+     * members, the second Sequence has too few to compare, a selection of all six frames holds its three, the set size of its
+     * frame is two, and the grouped grid's counts are two and one.
      *
      * Edge cases:
      *
@@ -290,9 +288,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The Sequence leaves the account's queue: the set held every frame the account is shown, so its Picks leave the Sequence.
-     * The other account's two frames stay as they were, live and in the Sequence, and the other account, holding Curate own,
-     * still finds the Sequence in its queue with its two frames.
+     * The Sequence leaves the account's queue, since the set held every frame it is shown. The other account's two frames stay
+     * live in the Sequence, and that account, holding Curate own, still finds it in its queue with two members.
      */
     val sequenceId = UUID.randomUUID.toString
     val List(keep1, keep2, drop) = List.fill(3)(mine(isTriaged = true))
@@ -329,10 +326,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Each of these is a `NotFoundException`, never a `ForbiddenException`, and recycles or restores nothing: resolving with the
-     * other account's frame and the other Library's as Picks; resolving the account's own frame with the other account's and an
-     * unknown ID recycled; reopening with the other account's frame and the other Library's as Picks; reopening the account's own
-     * frame with the other account's and an unknown ID restored.
+     * Resolving or reopening with the other account's frame beside the other Library's frame or an unknown ID is a
+     * `NotFoundException`, never a `ForbiddenException`, and recycles or restores nothing.
      */
     val own = mine(isTriaged = true)
     val others = theirs(isTriaged = true)

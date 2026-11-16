@@ -9,10 +9,7 @@ import org.slf4j.LoggerFactory
  */
 case class SearchTerm(variants: Seq[Seq[String]], isPhrase: Boolean = false, isExcluded: Boolean = false):
 
-  /**
-   * Whether a name, given as its [[SearchWords.variants]], has the term: the rule a Search document is matched by, applied in
-   * memory to each reading of the name on its own
-   */
+  /** The rule a Search document is matched by, applied in memory to each reading of a name on its own */
   def isIn(nameVariants: Seq[Seq[String]]): Boolean =
     variants.exists(words => nameVariants.exists(nameWords => isWithin(words, nameWords)))
 
@@ -45,9 +42,8 @@ object SearchText:
   private val Or = "OR"
 
   /**
-   * Parses the text as typed and never fails: an unbalanced quote is closed at the end of the text, a term without a word (a lone
-   * `-`, punctuation, an empty phrase) and a dangling `OR` are dropped, and terms past [[MAX_TERMS]] are dropped. None when no
-   * term is left.
+   * Never fails: an unbalanced quote closes at the end of the text, and a term without a word (a lone `-`, punctuation, an empty
+   * phrase), a dangling `OR` and terms past [[MAX_TERMS]] are dropped. None when no term is left.
    */
   def parse(text: String): Option[SearchExpression] =
     // A term, or None for the OR operator

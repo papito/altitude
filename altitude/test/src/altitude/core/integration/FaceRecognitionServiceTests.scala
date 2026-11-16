@@ -35,13 +35,12 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * Two photos of the same person, `people/meme-ben2.png` and `people/meme-ben3.png`, each imported, which stores their faces.
-     * Each photo's face is also extracted again outside the import to query recognition directly.
+     * Two photos of the same person, each imported, and each face also extracted again to query recognition directly.
      *
      * Assertions:
      *
-     * Extraction produces all four face images: the crop, the display thumbnail, the aligned crop and its grayscale copy.
-     * Recognizing either face returns the Person the first import started, and that Person has two Faces, one per photo.
+     * Extraction produces all four face images. Recognizing either face returns the Person the first import started, who has two
+     * Faces.
      */
     val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
     testApp.service.library.addImportAsset(importAsset1)
@@ -52,7 +51,6 @@ import altitude.core.service.FaceRecognitionService
     faceImages.alignedImageGs should not be empty
     val recognizedPerson: Person = testApp.service.faceRecognition.recognizeFace(face1).value
 
-    // Recognize
     val importAsset2 = IntegrationTestUtil.getImportAsset("people/meme-ben3.png")
     testApp.service.library.addImportAsset(importAsset2)
     val (face2, _) = testApp.service.faceDetection.extractFaces(importAsset2.bytes).head
@@ -69,13 +67,11 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * Three People, each with a Face at the same synthetic embedding on one asset: one enrolled, one match-only, and one enrolled
-     * but of a person marked as a bad match.
+     * Three People with a Face at the same embedding: one enrolled, one match-only, and one enrolled but marked a bad match.
      *
      * Assertions:
      *
-     * Both an enrolled and a match-only query at that embedding resolve to the enrolled person, so neither the match-only Face
-     * nor the bad match's Face is a candidate.
+     * Both an enrolled and a match-only query at that embedding resolve to the enrolled person.
      */
     val asset = testContext.persistAsset()
     val vector = unitVector(1)
@@ -106,7 +102,7 @@ import altitude.core.service.FaceRecognitionService
      *
      * Assertions:
      *
-     * Each reads back as it was stored, through the DAO mapping both engines share and each engine's own insert.
+     * Each reads back as it was stored.
      */
     val asset = testContext.persistAsset()
     val sharp = testApp.service.person.addPerson(Person())
@@ -124,12 +120,11 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * A second repository with a Person whose enrolled Face is at a synthetic embedding, and a query at the same embedding in the
-     * first repository, which has no Face of its own.
+     * A Person's enrolled Face in a second repository, and a query at the same embedding in the first, which has no Faces.
      *
      * Assertions:
      *
-     * The query matches nobody of the other repository: it starts a Person in its own.
+     * The query matches nobody of the other repository and starts a Person in its own.
      */
     val vector = unitVector(1)
     val firstRepo = testContext.repository
@@ -153,8 +148,8 @@ import altitude.core.service.FaceRecognitionService
      *
      * Assertions:
      *
-     * The DAO reads the Face's vector back equal to the one stored, through the engine's vector store, since the model never
-     * carries it.
+     * The DAO reads the vector back equal to the one stored. The model never carries it, so this goes through the engine's vector
+     * store.
      *
      * Edge cases:
      *
@@ -181,14 +176,13 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * Faces at known distances from a synthetic embedding, on one asset: the current Person's at the embedding itself and about
-     * 0.05 away, an enrolled Face of a bad-match Person and a match-only Face about 0.05 away, Person A's enrolled Face about
-     * 0.11 away, Person B's about 0.29 away, and Person C's about 1 away, past the threshold.
+     * Faces at known distances from an embedding: the current Person's at 0 and about 0.05, a bad match's and a match-only Face
+     * at about 0.05, Person A's at about 0.11, Person B's at about 0.29, and Person C's at about 1, past the threshold.
      *
      * Assertions:
      *
-     * The nearest Faces of people other than the current Person, within the recognition threshold, are A's then B's: the current
-     * Person's Faces are left out however close, as are the bad match's, the match-only Face and C's.
+     * The nearest Faces of others are A's then B's: the current Person's Faces are left out however close, as are the bad
+     * match's, the match-only Face and C's.
      *
      * Edge cases:
      *
@@ -226,13 +220,13 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * A second repository with a Person whose enrolled Face is at a synthetic embedding; in the first repository, the current
-     * Person's Face at that embedding and another Person's about 0.29 away.
+     * An enrolled Face in a second repository at an embedding; in the first, the current Person's Face there and another Person's
+     * about 0.29 away.
      *
      * Assertions:
      *
-     * The nearest Faces of other people, searched from the first repository, are the other Person's Face alone: the Face of the
-     * second repository, closer, is not seen.
+     * Searched from the first repository, the nearest Faces of others are the other Person's alone; the closer Face of the second
+     * repository is not seen.
      */
     val vector = unitVector(11)
     val firstRepo = testContext.repository
@@ -260,14 +254,13 @@ import altitude.core.service.FaceRecognitionService
       /**
        * Setup:
        *
-       * PostgreSQL only: the statement that finds the nearest stored Faces of a query embedding, planned with the table scan and
-       * the sort ruled out, since over a handful of Faces the planner would read and sort them all rather than read an index.
+       * The nearest-Faces statements explained with the table scan and the sort ruled out, since over a handful of Faces the
+       * planner would otherwise scan and sort them all.
        *
        * Assertions:
        *
-       * The plan reads the partial HNSW index over the enrolled Faces' half-precision vectors: the statement's order and
-       * predicates are the ones the index is declared with. So does the plan of the statement that leaves a Person out, the
-       * Suggested group's.
+       * Both the recognition statement and the Suggested one, which leaves a Person out, read the partial HNSW index `face_03`,
+       * so their order and predicates match the index's declaration.
        */
       val vector = PostgresOverrides.vectorLiteral(unitVector(1))
 
@@ -292,12 +285,11 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * One Person whose only Face, at a synthetic embedding, is match-only, so that embedding has no candidate.
+     * One Person whose only Face is match-only, so its embedding has no candidate.
      *
      * Assertions:
      *
-     * A match-only query there resolves to nobody, while an enrolled query starts a new Person rather than joining the match-only
-     * Face's owner.
+     * A match-only query there resolves to nobody, while an enrolled query starts a new Person.
      */
     val asset = testContext.persistAsset()
     val vector = unitVector(2)
@@ -314,12 +306,11 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * Two People with one enrolled Face each: one at a synthetic embedding, the other at the normalized mean of it and an
-     * unrelated vector, about 0.29 away and within the match threshold.
+     * Two People with one enrolled Face each, about 0.29 apart, within the match threshold.
      *
      * Assertions:
      *
-     * A query at either Face matches both, one vote per Person, and the tie goes to the Person whose Face is closer to the query.
+     * A query at either Face matches both, one vote each, and the tie goes to the Person whose Face is closer.
      */
     val asset = testContext.persistAsset()
     val vector = unitVector(3)
@@ -344,12 +335,11 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * An import of `affleck.jpg` letterboxed into a clip-sized frame and blurred at FRAME_BLUR, which makes its face match-only,
-     * into a library with no People.
+     * A still with a blurred, match-only face imported into a library with no People.
      *
      * Assertions:
      *
-     * The face has no Person to join and is dropped: the asset has no Faces and no People, and no Person exists.
+     * The face has no Person to join and is dropped: the asset has no Faces and no Person exists.
      */
     val blurred: Asset = testApp.service.library.addImportAsset(
       IntegrationTestUtil.fileToImportAsset(TestVideos.frameStill("affleck.jpg", TestVideos.FRAME_BLUR).toFile))
@@ -368,7 +358,7 @@ import altitude.core.service.FaceRecognitionService
      *
      * Assertions:
      *
-     * The clip has one enrolled Face, with a Frame time within the clip's duration, and one Person.
+     * The clip has one enrolled Face, with a Frame time within its duration, and one Person.
      */
     val clip: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.oneFace.toFile))
 
@@ -397,7 +387,6 @@ import altitude.core.service.FaceRecognitionService
     faces.size should be(2)
     faces.map(_.frameTimeMs.value).sorted match
       case List(first, second) =>
-        // Each Face is pinned to a frame of its own person's span: the first three seconds, then the next three
         first should be < 3000L
         second should be >= 3000L
     testApp.service.person.getPeopleForAsset(clip.persistedId).map(_.persistedId).distinct.size should be(2)
@@ -408,8 +397,7 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * Three imports of one person: the `affleck.jpg` photo, the three-second `TestVideos.oneFace` clip, and a second, two-second
-     * clip of the same portrait.
+     * Three imports of one person: a photo, a three-second clip and a two-second clip of the same portrait.
      *
      * Assertions:
      *
@@ -431,17 +419,13 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * An import of a clip of `bullock.jpg` for half a second, then two and a half seconds of black, into a library with no
-     * People. Frames are sampled at 0, 1000 and 2000 ms, so the person is in the first sampled frame only.
+     * A clip of a sharp portrait for half a second, then black to three seconds, imported into a library with no People. Frames
+     * are sampled each second, so the person is in the first one only.
      *
      * Assertions:
      *
-     * With a single frame of support the Face is match-only, and with no Person to join it is dropped: the clip has no Faces and
-     * no Person exists.
-     *
-     * Edge cases:
-     *
-     * A cluster under the minimum of two supporting frames, from a sharp face that would otherwise enroll.
+     * With one frame of support, under the minimum of two, the Face is match-only and, with no Person to join, dropped: the clip
+     * has no Faces and no Person exists.
      */
     val clip: Asset = testApp.service.library.addImportAsset(
       IntegrationTestUtil.fileToImportAsset(
@@ -456,8 +440,7 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * The `affleck.jpg` photo imported first, then a clip of the same portrait for half a second followed by two and a half
-     * seconds of black, so the person is in one sampled frame.
+     * A photo imported, then a clip with the same portrait in one sampled frame only.
      *
      * Assertions:
      *
@@ -485,8 +468,7 @@ import altitude.core.service.FaceRecognitionService
      *
      * Assertions:
      *
-     * The blurred face is match-only even though it is in every sampled frame, so with no Person to join, the clip has no Faces
-     * and no Person exists.
+     * The blurred face is match-only though it is in every sampled frame, so the clip has no Faces and no Person exists.
      */
     val clip: Asset = testApp.service.library.addImportAsset(
       IntegrationTestUtil.fileToImportAsset(
@@ -523,8 +505,7 @@ import altitude.core.service.FaceRecognitionService
      *
      * Assertions:
      *
-     * The Face read back from the repository has, as its checksum, the SHA-256 in lowercase hex of the crop file the import wrote
-     * to the file store.
+     * The Face's checksum is the lowercase hex SHA-256 of the crop file the import wrote.
      */
     val importedAsset: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/meme-ben2.png"))
 
@@ -538,13 +519,11 @@ import altitude.core.service.FaceRecognitionService
     /**
      * Setup:
      *
-     * A persisted asset, then face processing run on a staged PNG of `bullock.jpg` drawn twice side by side, so both detections
-     * and their crops are byte-identical.
+     * Face processing for a persisted asset over one portrait drawn twice side by side, so both crops are byte-identical.
      *
      * Assertions:
      *
-     * The second Face breaks the face checksum index after the first Face's files are written. Processing fails with a duplicate
-     * error, the asset keeps no Faces, and the repository's faces directory holds no files.
+     * Processing fails with a duplicate error, the asset keeps no Faces, and the repository's faces directory holds no files.
      */
     val asset = testContext.persistAsset()
     val dataAsset = AssetWithData(asset, testApp.service.staging.stage(samePortraitTwice("people/bullock.jpg")))
@@ -560,8 +539,8 @@ import altitude.core.service.FaceRecognitionService
   }
 
   /**
-   * One portrait drawn twice side by side, at an offset that is a multiple of the detector's largest stride and in an image small
-   * enough not to be resized, so both detections, and their crops, are the same
+   * One portrait drawn twice side by side, offset by a multiple of the detector's largest stride in an image small enough not to
+   * be resized, so both detections and crops are the same
    */
   private def samePortraitTwice(relPath: String): Array[Byte] =
     val portrait = ImageIO.read(new ByteArrayInputStream(IntegrationTestUtil.getImportAsset(relPath).bytes))

@@ -16,8 +16,7 @@ clean:
 clear-db:
 	ENV=dev mill altitude.runMain altitude.tools.clearDb
 
-# temp target to restore a DB after trying to reproduce a bug
-# (to avoid importing all the time)
+# Restores a backed-up dev DB after reproducing a bug, to avoid re-importing
 restore-db:
 	cp data/db/altitude.db.bak data/db/altitude.db
 
@@ -75,8 +74,7 @@ test-unit:
 test-controllers:
 	ENV=test mill altitude.test.testOnly *ControllerSuiteBundle --show-output -- $(SKIP_SLOW)
 
-# The client modules' tests under Node's built-in runner, with no dependency: the Edit's parity with the server's renderer,
-# and the search parameters' rules for a description and for the triage filter
+# The client modules' tests, under Node's built-in runner with no dependencies
 test-js:
 	node --test 'scripts/test-js/*.test.mjs'
 

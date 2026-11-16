@@ -54,16 +54,16 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests of the repository view naming no person or Location, one of each, and three people with two Locations.
+     * Requests naming no person or Location, one of each, and several of each.
      *
      * Assertions:
      *
-     * A parameter left out is no filter, one ID is a list of one, and a comma-separated value is its IDs in the order given,
-     * which the query the scope builds takes as a set; the folder and the album stay one ID each.
+     * A parameter left out is no filter, and a comma-separated value is its IDs in the order given, which the built query takes
+     * as a set. The folder and the album stay one ID each.
      *
      * Edge cases:
      *
-     * An ID repeated in a parameter counts once, at its first place.
+     * A repeated ID counts once, at its first place.
      */
     val none = browse().value
     none.personIds shouldBe empty
@@ -91,17 +91,15 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests whose `personId` or `locationId` is empty, a lone comma, one ID followed by a comma, and IDs with empty segments
-     * before, between and after them.
+     * Person and Location parameters that are empty, only commas, or IDs with empty segments around them.
      *
      * Assertions:
      *
-     * An empty segment is no ID: a parameter of nothing but empty segments names nothing, as one left out does, and the IDs
-     * around an empty segment are taken in the order given.
+     * An empty segment is no ID: only empty segments name nothing, and the IDs around them keep their order.
      *
      * Edge cases:
      *
-     * Ten IDs followed by a comma are ten IDs, not eleven, so they are taken.
+     * Ten IDs followed by a comma are ten, within the bound.
      */
     for (value <- List("", ",", ",,")) withClue(s"'$value': ") {
       val scope = browse(fields.PERSON_ID -> value, fields.LOCATION_ID -> value).value
@@ -119,18 +117,16 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests of the repository view with an album, and with a Triage subset, each beside what only the advanced search panel
-     * combines: a date range, two people, two Locations, and two of the Search text, a folder, a person and a Location.
+     * Requests with an album or a Triage subset beside filters only the advanced search combines: a date range, several people or
+     * Locations, or two of the Search text, a folder, a person and a Location.
      *
      * Assertions:
      *
-     * Each is refused with a message naming the album and the subset: an advanced search searches the view by the panel's filters
-     * alone.
+     * Each is refused with a message naming the album and the subset.
      *
      * Edge cases:
      *
-     * An album or a subset beside one of the Search text, a folder, a person or a Location, and the same filters with neither an
-     * album nor a subset, are taken.
+     * An album or a subset beside a single one of those filters is taken, and so are the combined filters alone.
      */
     val combined = List(
       List(fields.TAKEN_FROM -> "2024-06-01"),
@@ -163,12 +159,11 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * Ten IDs in a parameter are taken, and eleven are refused with a message saying how many a search takes.
+     * Ten IDs are taken; eleven are refused with a message giving the bound.
      *
      * Edge cases:
      *
-     * Ten people together with ten Locations are taken: the bound is each parameter's own. Eleven values that are ten IDs, one of
-     * them repeated, are taken.
+     * The bound is per parameter (ten people with ten Locations are taken) and counts distinct IDs (ten plus a repeat are taken).
      */
     browse(fields.PERSON_ID -> ids(10)).value.personIds should have size 10
     browse(fields.LOCATION_ID -> ids(10)).value.locationIds should have size 10
@@ -184,15 +179,15 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests naming two people with no `peopleMatch`, with `all`, with `any`, and with values that are neither.
+     * Requests naming two people with no `peopleMatch`, with `all`, with `any`, and with other values.
      *
      * Assertions:
      *
-     * Left out, the people match is all; `all` and `any` are taken as given, and the query the scope builds carries the match.
+     * The match defaults to all, `all` and `any` are taken, and the built query carries the match.
      *
      * Edge cases:
      *
-     * Any other value, empty or in another case included, is refused with a message naming the parameter.
+     * Any other value, including an empty or uppercase one, is refused with a message naming the parameter.
      */
     val people = fields.PERSON_ID -> "alice,bob"
     browse(people).value.peopleMatch shouldBe PeopleMatch.All
@@ -211,17 +206,16 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests with both ends of each range, with one end of a range alone, with one day as both ends, and with no date.
+     * Requests with both ends of each range, one end alone, one day as both ends, and no date.
      *
      * Assertions:
      *
-     * `takenFrom` and `takenTo` make the Date Taken range and `importedFrom` and `importedTo` the Date Imported range, each end
-     * the day its parameter spells, and the query the scope builds carries both ranges.
+     * `takenFrom`/`takenTo` make the Date Taken range and `importedFrom`/`importedTo` the Date Imported range, and the built
+     * query carries both.
      *
      * Edge cases:
      *
-     * A range with one end alone is open at the other, one day as both ends is that single day, and a request with no date has no
-     * range.
+     * A lone end leaves the range open at the other, one day as both ends is that day, and no date is no range.
      */
     def day(iso: String) = Some(LocalDate.parse(iso))
 
@@ -250,17 +244,15 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests with each of the four dates malformed, and with each range's start a day after its end.
+     * Each of the four dates malformed, and each range's start a day after its end.
      *
      * Assertions:
      *
-     * A date that is not an ISO day is refused with a message naming its parameter, and a range that starts after it ends with a
-     * message naming both of its parameters.
+     * A date that is not an ISO day is refused naming its parameter, and a reversed range naming both of its parameters.
      *
      * Edge cases:
      *
-     * An empty date, a date without its leading zeros, a day the calendar does not have, a date with a time and a year that is
-     * not four digits, signed as ISO 8601 writes a longer one, are all malformed.
+     * Empty, unpadded, nonexistent and timed dates are malformed, and so is a signed year of other than four digits.
      */
     for (
       name <- List(fields.TAKEN_FROM, fields.TAKEN_TO, fields.IMPORTED_FROM, fields.IMPORTED_TO);
@@ -282,17 +274,15 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests of the trash view with a Date Taken range, with a Date Imported range, with two people and with two Locations, and
-     * the same requests of the repository and the triage view.
+     * Requests of the trash, repository and triage views with a date range, two people or two Locations.
      *
      * Assertions:
      *
-     * In the trash each of the four is refused with a message naming the trash; the other two views take them.
+     * The trash refuses each with a message naming the trash; the other views take them.
      *
      * Edge cases:
      *
-     * The trash still takes one person, one Location or one folder, each alone or beside an album, and a range open at an end is
-     * refused there as a closed one is.
+     * The trash still takes one person, Location or folder, alone or beside an album, and refuses an open range as a closed one.
      */
     val advanced = List(
       List(fields.TAKEN_FROM -> "2024-06-01", fields.TAKEN_TO -> "2024-06-30"),
@@ -319,12 +309,11 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * A request of the repository view with two people, two Locations and both date ranges, with and without `triaged=true`.
+     * A request with several people, Locations and date ranges, with and without `triaged=true`.
      *
      * Assertions:
      *
-     * Without the flag the scope leaves the triaged assets out; with it the scope has no rule on triage, so the triaged assets
-     * are searched too, and it keeps every filter.
+     * Without the flag the scope leaves triaged assets out; with it the scope drops the triage rule and keeps every filter.
      */
     val filters = List(
       fields.PERSON_ID -> "alice,bob",
@@ -347,21 +336,18 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests of the repository view with a description: alone, with spaces and a line feed around it, with the grid layout
-     * named, and beside each Search filter in turn (the Search text, a folder, a person, several people matching any, several
-     * Locations, each end of the two date ranges, `triaged` true and false), then beside all of them at once.
+     * Requests with a description: alone, padded with white space, with the grid layout, beside each Search filter in turn, and
+     * beside all of them.
      *
      * Assertions:
      *
-     * Alone, the scope holds the description as written but for the white space around it, no Search text and no filter, and
-     * leaves the triaged assets out. Beside filters, the scope is the one the same request has without the description, with the
-     * description added: the filters are read the same, and the query the scope builds carries them.
+     * Alone, the scope holds the trimmed description and no filter, and leaves triaged assets out. Beside filters, the scope is
+     * the one without the description plus the description, and its query carries the filters.
      *
      * Edge cases:
      *
-     * A description of 300 characters is taken, and so is one that would parse to no Search term, since a description is not read
-     * as Search text. Search text with no usable term beside a description is no text, as it is without one. A request without a
-     * description has none in its scope.
+     * A description of 300 characters is taken, and so is one that would parse to no Search term, since it is not Search text.
+     * Unusable Search text beside a description is no text. A request without a description has none.
      */
     val scope = browse(fields.DESCRIBE -> "woman in a park").value
     scope shouldBe browse().value.copy(description = Some("woman in a park"))
@@ -416,17 +402,15 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests with an empty description, with one of spaces and line feeds alone, with one of 301 characters, and with one of
-     * 300 characters between spaces; and a blank description beside a folder.
+     * Empty, white-space-only, 301-character and space-padded 300-character descriptions; a blank one beside a folder.
      *
      * Assertions:
      *
-     * The empty and the blank description are refused as blank, alone or beside a filter, and the one of 301 characters as too
-     * long, naming the bound.
+     * Empty and blank descriptions are refused as blank, even beside a filter, and 301 characters as too long.
      *
      * Edge cases:
      *
-     * The length is the trimmed description's: 300 characters between spaces are taken.
+     * The bound counts the trimmed description.
      */
     browse(fields.DESCRIBE -> "").left.value shouldBe "A description cannot be blank"
     browse(fields.DESCRIBE -> " \n\t ").left.value shouldBe "A description cannot be blank"
@@ -440,20 +424,18 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests of the repository view with a description beside each parameter a Describe search does not take, in turn: an
-     * album, a Triage subset, a map area and the map layout; a request with a subset and an album beside the description and a
-     * folder; and requests with a description in the trash.
+     * A description beside an album, a Triage subset, a map area or the map layout; beside two of them and a folder; and in the
+     * trash.
      *
      * Assertions:
      *
-     * Each is refused, and the message names the parameter a description takes none of; the request with two of them names both,
-     * in the order the parameters are declared, and not the folder, which a description takes. A description is refused in the
-     * trash, which the message names.
+     * Each is refused naming the parameters a description does not take, in declaration order, never the folder. In the trash the
+     * message names the trash.
      *
      * Edge cases:
      *
-     * Such a parameter is refused whatever its value: a subset that is none. With a filter that would be refused on its own
-     * beside the description too, the parameter the description does not take is what is refused.
+     * An unknown subset is refused too. When another filter is also invalid, the parameter a description does not take is the one
+     * reported.
      */
     val refused = List(
       fields.ALBUM_ID -> "best",
@@ -487,18 +469,17 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests of the Triage view with a description: alone, with `triaged=true`, and beside the Search text, two people matching
-     * any, two Locations and both date ranges at once.
+     * Triage-view requests with a description: alone, with `triaged=true`, and beside the Search text, people, Locations and date
+     * ranges.
      *
      * Assertions:
      *
-     * Each scope is the one the same request has without the description, with the description added: it holds the triaged assets
-     * out of the trash alone, and the query it builds carries the filters.
+     * Each scope is the one without the description plus the description: only triaged assets outside the trash, with the filters
+     * in its query.
      *
      * Edge cases:
      *
-     * What a description takes in no view is refused in the Triage view too, named by the message: a Triage subset and the map
-     * layout. `triaged=false` is refused with the Triage view, with a description as without one.
+     * A Triage subset and the map layout are refused here as in any view, and `triaged=false` is refused in this view either way.
      */
     val triage = Const.Search.View.TRIAGE
     val described = parse(triage, fields.DESCRIBE -> "a cactus").value
@@ -534,12 +515,12 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Requests of the repository view with a description beside a filter that is refused on its own: eleven people, eleven
-     * Locations, an unknown people match, a date that is no ISO day, and a range whose first day is after its last.
+     * A description beside each filter that is refused on its own: too many people or Locations, an unknown people match, a
+     * malformed date and a reversed range.
      *
      * Assertions:
      *
-     * Each is refused with the message the same request has without the description.
+     * Each is refused with the same message as without the description.
      */
     val malformed = List(
       List(fields.PERSON_ID -> ids(11)) -> "A search names at most 10 people",

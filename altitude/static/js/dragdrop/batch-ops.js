@@ -8,9 +8,8 @@ import {
 } from "./helpers.js"
 
 /**
- * The batch ops' Move button drags the whole selection, from either copy (`includes/batch_ops`: the search toolbar's
- * and the footer's); the selected thumbnails dim while it does. A click on the button (no drag) shows its hint through
- * `$tooltip`.
+ * The batch ops' Move button (the toolbar's or the footer's copy) drags the whole selection, whose thumbnails dim
+ * meanwhile. A plain click shows its hint (`$tooltip`).
  */
 export function bindBatchOpsDragDrop() {
     interact(".batch-ops button.batch-mover").draggable({
@@ -23,13 +22,11 @@ export function bindBatchOpsDragDrop() {
                 Alpine.store(Const.state.selectedAssets).setDragging(true)
 
                 // The toolbar's copy sits in the scrolling results pane, which would clip it on its way to the
-                // explorer; fixed, it is drawn over everything, as a dragged thumbnail is. A placeholder holds its
-                // place in the row, so the buttons after it stay put
+                // explorer; fixed, it is drawn over everything, and a placeholder keeps the buttons after it in place
                 setFixedPositionWhileDragging(event)
 
-                // The release's click lands on the button, moved under the pointer, and would
-                // show the hint as if it had been clicked. Armed at start rather than in `end`:
-                // with inertia, a flick's `end` fires after the browser's click.
+                // The release's click lands on the button, now under the pointer, and would show the hint.
+                // Armed at start: with inertia, a flick's `end` fires after the browser's click.
                 suppressClickAfterRelease()
             },
             end: (event) => {

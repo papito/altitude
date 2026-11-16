@@ -22,8 +22,8 @@ object AuditEventType:
     values.find(_.dbValue == value).getOrElse(throw IllegalArgumentException(s"Unknown audit event: $value"))
 
 /**
- * One row of the append-only `audit_event` table. The actor is who acted (none for a failed login, which names no account), the
- * target the account acted on, both as they were then; `detail` says what changed, and `clientIp` where a request came from.
+ * One row of the append-only `audit_event` table. `actor` and `target` are the accounts as they were then; a failed login that
+ * names no account has no actor.
  */
 final case class AuditEvent(
     id: Option[String] = None,

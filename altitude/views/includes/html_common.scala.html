@@ -2,17 +2,12 @@
 @import altitude.core.models.Permission
 @()
 
-@* The snackbar, rendered from the Alpine `snackbar` store of static/js/common/snackbar.js: errors
-   stack at top center, successes and warnings ("notices") at bottom left. Each stack is a
-   `popover="manual"` element the store shows while it has a message, so it paints in the top layer,
-   above the modal hosts and the map. The notices stack holds its timers while the pointer is over it
-   or focus is inside it. Screen readers hear a message through visually hidden announcers
-   (`data-app-snackbar-announcer`), not through the stacks: `x-trap.inert` hides everything outside
-   an active modal host, so each trapped `.modal-box` holds announcers of its own next to its
-   content (which every open replaces), and the ones below serve the page and the popover dialog. *@
+@* The snackbar's stacks, each a `popover="manual"` element so it paints in the top layer, above the modal hosts and the
+   map. Screen readers hear a message through visually hidden announcers, not the stacks: `x-trap.inert` hides everything
+   outside an active modal host, so each trapped `.modal-box` holds announcers of its own, and the ones below serve the
+   page and the popover dialog. *@
 
-@* The messages of one stack, `messages` being the store's list for it. The icon gives the type
-   along with the color. *@
+@* The messages of one stack; the icon gives the type along with the color *@
 @snackbarMessages(messages: String) = {
     <template x-for="item in @messages" :key="item.id">
         <div class="snackbar" :class="$store.snackbar.classesOf(item)">
@@ -27,9 +22,8 @@
     </template>
 }
 
-@* The announcers of one place: two sibling live regions, never nested, the polite one for successes
-   and warnings and the assertive one for errors. A message is appended as a paragraph and removed
-   again after 5 s. *@
+@* The announcers of one place: two sibling live regions, never nested, polite for successes and warnings and assertive
+   for errors *@
 @snackbarAnnouncers() = {
     <div class="visually-hidden" role="status" data-app-snackbar-announcer="polite"></div>
     <div class="visually-hidden" role="alert" data-app-snackbar-announcer="assertive"></div>
@@ -57,16 +51,12 @@
 
 @snackbarAnnouncers()
 
-@* The tooltip's host: `$tooltip('Message')` (static/js/common/tooltip.js) writes the message in and
-   shows it above the clicked element, placed by CSS anchor positioning (`#tooltip` in core.css). *@
+@* The tooltip's host, which `$tooltip('Message')` fills and shows above the clicked element *@
 <div id="tooltip" popover="manual" role="tooltip"></div>
 
-@* Dialog hosts: the general modal, the popover dialog, asset detail and Curation. Visibility, focus, and
-   dismissal are owned by static/js/common/modal.js through the Alpine `modal` store; `x-trap` comes
-   from the @@alpinejs/focus plugin. General dialogs ignore backdrop clicks; asset detail closes on
-   them. The popover dialog is a native `<dialog popover="auto">` with no scrim and no trap: the
-   browser shows it below its anchor and dismisses it on an outside click. Curation fills the window and
-   ignores backdrop clicks; its shell (htmx/curation) holds its title and Exit. *@
+@* Dialog hosts, owned by static/js/common/modal.js through the Alpine `modal` store. The general modal and Curation
+   ignore backdrop clicks; asset detail closes on them. The popover dialog is a native `<dialog popover="auto">` with no
+   scrim and no trap, which the browser dismisses on an outside click. *@
 
 <div id="modalContainer"
      x-data
@@ -110,16 +100,10 @@
     <div class="modal-box"
          x-trap.inert.noscroll.noreturn.noautofocus="$store.modal.isActive('assetDetail')">
         <div class="modal-toolbar">
-            @* The title, and the badge of an edited asset, which reads "Edited" while the stage shows the Edit and "Original"
-               while it shows the original (js/edit/edit-stage.js) *@
+            @* The title, and an edited asset's badge, which reads "Edited" or "Original" by what the stage shows *@
             <div class="modal-title" id="imageDetailModalTitle"><span x-text="$store.modal.title"></span><span class="edit-badge" data-app-edit-badge hidden>Edited</span></div>
-            @* The Edit panel's toggle, `e`, for a holder of Edit images alone: js/edit/edit-panel.js keeps its pressed state,
-               disables it with a title saying why on an asset no Edit may change, and takes its clicks. Then Show original's
-               toggle, on an edited asset alone, for every viewer (`\` held does the same while held);
-               js/edit/edit-stage.js shows it, keeps its pressed state and takes its clicks. Then the Detail panel's toggle,
-               `m`, and the Face highlights', `p`; js/search-results/detail-panel.js keeps their pressed state and takes their
-               clicks. Then fullscreen's, `f`, which js/search-results/detail-fullscreen.js takes and removes where the browser
-               allows no fullscreen *@
+            @* The Edit toggle is for a holder of Edit images alone; Show original's is every viewer's, shown on an edited asset
+   alone; fullscreen's is removed where the browser allows no fullscreen. Scripts keep each toggle's pressed state. *@
             @if(RequestContext.holds(Permission.EditImages)) {
             <button type="button"
                     class="toolbar-toggle"

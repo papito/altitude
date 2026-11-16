@@ -19,12 +19,10 @@ import altitude.core.models.SceneEmbedding
 
 object SqliteOverrides:
   /**
-   * The stored DATETIME text format, written and read. Timestamps are wall-clock text: camera-local for capture times, UTC for
-   * import times. A fraction of a second is written only when there is one (a burst frame's subsecond capture time, the clock's
-   * microseconds on an import time, as PostgreSQL's TIMESTAMPTZ keeps them), with no trailing zeros, so a whole second is
-   * `yyyy-MM-dd HH:mm:ss` as every existing row is, and `date()` reads both. Every writer, the tests' helpers included, must
-   * write this canonical form: a hand-written statement compares the stored text (`BETWEEN` on a capture-time window), which
-   * orders as the times do only while no row carries trailing zeros or a `.0`.
+   * The stored DATETIME text format: wall-clock text, camera-local for capture times and UTC for import times. A fraction of a
+   * second is written only when there is one, with no trailing zeros, so a whole second is `yyyy-MM-dd HH:mm:ss` and `date()`
+   * reads both. Every writer, test helpers included, must write this canonical form: hand-written statements compare the stored
+   * text (`BETWEEN` on a capture-time window), which orders as the times do only while no row carries trailing zeros or a `.0`.
    */
   val DATETIME_FORMATTER: DateTimeFormatter = new DateTimeFormatterBuilder()
     .appendPattern("yyyy-MM-dd HH:mm:ss")
@@ -33,10 +31,7 @@ object SqliteOverrides:
     .optionalEnd()
     .toFormatter
 
-  /**
-   * A Scene embedding as its BLOB: the raw little-endian float32 values, the layout `vector_as_f32` stores a Face's features in
-   * and sqlite-vector scans
-   */
+  /** A Scene embedding as its BLOB: raw little-endian float32 values, the layout `vector_as_f32` stores and sqlite-vector scans */
   def vectorBytes(embedding: SceneEmbedding): Array[Byte] =
     val buffer = ByteBuffer.allocate(embedding.values.length * java.lang.Float.BYTES).order(ByteOrder.LITTLE_ENDIAN)
     val floats = buffer.asFloatBuffer
@@ -91,7 +86,7 @@ trait SqliteOverrides:
 
     Some(LocalDateTime.parse(value.get.asInstanceOf[String], SqliteOverrides.DATETIME_FORMATTER))
 
-  // SQLITE does not have a BOOLEAN type, so we use an INTEGER type instead and "fix it in post"
+  // SQLite has no BOOLEAN type: a boolean column reads back as an INTEGER
   override protected def getBooleanField(value: AnyRef): Boolean = value match
     case b: java.lang.Boolean => b.booleanValue
     case i: java.lang.Integer =>
@@ -106,7 +101,7 @@ trait SqliteOverrides:
     val res = executeAndGetOne(sql, List())
     res("id")
 
-  override val forUpdate: String = "" // SQLITE does not support row-level locking, so no need for "FOR UPDATE"
+  override val forUpdate: String = "" // SQLite has no row-level locking
 
   override val forKeyShare: String = ""
 

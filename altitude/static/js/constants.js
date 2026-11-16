@@ -5,11 +5,7 @@ export const Const = {
         trashbin: "trashbin",
     },
 
-    /**
-     * The Permissions a script's control may need, by the names `Permission` gives them on the
-     * server and the main page's body lists in `data-app-permissions` (js/context.js `holds`): those
-     * a script asks about; a template's controls follow the rest on the server
-     */
+    // The Permissions scripts ask about (`context.holds`), by their server `Permission` names
     permission: {
         curateOwn: "CurateOwn",
         curateAll: "CurateAll",
@@ -17,7 +13,7 @@ export const Const = {
         recycle: "Recycle",
     },
 
-    // Where the explorer sits against the results, as `data-dock-side` on <html> names it
+    // The explorer's side of the results, as `data-dock-side` on <html> names it
     dockSides: {
         left: "left",
         right: "right",
@@ -65,72 +61,68 @@ export const Const = {
         personNameEdited: "PERSON_NAME_EDITED_EVENT",
         personMarkedAsBadMatch: "PERSON_MARKED_AS_BAD_MATCH_EVENT",
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
-        // A person was merged, hidden, shown, discarded, renamed or corrected on a Face; the People tab reloads its panes
+        // Any change to a Person or to a Face's Person; the People tab reloads its panes
         peopleChanged: "PEOPLE_CHANGED_EVENT",
-        // The Change combobox of a People row picked a Person (`detail.personId`) or a new name (`detail.name`) for
-        // `detail.faceId` (js/alpine/components/face-combobox.js); js/search-results/detail-panel.js sends the correction
+        // The Change combobox picked a Person (`detail.personId`) or a new name (`detail.name`) for `detail.faceId`
         facePersonPicked: "FACE_PERSON_PICKED_EVENT",
-        // The Change combobox's X: the row of `detail.faceId` goes back to its original state, with nothing selected
+        // The Change combobox's X: the row of `detail.faceId` reverts, with nothing selected
         faceChangeCancelled: "FACE_CHANGE_CANCELLED_EVENT",
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
         togglePlayback: "TOGGLE_PLAYBACK_EVENT",
-        // `m` in Asset detail: opens or closes the Detail panel (js/search-results/detail-panel.js)
+        // `m` in Asset detail
         toggleDetailPanel: "TOGGLE_DETAIL_PANEL_EVENT",
-        // `p` in Asset detail: shows or hides the Face highlights (js/search-results/detail-panel.js)
+        // `p` in Asset detail
         toggleFaceHighlights: "TOGGLE_FACE_HIGHLIGHTS_EVENT",
-        // `f` in Asset detail: puts it in fullscreen or leaves it (js/search-results/detail-fullscreen.js)
+        // `f` in Asset detail
         toggleFullscreen: "TOGGLE_FULLSCREEN_EVENT",
-        // `\` pressed (`detail.held` true) or released (false) in Asset detail: Show original for as long as it is
-        // held, on an edited asset (js/listeners/edit.js, js/edit/edit-stage.js)
+        // `\` pressed (`detail.held` true) or released in Asset detail: Show original while held, on an edited asset
         showOriginalHeld: "SHOW_ORIGINAL_HELD_EVENT",
-        // `e` in Asset detail: opens or closes the Edit panel (js/edit/edit-panel.js)
+        // `e` in Asset detail
         toggleEditPanel: "TOGGLE_EDIT_PANEL_EVENT",
-        // `c` with the Edit panel open: opens or closes the Crop tool (js/edit/edit-panel.js)
+        // `c` with the Edit panel open
         toggleCropTool: "TOGGLE_CROP_TOOL_EVENT",
         // In the Crop tool: `o` cycles the guide, `x` swaps the aspect's orientation
         cycleCropGuide: "CYCLE_CROP_GUIDE_EVENT",
         swapCropAspect: "SWAP_CROP_ASPECT_EVENT",
-        // Enter with the Edit panel's changes held: Done
+        // Enter with the Edit panel's changes held
         editDone: "EDIT_DONE_EVENT",
-        // Ctrl/Cmd+Z, and Ctrl/Cmd+Shift+Z or Ctrl+Y, with the Edit panel open: Undo and Redo of the panel's session
+        // Ctrl/Cmd+Z, and Ctrl/Cmd+Shift+Z or Ctrl+Y, with the Edit panel open
         undoEdit: "UNDO_EDIT_EVENT",
         redoEdit: "REDO_EDIT_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
-        // An account was added, changed or deleted on the Users page; `detail.message` says which. The page reloads its cards
+        // An account was added, changed or deleted; `detail.message` says which
         accountsChanged: "ACCOUNTS_CHANGED_EVENT",
-        // A Watch folder of the Import page was added, changed or removed, or the status feed says the Library's Watch
-        // folders changed; `detail.message`, when there is one, says what was done. The page reads its cards again
+        // A Watch folder was added, changed or removed, here or as the status feed reports; `detail.message`, if any,
+        // says what
         watchFoldersChanged: "WATCH_FOLDERS_CHANGED_EVENT",
-        // The account changed its own password (the account info dialog's Change password); the session carries on with the new token
+        // The account changed its own password; the session carries on with the new token
         passwordChanged: "PASSWORD_CHANGED_EVENT",
-        // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
+        // The Dock side changed, by a pick or the viewport's orientation; `detail.side` is the new one
         dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
         styleGuideSampleSubmitted: "STYLE_GUIDE_SAMPLE_SUBMITTED_EVENT",
-        // The theme shown was changed, with `detail.theme` (js/common/theme.js)
+        // `detail.theme` is the theme now shown
         themeChanged: "THEME_CHANGED_EVENT",
-        // The batch ops' Curate: opens Curation on the selection unless it is over the button's `data-max-selection`
+        // The batch ops' Curate: opens Curation on the selection unless it exceeds the button's `data-max-selection`
         batchCurateRequested: "BATCH_CURATE_REQUESTED_EVENT",
-        // Opens Curation: on the queue with no detail, on one Sequence with `detail.sequenceId`, on a selection
-        // with `detail.assetIds`
+        // Opens Curation: the queue with no detail, one Sequence with `detail.sequenceId`, a selection with
+        // `detail.assetIds`
         curateRequested: "CURATE_REQUESTED_EVENT",
-        // A mutation in Curation was saved; the counts refresh
+        // A change in Curation was saved; the counts refresh
         curationChanged: "CURATION_CHANGED_EVENT",
         // Curation closed; `detail.recycledIds` and `detail.clearedSequenceIds` are what it leaves changed
         curationClosed: "CURATION_CLOSED_EVENT",
     },
 
     /**
-     * The `data-*` attributes JS reads element identity and state from. The Twirl templates and the
-     * client-side renderers (`common/folder-tree.js`, `common/album-list.js`,
-     * `common/location-list.js`) write the same names;
-     * `element.dataset` reads them by their camel-cased key (`data-folder-id` is `dataset.folderId`).
+     * The `data-*` attributes JS reads identity and state from. Templates and the client-side tree and
+     * list renderers write the same names; `dataset` reads them camel-cased.
      */
     attributes: {
         expanded: "data-expanded",
         viewedScope: "data-viewed-scope",
-        // The Loupe's level on a stage pane's lens, "200%", which its stylesheet shows (js/common/loupe.js)
+        // On a stage pane's lens: the Loupe's level ("200%"), which its stylesheet shows
         loupeLevel: "data-level",
         isRoot: "data-is-root",
         numOfChildren: "data-num-of-children",
@@ -144,46 +136,42 @@ export const Const = {
         dataSrc: "data-src",
         personId: "data-person-id",
         faceId: "data-face-id",
-        // An option of the Change combobox's fragment (htmx/assignable_people) in its Suggested group: a Person among the nearest
+        // On a Change combobox option in its Suggested group: a Person among the nearest
         suggested: "data-suggested",
-        // A People row of the Detail panel (htmx/detail_panel_people): its Person's name, whether the Person is Hidden, and
-        // the Frame time of a Face in a Video, which the Face highlights read with `data-face-box`; whether the Person is
-        // named and their number of assets, which the Change combobox reads (also on an option of htmx/assignable_people,
-        // whether named)
+        // On a Detail panel People row: the Person's name, Hidden state, whether named and asset count (the last two
+        // read by the Change combobox, also on its options), and a Video Face's Frame time, for the Face highlights
         personName: "data-person-name",
         personHidden: "data-person-hidden",
         personNamed: "data-person-named",
         personAssetCount: "data-person-asset-count",
         frameTimeMs: "data-frame-time-ms",
-        // A frame of a Curation set in the rail (`data-asset-id` finds the cells of the grid beneath), its file's
-        // name, what the stage's tag says is wrong with it, its Bundle, and whether it is in an album or Location
+        // On a Curation rail frame (`data-asset-id` finds the grid cells beneath): its file name, the stage tag's
+        // problems, its Bundle, and whether it is in an album or Location
         frameId: "data-frame-id",
         fileName: "data-file-name",
         problems: "data-problems",
         bundleKind: "data-bundle-kind",
         inAlbumOrLocation: "data-in-album-or-location",
-        // The Sequence a group header's Curate opens Curation on
+        // On a group header's Curate: the Sequence it opens
         sequenceId: "data-app-sequence-id",
-        // The Sequence the Detail panel's Curation link opens Curation on, over Asset detail
+        // On the Detail panel's Curation link: the Sequence it opens over Asset detail
         curateSequence: "data-app-curate-sequence",
-        // The Sequence a row of Curation's Sequence rail stands for (htmx/curation_queue); not `data-app-sequence-id`,
-        // which finds a group header's Curate
+        // On a row of Curation's Sequence rail; not `data-app-sequence-id`, which finds a group header's Curate
         railSequenceId: "data-rail-sequence-id",
-        // The fewest frames a group header's Curate stays for (`Const.Curation.MIN_FRAMES`)
+        // On a group header's Curate: the fewest frames it stays for (`Const.Curation.MIN_FRAMES`)
         minFrames: "data-min-frames",
-        // The most images the batch ops' Curate opens Curation on (`Const.Curation.MAX_SELECTION`)
+        // On the batch ops' Curate: the most images it opens Curation on (`Const.Curation.MAX_SELECTION`)
         maxSelection: "data-max-selection",
         // A Curation set's opening frames
         openingPinnedId: "data-opening-pinned-id",
         openingFocusedId: "data-opening-focused-id",
-        // The measurement's gray levels a pixel counts as blown or crushed at, and the box the image is fitted into
-        // before it is measured, which the stage's Clipping blink reads from the set's root
+        // On a Curation set's root and the Asset detail fragment, for the Clipping blink: the gray levels a pixel
+        // counts as blown or crushed at, and the box the image is fitted into before it is measured
         clippedLevel: "data-clipped-level",
         crushedLevel: "data-crushed-level",
         measurementBox: "data-measurement-box",
-        // What the stage's Histogram strip shows of a frame, on its rail item, as the import measured it: the
-        // Histogram, a byte per bin in Base64, and the fractions of its pixels crushed and blown; a frame not
-        // measured carries none
+        // On a rail item, for the stage's Histogram strip, as the import measured the frame: the Histogram (a byte
+        // per bin, Base64) and the fractions crushed and blown; absent on a frame not measured
         histogram: "data-histogram",
         crushedShadows: "data-crushed-shadows",
         clippedHighlights: "data-clipped-highlights",
@@ -192,96 +180,86 @@ export const Const = {
         faceBox: "data-face-box",
         // A Setting field's default, which its Reset fills in
         settingDefault: "data-setting-default",
-        // A pick of the explorer's Dock side (the options of its menu, js/common/explorer-dock.js), and of the Detail
-        // panel's, its own since both docks listen on the body (js/search-results/detail-panel.js)
+        // A pick of the explorer's Dock side, and of the Detail panel's (its own, since both docks listen on the body)
         dockSide: "data-app-dock-side",
         detailDockSide: "data-app-detail-dock-side",
-        // The Detail panel's toggle, the Face highlights' and fullscreen's in Asset detail's toolbar (includes/html_common)
+        // Asset detail toolbar's toggles: the Detail panel, the Face highlights and fullscreen
         detailPanelToggle: "data-app-detail-panel-toggle",
         faceHighlightsToggle: "data-app-face-highlights-toggle",
         fullscreenToggle: "data-app-fullscreen-toggle",
         fullscreenKey: "data-app-fullscreen-key", // the key legend's fullscreen entry, gone where the toggle is
-        // Show original's toggle in Asset detail's toolbar, the title's badge that says whether the stage shows the Edit
-        // ("Edited") or the original, and the key legend's `\` entry, all shown on an edited asset alone (js/edit/edit-stage.js)
+        // Shown on an edited asset alone: Show original's toolbar toggle, the title's badge saying whether the stage
+        // shows the Edit or the original, and the key legend's `\` entry
         showOriginalToggle: "data-app-show-original-toggle",
         editBadge: "data-app-edit-badge",
         showOriginalKey: "data-app-show-original-key",
-        // The Edit panel's toggle in Asset detail's toolbar (includes/html_common, for a holder of Edit images), and the
-        // Asset detail fragment while the Edit panel is open and while its Crop tool is (view_image_detail_modal.css lays
-        // the grid and the stage out from them; js/edit/edit-panel.js, js/edit/crop-tool.js)
+        // The Edit panel's toggle in Asset detail's toolbar, for a holder of Edit images
         editPanelToggle: "data-app-edit-panel-toggle",
-        // The stage's canvas while it draws the identity behind the original's color-managed <img>, for the Edit panel's
-        // reads (view_image_detail_modal.css hides it; js/edit/edit-stage.js)
+        // On the stage's canvas while it draws the identity behind the original's color-managed <img>, for the Edit
+        // panel's reads; the stylesheet hides it
         editCanvasBehind: "data-app-edit-canvas-behind",
+        // On the Asset detail fragment while the Edit panel, and its Crop tool, are open; the grid and stage lay out
+        // by them
         editPanelOpen: "data-app-edit-panel-open",
         cropToolOpen: "data-app-crop-tool-open",
-        // The stage's bar of the Edit panel's held changes (includes/edit_stage_tools): the Crop tool's guide button, the
-        // name it shows and the crop's size, Cancel, the count of the changes held and Done
+        // The stage's bar of held changes: the Crop tool's guide button, the guide's name and the crop's size, Cancel,
+        // Done and the count of changes held
         cropGuide: "data-app-crop-guide",
         cropGuideName: "data-app-crop-guide-name",
         cropSize: "data-app-crop-size",
         editCancel: "data-app-edit-cancel",
         editDone: "data-app-edit-done",
         editHeldCount: "data-app-edit-held-count",
-        // The Edit panel's warning of changes not saved (includes/edit_panel, js/edit/leave-dialog.js): a choice's button,
-        // its value the choice (`save`, `discard`, `stay`), and the message
+        // The warning of changes not saved: a choice's button, valued `save`, `discard` or `stay`, and the message
         editLeave: "data-app-edit-leave",
         editLeaveMessage: "data-app-edit-leave-message",
-        // The button of a People row that selects its Face (htmx/detail_panel_people), and under a selected row its
-        // corrections: Change, which opens the combobox, and Remove, whose second label (the one after the first click)
-        // the button carries
+        // A People row's button that selects its Face, and under a selected row Change (opens the combobox) and Remove,
+        // which carries the label its first click switches to
         faceRow: "data-app-face-row",
         faceChange: "data-app-face-change",
         faceRemove: "data-app-face-remove",
         faceRemoveLastLabel: "data-app-face-remove-label-last",
-        // The People section's root (htmx/detail_panel_people): read-only in the trash, and after a correction the result
-        // message for the snackbar, when a Person was deleted their ID and the line that says so, and after a merge of the
-        // Face's Person the merged Person's ID and the ID of the Person they were merged into
+        // On the People section's root: read-only in the trash; after a correction the snackbar message, a deleted
+        // Person's ID and the line that says so, and after a merge the merged Person's ID and the one they merged into
         readOnly: "data-app-read-only",
         resultMessage: "data-app-result-message",
         deletedPersonId: "data-app-deleted-person-id",
         deletedPersonMessage: "data-app-deleted-person-message",
         mergedPersonId: "data-app-merged-person-id",
         mergedIntoId: "data-app-merged-into-id",
-        // The Detail panel's dimensions row, which reads the shown element's size (htmx/detail_panel)
+        // The Detail panel's dimensions row, filled from the shown element's size
         detailDimensions: "data-app-detail-dimensions",
-        // The Asset detail fragment while the Detail panel is open (view_image_detail_modal.css lays the grid out from it),
-        // and the asset whose sections the panel's fragment and its People section hold (htmx/detail_panel,
-        // htmx/detail_panel_people); not `data-asset-id`, which finds the cells of the grid
+        // On the Asset detail fragment while the Detail panel is open (the grid lays out by it), and the asset the
+        // panel and its People section show; not `data-asset-id`, which finds grid cells
         detailPanelOpen: "data-app-detail-panel-open",
         appAssetId: "data-app-asset-id",
-        // The advanced search panel's host in the nav (includes/nav): the route its form is loaded from
+        // On the advanced search panel's host in the nav: the route its form loads from
         panelUrl: "data-panel-url",
-        // Whether the account sees triaged items, a member, on the same host: present on every page with the nav, and
-        // absent for a Guest (`context.seesTriaged`)
+        // On the same host for a member, absent for a Guest: the account sees triaged items (`context.seesTriaged`)
         seesTriaged: "data-app-sees-triaged",
-        // A combobox field of the panel's form (htmx/search_panel): the route of its options, whether it takes several
-        // names, the most it takes and the line that says so once it holds them
+        // On a combobox field of the panel: its options' route and the form inputs sent with it, whether it takes
+        // several names, the most it takes and the line shown at that limit
         optionsUrl: "data-options-url",
         optionsParams: "data-options-params",
         multiple: "data-multiple",
         maxChosen: "data-max-chosen",
         maxChosenMessage: "data-max-chosen-message",
-        // What an option of such a field and the chip of a chosen one carry (htmx/search_options_*, htmx/search_panel):
-        // the ID a search takes and the label a chip shows; and their parts: the element that shows the name, and a
-        // Person's cover Face, which a new chip copies (includes/search_chip, includes/search_person_cover)
+        // On an option of such a field and a chosen one's chip: the ID a search takes, the chip's label, the element
+        // showing the name, and a Person's cover Face, which a new chip copies
         optionId: "data-option-id",
         optionLabel: "data-option-label",
         optionName: "data-option-name",
         optionCover: "data-option-cover",
-        // The remove button of a chosen filter's chip, in the panel and in a filtered search's results title
-        // (includes/search_chip)
+        // A chosen filter's chip remove button, in the panel and in a filtered search's results title
         chipRemove: "data-chip-remove",
-        // A chip of a filtered search's results title (includes/search_filter_chips), which carries the parameters it
-        // stands for as `data-app-filter-<param>` literals; and the title's Edit, which opens the panel
+        // A chip of a filtered search's results title, carrying its parameters as `data-app-filter-<param>`; and the
+        // title's Edit, which opens the panel
         filter: "data-app-filter",
         editFilters: "data-app-edit-filters",
-        // The badge of the nav's filter button (includes/nav): the number of filters in force, or of those in
-        // the open panel's form
+        // The nav filter button's badge: the number of filters in force, or in the open panel's form
         filterCount: "data-app-filter-count",
-        // The Import history (htmx/import_history, htmx/import_files): an Import's entry, the `<details>` of its
-        // Import files, the route of the view a part of the history shows (the history itself, an Import's files),
-        // by which the page reads it again, and on a control the route of the view it asks for instead
+        // The Import history: an Import's entry, the `<details>` of its files, the route of the view a part shows (by
+        // which the page reads it again), and on a control the route of the view it asks for instead
         importId: "data-import-id",
         importFiles: "data-app-import-files",
         viewUrl: "data-app-view-url",
@@ -306,42 +284,37 @@ export const Const = {
 
     localStore: {
         gridMetadataFields: "gridMetadataFields",
-        // The explorer's Dock side, once picked, and its share of the width and of the height
-        // (js/common/explorer-dock.js; static/js/explorer-dock-boot.js names the same key in its `data-key`)
+        // The explorer's Dock side, once picked, and its share of each axis; `explorer-dock-boot.js` names the same key
+        // in its `data-key`
         explorerDock: "explorerDock",
-        // The results layout (`grid` / `map`) last chosen, seeded into the search parameters on load
+        // The results layout last chosen (`grid` / `map`), seeded into the search parameters on load
         resultsLayout: "resultsLayout",
-        // Whether Browse shows the triaged items, "true" or "false": the View settings dialog's "Show triaged items"
-        // as last flipped, seeded into the search parameters on load for an account that sees triaged items
-        // (js/stores/search-params.js); shown when nothing is kept
+        // Whether Browse shows triaged items, "true" or "false", as last flipped; seeded into the search parameters on
+        // load for an account that sees them, and shown when nothing is kept
         showTriaged: "showTriaged",
-        // The theme (`light` / `dark`) last chosen, shown on every page with a nav (js/common/theme.js;
-        // the boot script tag of includes/header_common names the same key in its `data-key`)
+        // The theme last chosen (`light` / `dark`); the boot script of `includes/header_common` names the same key in
+        // its `data-key`
         theme: "theme",
-        // The design tweaks panel's state (the tokentweak package, configured by js/design-tweaks.js): the
-        // active tweak set, the snapshots, the theme, the panel's dock and open state and the adopted
-        // sheet's text. The boot script tag of includes/header_common names the same key in its `data-key`
+        // The design tweaks panel's state; the boot script of `includes/header_common` names the same key in its
+        // `data-key`
         designTweaks: "designTweaks",
-        // The People tab's remembered state (js/alpine/components/people-tab.js): each pane's
-        // People buckets, whether Split view is on and the panes' sizes on each axis
+        // The People tab's state: each pane's People buckets, Split view, and the panes' sizes on each axis
         peopleView: "peopleView",
-        // The Loupe's magnification last chosen on Curation's stage, read and saved by js/common/loupe.js
-        // through the `rememberedLoupeLevel` and `saveLoupeLevel` the Curation component hands it
+        // The Loupe's magnification last chosen on Curation's stage
         loupeLevel: "loupeLevel",
-        // The Bundle kinds whose details Curation's rail shows, a JSON array (js/alpine/components/curation.js)
+        // The Bundle kinds whose details Curation's rail shows, a JSON array
         curationDetails: "curationDetails",
-        // Whether Curation's stage shows the Histogram strips, "true" or "false" (js/alpine/components/curation.js)
+        // Whether Curation's stage shows the Histogram strips, "true" or "false"
         curationHistogram: "curationHistogram",
-        // Whether Curation shows the Sequence rail on the queue, "true" or "false" (js/alpine/components/curation.js)
+        // Whether Curation shows the Sequence rail on the queue, "true" or "false"
         curationSequenceRail: "curationSequenceRail",
-        // Asset detail's remembered view (js/search-results/detail-panel.js): whether the Detail panel is open, whether
-        // the Face highlights are on and the panel's dock (its side once picked and its share of each axis); and the Edit
-        // panel's (js/edit/edit-panel.js): whether it is open (`editOpen`) and its share of each axis (`editDock`)
+        // Asset detail's view: the Detail panel's open state, Face highlights and dock, and the Edit panel's open state
+        // (`editOpen`) and dock (`editDock`)
         assetDetailView: "assetDetailView",
     },
 
     sessionStore: {
-        // The map view last looked at per search scope (js/map/map-state.js)
+        // The map view last looked at per search scope
         mapViews: "mapViews",
     },
 
@@ -350,29 +323,26 @@ export const Const = {
             grid: "grid",
             map: "map",
         },
-        // The Triage subsets, the assets the Triage summary's counts show: the server's (`TriageSubset.apiValue`), sent
-        // as the `subset` parameter
+        // The Triage summary's subsets (`TriageSubset.apiValue`), sent as the `subset` parameter
         subsets: {
             unknownPeople: "unknownPeople",
             noLocation: "noLocation",
         },
-        // How several people of one search combine (`PeopleMatch.apiValue`), sent as the `peopleMatch` parameter: the
-        // assets with all of them, the server's rule when the parameter is left out, or with any of them
+        // How several people of one search combine (`PeopleMatch.apiValue`), sent as `peopleMatch`; the server defaults
+        // to all
         peopleMatch: {
             all: "all",
             any: "any",
         },
-        // The sort by match quality (`Const.Search.SORT_RELEVANCE`), which the server refuses without Search text
+        // Sort by match quality (`Const.Search.SORT_RELEVANCE`), which the server refuses without Search text
         sortRelevance: "relevance",
-        // The sort by likeness to a description (`Const.Search.SORT_SIMILARITY`), which the server refuses without one
+        // Sort by likeness to a description (`Const.Search.SORT_SIMILARITY`), which the server refuses without one
         sortSimilarity: "similarity",
-        // The largest page size the server serves (`Const.Search.MAX_RPP`); it refuses a larger one
+        // The largest page size the server serves (`Const.Search.MAX_RPP`)
         maxRpp: 500,
-        // The most people, and the most Locations, one search names (`SearchRequestParser.MAX_IDS`); the server refuses
-        // more in either parameter
+        // The most people, and the most Locations, one search names (`SearchRequestParser.MAX_IDS`)
         maxIds: 10,
-        // The longest description of a Describe search (`Const.Search.MAX_DESCRIPTION_LENGTH`), counted without the
-        // white space around it; the server refuses a longer one
+        // The longest Describe search description (`Const.Search.MAX_DESCRIPTION_LENGTH`), counted trimmed
         maxDescriptionLength: 300,
     },
 
@@ -382,21 +352,20 @@ export const Const = {
     },
 
     people: {
-        // A Person's name is held to these lengths by the server (`Api.Constraints.MIN_NAME_LENGTH`, `MAX_NAME_LENGTH`);
-        // the Change combobox offers to create a name only inside them
+        // A Person's name length limits (`Api.Constraints.MIN_NAME_LENGTH`, `MAX_NAME_LENGTH`); the Change combobox
+        // offers to create a name only within them
         nameLength: {
             min: 2,
             max: 80,
         },
-        // The People bucket names are the server's (`Const.PeopleBucket`), sent as the `buckets` parameter
+        // The server's `Const.PeopleBucket` names, sent as the `buckets` parameter
         buckets: {
             matched: "matched",
             hidden: "hidden",
             unmatched: "unmatched",
         },
-        // The two panes of the People tab, as `data-app-people-pane` names them: the Main pane,
-        // always shown, and the Duplicate pane of Split view. The names are the server's too
-        // (`Const.PeoplePane`), sent as the `pane` parameter of a pane's list
+        // The People tab's Main pane and Split view's Duplicate pane, as `data-app-people-pane` and the server's
+        // `Const.PeoplePane` name them (a pane list's `pane` parameter)
         panes: {
             main: "main",
             duplicate: "duplicate",

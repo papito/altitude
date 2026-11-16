@@ -3,30 +3,19 @@ import { Const } from "../constants.js"
 const WEAKER_MATCHES_CLASS = "weaker-matches"
 
 /**
- * The group headers of a grouped grid (`.result-group`, a day, a Location or a Sequence, rendered by
- * `htmx/results_grid_grouped.scala.html` with the group's full match count in `.count`, across every
- * page loaded or not). This is the one place a header changes on the client: a cell leaving the grid
- * takes one off its group, and a group with no matches left loses its header. A header whose loaded
- * cells are all gone but whose count is still positive stays - the group still has matches on pages
- * not loaded yet.
- *
- * A Sequence's header has a Curate button while its group has enough frames, the number the server
- * renders on the button (`data-min-frames`), and loses it when the count falls under that or Curation
- * clears the Sequence.
- *
- * The header's checkbox over the group's loaded cells is its own component
- * (js/alpine/components/date-group-selectable.js).
+ * The group headers of a grouped grid (a day, a Location or a Sequence), each counting its group's
+ * matches across every page, loaded or not. This is the one place a header changes on the client: a
+ * cell leaving the grid takes one off its group, and a header whose count reaches zero goes, while one
+ * whose loaded cells are gone but whose count is positive stays, for the pages not loaded yet. A
+ * Sequence header's Curate button goes when the count falls under `data-min-frames` or Curation clears
+ * the Sequence.
  */
 
 /**
- * Takes `cellEl` off the count of its group's header, removing the header when the count reaches zero.
  * Call it before the cell leaves the grid: the header is found by walking back over the cell's
- * siblings, which crosses page boundaries, since a continued group repeats no header.
- *
- * A Describe search's weaker matches have a header of their own (`.weaker-matches`,
- * includes/weaker_matches_header.scala.html) counting all of them. On the ungrouped grid it is the
- * header the walk finds; on a grouped grid the weaker matches' groups follow it, each under its own
- * header, so a cell of one of them leaves the count of its group and of the weaker matches both.
+ * siblings, across page boundaries, since a continued group repeats no header. A Describe search's
+ * weaker matches have a header of their own counting them all; on a grouped grid their groups follow
+ * it, so a cell there leaves both counts.
  */
 export function decrementDateGroupOf(cellEl) {
     const headerEl = headerBefore(cellEl, "result-group")
@@ -44,7 +33,6 @@ export function decrementDateGroupOf(cellEl) {
     }
 }
 
-/** Takes one off a header's count, removing the header when none is left */
 function decrement(headerEl) {
     const countEl = headerEl.querySelector(".count")
     const count = Math.max(0, Number(countEl?.dataset.count) - 1)
@@ -64,9 +52,8 @@ function decrement(headerEl) {
 }
 
 /**
- * The headers of Sequences Curation cleared lose their Curate button; their kept frames stay under
- * them. A Sequence can have two headers on screen: one whose first frame left the grid is overtaken
- * by another Sequence on the next page, and opens again after it.
+ * A Sequence can have two headers on screen (overtaken by another Sequence on the next page and opened
+ * again after it), so every button of it goes
  */
 export function removeCurateButtons(sequenceIds) {
     sequenceIds.forEach((sequenceId) => {
@@ -78,15 +65,11 @@ export function removeCurateButtons(sequenceIds) {
     })
 }
 
-/**
- * The count as a header reads it. The server renders the same text for the counts it sends
- * (`Util.humanReadableItemCount`); the two have to agree.
- */
+/** Must agree with the server's `Util.humanReadableItemCount` */
 function itemCountText(count) {
     return count === 1 ? "(1 item)" : `(${count} items)`
 }
 
-/** The nearest element before `el` among its siblings that has the class, a header of the grid */
 function headerBefore(el, className) {
     let previous = el.previousElementSibling
 

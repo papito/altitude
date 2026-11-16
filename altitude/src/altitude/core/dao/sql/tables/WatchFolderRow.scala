@@ -3,7 +3,6 @@ package altitude.core.dao.sql.tables
 import java.time.OffsetDateTime
 import scalasql.Table
 
-/** The `watch_folder` table */
 case class WatchFolderRow[T[_]](
     id: T[String],
     repositoryId: T[String],

@@ -16,31 +16,24 @@
 # [tool.uv.sources]
 # torch = { index = "pytorch-cpu" }
 # ///
-"""Writes the golden files SigLIP 2's text side is tested against, from the reference implementation: the checkpoint's
-processor and its PyTorch model (`google/siglip2-base-patch16-256`, the checkpoint the export script of
-`renegade-otter/altitude-models`, `export-models.py`, exports).
+"""Writes the golden files SigLIP 2's text side is tested against, from the reference implementation: the processor and
+PyTorch model of `google/siglip2-base-patch16-256`, the checkpoint that `export-models.py` of
+`renegade-otter/altitude-models` exports.
 
-    altitude/test/resources/siglip2/tokens.json      a list of {"description", "ids"}: a description and the 64 token
-                                                     IDs the reference processor gives it, for `Siglip2TokenizerTests`
-    altitude/test/resources/siglip2/embeddings.json  a list of {"description", "embedding"}: a description and the 768
-                                                     floats of its embedding by the PyTorch model, L2-normalized as
-                                                     the model normalizes it, for `DescribeEmbedderTests`. The model
-                                                     is given the description as the application's embedder gives it
-                                                     to the tokenizer, each run of whitespace one space (`normalized`)
+    altitude/test/resources/siglip2/tokens.json      {"description", "ids"}: the 64 token IDs the reference processor
+                                                     gives each description, for `Siglip2TokenizerTests`
+    altitude/test/resources/siglip2/embeddings.json  {"description", "embedding"}: the 768 floats of each description's
+                                                     L2-normalized embedding, for `DescribeEmbedderTests`
 
-The IDs are the processor's with `padding="max_length"`, `max_length=64`, `truncation=True`, as the model was trained,
-over the description in lowercase. The lowercasing is done here, explicitly: SigLIP 2 was trained on lowercased text,
-but the checkpoint's tokenizer (`GemmaTokenizer`) leaves the case as it is. A golden description is stored as written,
-since lowercasing it is the tokenizer's work in the application too, and collapsing its whitespace the embedder's: the
-token IDs are of the description as written, which is what the application's tokenizer is given in its own test.
+The IDs are of the description in lowercase, padded and truncated to 64 tokens as the model was trained. The lowercasing
+is done here: SigLIP 2 was trained on lowercased text, but the checkpoint's tokenizer (`GemmaTokenizer`) keeps the case.
+A golden description is stored as written, since the application's tokenizer lowercases it and its embedder collapses
+its whitespace (`normalized`).
 
-The descriptions cover what a description can hold: plain words, punctuation, digits, spaces at the ends and repeated,
-tabs and line breaks, apostrophes, accents and other scripts, characters whose lowercase is not one character or
-depends on their place, CJK, emoji, characters that are no piece and fall back to bytes, mixed case, the pieces the
-tokenizer matches whole (special tokens, HTML tags, runs of line feeds), runs of one character, and descriptions at and
-past the 64 tokens. The run fails if a kind the tests rely on is no longer among them (`check_coverage`).
-
-Both files are tracked. Run from the repository root, after a change to the descriptions or to the checkpoint:
+The descriptions cover what a description can hold, from plain words to other scripts, emoji, byte fallbacks, the pieces
+the tokenizer matches whole and descriptions past 64 tokens; the run fails if a kind the tests rely on is gone
+(`check_coverage`). Both files are tracked. Run from the repository root after a change to the descriptions or to the
+checkpoint:
 
     uv run scripts/siglip2-golden.py
 
@@ -510,9 +503,9 @@ EMBEDDED = [
 
 
 def normalized(description: str) -> str:
-    """A description as the application's embedder hands it to its tokenizer (`OnnxDescribeEmbedder.normalized`): each
-    run of whitespace one space and none at the ends. `EMBEDDED` holds no whitespace but spaces and a line feed, which
-    Python and the JVM both count as whitespace."""
+    """A description as the application's embedder hands it to its tokenizer: each run of whitespace one space and none
+    at the ends. `EMBEDDED` holds no whitespace but spaces and a line feed, which Python and the JVM both count as
+    whitespace."""
     return " ".join(description.split())
 
 

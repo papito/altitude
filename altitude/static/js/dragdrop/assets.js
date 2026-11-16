@@ -10,13 +10,12 @@ import {
 } from "./helpers.js"
 
 /**
- * Thumbnails in the results grid drag into folders, albums, and the trash; a thumbnail that is
- * among the selected ones drags the whole selection with it (its listeners escalate to a batch).
- * The `#trash` nav item is a drop zone for a thumbnail or the batch mover when `toTrash`, the
- * account may recycle what the view shows (`context.recyclesHere`).
+ * Thumbnails drag into folders, albums, Locations and the trash; one among the selected drags the
+ * whole selection (its event's listener escalates to a batch). `#trash` takes drops only with
+ * `toTrash`: the account may recycle what the view shows.
  */
 
-// The dragged thumbnail's image, shrunk under the pointer, is this wide
+// The width of the dragged thumbnail's image, shrunk under the pointer
 const GHOST_IMAGE_WIDTH_PX = 45
 
 // The inline size each dragged image had before its drag, restored when the drag ends
@@ -25,8 +24,7 @@ const ghostImageInlineSizes = new WeakMap()
 export function bindAssetDragDrop({ dispatch, toTrash }) {
     const assetDraggable = interact("#assets .drag-drop")
 
-    // A Shift-drag over a thumbnail is an additive box selection (see box-selection.js), so no asset
-    // drag may start while Shift is held
+    // A Shift-drag is an additive box selection (box-selection.js), so no asset drag starts with Shift
     assetDraggable.actionChecker((pointer, event, action) =>
         pointer.shiftKey ? null : action,
     )
@@ -84,9 +82,8 @@ function onDragStart(event) {
 
     const clone = target.cloneNode(true)
     clone.id = "dragCloneStandIn"
-    // The stand-in lives on <body>, outside `#assets`, so the
-    // cell badges lose their pill styling and would render as
-    // stray text
+    // The stand-in lives on <body>, outside `#assets`, where the cell badges lose their pill styling
+    // and would render as stray text
     clone.querySelector(".triage-marker")?.remove()
     clone.querySelector(".no-date-marker")?.remove()
     clone.style.position = "fixed"
@@ -98,10 +95,9 @@ function onDragStart(event) {
     clone.style.opacity = "30%"
     document.body.appendChild(clone)
 
-    // The image shrinks under the pointer, in both dimensions. lazy-images.js may have fixed its
-    // rendered size inline (a released image keeps it, and it stays once the image is back), so
-    // with only the width set the ghost would be a sliver as tall as the thumbnail, too tall for
-    // a folder row to ever cover a drop zone's share of it. The inline size is restored as it was.
+    // Both dimensions are set: lazy-images.js may have fixed the rendered size inline, and with only
+    // the width set the ghost would be a sliver as tall as the thumbnail, too tall for a folder row
+    // to ever cover a drop zone's share of it. The inline size is restored on drag end.
     const originalWidth = imgElement.clientWidth
     ghostImageInlineSizes.set(imgElement, {
         width: imgElement.style.width,
@@ -110,10 +106,9 @@ function onDragStart(event) {
     imgElement.style.width = `${GHOST_IMAGE_WIDTH_PX}px`
     imgElement.style.height = "auto"
 
-    // The offset that centers the shrunk image on the pointer
+    // The shrunk image stays centered in the thumbnail's width, its top at the pointer
     const offsetX = (originalWidth - GHOST_IMAGE_WIDTH_PX) / 2
 
-    // Adjust the target position to center the resized image at cursor
     const yOffset = event.clientY - position.top
     target.style.top = position.top + yOffset + "px"
     target.style.left = position.left + offsetX + "px"
@@ -128,11 +123,10 @@ function onDragStart(event) {
             cloneCheckmark.style.display = "flex"
         }
 
-        // Create or update the count badge
         const countBadge = document.createElement("div")
         target.appendChild(countBadge)
 
-        // Position the badge to match the image dimensions and position
+        // The badge covers the image
         const imgRect = imgElement.getBoundingClientRect()
         const targetRect = target.getBoundingClientRect()
         const offsetLeft = imgRect.left - targetRect.left
@@ -145,7 +139,6 @@ function onDragStart(event) {
         countBadge.className = "drag-count-badge"
         countBadge.textContent = selectedAssetsStore.size
 
-        // Mark affected assets as being dragged
         selectedAssetsStore.setDragging(true)
 
         target.style.opacity = "1"
@@ -154,7 +147,6 @@ function onDragStart(event) {
 }
 
 function onDragEnd(event) {
-    // Clean up multiple selection styling before calling the common dragged function
     const target = event.target
 
     const assetId = event.target.getAttribute(Const.attributes.assetId)
@@ -162,7 +154,6 @@ function onDragEnd(event) {
 
     imgElement.style.opacity = "1"
 
-    // Remove the grid placeholder if it exists
     const placeholder = target.parentNode.querySelector(
         ".drag-grid-placeholder",
     )
@@ -193,7 +184,6 @@ function onDragEnd(event) {
     const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
 
     if (selectedAssetsStore.contains(assetId)) {
-        // Unmark affected assets as being dragged
         selectedAssetsStore.setDragging(false)
     }
 
@@ -202,6 +192,5 @@ function onDragEnd(event) {
     // The browser fires a click after pointerup; it must not reach the thumbnail
     suppressNextClick()
 
-    // Call the common dragged function for final cleanup
     dragged(event)
 }

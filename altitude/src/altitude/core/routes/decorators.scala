@@ -34,11 +34,9 @@ object decorators:
   val logger: Logger = LoggerFactory.getLogger(getClass)
 
   /**
-   * cask's gzip decorator, except for a response that offers byte ranges and for an image. A stored original is a compressed
-   * format already, and a range names its raw bytes, which a compressed body would not match. An image is deflated already, so a
-   * gzip costs CPU on both ends, saves nothing, and discards its Content-Length. Whether a response is gzipped depends on the
-   * request's Accept-Encoding, so a response that may be says so in `Vary`: a cache keeps a copy per coding rather than handing a
-   * gzipped body to a client that cannot read it. A 304 has no body to code, but varies as its 200 does.
+   * cask's gzip decorator, except for a response that offers byte ranges (a range names raw bytes, which a compressed body would
+   * not match) and for an image (deflated already: gzip costs CPU, saves nothing and drops Content-Length). A response that may
+   * be gzipped says so in `Vary`, so a cache keeps a copy per coding; a 304 varies as its 200 does.
    */
   class compress extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -74,24 +72,18 @@ object decorators:
   private val AUTH_HEADER_NAME = "Authorization"
   private val BEARER_PREFIX = "Bearer "
 
-  /** A request's login: its claims, and the token that replaces the request's stale one, which the answer sets as the cookie */
+  /** `renewedToken` replaces the request's stale one as the answer's cookie */
   final case class Login(claims: TokenClaims, renewedToken: Option[String])
 
-  /**
-   * A request with no login, and the cookies the answer that refuses it sets: the session cookie cleared when it held a token
-   * that was refused, so the browser stops sending it
-   */
+  /** `cookies` clears the session cookie when its token was refused, so the browser stops sending it */
   final case class NoLogin(cookies: Seq[Cookie])
 
   /**
-   * The request's login, its account made the request's: the dev user's (`UserService.getDevUser`), or that of the token of the
-   * Authorization header (Bearer) or, failing one, of the session cookie (`UserService.checkToken`). A stale cookie's token is
-   * rebuilt, to be replaced; a stale Bearer token, which the server cannot replace, is refused, as an invalid, expired or revoked
-   * token is, and the request has no login.
+   * The dev user, or the token of the Bearer header or else the session cookie. A stale cookie token is rebuilt to be replaced; a
+   * stale Bearer token cannot be replaced, so it is refused as an invalid, expired or revoked one is.
    */
   def authenticate(req: cask.Request): Either[NoLogin, Login] =
-    // Locally, the dev user bypasses the login, so a code change that the hot reload restarts the server for (a new token key)
-    // does not log the developer out
+    // Locally, the dev user bypasses the login, so a hot-reload restart (a new token key) does not log the developer out
     App.altitude.service.user.getDevUser match
       case Some(claims) => Right(Login(claims, None))
       case None =>
@@ -115,12 +107,10 @@ object decorators:
                 Left(NoLogin(if fromCookie && clearsCookie then Seq(SessionController.clearedAuthCookie) else Nil))
 
   /**
-   * Whether a WebSocket handshake comes from a page of this server, or from a client that is no browser: true when it has no
-   * Origin (every browser sends one on a WebSocket handshake, so only another kind of client omits it, and it holds the session
-   * token itself), and when its Origin is an http or https URL whose host and port, as written, are the request's Host header's,
-   * case aside. A browser omits a scheme's default port from both, and a reverse proxy that keeps the Host header keeps them
-   * equal. Anything else (another site, another port, `null`, a malformed Origin) is false: a page of another site cannot open
-   * the socket with the visitor's session.
+   * Whether a WebSocket handshake comes from a page of this server or from a non-browser client, so a page of another site cannot
+   * open the socket with the visitor's session. No Origin passes: every browser sends one, so only another kind of client,
+   * holding the token itself, omits it. Otherwise the Origin's host and port must equal the Host header's, case aside; a browser
+   * omits a default port from both, and a reverse proxy that keeps Host keeps them equal.
    */
   def isSameOriginOrNone(req: cask.Request): Boolean =
     Option(req.exchange.getRequestHeaders.getFirst("Origin")) match
@@ -145,7 +135,7 @@ object decorators:
     Option(req.exchange.getRequestHeaders.getFirst("Accept")).getOrElse("").contains("application/json") ||
       req.exchange.getRequestPath.startsWith("/api/")
 
-  /** Runs `endpoint` unless the path names a repository that does not exist (`repoContext` found none), answered as not found */
+  /** A path naming a repository that `repoContext` did not find is answered as not found */
   private def existingRepositoryOnly(req: cask.Request)(endpoint: => Result[Raw]): Result[Raw] =
     if RequestContext.repository.value.isEmpty && RepoPath.matches(req.exchange.getRequestPath) then
       logger.debug(s"No repository found for [${req.exchange.getRequestURI}]")
@@ -165,15 +155,10 @@ object decorators:
       Result.Success(Response(Const.Msg.Err.LIBRARY_NOT_FOUND, statusCode = 404, headers = Seq("Content-Type" -> "text/plain")))
 
   /**
-   * Decorator that requires a login (`authenticate`) for the endpoint. Without one, an htmx request is answered 401 with
-   * `HX-Redirect` to the login, an API request 401, and any other redirected to the login page, each answer clearing a session
-   * cookie whose token will never be good again (`TokenCheck.Refused`). A repository in the path that the account cannot see is
-   * answered as not found, as any foreign entity is: an Admin sees every one, anyone else one its token carries a grant in, so
-   * the gate reads no database. The token's Permissions in the path's Library (every one for an Admin; none for anyone else with
-   * no Library in the path) are put in `RequestContext.permissions`, its grants in every Library in `RequestContext.grants`, and
-   * its expiry in `RequestContext.sessionExpiresAt`. A token rebuilt from the database is set as the cookie of the answer, unless
-   * the answer sets the session cookie itself: an endpoint that mints a token (a password change) mints it after the rebuild,
-   * which its change made stale.
+   * Requires a login. Without one, the answer also clears a session cookie whose token will never be good again. A repository in
+   * the path the account cannot see is answered as not found, as any foreign entity is, and the gate reads only the token, no
+   * database. The token's Permissions, grants and expiry go into `RequestContext`, and a rebuilt token becomes the answer's
+   * cookie.
    */
   class requireLogin extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -182,16 +167,14 @@ object decorators:
           val answer =
             accessibleRepositoryOnly(req, login.claims)(delegate(req, Map("request" -> req, "user" -> login.claims.account)))
           val cookies = renewedCookies(login)
-          // An answer that sets the session cookie itself (a password changed, whose new token the rebuilt one predates) keeps it
+          // An answer that sets the session cookie itself keeps it: a password change mints its token after the rebuild, which
+          // the change made stale
           def setsSession(v: Raw) = v.cookies.exists(_.name == SessionController.AUTH_COOKIE_NAME)
           if cookies.isEmpty then answer
           else answer.transform { case v: Raw => if setsSession(v) then v else v.copy(cookies = v.cookies ++ cookies) }
         case Left(noLogin) => handleUnauthenticated(req, noLogin.cookies)
 
-    /**
-     * Runs `endpoint` unless the path names a repository that the token gives no access to or that does not exist: both are
-     * answered as not found, so the two cannot be told apart
-     */
+    /** A repository the token gives no access to and one that does not exist are both not found, so they cannot be told apart */
     private def accessibleRepositoryOnly(req: cask.Request, claims: TokenClaims)(endpoint: => Result[Raw]): Result[Raw] =
       val account = claims.account
       RequestContext.grants.value = claims.grants
@@ -211,10 +194,8 @@ object decorators:
           existingRepositoryOnly(req)(endpoint)
 
     /**
-     * The answer to a request with no login. An htmx request (`HX-Request`) is a 401 carrying `HX-Redirect` to the login, with
-     * the page it was sent from (`HX-Current-URL`, its path and query alone) to come back to: a redirect would be followed by the
-     * browser's fetch and the login page swapped in as the partial. An API request is a JSON 401, and any other a redirect to the
-     * login with the request's own URL. Each carries `cookies`, a refused session's cleared cookie.
+     * An htmx request gets a 401 with `HX-Redirect` to the login, coming back to the page it was sent from: a plain redirect
+     * would be followed by the fetch and the login page swapped in as the partial
      */
     private def handleUnauthenticated(req: cask.Request, cookies: Seq[Cookie]): Result[Raw] =
       if Option(req.exchange.getRequestHeaders.getFirst("HX-Request")).contains("true") then
@@ -232,7 +213,6 @@ object decorators:
             cookies = cookies
           ))
       else
-        // Redirect to login page for web requests, preserving the original URL
         val requestPath = req.exchange.getRequestPath
         // Undertow reports a missing query string as empty rather than null
         val queryString = Option(req.exchange.getQueryString).filter(_.nonEmpty).map(qs => s"?$qs").getOrElse("")
@@ -245,10 +225,7 @@ object decorators:
             cookies = cookies
           ))
 
-  /**
-   * The page an htmx request was sent from, as its `HX-Current-URL` names it: its path and query, which the login comes back to;
-   * None when the header is missing, is no URL, or has no absolute path
-   */
+  /** The path and query of `HX-Current-URL`; None when it is missing, no URL, or has no absolute path */
   private def pageOf(req: cask.Request): Option[String] =
     Option(req.exchange.getRequestHeaders.getFirst("HX-Current-URL")).flatMap {
       url =>
@@ -259,12 +236,9 @@ object decorators:
     }
 
   /**
-   * Decorator for an endpoint that a signed URL may open without a login. A request with both `exp` and `sig` query parameters is
-   * answered by the signature alone: one that [[altitude.core.service.ContentSigner.verify]] accepts for the request path is
-   * served with no account, since the signature is the grant, unless the repository does not exist (a 404, as for
-   * `requireLogin`), and any other is a plain-text 403 (a share-link holder has no account to log in to). Any other request,
-   * including one with only one of the two parameters, is `requireLogin`'s, so the logged-in UI builds plain URLs to the same
-   * route.
+   * For an endpoint a signed URL may open without a login. A request with both `exp` and `sig` is answered by the signature
+   * alone: served with no account when it verifies for the path, else a plain-text 403, since a share-link holder has no account
+   * to log in to. Any other request is `requireLogin`'s, so the logged-in UI builds plain URLs to the same route.
    */
   class requireLoginOrSignature extends cask.RawDecorator:
     private val login = requireLogin()
@@ -287,9 +261,8 @@ object decorators:
         logger.trace(s"Signed URL accepted for [$requested]")
         existingRepositoryOnly(req)(endpoint)
       else
-        // The answer does not say why; the log does, never with the signature. An expired link is the routine end of one, so DEBUG
-        // whatever its signature. A signature that does not match, with an expiry still ahead or a malformed one, is a tampered or
-        // forged link, or one signed under a key the server no longer holds, so WARN, as an invalid login token is.
+        // The answer does not say why; the log does, never with the signature. An expired link is routine, so DEBUG; a mismatch
+        // otherwise is a tampered or forged link or a retired key, so WARN, as an invalid login token is
         if exp.toLongOption.exists(_ <= now.getEpochSecond) then
           logger.debug(s"Signed URL for [$requested] refused: expired at [$exp]")
         else logger.warn(s"Signed URL for [$requested] refused: the signature does not match")
@@ -299,15 +272,14 @@ object decorators:
             statusCode = 403,
             headers = Seq("Content-Type" -> "text/plain")))
 
-  /** The account `requireLogin` put in the context, which a decorator applied after it reads; it throws when there is none */
+  /** The account `requireLogin` put in the context; throws when it did not run first */
   private def loggedIn(req: cask.Request, decorator: String): User =
     RequestContext.account.value.getOrElse(
       throw IllegalStateException(s"$decorator on ${req.exchange.getRequestPath} ran without requireLogin before it"))
 
   /**
-   * Runs the endpoint when the account `requireLogin` put in the context is `allowed`, else answers 403, saying why (`why`) in
-   * JSON for an API request and in plain text otherwise: there is nowhere to redirect the account to. The access decorators below
-   * are all this, applied after `requireLogin`.
+   * Runs the endpoint when the logged-in account is `allowed`, else a 403 saying `why`: there is nowhere to redirect it to. Every
+   * access decorator below is this, applied after `requireLogin`.
    */
   private def allowedOnly(req: cask.Request, delegate: cask.RawDecorator#Delegate, decorator: String, why: => String)(
       allowed: User => Boolean): Result[Raw] =
@@ -319,29 +291,19 @@ object decorators:
       val refusal = forbidden(why, json = isApiRequest(req))
       Result.Success(Response(refusal.data, refusal.statusCode, refusal.headers))
 
-  /**
-   * The one 403 of a refusal for lack of a Permission, from a decorator, a route or a service (`ForbiddenException` through
-   * `BaseController.answering` and `answeringJson`): `{"error": why}` in JSON, the shape of every JSON route's refusal
-   * (`BaseController.jsonError`), and "Forbidden: why" in plain text otherwise
-   */
+  /** The one 403 for lack of a Permission, whether from a decorator, a route or a service's `ForbiddenException` */
   def forbidden(why: String, json: Boolean): Response[String] =
     if json then Response(ujson.write(ujson.Obj("error" -> why)), 403, Seq("Content-Type" -> "application/json"))
     else Response(s"Forbidden: $why", 403, Seq("Content-Type" -> "text/plain"))
 
-  /**
-   * Decorator for an Admin-only endpoint, applied after `requireLogin`, which has put the account in the context. A User or a
-   * Guest is answered with 403, JSON for an API request and plain text otherwise; there is nowhere to redirect them to.
-   */
   class requireAdmin extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
       allowedOnly(req, delegate, "requireAdmin", Const.Msg.Err.FORBIDDEN_ADMIN)(_.accountType == AccountType.Admin)
 
   /**
-   * Decorator for an endpoint that needs a Permission in the path's Library, any one of `permissions`, applied after
-   * `requireLogin`, which has put the account's Permissions there in the context (every one for an Admin; none for a Guest, who
-   * is refused every such route). An account holding none of them is answered as `requireAdmin` answers a User. A rule that
-   * depends on the asset (Curate own against its owner, recycling a sorted or a triaged one) is the service's (`AssetRules`).
-   * `RouteTableTests` reads `anyOf` off the route.
+   * Needs any one of `permissions` in the path's Library; an Admin holds every one, a Guest none. A rule that depends on the
+   * asset (Curate own, recycling a sorted or a triaged one) is the service's (`AssetRules`). `RouteTableTests` reads `anyOf` off
+   * the route.
    */
   class requirePermission(permissions: Permission*) extends cask.RawDecorator:
     require(permissions.nonEmpty, "requirePermission names at least one Permission")
@@ -358,78 +320,60 @@ object decorators:
       }
 
   /**
-   * Decorator for an endpoint of a view a Guest does not see and that needs no Permission (the Triage partials), applied after
-   * `requireLogin`: a Guest sees Browse alone, and is answered as `requireAdmin` answers a User. A view or a route that does need
-   * one (the Import page, Curation, the Trash's Purge) is `requirePermission`'s, which refuses a Guest too.
+   * For a view a Guest does not see that needs no Permission (the Triage partials): a Guest sees Browse alone. A view that does
+   * need one is `requirePermission`'s, which refuses a Guest too.
    */
   class requireMember extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
       allowedOnly(req, delegate, "requireMember", Const.Msg.Err.FORBIDDEN_GUEST)(_.accountType != AccountType.Guest)
 
   /**
-   * Decorator for the Users page and adding an account, applied after `requireLogin`: an Admin, or an account holding Create
-   * Users or Create Guests in any Library, read from its token's grants (`RequestContext.createsAccounts`), not only in the
-   * path's; anyone else is answered as `requireAdmin` answers a User. What the account may give is the creator's ceiling, which
-   * `UserService.create` holds it to.
+   * For the Users page and adding an account: an Admin, or an account holding Create Users or Create Guests in any Library, not
+   * only the path's. `UserService.create` holds what it may give to the creator's ceiling.
    */
   class requireAccountCreator extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
       allowedOnly(req, delegate, "requireAccountCreator", Const.Msg.Err.FORBIDDEN_ACCOUNT_CREATOR)(
         _ => RequestContext.createsAccounts)
 
-  /**
-   * Decorator for creating a Library, applied after `requireLogin`: an Admin, or an account whose token carries the Create
-   * Libraries flag (`User.canCreateLibraries`); anyone else is answered as `requireAdmin` answers a User
-   */
   class requireLibraryCreator extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
       allowedOnly(req, delegate, "requireLibraryCreator", Const.Msg.Err.FORBIDDEN_LIBRARY_CREATOR)(mayCreateLibraries)
 
   /**
-   * Whether the context's account may see a view of its Library (`Const.Search.View`), for the routes that take the view as a
-   * parameter, which no decorator reads: a Guest sees Browse alone, so neither Triage nor the Trash, nor the triaged assets
-   * Browse adds with `triaged=true`; any other account sees every view
+   * For the routes that take the view as a parameter, which no decorator reads: a Guest sees Browse alone, without the triaged
+   * assets `triaged=true` adds
    */
   def maySeeView(view: String, triaged: Option[Boolean] = None): Boolean =
     RequestContext.isMember || (view == Const.Search.View.DEFAULT && !triaged.contains(true))
 
-  /**
-   * A Guest's request for a view it does not see ([[maySeeView]]), as a route taking the view as a parameter answers it: a 403
-   * ([[forbidden]]), in JSON when `json`; None for a view the account sees
-   */
+  /** A Guest's 403 for a view it does not see ([[maySeeView]]); None for a view the account sees */
   def refusedView(view: String, triaged: Option[Boolean], json: Boolean = false): Option[Response[String]] =
     Option.unless(maySeeView(view, triaged)) {
       logger.warn(s"Account [${RequestContext.getAccount.persistedId}] refused the view [$view] (triaged: $triaged): a Guest")
       forbidden(Const.Msg.Err.FORBIDDEN_GUEST, json)
     }
 
-  /**
-   * Whether the context's account may open the asset by its ID: a Guest sees Browse alone, so neither a triaged asset nor one in
-   * the trash; any other account, and a request with no account (a signed URL, whose signature is the grant), may
-   */
+  /** A Guest sees Browse alone, so no triaged or recycled asset; a request with no account (a signed URL) may open any */
   def maySeeAsset(asset: Asset): Boolean = !RequestContext.isGuest || (!asset.isTriaged && !asset.isRecycled)
 
-  /** The asset, or a `NotFoundException`, as for an unknown ID, when the context's account may not open it ([[maySeeAsset]]) */
+  /** An asset the account may not open is a `NotFoundException`, as an unknown ID is */
   def visibleOnly(asset: Asset): Asset =
     if maySeeAsset(asset) then asset
     else
       logger.debug(s"Asset [${asset.persistedId}] not shown to Guest [${RequestContext.getAccount.persistedId}]: Browse alone")
       throw NotFoundException(s"Asset [${asset.persistedId}] not found")
 
-  /** Whether the account may create a Library: an Admin by type, anyone else by the Create Libraries flag */
   def mayCreateLibraries(user: User): Boolean = user.accountType == AccountType.Admin || user.canCreateLibraries
 
   /**
-   * For a full page of a repository, applied after `requireLogin`, whose access check has refused a foreign repository: once the
-   * page answers 200, the request's repository is recorded as the account's last active one
-   * (`UserService.rememberLastActiveRepository`), which login and `/` open next. Partials and API routes do not carry it, so a
-   * nav reload or a search never moves where the user lands, and neither does a page that is not found. The page is rendered
-   * already, so a failure to record is logged at WARN and the page is served: the next login lands where the last recorded load
-   * says.
+   * For a full page of a repository: once it answers 200, the repository is recorded as the account's last active one, which
+   * login and `/` open next. Partials and API routes do not carry it, so a nav reload or a search never moves where the user
+   * lands. The page is rendered already, so a failure to record is only logged.
    */
   class rememberRepository extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
-      // The innermost decorator's map fills the endpoint's extra parameter list, so the request travels on from here too
+      // Fills the endpoint's extra parameter list, as in `allowedOnly`
       delegate(req, Map("request" -> req)).transform {
         case v: Raw if v.statusCode == 200 =>
           for
@@ -459,10 +403,9 @@ object decorators:
       }
 
   /**
-   * For files whose names stay when their content changes (the vendored libraries, the fonts and the JS modules under /static/):
-   * the browser keeps a file but asks before each use (`no-cache`), and an unchanged one answers 304 with no body. The ETag is a
-   * hash of the bytes, taken on every request, so a file refreshed under a running dev server is never answered as unchanged. It
-   * is weak, since `compress` may send the same bytes gzipped.
+   * For files whose names stay when their content changes (vendored libraries, fonts, JS modules): `no-cache` with an ETag, so an
+   * unchanged file answers 304. The ETag hashes the bytes on every request, so a file refreshed under a running dev server is
+   * never answered as unchanged; it is weak since `compress` may gzip the same bytes.
    */
   class revalidated extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -509,7 +452,6 @@ object decorators:
           logger.debug(s"WebSocket refused [${refused.value.statusCode}] - $pathInfo in ${currentTimeMillis - startTime}ms")
           cask.router.Result.Success(refused)
         case cask.router.Result.Success(response) =>
-          // Regular HTTP response
           logger.debug(s"Request END [${response.statusCode}] - $pathInfo in ${currentTimeMillis - startTime}ms")
           cask.router.Result.Success(response)
         case error =>

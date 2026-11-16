@@ -3,12 +3,12 @@ package altitude.core.dao
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Album
 
-/** Albums and their memberships. The `album_asset` table has no model of its own and is written only through this DAO. */
+/** Albums and their memberships. `album_asset` has no model of its own and is written only through this DAO. */
 trait AlbumDao extends BaseDao[Album]:
-  /** Every album in the context repository, by name, with its asset count */
+  /** By name, with asset counts */
   def getAll: List[Album]
 
-  /** Points the album at the given assets; returns how many were new. Only existing, non-recycled assets are added. */
+  /** Returns how many were new. Only existing, non-recycled assets are added. */
   def addAssets(albumId: String, assetIds: Set[String]): Int
 
   def removeAssets(albumId: String, assetIds: Set[String]): Int
@@ -17,8 +17,8 @@ trait AlbumDao extends BaseDao[Album]:
 
   def getAssetIds(albumId: String): Set[String]
 
-  /** Those of the assets that some album of the context repository holds */
+  /** Those of the assets that some album holds */
   def getAssetsInAnyAlbum(assetIds: Set[String]): Set[String]
 
-  /** The albums of the context repository holding the asset, by name ignoring case, each without its asset count */
+  /** By name ignoring case, without asset counts */
   def getAlbumsOfAsset(assetId: String): List[Album]

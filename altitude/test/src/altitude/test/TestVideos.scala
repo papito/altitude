@@ -16,9 +16,8 @@ import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 
 /**
- * Videos synthesized at test time, so no binaries live in git: short MP4s (the `mpeg4` codec, which the LGPL FFmpeg build
- * encodes) made of stills held for a span each, the `people/` images letterboxed on black. Each named clip is encoded once per
- * JVM into a temporary directory that is removed on exit.
+ * Videos synthesized at test time, so no binaries live in git: short MP4s made of stills held for a span each, in the `mpeg4`
+ * codec, which the LGPL FFmpeg build encodes. Each named clip is encoded once per JVM into a temporary directory.
  */
 object TestVideos {
   val WIDTH = 640
@@ -115,10 +114,7 @@ object TestVideos {
   /** A landscape encoding whose container says to show it as portrait, the way a phone held upright records */
   lazy val portrait: Path = clip(Seq(person("affleck.jpg", 2)), displayRotation = -90)
 
-  /**
-   * A clip whose media data is zeroed after encoding, so the container opens and probes as a two-second video but no frame of it
-   * decodes
-   */
+  /** A clip whose media data is zeroed after encoding: it probes as a two-second video, but no frame decodes */
   lazy val undecodable: Path = {
     val path = clip(Seq(person("affleck.jpg", 2)))
     val bytes = Files.readAllBytes(path)

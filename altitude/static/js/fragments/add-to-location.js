@@ -1,15 +1,10 @@
 import { fillSelectionField } from "./selection-field.js"
 
 /**
- * The Add to location modal dialog (`htmx/add_to_location_dialog.scala.html`,
- * `data-app-dialog-kind="add-to-location"`): the form's hidden `assetIds` field carries the
- * selection (`fillSelectionField`).
- *
- * The success event's detail names the chosen Location - its ID, and its bare name from the
- * option's `data-name`, as a drop's report names it, rather than the option's `Category › Name`
- * label - so the listener can name it in the snackbar after the dialog is gone, whichever explorer
- * tab is displayed: the detail is read when the request is issued, so it is kept in step with the
- * select rather than written on submit. The server adds how many assets it `added`.
+ * The Add to location dialog. The success detail names the chosen Location by its bare name (not
+ * the option's `Category › Name` label) so the snackbar can name it after the dialog is gone. The
+ * detail is read when the request is issued, so it follows the select rather than being written on
+ * submit.
  */
 export function hydrateAddToLocationFragment({ fragmentEl }) {
     fillSelectionField(fragmentEl)

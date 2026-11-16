@@ -28,7 +28,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
 
   private def repositoryId: String = RequestContext.getRepository.persistedId
 
-  /** This moment as an instant column takes it: bound in UTC, to the microsecond, as `AssetDao.add` binds an asset's */
+  /** This moment as an instant column takes it: in UTC, to the microsecond */
   private def now: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
 
   override protected def toModel(row: ImportRow[Sc]): Import =
@@ -104,11 +104,9 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
     model.copy(id = Some(id), createdAt = Some(toLocalDateTime(createdAt)))
 
   /**
-   * The statements [[list]] reads the first `shown` Imports with: the ones in progress, which are few, by the index on them
-   * (`import_03`); the closed ones off the history by age (`import_01`), from its newest end; and the count of them all. Each
-   * list is the newest first, by ID within one moment, so neither statement sorts more than the Imports of a moment, and the
-   * listing costs the Imports it shows: one statement ordered by whether an Import is closed could use neither index, and read
-   * and sorted the whole history.
+   * The statements of [[list]]: the few Imports in progress by `import_03`, the closed ones newest first by `import_01`, and the
+   * count. Each reads in index order, so the listing costs the Imports it shows; one statement ordered by whether an Import is
+   * closed could use neither index and would sort the whole history.
    */
   def listStatements(shown: Int): List[(String, List[Any])] =
     def newest(closed: String) = s"""
@@ -191,7 +189,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
 
     updateByBySql(sql, List(nativeBool(true), nativeUtcTimestamp(now), repositoryId))
 
-  // The Imports of the Watch folders alone, by the index on an Import's Watch folder
+  // Watch folder Imports only, by `import_02`
   override def countsByWatchFolder(): Map[String, (Int, Int)] =
     val imported = ImportOutcome.Imported.dbValue
     val sql = s"""

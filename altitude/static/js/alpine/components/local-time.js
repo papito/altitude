@@ -1,14 +1,11 @@
-// The two ways a moment reads: its date alone, or its date and time
 const FORMATS = {
     date: { dateStyle: "medium" },
     datetime: { dateStyle: "medium", timeStyle: "short" },
 }
 
 /**
- * A moment the server renders as `<time datetime="<ISO instant>">` holding its UTC text
- * (`Util.utcText`), shown in the viewer's zone and locale instead: the date alone, or the date and
- * time (`data-app-time-style`, "date" or "datetime"). The account info dialog's times use it
- * (`htmx/account_info_dialog`). A `datetime` the browser cannot read leaves the UTC text.
+ * Rewrites a server-rendered `<time datetime>` (UTC text) in the viewer's zone and locale, per
+ * `data-app-time-style`. A `datetime` the browser cannot parse keeps the UTC text.
  */
 export function localTime() {
     return {

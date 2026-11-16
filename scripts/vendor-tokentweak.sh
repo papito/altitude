@@ -1,6 +1,6 @@
 #!/bin/sh
-# Vendors the tokentweak package into altitude/static/js/lib, the way every library there is vendored: the
-# built files copied byte for byte out of the npm tarball, the license beside them. Run as `make vendor-tokentweak`.
+# Vendors the tokentweak package into altitude/static/js/lib: the built files copied byte for byte out of the npm
+# tarball, the license beside them. Run as `make vendor-tokentweak`.
 #
 #   sh scripts/vendor-tokentweak.sh [spec]
 #
@@ -9,9 +9,8 @@
 #   a tarball             ../tokentweak/tokentweak-0.2.0.tgz: an `npm pack` output
 #   a checkout            ../tokentweak: packed as it stands, so build it first (`npm run build` there)
 #
-# Nothing is installed: the tarball is unpacked in a temporary directory and three files are copied from it. A file
-# already identical to the tarball's is left alone. The version table in lib/README.md is not edited; the script
-# says when its rows need the new version.
+# Nothing is installed: the tarball is unpacked in a temporary directory. The version table in lib/README.md is not
+# edited; the script says when its rows need the new version.
 set -eu
 
 spec=${1:-latest}
@@ -50,7 +49,7 @@ pkg="$tmp/unpacked/package"
   echo "vendor-tokentweak: $tgz is not a tokentweak tarball" >&2; exit 1; }
 version=$(node -p "require('$pkg/package.json').version")
 
-# tarball path → vendored name
+# tarball path → vendored name; a file already identical is left alone
 vendor() {
   src="$pkg/$1"
   dest="$lib/$2"

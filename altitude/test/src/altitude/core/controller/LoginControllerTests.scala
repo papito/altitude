@@ -249,8 +249,8 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The page links the app's stylesheet, is titled, carries the brand and a "Log in" button, and shows no error. The failed
-     * login answers 401 with the page again: the generic `LOGIN_FAILED` error, the login as typed in its field, the page to come
-     * back to, and no trace of the password.
+     * login answers 401 with the page showing the generic error, the login as typed and the page to come back to, with no trace
+     * of the password.
      */
     val user = testContext.persistUser()
 
@@ -322,8 +322,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The Library's page still answers 200: the gate reads the grants in the token, and nothing told it of the change. Once the
-     * account's version is raised, as every account write does after its commit, the page is a 404.
+     * The Library's page still answers 200, since the gate reads the grants in the token. Once the account's version is raised,
+     * as every account write does after its commit, the page is a 404.
      */
     val user = testContext.persistUser()
     val library = addLibrary("Library A", user)
@@ -413,11 +413,11 @@ import altitude.core.util.Util
      * Assertions:
      *
      * A page request with the cookie redirects to the login and an API request is a 401, each answer clearing the session cookie
-     * (empty, Max-Age 0), so the browser stops sending it.
+     * (empty, Max-Age 0).
      *
      * Edge cases:
      *
-     * A refused Bearer token, and a request with no token at all, are refused with no cookie set: there is no cookie to clear.
+     * A refused Bearer token and a request with no token at all set no cookie, since there is none to clear.
      */
     val user = testContext.persistUser()
     val library = addLibrary("Library A", user)
@@ -461,15 +461,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A User holding a grant in a Library; htmx requests (`HX-Request`) for the nav of the Library's Import page, sent from that
-     * page (`HX-Current-URL`, with a query), with a session cookie that holds no token the server minted, with no cookie, and
-     * with no `HX-Current-URL`.
+     * A User holding a grant in a Library, and htmx requests for a nav partial sent from the Library's Import page (with a
+     * query): one with a forged session cookie, one with no cookie, and one with no `HX-Current-URL`.
      *
      * Assertions:
      *
-     * Each is answered 401, never a redirect that htmx would follow and swap in, with `HX-Redirect` to the login carrying the
-     * page's own path and query (not the partial's) as its `redirect`; the forged cookie's answer clears the cookie, and the
-     * answer with no cookie sets none.
+     * Each is a 401, not a redirect htmx would follow and swap in, with `HX-Redirect` to the login carrying the page's own path
+     * and query (not the partial's). The forged cookie's answer clears the cookie; the answer with no cookie sets none.
      *
      * Edge cases:
      *
@@ -515,9 +513,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Each session's next page request redirects to the login. The first's answer sets no cookie, so a token its browser was
-     * given meanwhile (the new one of a password change made in another request) is not cleared; the second's clears the session
-     * cookie, its account being able to do nothing.
+     * Each session's next page request redirects to the login. The first's answer sets no cookie, so a token its browser got
+     * meanwhile (the new one of a password change) is not cleared. The second's clears the session cookie.
      */
     val revoked = testContext.persistUser()
     val deactivated = testContext.persistUser()

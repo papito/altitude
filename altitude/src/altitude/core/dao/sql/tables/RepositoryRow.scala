@@ -4,9 +4,9 @@ import java.time.OffsetDateTime
 import scalasql.Table
 
 /**
- * The `repository` table. `fileStoreConfig` is `jsonb` on PostgreSQL and `TEXT` on SQLite; pgJDBC hands a `jsonb` column out as
- * its JSON text, which is what the model parses, so both read as a plain string. `nameKey` is the name key `repository_01` keeps
- * unique (`NameKey.of` of the name), written by `RepositoryDao.add` and never read back: the model derives it from the name.
+ * The `repository` table. `fileStoreConfig` is `jsonb` on PostgreSQL and `TEXT` on SQLite; pgJDBC hands `jsonb` out as its JSON
+ * text, so both read as a string. `nameKey` is the key `repository_01` keeps unique, written but never read back: the model
+ * derives it from the name.
  */
 case class RepositoryRow[T[_]](
     id: T[String],

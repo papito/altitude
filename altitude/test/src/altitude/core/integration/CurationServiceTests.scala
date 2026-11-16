@@ -25,10 +25,7 @@ import altitude.core.models.Settings
 import altitude.core.models.Stats
 import altitude.core.service.FaceDetectionService
 
-/**
- * A Curation set: reading the queue and its count, a Sequence's frames and a selection's, and a set's outcome (resolve and
- * reopen), over the burst of `BurstFrames`
- */
+/** The Curation queue and its count, a Sequence's or a selection's set, and a set's resolve and reopen, over `BurstFrames` */
 @DoNotDiscover class CurationServiceTests(override val testApp: Altitude)
   extends IntegrationTestCore
   with SearchPlans
@@ -73,8 +70,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The queue holds the burst captured first, then the other, each with its members and its first capture, although the later
-     * one was imported first. The lone frame has no Sequence, so it is in neither, and the count says two.
+     * The queue holds the burst captured first, then the other, each with its members and first capture, although the later one
+     * was imported first. The lone frame has no Sequence, and the count says two.
      */
     val later = burst(0, startingAt = 180)
     val earlier = burst(2, frames = 3)
@@ -113,8 +110,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The queue names the frame captured at the start as the Sequence's cover, although it was imported second, and once that
-     * frame is recycled the cover is the frame captured five seconds in: a recycled frame is no cover, as it is no member.
+     * The cover is the frame captured at the start, although it was imported second. Once it is recycled, the cover is the frame
+     * captured five seconds in: a recycled frame is no member, so no cover.
      */
     val middle = importFrame(frame(1), taken = Some(takenAt(5)))
     val first = importFrame(frame(0), taken = Some(takenAt(0)))
@@ -135,8 +132,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The queue names the frame imported first as the cover, whatever the two frames' IDs: with no capture time to go by, the
-     * frames are in import order, as the set shows them.
+     * The cover is the frame imported first, whatever the IDs: with no capture time, frames go in import order.
      */
     val undated = (2 to 3).toList.map(n => importUndated(frame(n), n))
 
@@ -152,8 +148,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * With a frame recycled the Sequence stays, with two members and the first capture of the frames left. With two recycled, one
-     * frame is left: the queue is empty, the count is zero, and the set reads as nothing. The restore brings all three back.
+     * With one frame recycled the Sequence stays, with two members and the first capture of those left. With two recycled the
+     * queue is empty and the set reads as nothing. The restore brings all three back.
      */
     val frames = burst(0, frames = 3)
     val sequenceId = sequenceOf(frames)
@@ -182,8 +178,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The longer burst is first until then, and second after, since a Sequence's place is the first capture of its frames still
-     * out of the trash.
+     * The longer burst is first until then and second after: a Sequence's place is the first capture of its live frames.
      */
     val longer = burst(0, frames = 4)
     val other = burst(4, startingAt = 1, model = "Nikon Z8")
@@ -198,8 +193,8 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A burst of three frames, and another picture, one of each marked as not completed. An import unfinished carries no Sequence
-     * in practice, so the row is written directly.
+     * A burst of three frames and another picture, one of each marked as not completed by writing the row directly, since an
+     * unfinished import carries no Sequence in practice.
      *
      * Assertions:
      *
@@ -224,8 +219,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * Each repository's queue and count hold its own Sequence alone. The other repository's Sequence reads as nothing, its frames
-     * alone are no selection, and among a repository's own frames they are dropped.
+     * Each repository's queue and count hold its own Sequence alone. The other repository's Sequence and frames read as nothing,
+     * and are dropped from a selection beside the repository's own.
      */
     val local = burst(0)
     val repo2 = testContext.persistRepository()
@@ -249,8 +244,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The first set holds its two frames left in capture order, each read as a frame with its measurements and its Sequence, and
-     * they come back from the rule: every frame is in a Bundle or a Contender. An ID no Sequence has reads as nothing.
+     * The first set holds its two live frames in capture order, measured and in the Sequence, and the rule places every frame in
+     * a Bundle or among the Contenders. An ID no Sequence has reads as nothing.
      */
     val frames = burst(0, frames = 3)
     burst(3, startingAt = 180)
@@ -283,9 +278,8 @@ import altitude.core.service.FaceDetectionService
      * Assertions:
      *
      * The queue holds the dated Sequence first and the undated one, with no first capture, after it on both engines, although the
-     * undated one was imported first. The undated set's frames are in the order they were imported, whatever their IDs. The
-     * resolve takes the Pick out of the Sequence and recycles the other two, so the Sequence leaves the queue and has no set; the
-     * reopen brings the frames and the Sequence back, in the same order.
+     * undated one was imported first. The undated set is in import order, whatever the IDs. The resolve takes the Pick out and
+     * recycles the rest, so the Sequence leaves the queue; the reopen brings it back in the same order.
      */
     val undated = (2 to 4).toList.map(n => importUndated(frame(n), n))
     val sequenceId = sequenceOf(undated)
@@ -324,13 +318,13 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A burst of two frames run through the whole import, so each has its Histogram stored, and a still image inserted without
-     * the pipeline, with no metrics or Histogram, as an image the measurement could not decode is left. A second repository.
+     * A burst of two frames run through the whole import, so each has its Histogram, and a still image inserted without the
+     * pipeline, unmeasured like an image the measurement could not decode. A second repository.
      *
      * Assertions:
      *
-     * The Sequence's set holds each frame with the Histogram stored for it, as does a selection of the three, whose unmeasured
-     * frame has none. Read from the second repository, the frames have no Histograms.
+     * The Sequence's set and a selection of the three carry each frame's stored Histogram, and the unmeasured frame has none.
+     * Read from the second repository, the frames have no Histograms.
      */
     val frames = burst(0)
     val unmeasured = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
@@ -350,9 +344,8 @@ import altitude.core.service.FaceDetectionService
   }
 
   /**
-   * A Sequence of `count` frames, in capture order, a second apart, inserted without the import pipeline (`insertAsset`): the
-   * tests over it read capture times and the Sequence, which it stamps, and no file or measurement. They are inserted last frame
-   * first, so the order of the rows says nothing about capture order.
+   * A Sequence of `count` frames a second apart, in capture order, inserted without the pipeline since its tests read no file or
+   * measurement. They are inserted last frame first, so row order says nothing about capture order.
    */
   private def longSequence(count: Int): List[Asset] = {
     val start = LocalDateTime.of(2024, 6, 1, 12, 0)
@@ -373,13 +366,13 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The set holds the first `MAX_SEQUENCE_FRAMES` in capture order and holds back four: the three frames past it and the frame
-     * with no capture time, which sorts last on both engines. The queue still counts all the frames.
+     * The set holds the first `MAX_SEQUENCE_FRAMES` in capture order and holds back four: the three past it and the undated
+     * frame, which sorts last on both engines. The queue still counts all the frames.
      *
      * Edge cases:
      *
-     * Recycling frames of the window brings the frames past it in. At exactly `MAX_SEQUENCE_FRAMES` frames left, the window is
-     * the whole Sequence and holds nothing back, the frame with no capture time last.
+     * Recycling frames of the window brings the later ones in. At exactly `MAX_SEQUENCE_FRAMES` frames left, the window is the
+     * whole Sequence, the undated frame last.
      */
     val undated = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
     val frames = longSequence(MAX_FRAMES + 3)
@@ -410,9 +403,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * Keep all on the window answers nothing cleared and changes nothing, so the same window reads again. The resolve recycles
-     * the window's other frames and answers nothing cleared. The Pick stays in the Sequence, the three frames past the window are
-     * untouched, and the Sequence stays in the queue, to be read again as the Pick and those three, holding nothing back.
+     * Keep all on the window clears and changes nothing. The resolve recycles the window's other frames and clears nothing: the
+     * Pick and the three frames past the window stay in the Sequence, which reads next as those four.
      */
     val frames = longSequence(MAX_FRAMES + 3)
     val sequenceId = sequenceOf(frames)
@@ -450,13 +442,11 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * Two still images, a Video, an animated image (a still fixture with a duration written, which is what makes one), a recycled
-     * image, and an ID that is no asset.
+     * Two still images, a Video, an animated image (a still with a duration written), a recycled image, and an unknown ID.
      *
      * Assertions:
      *
-     * The set of all of them holds the two still images. A selection of one still image and everything else has fewer than two
-     * left, as has an empty one, and reads as nothing.
+     * The set of all of them holds the two still images. A selection left with fewer than two, or empty, reads as nothing.
      */
     val first = testContext.insertAsset()
     val second = testContext.insertAsset()
@@ -481,7 +471,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The set holds the three in capture order, each read with its Sequence or none, for the rule to tell what compares.
+     * The set holds the three in capture order, each with its Sequence or none, for the rule to tell what compares.
      */
     val frames = burst(0, frames = 3)
     val lone = importFrame(frame(5), taken = Some(takenAt(90)))
@@ -498,13 +488,13 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A burst of two frames, whose picture has Faces of its own, each given a Face of a person left visible, the first a Face of
-     * a person then hidden, the second a Face of a person then marked as a bad match.
+     * A burst of two frames with Faces of their own, each given a Face of a visible person; the first also one of a person then
+     * hidden, the second one of a person then marked as a bad match.
      *
      * Assertions:
      *
-     * Before the marking, the Sequence's set reads each frame with its own Faces and the added ones. After it, the set and the
-     * selection of the two read each frame with the same Faces less the hidden person's and the bad match's.
+     * Before the marking, each frame reads with all its Faces. After it, the set and the selection drop the hidden person's and
+     * the bad match's.
      */
     val frames = burst(0)
     val features = Array.fill(FaceDetectionService.EMBEDDING_DIMENSIONS)(0.1f)
@@ -544,8 +534,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The Sequence's set and the selection each read the first three as in an album or Location and the last as not. Once the
-     * album has let go, the frame only it held reads as not, and the frame also in the Location still does.
+     * The set and the selection read the first three as in an album or Location and the last as not. Once the album lets go, the
+     * frame only it held reads as not.
      */
     val frames = burst(0, frames = 4)
     val album = testApp.service.album.add("kept")
@@ -570,8 +560,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * Under the first the set carries the Too dark notice, and under the others it does not, with no write in between: nothing
-     * the rule decides is stored.
+     * The set carries the Too dark notice under the first and not under the others, with no write in between: nothing the rule
+     * decides is stored.
      */
     val sequenceId = sequenceOf(burst(0))
 
@@ -592,15 +582,13 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A burst of two frames, and one of them seeded into 5,000 copies with no Sequence, analyzed and rolled back once the plans
-     * are read: a library the planner has rows to choose by, in which the frames with a Sequence are few.
+     * A burst of two frames, one of them seeded into 5,000 copies with no Sequence: a library in which the frames with a Sequence
+     * are few.
      *
      * Assertions:
      *
-     * The engine's plan names `asset_sequence` for all five statements, the first four also as an account that curates its own
-     * frames alone reads them, so the toolbar's count, read after every mutation, costs the rows that carry a Sequence and not
-     * the library. The queue's statement names it twice, once for the grouped rows and once for the cover its correlated subquery
-     * reads per Sequence, so no cover costs a scan of the library either.
+     * The query plan names `asset_sequence` for all five statements, the first four also as read under Curate own, so they cost
+     * the rows that carry a Sequence, not the library. The queue's plan names it twice: the cover subquery uses it too.
      */
     val frames = burst(0)
     val dao = testApp.DAO.asset.asInstanceOf[AssetDao]
@@ -633,9 +621,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The answer names the Pick with the Sequence it left. The Pick is out of the Sequence and out of the trash; the others are
-     * in the trash and keep it, as any recycled frame does; the stats moved them from triage to recycled. The Sequence has left
-     * the queue and the count, and has no set.
+     * The answer names the Pick with the Sequence it left. The Pick is live with no Sequence; the others are recycled and keep
+     * it; the stats move them from triage to recycled. The Sequence leaves the queue and has no set.
      */
     val frames = burst(0, frames = 3)
     val sequenceId = sequenceOf(frames)
@@ -662,13 +649,11 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A burst of three frames, and the repository's recycled count row deleted behind the services' back, so counting what a
-     * resolve recycles fails once the frames have been written.
+     * A burst of three frames, and the repository's recycled count row deleted, so the resolve fails after writing the frames.
      *
      * Assertions:
      *
-     * The resolve fails on the missing stat, and every frame is still out of the trash and in the Sequence, which stays in the
-     * queue.
+     * The resolve fails on the missing stat, and every frame is still live and in the Sequence, which stays in the queue.
      */
     val frames = burst(0, frames = 3)
     val sequenceId = sequenceOf(frames)
@@ -699,8 +684,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * Both are named in the answer, carry no Sequence and are out of the trash, so the two frames left do not make the Sequence
-     * one to compare again: it is out of the queue and the count.
+     * Both are named in the answer, live and with no Sequence, so the Sequence leaves the queue.
      */
     val frames = burst(0, frames = 3)
     val sequenceId = sequenceOf(frames)
@@ -721,8 +705,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * Nothing is cleared, so the answer is empty. The other is recycled; the Pick keeps its Sequence, to be compared with the
-     * frames outside the selection, and the Sequence stays in the queue and the count with the three frames left.
+     * Nothing is cleared. The other is recycled, and the Pick keeps its Sequence, to be compared with the frames outside the
+     * selection; the Sequence stays in the queue with three frames.
      */
     val frames = burst(0, frames = 4)
     val sequenceId = sequenceOf(frames)
@@ -744,7 +728,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The set holds all the frames still out of the trash, so the Pick leaves the Sequence.
+     * The set holds every live frame, so the Pick leaves the Sequence.
      */
     val frames = burst(0, frames = 3)
     val sequenceId = sequenceOf(frames)
@@ -767,7 +751,7 @@ import altitude.core.service.FaceDetectionService
      * Assertions:
      *
      * The first Sequence is held whole, so its Pick leaves it and it leaves the queue. The second is not, so its Pick stays and
-     * it stays in the queue, with the two frames left. The lone frame is recycled like any other.
+     * it stays queued with two frames. The lone frame is recycled.
      */
     val whole = burst(0)
     val part = burst(2, frames = 3, model = "Nikon Z8")
@@ -796,9 +780,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * Keep all on part of a Sequence answers nothing cleared: every frame is where it was, the stats are as they were and the
-     * Sequence is still in the queue. Keep all on a whole Sequence dismisses it: its frames carry no Sequence, none is recycled,
-     * and it leaves the queue.
+     * Keep all on part of a Sequence clears and changes nothing. Keep all on a whole Sequence dismisses it: its frames carry no
+     * Sequence, none is recycled, and it leaves the queue.
      */
     val part = burst(0, frames = 3)
     val whole = burst(3, startingAt = 30, model = "Nikon Z8")
@@ -821,8 +804,8 @@ import altitude.core.service.FaceDetectionService
   }
 
   /**
-   * A burst of three frames and a fourth frame of it about to complete: imported, then put back as it is before the last stage of
-   * its import, which is what `complete` runs. Its stats were counted by the import, so that stage's count is left out.
+   * A burst of three frames and a fourth put back to before its import's last stage, which `complete` runs. Its stats were
+   * already counted by the import, so `complete` leaves the count out.
    */
   private def burstWithFrameCompleting: (List[Asset], Asset, () => Unit) = {
     val frames = burst(0, frames = 3)
@@ -845,9 +828,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The resolve waits for the completion, then sees the fourth frame, so its set does not hold the whole Sequence: nothing is
-     * cleared, and the Pick and the fourth frame are left in the Sequence, in the queue with the two of them. Read without the
-     * wait, the Pick would leave the Sequence and the new frame would be alone in it, compared with nothing.
+     * The resolve waits for the completion and sees the fourth frame, so its set is not the whole Sequence: nothing is cleared,
+     * and the Pick and the fourth frame stay queued together. Without the wait, the new frame would be alone in the Sequence.
      */
     val (frames, completing, complete) = burstWithFrameCompleting
     val sequenceId = sequenceOf(frames)
@@ -873,8 +855,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The resolve clears the Pick, and the assignment waits for it, then reads the Pick with no Sequence and the recycled frames
-     * with theirs, so the fourth frame joins that Sequence with the Pick. The two end up as they would had the frame been first.
+     * The assignment waits for the resolve, then joins the recycled frames' Sequence and stamps the Pick back into it: the two
+     * end up as they would had the frame come first.
      */
     val (frames, completing, complete) = burstWithFrameCompleting
     val sequenceId = sequenceOf(frames)
@@ -896,14 +878,13 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A burst of three frames with its last recycled, and a frame in another repository. Each list a resolve refuses, then each a
-     * reopen refuses: a Sequence given for a frame that was no Pick.
+     * A burst of three frames with its last recycled, and a frame in another repository, offered to resolve and reopen in each
+     * shape they refuse, among them a Sequence given for a frame that was no Pick.
      *
      * Assertions:
      *
-     * Each is an `IllegalOperationException`, since a resolve with no live Pick would recycle the set and keep nothing, except a
-     * Pick in another repository or one that names no asset, which is a `NotFoundException`: every ID is read in the repository
-     * first. Nothing has changed: the two frames are out of the trash and in the Sequence, in the queue.
+     * Each is an `IllegalOperationException`, since a resolve with no live Pick would keep nothing, except a foreign or unknown
+     * Pick, which is a `NotFoundException`. Nothing changes.
      */
     val frames = burst(0, frames = 3)
     val sequenceId = sequenceOf(frames)
@@ -943,8 +924,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * Each reopen reports the frames it restored. Every frame is back out of the trash and in its Sequence, the stats are as they
-     * were, and both Sequences are in the queue and the count with all their frames.
+     * Each reopen reports the frames it restored. Every frame is back, live and in its Sequence, the stats are as they were, and
+     * both Sequences are queued with all their frames.
      */
     val frames = burst(0, frames = 3)
     val kept = burst(3, startingAt = 30, model = "Nikon Z8")
@@ -981,8 +962,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The reopen restores the other recycled frame and reports the copied one as a duplicate, which stays in the trash with its
-     * Sequence. The Pick is in the Sequence, with the restored frame and the new import, which joined it as a frame of its burst.
+     * The reopen restores the other recycled frame and reports the copied one as a duplicate, left in the trash. The Pick, the
+     * restored frame and the new import, which joined as a frame of the burst, share the Sequence.
      */
     val frames = burst(0, frames = 3)
     val sequenceId = sequenceOf(frames)
@@ -1034,8 +1015,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * A sorted asset never carries a Sequence, so the Pick stays as it is and the reopen does not fail on it: the recycled frames
-     * are back in the Sequence, in the queue without the Pick.
+     * A sorted asset never carries a Sequence, so the Pick stays as it is and the reopen does not fail on it; the recycled frames
+     * are back in the Sequence without it.
      */
     val frames = burst(0, frames = 3)
     val sequenceId = sequenceOf(frames)
@@ -1065,8 +1046,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The frame and the Pick are in a new Sequence, not the old one, which only its recycled frames carry, and the new one is
-     * what the queue and the count hold.
+     * The frame and the Pick form a new Sequence, which the queue holds; only the recycled frames keep the old one.
      */
     val frames = burst(0, frames = 3)
     val sequenceId = sequenceOf(frames)
@@ -1093,8 +1073,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The recycled frame still carries the Sequence, so the frame joins it and stamps the Pick into it, and the Sequence is back
-     * in the queue with the two of them.
+     * The recycled frame still carries the Sequence, so the new frame joins it and stamps the Pick back in; the Sequence is
+     * queued again with the two.
      */
     val frames = burst(0)
     val sequenceId = sequenceOf(frames)

@@ -42,9 +42,9 @@ object FaceRecognitionService:
     }
 
   /**
-   * A second pass over clusters in the order [[cluster]] returns them: a cluster whose centroid is within the threshold of an
-   * earlier cluster's centroid is absorbed by it. The single-member comparison of the first pass splits a face whose detections
-   * drift, as a turning head does; the centroids of the halves are closer than their leaders.
+   * A second pass: a cluster whose centroid is within the threshold of an earlier one's is absorbed by it. The first pass
+   * compares with one leader, so it splits a face whose detections drift, as a turning head does; the halves' centroids are
+   * closer.
    */
   def mergeClusters[A](clusters: List[Cluster[A]], features: A => Array[Float], threshold: Double): List[Cluster[A]] =
     def centroid(c: Cluster[A]): Array[Float] = meanNormalized(c.members.map(features))
@@ -63,10 +63,7 @@ class FaceRecognitionService(val app: Altitude):
   protected val txManager: TransactionManager = app.txManager
   private val faceDao: FaceDao = app.DAO.face
 
-  /**
-   * The faces of an asset, found without touching the database; [[recognizeAndStore]] matches and stores them. An animated image,
-   * an image with a duration, is not searched for faces.
-   */
+  /** The faces of an asset, found without touching the database. An animated image (one with a duration) is skipped. */
   def detect(dataAsset: AssetWithData): DetectedFaces =
     dataAsset.asset.assetType.mediaType match
       case "video" => detectInVideo(dataAsset)
@@ -75,10 +72,7 @@ class FaceRecognitionService(val app: Altitude):
         DetectedFaces(Nil)
       case _ => detectInImage(dataAsset)
 
-  /**
-   * Matches each of the asset's detected faces to a person and stores it, in one transaction (see [[withFaceFiles]]). Every face
-   * of an image is stored; a Video's are one per person.
-   */
+  /** Matches each detected face to a person and stores it, in one transaction; a Video stores one Face per person */
   def recognizeAndStore(asset: Asset, detected: DetectedFaces): Unit =
     asset.assetType.mediaType match
       case "video" => storeVideoFaces(asset, detected)
@@ -91,11 +85,9 @@ class FaceRecognitionService(val app: Altitude):
     DetectedFaces(faceWithImages)
 
   /**
-   * Faces in a Video: every Sampled frame is detected, and the detections of the whole video are clustered by embedding
-   * ([[FaceRecognitionService.cluster]], then [[FaceRecognitionService.mergeClusters]]). Each cluster becomes one Face: the crop,
-   * box, Frame time and quality of its best-quality detection, but the normalized centroid of all its members as the vector,
-   * which is steadier than any single frame. A cluster seen in fewer than `video.faces.min_cluster_frames` frames is match-only,
-   * so a passer-by in one frame cannot start a Person.
+   * Faces in a Video: the detections of every Sampled frame, clustered by embedding. Each cluster becomes one Face with its best
+   * detection's crop, box, Frame time and quality, but the centroid of all members as the vector, steadier than any one frame. A
+   * cluster seen in fewer than `video.faces.min_cluster_frames` frames is match-only, so a passer-by cannot start a Person.
    */
   private def detectInVideo(dataAsset: AssetWithData): DetectedFaces =
     val times = app.service.video.sampleTimes(app.service.asset.videoDuration(dataAsset))
@@ -112,8 +104,7 @@ class FaceRecognitionService(val app: Altitude):
     }
     logger.debug(s"Detected ${detections.size} faces across ${times.size} Sampled frames of ${dataAsset.asset}")
 
-    // Two detections closer than the distance threshold are the same person; a cluster seen in fewer than the minimum frames is
-    // match-only. Both are Settings, read per Video.
+    // Settings, read once per Video
     val settings = app.settings.current
     val distanceThreshold = settings.faceRecognitionCosineDistanceThreshold
     val minClusterFrames = settings.videoFacesMinClusterFrames
@@ -146,8 +137,8 @@ class FaceRecognitionService(val app: Altitude):
     }
 
   /**
-   * A Person gets one Face per Video: when two of its faces resolve to the same Person, the later, lower-quality one is dropped,
-   * so a pose change that splits a person in two does not fail the import.
+   * A Person gets one Face per Video: of two faces resolving to the same Person, the later, lower-quality one is dropped, so a
+   * pose change that splits a person in two does not fail the import.
    */
   private def storeVideoFaces(asset: Asset, detected: DetectedFaces): Unit =
     withFaceFiles {
@@ -171,9 +162,8 @@ class FaceRecognitionService(val app: Altitude):
   private type StoreFace = (Face, FaceImages, Asset, Person) => Unit
 
   /**
-   * Runs the storing of an asset's Faces in one transaction, the files of each Face written as it is stored. When the transaction
-   * rolls back, the files already written are deleted: a Face in the database always has its files, and one that is not leaves
-   * none behind.
+   * Stores an asset's Faces in one transaction, writing each Face's files as it is stored. On rollback the files written are
+   * deleted, so a stored Face always has its files and an unstored one leaves none.
    */
   private def withFaceFiles[A](f: StoreFace => A): A =
     val written = scala.collection.mutable.ListBuffer.empty[String]
@@ -191,15 +181,14 @@ class FaceRecognitionService(val app: Altitude):
         throw ex
 
   /**
-   * The Person for a Face, already persisted: the top-K nearest enrolled Faces within the distance threshold vote, the Person
-   * with the most votes winning and a tie going to the closest. Without a match, an enrolled Face starts a new Person; a
-   * match-only Face is nobody's, `None`, and is not stored.
+   * The persisted Person for a new Face: the top-K nearest enrolled Faces within the distance threshold vote, a tie going to the
+   * closest. Without a match an enrolled Face starts a new Person, and a match-only Face gets `None` and is not stored.
    */
   def recognizeFace(detectedFace: Face): Option[Person] =
     require(detectedFace.id.isEmpty, "Face object must not be persisted yet")
     require(detectedFace.personId.isEmpty, "Face object must not be associated with a person yet")
 
-    // The nearest candidates that vote, and how close one must be: Settings, read per face
+    // Settings, read per face
     val settings = app.settings.current
     val matchCount = settings.faceRecognitionMatchCount
     val distanceThreshold = settings.faceRecognitionCosineDistanceThreshold

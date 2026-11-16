@@ -1,6 +1,5 @@
-/* The People tab fills the explorer panel so Split.js has a box to divide between the two panes, laid along the axis
-   the Dock side calls for: a column (the panes stacked) under a left or right dock, where the explorer is tall, and a row
-   (side by side) under a top or bottom one, where it is wide */
+/* The tab fills the explorer so Split.js has a box to divide: the panes stack under a left or right dock, where the
+   explorer is tall, and sit side by side under a top or bottom one */
 #people {
     display: flex;
     flex-direction: column;
@@ -12,8 +11,8 @@ html[data-dock-side="bottom"] #people {
     flex-direction: row;
 }
 
-/* A pane: the buckets row stays put while the list below it scrolls. Both minimums are reset so Split.js may size it
-   below its content on either axis */
+/* The buckets row stays put while the list scrolls. Both minimums are reset so Split.js may size a pane below its
+   content */
 #people .pane {
     display: grid;
     grid-template-rows: auto 1fr;
@@ -22,20 +21,16 @@ html[data-dock-side="bottom"] #people {
     overflow: hidden;
 }
 
-/* One pane, no Split view: it fills the tab so its list scrolls. With two, Split.js sets each pane's size inline along
-   its axis, the height when stacked and the width side by side */
+/* One pane, no Split view: it fills the tab. With two, Split.js sizes each pane inline */
 #people .pane:only-of-type {
     flex: 1;
 }
-
-/* The gutter between the two panes is a .divider of core.css, built with its orientation class by the component */
 
 #people .pane .list {
     min-height: 0;
     overflow-y: auto;
 }
 
-/* The bucket switches of a pane, a wrapping row; each switch and its label a pair, as in the View settings dialog */
 #people .buckets {
     display: flex;
     flex-wrap: wrap;
@@ -49,7 +44,6 @@ html[data-dock-side="bottom"] #people {
     gap: var(--space-3);
 }
 
-/* A switch's legend, the faint line after its label (the Duplicate Split View switch's) */
 #people .buckets .legend {
     color: var(--theme-neutral-3);
     font-size: var(--font-size-small);
@@ -61,7 +55,7 @@ html[data-dock-side="bottom"] #people {
     border: var(--border-hairline) var(--theme-neutral-3);
     border-radius: var(--radius);
     display: grid;
-    /* --face-box is the face detection box size, set on #people by htmx/people.scala.html */
+    /* --face-box: the face detection box size, set on #people */
     width: calc(var(--face-box) + 60px);
     height: calc(var(--face-box) + 40px);
     place-items: center;
@@ -86,7 +80,6 @@ html[data-dock-side="bottom"] #people {
     position: relative;
 }
 
-/* A hidden person's mark, in the image's corner */
 #people .cell .hidden-badge {
     position: absolute;
     inset-block-start: 0;
@@ -131,12 +124,10 @@ html[data-dock-side="bottom"] #people {
     color: var(--warning-color);
 }
 
-/* The rename pencil (htmx/people_list), at the end of the name row and out of its flow, so the name stays centered,
-   over the row's color so a long name does not show through it. It is --space-8 wide at least, the least width of a
-   pointer target (24 CSS px at the default root size). It shows while the cell is hovered or holds keyboard focus
-   (:focus-visible, the pencil's own included, which then wears the focus ring of core.css): focus a click left in a
-   cell reveals nothing, so no second pencil shows beside the hovered cell's. Where nothing hovers, on a touch screen,
-   it shows always */
+/* The rename pencil is out of the name row's flow so the name stays centered, and filled with the row's color so a long
+   name does not show through. --space-8 is the least pointer target width (24 px). It shows on hover or keyboard focus: :focus-visible, not
+   :focus-within, so focus a click left in a cell shows no second pencil beside the hovered one. On a touch screen it
+   always shows */
 #people .cell .rename {
     position: absolute;
     inset-block: 0;
@@ -167,7 +158,7 @@ html[data-dock-side="bottom"] #people {
     color: var(--theme-neutral-4);
 }
 
-/* The one line a pane shows with no one in its buckets */
+/* A pane with no one in its buckets */
 #people .empty {
     text-align: center;
     color: var(--theme-neutral-3);

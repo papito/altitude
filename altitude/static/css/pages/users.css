@@ -1,7 +1,5 @@
-/* The Users page (users.scala.html) and its dialogs: the page's layout, the account cards (htmx/user_accounts), the Add User
-   modal (htmx/account_form, with its Permission matrix) and the two small account dialogs (htmx/set_password_dialog,
-   htmx/delete_account_dialog). The bundle applies on every page, so the page's rules are scoped to its body's class and the
-   dialogs' to their IDs. */
+/* The Users page and its account dialogs. The bundle applies on every page, so the page's rules are scoped to its body's
+   class and the dialogs' to their IDs. */
 
 :where(body.users) main {
   display: grid;
@@ -13,7 +11,7 @@
   padding: var(--space-8) var(--space-6);
 }
 
-/* The title, the filter box taking the rest of the row, and Add User at its right */
+/* Title, filter box filling the row, Add User at the right */
 #users > header {
   display: grid;
   grid-template-columns: max-content 1fr max-content;
@@ -61,7 +59,6 @@
   box-shadow: var(--box-shadow);
 }
 
-/* A deactivated account's card, dimmed */
 .account-card.deactivated {
   opacity: 0.55;
 }
@@ -116,7 +113,7 @@
   overflow-wrap: anywhere;
 }
 
-/* The Add User modal: the general modal widened, one column whose body scrolls under the actions, which stay in view */
+/* The Add User modal, widened; its body scrolls while the actions stay in view */
 #modalContent:has(#accountForm) {
   --modal-content-width: var(--account-form-width);
 }
@@ -162,7 +159,6 @@
   color: hsl(from currentColor h s l / 0.6);
 }
 
-/* The account type cards, in a row, the chosen one in the accent */
 #accountForm .type-cards {
   display: grid;
   grid-auto-flow: column;
@@ -201,7 +197,7 @@
   color: var(--theme-neutral-3);
 }
 
-/* An Admin's section, the Library switches, boxed as a type card is */
+/* The Library switches (Admin only), boxed like a type card */
 #accountForm .admin-only {
   display: grid;
   row-gap: var(--space-5);
@@ -210,7 +206,6 @@
   border-radius: var(--radius);
 }
 
-/* A switch, its label, and after the new-Library grant's switch its Permission chips */
 #accountForm .switch-row {
   display: flex;
   flex-wrap: wrap;
@@ -258,7 +253,7 @@
   }
 }
 
-/* The Permission matrix: a row per Library, a column per Permission under a header that stays in view as the body scrolls */
+/* The Permission matrix's header stays in view as the form body scrolls */
 #accountForm .permission-matrix {
   border-collapse: collapse;
 }
@@ -299,7 +294,7 @@
   text-align: center;
 }
 
-/* A column's header is its toggle: the Permission's name spelled out and wrapped */
+/* A column's header is the button that toggles that column */
 #accountForm .permission-matrix th.permission button {
   padding: var(--space-2);
   border: none;
@@ -330,12 +325,12 @@
   gap: var(--space-3);
 }
 
-/* The new password's field, with Generate and Show after it */
-/* The Add User form's password and its confirmation: one component's element, each field a row of the identity's grid */
+/* The password and its confirmation share one component element; each field stays a row of the identity's grid */
 #accountForm .password-fields {
   display: contents;
 }
 
+/* The password field, with Generate and Show after it */
 .password-field {
   display: grid;
   grid-template-columns: 1fr max-content max-content;

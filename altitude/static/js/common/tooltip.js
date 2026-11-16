@@ -1,19 +1,12 @@
 /**
- * The tooltip: a short hint shown above a control on a click, in the shape of the Alpine UI
- * tooltip's `$tooltip` magic (`docs/reference/alpine-components/tooltip.md`) but with no tippy or
- * Popper. `$tooltip('Message')` in a click handler writes the message into `#tooltip`, the one
- * `popover="manual"` host of `views/includes/html_common.scala.html`, and shows it in the top
- * layer; the `#tooltip` rule of `core.css` places it by CSS anchor positioning, centered above
- * the element the magic names `--tooltip-anchor` (an inline `anchor-name`, so any element can
- * call it with no ID or rule of its own). The magic is registered with everything else
- * `html_common` binds, by `registerHtmlCommonBindings` in `stores/html-common.js`.
+ * The tooltip: a short hint above a control on a click, the Alpine UI `$tooltip` magic without
+ * tippy or Popper. The message goes into the one `popover="manual"` `#tooltip` host, placed by CSS
+ * anchor positioning above the element given an inline `anchor-name`, so any element can call it.
  *
- * One tooltip at a time. It goes away after `LIFETIME_MS`, or at the next press or key anywhere,
- * read at the document's capture phase: a press or Enter on a control that removes or hides the
- * anchor (Deselect All hides the batch bar) comes a tick before the anchor is gone, and a
- * tooltip whose anchor is gone would be placed at the viewport's corner. A screen reader hears
- * the message through the snackbar's polite live region, since the host is `display: none`
- * until shown and a live region that appears with its text is not reliably read.
+ * One tooltip at a time. It goes after `LIFETIME_MS` or at the next press or key, read in the
+ * capture phase: a press that hides the anchor comes a tick before it is gone, and a tooltip with
+ * no anchor would sit at the viewport's corner. Screen readers hear it through the snackbar's
+ * polite region, since a live region that appears with its text is not reliably read.
  */
 import { announcePolitely } from "./snackbar.js"
 
@@ -23,15 +16,13 @@ const ANCHOR_NAME = "--tooltip-anchor"
 
 const LIFETIME_MS = 2000
 
-// The element the host is anchored to while the tooltip is shown
 let anchorEl = null
 
 let hideTimer = null
 
-// The press-or-key handler of the shown tooltip, removed with it
 let onDismissGesture = null
 
-// Alpine's magic callback: `$tooltip(message)` on the element the directive is on
+// `$tooltip(message)` anchors to the element the expression is on
 export const tooltipMagic = (el) => (message) => showTooltip(el, message)
 
 export function showTooltip(el, message) {
@@ -62,7 +53,6 @@ export function showTooltip(el, message) {
     announcePolitely(message)
 }
 
-/** Hides the tooltip at once; a no-op when none is shown */
 export function hideTooltip() {
     clearTimeout(hideTimer)
     hideTimer = null

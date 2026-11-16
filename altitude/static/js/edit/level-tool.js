@@ -1,8 +1,6 @@
 /**
- * The Level tool's line (`#levelLine`, `includes/edit_stage_tools`), drawn over the Crop tool's layer while a drag
- * draws it: from where the drag started to the pointer, in the layer's pixels. What the line sets is the Crop tool's
- * (`crop-tool.js`, through `adjust.levelStraighten`): Straighten turns so the line becomes level or plumb, whichever is
- * nearer.
+ * The Level tool's line, drawn over the Crop tool's layer during a drag, from where it started to the pointer. Straighten
+ * turns so the line becomes level or plumb, whichever is nearer.
  */
 import { levelStraighten } from "./adjust.js"
 
@@ -31,10 +29,7 @@ export function hideLevelLine() {
     document.getElementById(LINE_ID)?.setAttribute("hidden", "")
 }
 
-/**
- * The Straighten the line from `from` to `to` (client pixels over the shown frame) asks for, from `straighten`; null
- * for a line too short to be one (a click)
- */
+/** The Straighten the line asks for, from the current `straighten`; null for a line too short to be one (a click) */
 export function straightenFromLine(straighten, from, to) {
     return levelStraighten(straighten, to.x - from.x, to.y - from.y)
 }

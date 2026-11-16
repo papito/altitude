@@ -1,5 +1,3 @@
-/* An account's Libraries (includes/account_libraries), on an account card and in the account info dialog: a summary that
-   expands to one row per Library, its Permissions' labels under its name, dimmed, and the Library of the page marked */
 .account-libraries summary {
   cursor: pointer;
 }

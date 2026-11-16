@@ -15,9 +15,8 @@ import altitude.core.models.Settings
 import altitude.core.service.GeocoderService
 
 /**
- * The geocoder proxy against a stub of a Nominatim-compatible endpoint on localhost: the Setting gate, the request it sends (the
- * identifying `User-Agent` the Nominatim policy asks for, `format=json`, a small `limit`), and what it makes of the answer. No
- * network is touched.
+ * The geocoder proxy against a local Nominatim-compatible stub, with no network: the Setting gate, the request it sends (with the
+ * identifying `User-Agent` Nominatim's policy asks for), and what it makes of the answer.
  */
 @DoNotDiscover class GeocoderServiceTests extends AnyFunSuite with BeforeAndAfterAll with OptionValues {
 
@@ -63,8 +62,8 @@ import altitude.core.service.GeocoderService
      *
      * Assertions:
      *
-     * The places map to labelled results in the order given, and the request carries the trimmed query, format=json, the limit of
-     * five and the Altitude User-Agent.
+     * The places map to labelled results in order, and the request carries the trimmed query, format=json, a limit of five and
+     * the Altitude User-Agent.
      */
     stub.response = (200, nominatimBody)
     val results = GeocoderService(settings(enabled = true)).search("  Paris ")
@@ -101,16 +100,12 @@ import altitude.core.service.GeocoderService
     /**
      * Setup:
      *
-     * A stub answering with three places - one with coordinates, one without, one with coordinates that are not numbers - and a
-     * query with an apostrophe, an accented letter and an ampersand.
+     * A stub answering with three places, with coordinates, without, and with coordinates that are not numbers, and a query with
+     * an apostrophe, an accented letter and an ampersand.
      *
      * Assertions:
      *
      * Only the place with usable coordinates comes back, and the query reaches the stub URL-encoded.
-     *
-     * Edge cases:
-     *
-     * Missing and non-numeric coordinates, and characters that would otherwise break the query string.
      */
     stub.response = (
       200,
@@ -129,11 +124,7 @@ import altitude.core.service.GeocoderService
      *
      * Assertions:
      *
-     * Each of them fails the search with a GeocoderException rather than an empty result.
-     *
-     * Edge cases:
-     *
-     * A non-200 status, a body that is not JSON, and JSON that is not a list.
+     * Each fails the search with a GeocoderException rather than an empty result.
      */
     stub.response = (503, "busy")
     intercept[GeocoderException] {

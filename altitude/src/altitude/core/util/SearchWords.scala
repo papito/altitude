@@ -20,12 +20,12 @@ object SearchWords:
   // Those, or a camelCase hump: lower case then upper case, so a run of capitals stays one word
   private val Boundary = ("""(?<=\p{Ll})(?=\p{Lu})|""" + CaseFreeBoundary.regex).r
 
-  /** The words of the text in order: lower case, no diacritics, letters or digits only */
+  /** Lower case, no diacritics, letters or digits only */
   def of(text: String): Seq[String] = words(unmarked(text), Boundary)
 
   /**
-   * How many texts [[variants]] remembers, least recently read first out: a search reads the readings of every name of the
-   * repository on every request, and an import those of every file name and metadata value it indexes
+   * Least recently read first out: a search reads the readings of every name of the repository on every request, and an import
+   * those of every file name and metadata value it indexes
    */
   private val MEMO_SIZE = 50000
 
@@ -36,9 +36,9 @@ object SearchWords:
     })
 
   /**
-   * The word sequences the text can be read as, none for text without a word. The first is [[of]]; the second is the same rule
-   * without the camelCase hump, present only when the text has one, so that a word written with a hump and the same word written
-   * in one case can find each other: `McDonald_beachSunset.jpg` is `mc donald beach sunset jpg` or `mcdonald beachsunset jpg`.
+   * None for text without a word. The first is [[of]]; the second, only when the text has a camelCase hump, splits without it, so
+   * a word written with a hump and in one case find each other: `McDonald_beachSunset.jpg` is `mc donald beach sunset jpg` or
+   * `mcdonald beachsunset jpg`.
    */
   def variants(text: String): Seq[Seq[String]] = memo.computeIfAbsent(text, readings)
 

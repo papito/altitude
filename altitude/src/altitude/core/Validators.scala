@@ -1,4 +1,3 @@
-// src/main/scala/software/altitude/core/Validators.scala
 package altitude.core
 
 import scala.util.matching.Regex
@@ -13,16 +12,13 @@ object Validators:
 
   def isUuid(value: String): Boolean = uuidRegex.matches(value)
 
-  /** An email address of ASCII characters, as the request validator's `email` fields are held to */
+  /** An email address of ASCII characters, the rule of the request validator's `email` fields */
   def isEmail(value: String): Boolean = emailRegex.matches(value)
 
   /**
-   * A name as it is stored ([[NameKey.normalized]]) once it passes its length rule, which is checked after normalization, since
-   * NFC can lengthen a name (U+FB2C is three code points in NFC): `minLength` to `maxLength` characters, counted in code points
-   * as the name column counts them, so an emoji is one, and a name key within [[NameKey.MAX_KEY_BYTES]]. Otherwise a
-   * `ValidationException` that says why, as its message and as the error of the name's field (`field`), the request validator's
-   * error for a length. A form's own length check counts what was typed, before normalization; this is the one the stored name is
-   * held to.
+   * The name as stored ([[NameKey.normalized]]), or a `ValidationException` on `field`. Lengths are checked after normalization,
+   * since NFC can lengthen a name (U+FB2C is three code points), and counted in code points as the column counts them. A form's
+   * own check counts what was typed; this is the one the stored name is held to.
    */
   def validName(name: String, field: String, maxLength: Int, minLength: Int = 0): String =
     val normalized = NameKey.normalized(name)

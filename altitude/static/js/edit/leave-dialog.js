@@ -1,17 +1,12 @@
 /**
- * The Edit panel's warning of changes not saved (`includes/edit_panel`, `dialog#editLeaveDialog`): asked before Asset
- * detail closes or steps to another asset, the Edit panel closes, or Escape leaves the Crop tool, while a change is
- * pending (`edit-panel.js`). It is a native modal `<dialog>` inside Asset detail's fragment, so it stacks over Asset
- * detail, the one dialog host that is active, rather than replacing it as an open of another host would (`modal.js`):
- * the browser keeps focus in it, makes the rest inert and gives focus back on closing. Its choices are Save (the
- * initial focus: a safe answer), Discard (the error button) and Keep editing; Escape (`global.js`, `closeLeaveDialog`,
- * and the dialog's own `cancel`) is Keep editing.
+ * The Edit panel's warning of changes not saved. It is a native modal `<dialog>` inside Asset detail's fragment, so it
+ * stacks over Asset detail rather than replacing it as another dialog host would, and the browser keeps focus in it.
+ * Save takes the initial focus as the safe answer; Escape is Keep editing.
  */
 import { Const } from "../constants.js"
 
 const DIALOG_ID = "editLeaveDialog"
 
-/** The warning's answers */
 export const LeaveChoice = Object.freeze({
     save: "save",
     discard: "discard",
@@ -89,7 +84,7 @@ export function askToLeave({ message }) {
     return openAnswer
 }
 
-/** Closes the open warning as Keep editing, Escape's job ahead of anything else in Asset detail; answers whether it was open */
+/** Closes the open warning as Keep editing; answers whether it was open */
 export function closeLeaveDialog() {
     if (!dialogEl()?.open) {
         return false
@@ -98,7 +93,6 @@ export function closeLeaveDialog() {
     return true
 }
 
-/** Whether the warning is open: Asset detail's keys are its buttons' then (`global.js`) */
 export function isLeaveDialogOpen() {
     return Boolean(dialogEl()?.open)
 }

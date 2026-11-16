@@ -36,12 +36,11 @@ import altitude.core.transactions.TransactionManager
     /**
      * Setup:
      *
-     * One asset, then a read transaction that counts the assets, has another thread persist and commit a second asset, and counts
-     * again.
+     * One asset, then a read transaction that counts the assets, has another thread commit a second asset, and counts again.
      *
      * Assertions:
      *
-     * Both counts inside the read transaction agree, while a read transaction started afterwards sees the new asset.
+     * Both counts inside the read transaction agree; a read transaction started afterwards sees the new asset.
      */
     testContext.persistAsset()
 
@@ -62,7 +61,7 @@ import altitude.core.transactions.TransactionManager
     /**
      * Setup:
      *
-     * A write transaction that closes its own connection, so that its rollback fails, and then throws.
+     * A write transaction that closes its own connection, so its rollback fails, and then throws.
      *
      * Assertions:
      *
@@ -71,7 +70,6 @@ import altitude.core.transactions.TransactionManager
      */
     intercept[IllegalStateException] {
       testApp.txManager.withTransaction {
-        // The rollback of a closed connection fails
         RequestContext.getConn.close()
         throw IllegalStateException("The failure of the transaction")
       }
@@ -90,7 +88,7 @@ import altitude.core.transactions.TransactionManager
      *
      * Assertions:
      *
-     * The thread finds no connection - a thread does not inherit the transaction it was started in.
+     * The thread finds no connection: it does not inherit the transaction it was started in.
      */
     var inherited: Option[Connection] = None
 
@@ -108,8 +106,8 @@ import altitude.core.transactions.TransactionManager
     /**
      * Setup:
      *
-     * A write transaction that registers an action inside a nested one and checks it has not run when the nested one ends; a
-     * write transaction that registers one and then fails; and an action registered outside any transaction.
+     * An action registered in a nested write transaction, one registered in a write transaction that then fails, and one
+     * registered outside any transaction.
      *
      * Assertions:
      *
@@ -167,13 +165,12 @@ import altitude.core.transactions.TransactionManager
       /**
        * Setup:
        *
-       * A second SQLite connection with no busy timeout, so that it is refused when it cannot take the write lock at once, and a
-       * write transaction that has only read.
+       * A second SQLite connection with no busy timeout, so it is refused when it cannot take the write lock at once, and a write
+       * transaction that has only read.
        *
        * Assertions:
        *
-       * While the write transaction is open, the other connection cannot begin a write transaction of its own: the write lock is
-       * taken when the transaction starts, not at its first write.
+       * While the write transaction is open, the other connection cannot begin a write transaction of its own.
        */
       val noWaiting = new SQLiteConfig()
       noWaiting.setBusyTimeout(0)
@@ -192,11 +189,11 @@ import altitude.core.transactions.TransactionManager
       /**
        * Setup:
        *
-       * The journal mode, foreign key and temporary storage settings, read in a read transaction and in a write transaction.
+       * The journal mode, foreign key and temporary storage settings, read in a read and in a write transaction.
        *
        * Assertions:
        *
-       * Both kinds of connection are opened with the same settings: WAL, foreign keys on and temporary storage in memory.
+       * Both kinds of connection have WAL, foreign keys on and temporary storage in memory.
        */
       def settings: List[String] =
         List("journal_mode", "foreign_keys", "temp_store").map(name => query(s"PRAGMA $name").head(name).toString)
@@ -210,7 +207,7 @@ import altitude.core.transactions.TransactionManager
       /**
        * Setup:
        *
-       * The query_only setting, read in a read transaction and in a write transaction.
+       * The query_only setting, read in a read and in a write transaction.
        *
        * Assertions:
        *
@@ -225,15 +222,13 @@ import altitude.core.transactions.TransactionManager
       /**
        * Setup:
        *
-       * A transaction manager of its own over a new, empty database file. Its read and write connections are opened before any
-       * table exists, as a fresh database's are while its version is read and its schema is created; the schema is then created
-       * on the write connection, and the manager is told so.
+       * A transaction manager of its own over a new, empty database file, its read and write connections opened before any table
+       * exists, as a fresh install's are. The schema is then created on the write connection and the manager told so.
        *
        * Assertions:
        *
-       * A plain read transaction and a plain write transaction, with no vector setup of their own, search the face vectors and
-       * the SigLIP 2 Scene embeddings: a connection is set up for both as it is opened, so the ones opened before the `face` and
-       * `asset` tables existed have been replaced.
+       * Plain read and write transactions search the face vectors and the SigLIP 2 Scene embeddings: the connections opened
+       * before the `face` and `asset` tables existed have been replaced by ones set up for both.
        */
       val dbFile = new File(testApp.config.getString(Const.Conf.TEST_DIR), "fresh.sqlite.db")
       dbFile.getParentFile.mkdirs()
@@ -274,13 +269,12 @@ import altitude.core.transactions.TransactionManager
       /**
        * Setup:
        *
-       * A read transaction that reads the JIT and plan cache settings, then, with the read statement timeout saved as one second,
-       * a read statement that sleeps for two.
+       * A read transaction that reads the JIT and plan cache settings, then, with the read statement timeout at one second, a
+       * read statement that sleeps for two.
        *
        * Assertions:
        *
-       * A read transaction plans without JIT and with custom plans, and a statement that runs past the time limit is refused with
-       * a query timeout.
+       * JIT is off and plans are custom, and the statement past the time limit fails with a query timeout.
        */
       import AltitudePostgresDialect.*
 
@@ -301,21 +295,20 @@ import altitude.core.transactions.TransactionManager
       /**
        * Setup:
        *
-       * pgvector's four settings of an index scan, read inside a face vector transaction, written and read-only, and inside
-       * vector searches for 400, for 5,000 and for 10 rows, with the vector index search width Setting at its default of 100 and
-       * then saved as 150.
+       * pgvector's four index scan settings, read in face vector transactions (write and read-only) and in vector searches for
+       * 400, 5,000 and 10 rows, with the search width Setting at its default of 100 and then at 150.
        *
        * Assertions:
        *
-       * A face vector transaction keeps the Setting's candidates and scans on in relaxed order under pgvector's own caps, as
-       * before. A vector search keeps as many candidates as its limit, and lifts the cap on the tuples a scan visits and raises
-       * the one on its memory, so the scan ends when the limit is met and not before. It is a read transaction.
+       * A face vector transaction keeps the Setting's candidates and scans in relaxed order under pgvector's own caps. A vector
+       * search is read-only, keeps as many candidates as its limit, lifts the cap on scanned tuples and raises the memory one, so
+       * the scan ends only when the limit is met.
        *
        * Edge cases:
        *
-       * pgvector keeps 1,000 candidates at most, so a search for 5,000 rows keeps 1,000. A search for fewer rows than the Setting
-       * keeps the Setting's candidates. Nested in a vector search, a face vector transaction runs under the search's setup, and a
-       * vector search nested in a face vector transaction raises the setup to its own.
+       * pgvector caps candidates at 1,000, so a search for 5,000 keeps 1,000; a search for fewer rows than the Setting keeps the
+       * Setting's. A face vector transaction nested in a vector search runs under the search's setup, and a vector search nested
+       * in a face vector transaction raises the setup to its own.
        */
       def scanSettings: List[String] = {
         // pgvector's settings are known to a session once it has used the extension
@@ -355,8 +348,7 @@ import altitude.core.transactions.TransactionManager
     /**
      * Setup:
      *
-     * A vector search for 10 rows that reads its connection, with a second vector search and a plain read transaction nested in
-     * it, each reading theirs.
+     * A vector search with a second vector search and a plain read transaction nested in it, each reading its connection.
      *
      * Assertions:
      *

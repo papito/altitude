@@ -3,10 +3,8 @@
 @import altitude.core.RequestContext
 @import altitude.core.models.User
 
-@* The Delete dialog of an account card's ⋯ menu on the Users page (GET /htmx/users/r/:repoId/dialogs/delete, an Admin's), a
-   popover dialog below the card's trigger, naming how many assets of the account, in every Library, become the Admin's. The
-   delete is for good. As every Delete confirmation, it leaves initial focus on the close control, so opening it cannot press
-   its destructive button. *@
+@* An Admin's Delete of an account: its assets in every Library become the Admin's. Like every Delete confirmation, it
+   leaves initial focus on the close control, so opening it cannot press Delete. *@
 @(account: User, assets: Int)
 
 <div id="deleteAccount"

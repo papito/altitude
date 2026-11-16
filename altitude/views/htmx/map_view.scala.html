@@ -2,9 +2,9 @@
 
 @(bounds: Option[MapBounds], tileUrl: String, attribution: String)
 
-@* The map shell: `data-map-bounds` is the plotted extent of the whole search (empty when nothing is plotted) for the
-   initial fit, and the map hydrator (js/map/map-view.js) requests the cells of each viewport. The panel is the ordinary
-   results grid for a crowded pin's area, run with the `bbox` filter into `#mapPanelContent` (js/map/map-panel.js). *@
+@* The map shell. `data-map-bounds` is the plotted extent of the whole search for the initial fit, empty when nothing is
+   plotted; js/map/map-view.js requests each viewport's cells. The panel is the results grid for a crowded pin's area, run
+   with the `bbox` filter. *@
 <div id="mapView">
   <div id="map"
        data-app-fragment="map-view"

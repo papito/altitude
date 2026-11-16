@@ -12,25 +12,19 @@
 }
 <link rel="stylesheet" href="@altitude.core.Assets.appCss">
 <link rel="stylesheet" href="/static/css/font-awesome.min.css">
-<!-- defaultTimeout: htmx 4 aborts requests after 60s by default; keep htmx 2's "no timeout" for
-     long-running actions such as purging the recycle bin.
-     noSwap: keep htmx 2's behavior of not swapping 4xx/5xx bodies; JS listeners report those via snackbar.
-     defaultSettleDelay: no settle, which would copy each old element's attributes onto the new one with its ID and back,
-     after Alpine has initialized the new content, undoing what it set (Asset detail's fragment, where the Edit panel's
-     tabs share IDs from one asset to the next); the app runs no CSS transition on a settle. -->
+<!-- defaultTimeout and noSwap keep htmx 2's behavior: no timeout (htmx 4 aborts after 60 s) for long actions such as
+     purging the recycle bin, and no swap of 4xx/5xx bodies, which JS listeners report by snackbar. No settle: it would copy each old element's
+     attributes onto the new one with its ID after Alpine has initialized it, undoing what Alpine set (the Edit panel's
+     tabs share IDs from one asset to the next). -->
 <meta name="htmx-config" content='{"defaultTimeout": 0, "noSwap": [204, 304, "4xx", "5xx"], "defaultSettleDelay": 0}'>
-@* htmx alone is not deferred: run while the page is still parsing, it starts on DOMContentLoaded, after every deferred
-   script (its extensions, json-enc and hx-ws) and every module has run; deferred, it would start before they had *@
+@* htmx alone is not deferred: run during parsing, it starts on DOMContentLoaded, after every deferred script (its
+   extensions) and module has run; deferred, it would start before them *@
 <script src="/static/js/lib/htmx.min.js"></script>
 <script src="/static/js/lib/axios.min.js" defer></script>
 <script type="module" src="/static/js/global.js"></script>
-@* Dev only, like the routes behind it (StyleGuideController): the design tweaks panel, the vendored tokentweak package
-   (js/lib/tokentweak.js) configured by the adapter js/design-tweaks.js. The boot script (js/lib/tokentweak-boot.js) adopts
-   the stylesheet of the stored tweaks before the first paint, so a page never flashes the untweaked look, and shows the page
-   in the remembered theme; the adapter's module, deferred as every module is, finds that sheet by its marker rule, takes it
-   over and builds the panel. The boot script reads the storage key from its `data-key`, the same key as
-   `Const.localStore.designTweaks`. Disabled for now: both tags are commented out, so no page loads the panel; uncomment
-   them to enable it. *@
+@* Dev only: the design tweaks panel (the vendored tokentweak, configured by js/design-tweaks.js). The boot script adopts
+   the stored tweaks' stylesheet before the first paint, so a page never flashes the untweaked look; its `data-key` is
+   `Const.localStore.designTweaks`. Both tags are commented out, so no page loads the panel; uncomment them to enable it. *@
 @if(Environment.isDev) {
 @*<script src="/static/js/lib/tokentweak-boot.js" data-key="designTweaks"></script>*@
 @*<script type="module" src="/static/js/design-tweaks.js"></script>*@

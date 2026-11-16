@@ -4,9 +4,7 @@
 
 @(title: String, categories: List[Location], tileUrl: String, attribution: String, geocoderEnabled: Boolean, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
-@* The pin is placed on the map (js/fragments/location-editor.js): a click places it, dragging moves it, a place-name result
-   jumps to it. The coordinates travel in the hidden inputs, so a validation replacement re-renders the pin where it was; the
-   readout under the map is the only visible form of them. *@
+@* The coordinates travel in the hidden inputs, so a validation response re-renders the pin where it was. *@
 <form id="addLocation" class="location-editor" data-app-fragment="modal"
       data-app-modal-title="@{title}"
       data-app-dialog-autofocus-selector="#field-name"
@@ -40,7 +38,7 @@
     }
     @* tabindex keeps Alpine's focus trap from fighting Leaflet's own keyboard handling on the container *@
     <div id="locationEditorMap" tabindex="-1"></div>
-    @* The two coordinates fail together (there is one pin), so the controller reports one of them; one line shows it *@
+    @* The two coordinates fail together (there is one pin), so the controller reports one of them *@
     @for(pinError <- fieldErrors.get(Api.Field.Location.LATITUDE).orElse(fieldErrors.get(Api.Field.Location.LONGITUDE))) {
       <div class="error">@{pinError}</div>
     }

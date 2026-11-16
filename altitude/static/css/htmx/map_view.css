@@ -1,4 +1,4 @@
-/* The map fills whatever the results column leaves under the controls; the panel is a column laid over its right edge */
+/* The map fills the results column under the controls; the panel lies over its right edge */
 #mapView {
   position: relative;
   flex: 1;
@@ -49,15 +49,14 @@
   overflow-y: auto;
 }
 
-/* The panel's grid is scoped by the header above it: the fragment's own title and controls are for the map */
+/* The panel's header names what it holds, so the loaded fragment's title, toolbar and Curate queue are hidden */
 #mapPanel .results-title,
 #mapPanel #searchControl,
 #mapPanel #curateQueue {
   display: none;
 }
 
-/* Map pins (js/map/map-view.js). Leaflet's div icon carries the class and the size; the pin's own markup is the
-   div inside it, which fills it */
+/* Leaflet's div icon carries the class and the size; the pin's markup is the div inside it */
 .asset-pin {
   box-sizing: border-box;
   border: 2px solid var(--theme-neutral-4);
@@ -92,7 +91,7 @@
   text-shadow: var(--drop-shadow);
 }
 
-/* A Location's pin: the glyph with the Location's path beside it */
+/* A Location's pin: the glyph with its path beside it, wider than the size Leaflet writes inline */
 .location-pin.on-map {
   width: max-content !important;
   cursor: pointer;

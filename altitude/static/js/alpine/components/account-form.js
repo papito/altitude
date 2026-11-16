@@ -1,22 +1,8 @@
 /**
- * The Add User and Edit form of the Users page (`htmx/account_form`), on the form: the account type
- * chosen, the Libraries given and the Permissions in each, and the Admin's Create Libraries and
- * new-Library grant switches, starting from the state the server writes in `data-app-account-form`
- * (the values shown, the creator's ceiling: per Library whether it may give a User or a Guest
- * access there, and which Permissions, and the preset a User given a Library starts with,
- * `AccountForm.PRESET`). The matrix's toggles run here, with no request:
- *
- * - checking a Library's access, for a User, checks Import and Curate own there where the ceiling
- *   holds them; unchecking it clears its Permissions;
- * - checking a Permission checks the Library's access too;
- * - a row's All checks every Permission of the row, or clears them when all are checked;
- * - a column's header checks its Permission in every Library chosen, or clears it there when all
- *   of them hold it.
- *
- * The inputs follow the state through bindings, and what may not be sent is disabled, so the
- * browser leaves it out of the form: a Guest's Permissions, an Admin's whole matrix and switches,
- * a Library the type may not be given there, and an unchecked Library once as many are checked as
- * an account may hold (`maxLibraries`). The server holds every rule again.
+ * The Users page's Add User and Edit form. It starts from `data-app-account-form`, which carries the
+ * creator's ceiling: per Library, whether it may give a User or a Guest access there, and which
+ * Permissions. Inputs that may not be sent are disabled so the browser leaves them out of the form;
+ * the server enforces every rule again.
  */
 export function accountForm() {
     return {
@@ -55,7 +41,6 @@ export function accountForm() {
             return this.type === "Guest"
         },
 
-        /** Whether the type chosen holds grants: a User or a Guest */
         takesGrants() {
             return this.isUser() || this.isGuest()
         },
@@ -96,7 +81,7 @@ export function accountForm() {
             )
         },
 
-        /** Whether the Library's row is offered to the type chosen: the creator may give it a User, or a Guest */
+        /** Whether the creator may give the chosen type access to this Library */
         rowShown(libraryId) {
             const row = this.ceiling[libraryId]
             return (
@@ -108,7 +93,7 @@ export function accountForm() {
             return this.access.includes(libraryId)
         },
 
-        /** Whether as many Libraries of the rows offered are checked as an account may hold */
+        /** Whether as many Libraries are checked as an account may hold */
         atBound() {
             return (
                 this.access.filter(
@@ -117,7 +102,6 @@ export function accountForm() {
             )
         },
 
-        /** Whether the Library's access cannot change: its row is not offered, or it is unchecked at the bound */
         accessBlocked(libraryId) {
             return (
                 !this.rowShown(libraryId) ||
@@ -125,6 +109,7 @@ export function accountForm() {
             )
         },
 
+        /** Unchecking clears the Library's Permissions; checking it for a User with none starts at the preset */
         setAccess(libraryId, on) {
             this.access = this._with(this.access, libraryId, on)
             if (!on) {
@@ -143,7 +128,6 @@ export function accountForm() {
             return (this.permissions[libraryId] ?? []).includes(permission)
         },
 
-        /** Whether the Library's Permissions cannot change: the type holds none, or its access cannot be given */
         permissionsBlocked(libraryId) {
             return !this.isUser() || this.accessBlocked(libraryId)
         },
@@ -159,7 +143,7 @@ export function accountForm() {
             }
         },
 
-        /** A row's All: every Permission of the ceiling there, or none once all are held */
+        /** A row's All: every Permission the ceiling offers there, or none once all are held */
         toggleRow(libraryId) {
             if (this.permissionsBlocked(libraryId)) {
                 return
@@ -174,7 +158,7 @@ export function accountForm() {
             }
         },
 
-        /** A column's header: its Permission in every Library chosen that offers it, or in none once all hold it */
+        /** A column's header: its Permission in every chosen Library that offers it, or in none once all hold it */
         toggleColumn(permission) {
             if (!this.isUser()) {
                 return
@@ -189,7 +173,7 @@ export function accountForm() {
             chosen.forEach((id) => this.setPermission(id, permission, !all))
         },
 
-        // The list with `value` in it, once, or without it
+        // The list with `value` once, or without it
         _with(list, value, on) {
             const without = list.filter((item) => item !== value)
             return on ? [...without, value] : without

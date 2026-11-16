@@ -81,8 +81,8 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     mvn"org.apache.pekko::pekko-actor-typed:$pekkoVersion",
     mvn"org.apache.pekko::pekko-stream-typed:$pekkoVersion",
 
-    // ONNX Runtime runs the Scene models (DINOv2 and SigLIP 2, see OnnxSceneEmbedder). The CPU artifact bundles its natives for
-    // Linux x64 and aarch64, macOS and Windows in the one jar, so deployment does not change.
+    // ONNX Runtime runs the Scene models (OnnxSceneEmbedder) and SigLIP 2's text tower (OnnxDescribeEmbedder). The CPU
+    // artifact bundles its natives for Linux x64 and aarch64, macOS and Windows in the one jar.
     mvn"com.microsoft.onnxruntime:onnxruntime:1.31.1",
   )
 
@@ -149,7 +149,6 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
 
   private def cssSources: T[PathRef] = Task.Source(moduleDir / "static" / "css")
 
-  /** The bundle's classpath root, and its file name under `assets/` there */
   case class CssBundle(root: PathRef, name: String) derives upickle.default.ReadWriter
 
   /** The application stylesheet: `app.css` with its imports inlined, under a content-hashed name the browser may cache
@@ -204,12 +203,10 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     val destDir = Task.dest
     val staticDestDir = destDir / "static"
 
-    // Copy static files to task output directory for JAR packaging
     if (os.exists(staticSrcDir)) {
       os.copy(staticSrcDir, staticDestDir, replaceExisting = true, createFolders = true, mergeFolders = true)
     }
 
-    // The bundle sits at the classpath root, as assets/app.<hash>.css
     super.resources() ++ Seq(PathRef(destDir), cssBundle().root)
   }
 
@@ -220,7 +217,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
       mvn"com.lihaoyi::requests::0.9.0",
       mvn"org.scalatest::scalatest:3.2.19",
       mvn"org.mockito:mockito-core:5.14.2",
-      // Parses the application's sources for the architecture tests
+      // For the architecture tests
       mvn"org.scalameta::scalameta:4.17.4"
     )
 

@@ -25,7 +25,7 @@
   align-items: center;
 }
 
-/* The field (an input) and its Reset share the first row; everything after them spans the control */
+/* The input and its Reset share the first row; the lines after them span the control */
 #settingsForm .control > :not(input, select, button) {
   grid-column: 1 / -1;
 }

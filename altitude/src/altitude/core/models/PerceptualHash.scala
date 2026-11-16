@@ -6,8 +6,8 @@ object PerceptualHash:
   /** The bits of a hash, the farthest two can be by Hamming distance */
   val BITS: Int = java.lang.Long.SIZE
 
-  // One wire form whatever the value: 16 lowercase hex digits, zero-padded. upickle would write a Long as a number up to 2^53
-  // and as a string beyond, so a hash with the high bit set would otherwise change type on the way out.
+  // Always 16 zero-padded lowercase hex digits: upickle writes a Long as a number up to 2^53 and as a string beyond, so a hash
+  // with the high bit set would otherwise change type on the way out
   given JsonCodec.ReadWriter[PerceptualHash] = JsonCodec
     .readwriter[String]
     .bimap(hash => f"${hash.bits}%016x", hex => PerceptualHash(java.lang.Long.parseUnsignedLong(hex, 16)))

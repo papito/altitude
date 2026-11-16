@@ -4,17 +4,17 @@ import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Location
 
 /**
- * Categories, Locations and the memberships. The `location_asset` table has no model of its own and is written only through this
- * DAO. Rename and move go through `updateById`.
+ * Categories, Locations and memberships. `location_asset` has no model and is written only here. Rename and move go through
+ * `updateById`.
  */
 trait LocationDao extends BaseDao[Location]:
   /**
-   * Every row in the context repository, with its category's name and its asset count, in path order: categories and top-level
-   * Locations interleaved by name, each category directly followed by its Locations by name
+   * With category names and asset counts, in path order: categories and top-level Locations by name, each category followed by
+   * its Locations
    */
   def getAll: List[Location]
 
-  /** Points the Location at the given assets; returns how many were new. Only existing, non-recycled assets are added. */
+  /** Returns how many were new. Only existing, non-recycled assets are added. */
   def addAssets(locationId: String, assetIds: Set[String]): Int
 
   def removeAssets(locationId: String, assetIds: Set[String]): Int
@@ -23,14 +23,11 @@ trait LocationDao extends BaseDao[Location]:
 
   def getAssetIds(locationId: String): Set[String]
 
-  /** Those of the assets that some Location of the context repository holds */
+  /** Those of the assets that some Location holds */
   def getAssetsInAnyLocation(assetIds: Set[String]): Set[String]
 
-  /**
-   * The Locations of the context repository holding the asset, in path order (by the category's name, else the Location's own,
-   * then the Location's), each with its category's name and without its asset count
-   */
+  /** In path order, with category names and without asset counts */
   def getLocationsOfAsset(assetId: String): List[Location]
 
-  /** Makes the category's Locations top-level; returns how many moved */
+  /** Returns how many moved */
   def moveChildrenToRoot(categoryId: String): Int

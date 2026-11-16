@@ -51,11 +51,10 @@ import altitude.core.util.SearchWords
      *
      * Edge cases:
      *
-     * The Turkish dotted capital I, which lower-cases to an i and a combining dot that must not survive.
+     * The Turkish dotted capital I lower-cases to an i and a combining dot, and the dot does not survive.
      */
     SearchWords.of("Zoë Café") shouldBe Seq("zoe", "cafe")
     SearchWords.of("Zoë") shouldBe Seq("zoe")
-    // The dotted capital I lower-cases to an i and a combining dot, which must not survive
     SearchWords.of("İstanbul") shouldBe Seq("istanbul")
   }
 
@@ -78,16 +77,15 @@ import altitude.core.util.SearchWords
     /**
      * Setup:
      *
-     * Text padded with spaces and full of separators: an underscore, an apostrophe, brackets, a tab, quotes and query operator
-     * characters.
+     * Text padded with spaces and full of separators: an underscore, an apostrophe, brackets, a tab, quotes and query operators.
      *
      * Assertions:
      *
-     * Each of them separates words and none survives into a word.
+     * Each separates words and none survives into a word.
      *
      * Edge cases:
      *
-     * Leading and trailing whitespace, and characters that are query syntax elsewhere (`*:&|!<>`).
+     * Characters that are query syntax elsewhere (`*:&|!<>`) are separators too.
      */
     SearchWords.of("  new_york's (best)\t\"pizza\"*:&|!<>  ") shouldBe Seq("new", "york", "s", "best", "pizza")
   }
@@ -134,7 +132,7 @@ import altitude.core.util.SearchWords
      *
      * Edge cases:
      *
-     * An accented capital at the start of the humped word.
+     * An accented capital starting the humped word is stripped in both readings.
      */
     SearchWords.variants("McDonald_beachSunset.jpg") shouldBe
       Seq(Seq("mc", "donald", "beach", "sunset", "jpg"), Seq("mcdonald", "beachsunset", "jpg"))
@@ -154,7 +152,7 @@ import altitude.core.util.SearchWords
      *
      * Edge cases:
      *
-     * A run of capitals and all-caps words, which have no lower-to-upper hump.
+     * A run of capitals and all-caps words have no lower-to-upper hump.
      */
     SearchWords.variants("IMG_1234-beach.final.jpg") shouldBe Seq(Seq("img", "1234", "beach", "final", "jpg"))
     SearchWords.variants("HTMLParser MCDONALD mcdonald") shouldBe Seq(Seq("htmlparser", "mcdonald", "mcdonald"))

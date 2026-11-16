@@ -23,8 +23,8 @@ import altitude.core.util.BoundingBox
 import altitude.core.util.SearchQuery
 
 /**
- * The map's data: viewport cells over the plotted points of a search (an asset at its own point, or at the pin of each Location
- * it is in when it has none), the Locations in the viewport with matching assets, and the bounds of every plotted point.
+ * The map's data: viewport cells over a search's plotted points (an asset at its own point, or without one at the pin of each
+ * Location it is in), the viewport's Locations with matching assets, and the bounds of every plotted point.
  */
 @DoNotDiscover class SearchMapTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
 
@@ -69,21 +69,18 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Rome under the Italy category, Sydney and an empty Location; two assets at the same Paris point, an asset without a point
-     * in Rome, one without a point in Rome and Sydney, an asset with its own point in London that is also in Rome, and an asset
-     * with neither, added to Sydney and removed again.
+     * Locations Rome (in the Italy category), Sydney and an empty one. Two assets on one Paris point, a pointless asset in Rome,
+     * another in Rome and Sydney, a London asset also in Rome, and a pointless asset added to Sydney and removed again.
      *
      * Assertions:
      *
-     * The world view gathers the plotted points into one cell per position, with counts that add up to the plotted points and
-     * each cell represented by one of its own assets. The Locations in view list their matching members' count and their
-     * category's name.
+     * The world view has one cell per plotted position, each represented by one of its own assets. The Locations in view list
+     * their matching members' count and their category's name.
      *
      * Edge cases:
      *
-     * Two assets on one point share a cell, an asset in two Locations is plotted at both pins, an asset with its own point is
-     * plotted there and never at its Location's pin (though it still counts in the Location), and neither an empty Location nor
-     * an asset whose membership was removed shows up.
+     * Two assets on one point share a cell, an asset in two Locations is plotted at both pins, and an asset with its own point is
+     * plotted only there, though it still counts in its Location. An empty Location and a removed membership never show.
      */
     val italy = testApp.service.location.addCategory("Italy")
     val rome = addLocation("Rome", (41.9028, 12.4964), Some(italy.persistedId))
@@ -103,8 +100,6 @@ import altitude.core.util.SearchQuery
 
     val result = cellsOf()
 
-    // Two assets at one point are one cell; an asset without a point is plotted at each of its Locations' pins; an asset with
-    // a point of its own is plotted there alone, never at a pin
     val cells = result.cells
     cells.map(_.count).sum shouldBe 6
     cells.length shouldBe 4
@@ -124,7 +119,6 @@ import altitude.core.util.SearchQuery
     londonCell.count shouldBe 1
     londonCell.assetId shouldBe pointAndPin.persistedId
 
-    // A Location is listed with its matching assets, and not at all when it has none; the category names it
     locationSummary(result.locations) shouldEqual List(("Rome", Some("Italy"), 3), ("Sydney", None, 1))
   }
 
@@ -133,8 +127,8 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Three assets at one Paris point, one undated, one taken on 2026-09-01 and one on 2026-09-05; the dated ones are recycled in
-     * turn and a second undated asset is added. Last, a lone asset at a Tokyo point.
+     * Three assets on one Paris point, one undated and two dated. The dated ones are then recycled in turn and a second undated
+     * asset added. Last, a lone asset in Tokyo.
      *
      * Assertions:
      *
@@ -157,7 +151,6 @@ import altitude.core.util.SearchQuery
     testApp.service.library.recycleAssets(Set(newest.persistedId))
     summary(cellsOf().cells) shouldEqual List((2, older.persistedId))
 
-    // Without a capture time to prefer, the lowest ID is a stable choice across pans
     testApp.service.library.recycleAssets(Set(older.persistedId))
     val alsoUndated = persistAt(paris._1, paris._2)
     setTaken(alsoUndated, None)
@@ -177,12 +170,11 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * Zoom 0 merges them into one cell placed at their centroid, zoom 10 keeps them apart, and zooms outside 0..20 behave as the
-     * nearest bound.
+     * Zoom 0 merges them into one cell at their centroid, and zoom 10 keeps them apart.
      *
      * Edge cases:
      *
-     * The out-of-range zooms -5 and 25.
+     * Zooms -5 and 25 behave as 0 and 20.
      */
     val west = persistAt(48.5, 2.2)
     val east = persistAt(48.5, 3.2)
@@ -193,7 +185,6 @@ import altitude.core.util.SearchQuery
     cellsOf(zoom = -5).cells.map(_.count) shouldEqual cellsOf(zoom = 0).cells.map(_.count)
     summary(cellsOf(zoom = 25).cells) shouldEqual summary(cellsOf(zoom = 20).cells)
 
-    // The centroid of a merged cell is the mean of its points
     val merged = cellsOf(zoom = 0).cells.head
     merged.latitude shouldBe 48.5 +- 1e-6
     merged.longitude shouldBe 2.7 +- 1e-6
@@ -233,11 +224,11 @@ import altitude.core.util.SearchQuery
     cellsOf(BoundingBox.parse("-1,-179,1,179")).cells shouldBe Nil
   }
 
-  /** A library for the planner: 5,000 copies of the asset, one in ten of them geotagged somewhere on the globe */
+  /** A library for the planner: 5,000 copies of the asset, one in ten geotagged somewhere on the globe */
   private def seedGeotagged(template: Asset): Unit = {
     seedCopies(template.persistedId, copies = 5000, folders = 500)
-    // The copies are the assets whose ID is digits alone (`seedCopies`), every other asset's is a UUID; the copies whose ID ends
-    // in 0 are the one in ten. The ID is cast to a number only in the rows that match, as PostgreSQL refuses to cast a UUID.
+    // A copy's ID is all digits, unlike a UUID, and those ending in 0 are the one in ten. Only matching rows are cast, since
+    // PostgreSQL refuses to cast a UUID.
     val copyNumber = if (isPostgres) "CAST(id AS BIGINT)" else "CAST(id AS INTEGER)"
     update(s"""UPDATE asset SET latitude = -80 + ($copyNumber % 160), longitude = -180 + ($copyNumber % 360)
               | WHERE id NOT LIKE '%-%' AND id LIKE '%0'""".stripMargin)
@@ -248,15 +239,13 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Two assets in Paris and one without a point, the last seeded into 5,000 copies of which one in ten is geotagged, analyzed
-     * and rolled back once the plans are read. The cells statement over a Paris viewport, and the capped count of the grid scoped
-     * to the same box, which is what the crowded-pin panel shows.
+     * Two assets in Paris, and a pointless one seeded into 5,000 copies, one in ten geotagged. The cells statement over a Paris
+     * viewport, and the grid's capped count scoped to the same box.
      *
      * Assertions:
      *
-     * The cells statement reads its assets' own points from `asset_geo` and nothing else of the asset: the index carries the ID
-     * and the capture time a cell is ranked by, so the read is index-only on PostgreSQL and covering on SQLite. The grid scoped
-     * to the box bounds its assets by `asset_geo` as well.
+     * The cells statement reads only `asset_geo`, which carries the ID and capture time a cell is ranked by: index-only on
+     * PostgreSQL, covering on SQLite. The scoped grid bounds its assets by `asset_geo` too.
      */
     persistAt(paris._1, paris._2)
     persistAt(48.8606, 2.3376)
@@ -287,14 +276,13 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * A Location pinned in Paris holding one asset, in a library of 5,000 other assets, analyzed and rolled back once the plan is
-     * read, and the statement that counts the matching assets of the Locations in a Paris viewport.
+     * A Paris Location holding one asset among 5,000 seeded copies, and the statement counting the matching assets of a Paris
+     * viewport's Locations.
      *
      * Assertions:
      *
-     * The plan finds the matching assets by their ID (the primary key, or the unique key over the ID and the repository that the
-     * foreign keys name), from the memberships of the Locations in the box, and never passes over an index of the repository's
-     * assets.
+     * The plan reaches the matching assets by ID (the primary key, or the unique key over ID and repository that foreign keys
+     * name) from the box's Location memberships, never through an index over the repository's assets.
      */
     val location = addLocation("Paris")
     val member = testContext.persistAsset()
@@ -327,8 +315,8 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * Bounds are absent while nothing is plotted; then they span both own points and Location pins with the count of plotted
-     * points, and follow the search when it is scoped to a Location.
+     * Bounds are absent while nothing is plotted. Then they span own points and Location pins, count the plotted points, and
+     * follow a search scoped to a Location.
      */
     bounds() shouldBe None
 
@@ -349,7 +337,6 @@ import altitude.core.util.SearchQuery
     box.east shouldBe 151.2093 +- 1e-6
     box.count shouldBe 3
 
-    // The bounds follow the search: scoped to the Location, only the pinned asset is plotted
     val scoped = bounds(searchQuery(locationIds = Set(sydney.persistedId))).value
     scoped.count shouldBe 1
     scoped.south shouldBe -33.8688 +- 1e-6
@@ -366,8 +353,8 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * Cells, Location counts and bounds read the same matching set as the grid: the trash view plots only the recycled asset, a
-     * folder scope narrows all three, the root folder is the whole repository, and another repository's assets never appear.
+     * Cells, Location counts and bounds match the grid: the trash view plots only the recycled asset, a folder scope narrows all
+     * three, the root folder is the whole repository, and another repository's assets never appear.
      */
     val folder: Folder = testApp.service.folder.add("Trips")
     val inFolder = persistAt(paris._1, paris._2, folder = Some(folder))
@@ -377,7 +364,6 @@ import altitude.core.util.SearchQuery
     val rome = addLocation("Rome", (41.9028, 12.4964))
     testApp.service.location.addAssets(rome.persistedId, Set(elsewhere.persistedId, inFolder.persistedId))
 
-    // Another repository's geotagged asset is invisible here
     val otherUser = testContext.persistUser()
     val otherRepo = testContext.persistRepository()
     val foreign = testContext.persistAsset(repository = Some(otherRepo), user = Some(otherUser))
@@ -388,18 +374,15 @@ import altitude.core.util.SearchQuery
     summary(cellsOf().cells) shouldEqual List((1, elsewhere.persistedId), (1, inFolder.persistedId)).sorted
     bounds().value.count shouldBe 2
 
-    // The trash bin plots the recycled asset alone
     val trash = searchQuery(params = Map(FieldConst.Asset.IS_RECYCLED -> true))
     summary(cellsOf(query = trash).cells) shouldEqual List((1, recycled.persistedId))
     cellsOf(query = trash).locations shouldBe Nil
 
-    // A folder scope narrows the cells, the Location counts and the bounds alike
     val scoped = searchQuery(folderIds = Set(folder.persistedId))
     summary(cellsOf(query = scoped).cells) shouldEqual List((1, inFolder.persistedId))
     locationSummary(cellsOf(query = scoped).locations) shouldEqual List(("Rome", None, 1))
     bounds(scoped).value.count shouldBe 1
 
-    // The root folder is the whole repository
     val root = searchQuery(folderIds = Set(testContext.repositories.head.rootFolderId))
     bounds(root).value.count shouldBe 2
   }
@@ -409,13 +392,12 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * A Trips folder with an asset in Paris that is also in Rome, an unrelated asset in Tokyo, and an asset without a point in
-     * Rome.
+     * A Trips folder with a Paris asset that is also in Rome, an unrelated asset in Tokyo, and a pointless asset in Rome.
      *
      * Assertions:
      *
-     * Searching a folder's or a Location's name plots only the assets the name finds, at their own points or their Locations'
-     * pins, with Location counts and bounds to match; an excluded term narrows the bounds, and text that finds nothing has none.
+     * Searching a folder's or a Location's name plots only the assets it finds, with Location counts and bounds to match. An
+     * excluded term narrows the bounds, and text that finds nothing has none.
      */
     val trips: Folder = testApp.service.folder.add("Trips")
     val inFolder = persistAt(paris._1, paris._2, folder = Some(trips))

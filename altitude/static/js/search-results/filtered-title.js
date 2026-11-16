@@ -6,26 +6,19 @@ import { openSearchPanel, searchByFilters } from "./search-panel.js"
 import { runSearch } from "./search.js"
 
 /**
- * The results title of a filtered search (`includes/search_filter_chips`, views/AGENTS.md **Results
- * title**): "Search results" over a chip per filter, each with a × that removes its filter and
- * searches again, and Edit, which opens the advanced search panel on the search in force.
+ * The results title of a filtered search: a chip per filter, each with a × that removes it and
+ * searches again, and Edit, which opens the advanced search panel.
  *
- * The chips are the state, as they are in the panel: each chip (`data-app-filter`) carries the
- * parameters it stands for as `data-app-filter-<param>` literals, and its × (`data-chip-remove`)
- * takes the chip off the page and searches by what the chips left on it name, through the panel's
- * own funnel (`searchByFilters`: the store's `replaceFilters` and `runSearch`, in the view the
- * search is in, Browse or Triage, with its triage filter). A second × before the first search has answered
- * therefore searches without both. An ID of the search that names nothing in the Library has no
- * chip, so it goes with the first removal, as it goes with a search from the panel. The people match
- * is the search's; it goes with the second person (`withoutRefusedCombinations`). A description's
- * chip carries its `describe` like any other: removing it leaves the search of the other filters,
- * or the whole view when it was the only one.
+ * The chips are the state: each carries the parameters it stands for as `data-app-filter-<param>`
+ * literals, and a × searches by what the remaining chips name, so a second × before the first search
+ * answers searches without both. An ID that names nothing in the Library has no chip, so it goes with
+ * the first removal.
  */
 
 // The dataset key of the marker, and the prefix of the literals' keys
 const FILTER_KEY = "appFilter"
 
-/** Binds the chips' remove buttons and Edit of the fragment's results title, when the search is a filtered one */
+/** Binds the chips' remove buttons and Edit, when the results title is a filtered one */
 export function bindFilteredTitle({ fragmentEl }) {
     const chipEls = () =>
         Array.from(fragmentEl.querySelectorAll(`[${Const.attributes.filter}]`))
@@ -45,9 +38,8 @@ export function bindFilteredTitle({ fragmentEl }) {
 }
 
 /**
- * The search runs again when the filtered title on the page has a chip of the Person, which shows
- * their name and cover as the search found them: after a rename, the new search renders the chip
- * with the name as it is now. Whether it did.
+ * Runs the search again when the filtered title has a chip of the Person, which shows their name as
+ * the search found it, so a rename shows; returns whether it did.
  */
 export function searchAgainForPersonChip(personId) {
     if (!showsPersonChip(personId)) {
@@ -65,7 +57,7 @@ export function showsPersonChip(personId) {
     ).some((chipEl) => literalsOf(chipEl, FILTER_KEY).personId === personId)
 }
 
-/** The filters the chips name, the people and the Locations each as a list, with the search's people match */
+/** The filters the chips name, with the search's people match; the store drops that under two people */
 function filtersOf(chipEls) {
     const filters = {
         peopleMatch:

@@ -10,43 +10,41 @@ object WatchFolderDao:
   case class Placed(watchFolder: WatchFolder, repositoryId: String, repositoryName: String)
 
 /**
- * The Watch folders of the context repository. Three statements reach every Library's, each by something that is no Library's:
- * [[everywhere]], since no two Watch folders of the instance may overlap, and [[pauseOwnedBy]] and [[reassignOwner]], by an
- * account, in the transaction of the account write they serve.
+ * Scoped to the context repository, except [[everywhere]] (no two Watch folders of the instance may overlap) and [[pauseOwnedBy]]
+ * and [[reassignOwner]], which serve an account write.
  */
 trait WatchFolderDao extends BaseDao[WatchFolder]:
   /**
-   * Makes the transactions that add a Watch folder or change one's path take turns until they end, so the second checks its path
-   * against the one the first wrote, and no two overlapping ones pass the check at once; see `BaseDao.advisoryLock`
+   * Makes the transactions that add a Watch folder or change one's path take turns, so no two overlapping paths pass the check at
+   * once (`BaseDao.advisoryLock`)
    */
   def lockPaths(): Unit
 
-  /** The context repository's Watch folders, by name */
+  /** By name */
   def all(): List[WatchFolder]
 
-  /** Every Watch folder of the instance, in every Library */
+  /** Every Watch folder in every Library */
   def everywhere(): List[WatchFolderDao.Placed]
 
-  /** Those of the context repository whose destination is one of the folders */
+  /** Those whose destination is one of the folders */
   def targeting(folderIds: Set[String]): List[WatchFolder]
 
-  /** Writes what an Admin edits of it (name, path, destination, deletion) and its owner; how many rows changed */
+  /** Writes what an Admin edits and its owner; how many rows changed */
   def update(watchFolder: WatchFolder): Int
 
-  /** Pauses or resumes it, with why it is paused, if anything says; a resumed one has no reason. How many rows changed */
+  /** A resumed one has no reason; how many rows changed */
   def setPaused(id: String, isPaused: Boolean, reason: Option[String]): Int
 
-  /** Gives it an owner; how many rows changed */
   def setOwner(id: String, accountId: String): Int
 
-  /** Says why its directory is unavailable, or that it is available (none); how many rows changed */
+  /** Why its directory is unavailable, none when available; how many rows changed */
   def setStatusReason(id: String, reason: Option[String]): Int
 
-  /** Records a walk of its directory at `at`, which found it available; how many rows changed */
+  /** Records a scan at `at`, which found the directory available; how many rows changed */
   def scanned(id: String, at: OffsetDateTime): Int
 
-  /** Pauses every Watch folder the account owns, in every Library, saying why; how many it paused */
+  /** In every Library; how many it paused */
   def pauseOwnedBy(accountId: String, reason: String): Int
 
-  /** Gives every Watch folder of one account, in every Library, to another; how many changed owner */
+  /** In every Library; how many changed owner */
   def reassignOwner(fromAccountId: String, toAccountId: String): Int

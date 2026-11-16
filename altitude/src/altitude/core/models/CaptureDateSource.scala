@@ -16,7 +16,7 @@ enum CaptureDateSource(val dbValue: String):
   case GpsTimestamp extends CaptureDateSource("gps_timestamp")
   case FileName extends CaptureDateSource("filename")
 
-  /** Where the Date Taken came from, as the Detail panel says it: "from EXIF original" */
+  /** The source as the Detail panel names it after "from" */
   def label: String = this match
     case ExifOriginal => "EXIF original"
     case ExifDigitized => "EXIF digitized"

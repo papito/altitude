@@ -19,7 +19,7 @@ import altitude.core.models.Permissions
 import altitude.core.models.Person
 import altitude.core.util.ImageMeasurement
 
-/** The Face corrections of Asset detail over HTTP: the People section they answer with, and their status codes */
+/** Asset detail over HTTP: the Detail panel, the asset-detail modal, and the Face corrections answering the People section */
 @DoNotDiscover class AssetActionControllerTests extends ControllerTestCore {
 
   private def face(person: Person, asset: Asset): Face =
@@ -57,8 +57,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * Moving Alice's Face to Bob by his ID answers 200 with the People section: both rows carry Bob's ID and name, the root
-     * carries "Moved to Bob" and names no deleted person; Bob's count is still one, the image being his already.
+     * Moving Alice's Face to Bob answers the People section with both rows under Bob and the moved message, naming no deleted
+     * person. Bob's count stays one, the image being his already.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -97,8 +97,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * Moving the Face to "Carol" answers 200 with the row under a new Person named Carol, "Moved to Carol" and the deleted
-     * source's ID in the root's data attributes; the source is gone.
+     * Moving the Face to " Carol " answers the row under a new Person named Carol, with the moved message and the deleted
+     * source's ID; the source is gone.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -132,8 +132,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * Removing Alice's Face answers 200 with Bob's row alone and "Removed Alice"; removing it again answers 404, as does moving
-     * it. Removing Bob's Face reports him deleted, and leaves the section with no rows.
+     * Removing Alice's Face answers Bob's row alone and the removed message; removing or moving it again answers 404. Removing
+     * Bob's Face reports him deleted and leaves no rows.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -205,8 +205,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * A body with neither a person nor a name, with both, with a one-letter name, with a reserved name, or naming the Face's own
-     * person answers 400; one naming an unknown person answers 404. The Face keeps its person throughout.
+     * A body with neither a person nor a name, both, a one-letter or reserved name, or the Face's own person answers 400; an
+     * unknown person answers 404. The Face keeps its person.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -246,9 +246,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * Naming them " Andreea " through the Face on the first asset answers 200 with the People section: the row carries the same
-     * Person under the trimmed name, the root carries "Unknown N is now Andreea" and names no deleted or merged Person. The
-     * Person is stored named, still counting three assets.
+     * Naming them " Andreea " through one Face answers the row under the same Person with the trimmed name and the named message,
+     * naming no deleted or merged Person. The Person is stored named, still counting three assets.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -292,9 +291,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * Merging the Person into Andrei through the Face on the first asset answers 200 with the People section: the row carries
-     * Andrei's ID and name, and the root carries "Unknown N merged into Andrei", the merged Person's ID and Andrei's, and no
-     * deleted Person. Andrei counts five assets, and every Face of the merged Person is his.
+     * Merging the Person into Andrei through one Face answers the row under Andrei, with the merged message and both people's
+     * IDs, and no deleted Person. Andrei counts five assets and holds every Face of the merged Person.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -342,14 +340,13 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * A body with no Person, a Person ID that is not a UUID, no name, a one-letter name or a reserved name answers 400; a name
-     * Andrei holds, in another case, answers 400 with "Person by that name already exists". A Person who is not the Face's
-     * answers 404, and the Face on the recycled asset 409. The Person keeps no name throughout.
+     * No Person, a non-UUID Person ID, no name, or a one-letter or reserved name answers 400, as does Andrei's name in another
+     * case, with the name-taken error. A Person who is not the Face's answers 404, and the recycled Face 409. The Person stays
+     * nameless.
      *
      * Edge cases:
      *
-     * Once the Person is named elsewhere, naming them through the Face answers 409 with "This person has a name now", as a stale
-     * section is answered.
+     * Once the Person is named elsewhere, a stale naming answers 409 with the named-since error.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -398,14 +395,13 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * A body with no destination, or a destination that is not a UUID, answers 400, as do a destination with no name and the
-     * Face's own Person. A destination no Person has, or Eve, answers 404, as does a Person who is not the Face's; the Face on
-     * the recycled asset answers 409. The Person stays live and keeps their Face throughout.
+     * No destination, a non-UUID one, a nameless one or the Face's own Person answers 400. An unknown destination, Eve, or a
+     * Person who is not the Face's answers 404, and the recycled Face 409. The Person stays live and keeps their Face.
      *
      * Edge cases:
      *
-     * Once the Person is named elsewhere, merging them through the Face answers 409 with "This person has a name now", as a stale
-     * section is answered, and they stay live under that name.
+     * Once the Person is named elsewhere, a stale merge answers 409 with the named-since error, and they stay live under that
+     * name.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -460,20 +456,16 @@ import altitude.core.util.ImageMeasurement
     /**
      * Setup:
      *
-     * A logged-in user's repository with the folders Trips and 2026 under it, an image in 2026 imported with EXIF metadata naming
-     * its camera, aperture and capture time, in the album Iceland and in the Location Reykjavik under the category Europe; on it
-     * a Face of Alice, a Face of the hidden Mia, a Face of a Person with no name who has a Face on a second image too, and a Face
-     * of a bad-match Person.
+     * A logged-in user's repository with an image in the folder Trips/2026, imported with EXIF camera, aperture and capture time,
+     * in the album Iceland and the Location Reykjavik (category Europe). On it are Faces of Alice, the hidden Mia, a nameless
+     * Person with a Face on a second image too, and a bad-match Person.
      *
      * Assertions:
      *
-     * The panel answers 200 with the People section holding Alice's, Mia's and the nameless Person's rows, Mia's marked Hidden,
-     * and not the bad match's; Alice's and Mia's rows marked named and the nameless Person's not, each carrying its Person's
-     * number of assets, their `numOfFaces` (1 for Alice, 2 for the nameless Person); the Details with the file name, the stored
-     * dimensions, the Date Taken with its source, the folder crumbs, the album and the Location each a link to its search opening
-     * in a new tab, the MIME type, the extractor's File Type and the camera rows, with no Curation row for a sorted asset, no
-     * Image quality row for a measured one and no Metadata section. Nothing marks the section read-only, and each row renders its
-     * corrections: Change, Remove with its two labels, and the Change combobox's input and listbox.
+     * The People section lists Alice, Mia (marked Hidden) and the nameless Person, not the bad match, each row with its
+     * corrections, its Person's asset count and whether it is named. The Details show the file data, Date Taken and its source,
+     * the folder, album and Location links (opening their search in a new tab) and the camera rows. A sorted, measured asset has
+     * no Curation or Image quality row, and there is no Metadata section.
      *
      * Edge cases:
      *
@@ -524,7 +516,7 @@ import altitude.core.util.ImageMeasurement
         html should include("""data-person-hidden="true"""")
         html should include("Hidden")
 
-        // A row's opening tag, which carries what the Face highlights and the combobox read of its Person
+        // A row's opening tag, which carries its Person's data attributes
         def rowTag(faceId: String): String = s"""<div ${rowOf(faceId)}[^>]*>""".r.findFirstIn(html).get
         List(alices, mias).foreach(named => rowTag(named.persistedId) should include("""data-person-named="true""""))
         (rowTag(namelessFace.persistedId) should not).include("data-person-named")
@@ -569,8 +561,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * The panel answers 200 with the People section marked read-only and its empty line, and no Folder row for the root; a random
-     * asset ID answers 404. A recycled image with a Face renders its row without Change or Remove.
+     * The panel's People section is read-only with its empty line, and the root has no Folder row; an unknown asset ID answers
+     * 404. A recycled image with a Face renders its row without Change or Remove.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -611,8 +603,7 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * The panel asked for through the first repository with the other repository's asset ID is a 404, as for an unknown asset,
-     * and shows nothing of the asset or its people.
+     * The panel for the other repository's asset, asked through the first, is a 404 showing nothing of the asset or its people.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -643,8 +634,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * Asked through the first repository, the asset-detail modal answers 404 for an asset ID that does not exist and for the
-     * other repository's image, as HTML and when asked for as JSON, and no answer carries the image's file name.
+     * Through the first repository, the modal answers 404 for an unknown asset ID and for the other repository's image, as HTML
+     * and as JSON, and no answer carries the image's file name.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -682,8 +673,8 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * Asked for as JSON, the asset-detail modal answers 200 with the image's file name, and with no `original_owner` or
-     * `owner_user_id` key: the importer's email, username and ID appear nowhere in it.
+     * The JSON carries the file name but no `original_owner` or `owner_user_id`, and none of the importer's email, username or
+     * ID.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -723,22 +714,19 @@ import altitude.core.util.ImageMeasurement
     /**
      * Setup:
      *
-     * A Library with an imported image whose Edit is saved once (Exposure +0.4) and rendered, an imported image never edited, and
-     * an imported image in the trash; a User holding every Permission, and a User holding every Permission but Edit images, each
-     * logged in.
+     * A Library with an image whose Edit is saved once (Exposure +0.4) and rendered, an image never edited, and an image in the
+     * trash; a User with every Permission and a User with all but Edit images, each logged in.
      *
      * Assertions:
      *
-     * Asked for as JSON by the first User, the edited image's detail carries `edit`: edit version 1, rendered at that version as
-     * revision 1, edited, its size, the size of its upright original and its Edit, and `editable` true with no `editRefusal`; the
-     * fragment carries the same Edit as JSON and `editable` in its data attributes, with the measurement's clipping levels and
-     * box, which the Edit panel's Clipping blink reads. The image never edited has no `edit`, in the JSON or the fragment, and is
-     * editable.
+     * For the first User, the edited image's JSON carries `edit` (version 1, rendered as revision 1, its size, its upright size
+     * and its recipe) and `editable` true with no `editRefusal`. The fragment carries the same Edit, `editable`, and the
+     * measurement's clipping levels and box. The unedited image has no `edit` and is editable.
      *
      * Edge cases:
      *
-     * The image in the trash is not editable, and says why (`editRefusal`, in the JSON and the fragment), which the Edit toggle's
-     * title shows; no image is editable for the User without Edit images, and none says why, as that User has no Edit toggle.
+     * The trashed image is not editable and gives the reason in `editRefusal`. For the User without Edit images, no image is
+     * editable and none gives a reason, since that User has no Edit toggle.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -857,19 +845,17 @@ import altitude.core.util.ImageMeasurement
     /**
      * Setup:
      *
-     * A logged-in user's repository with three triaged images stamped into one Sequence, of which one and then a second go to the
-     * trash.
+     * A logged-in user's repository with three triaged images in one Sequence, two of which then go to the trash in turn.
      *
      * Assertions:
      *
-     * With all three out of the trash, a frame's panel has a Curation row linking to Curation on that Sequence in the Triage
-     * view, carrying the Sequence for a plain click, reading "View set of 3", right under the File row, no Sequence row and,
-     * being in triage, no Folder row.
+     * A frame's panel has a Curation row under the File row, linking to Curation on that Sequence in the Triage view with the
+     * frame count. There is no Sequence row and, in triage, no Folder row.
      *
      * Edge cases:
      *
-     * A frame in the trash is not counted, and its own panel has no Curation row, since Curation would not show it. With one
-     * frame left out of the trash there is nothing to curate and no row.
+     * A trashed frame is not counted and its own panel has no Curation row, since Curation would not show it. With one frame left
+     * there is nothing to curate and no row.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -914,8 +900,7 @@ import altitude.core.util.ImageMeasurement
      *
      * Assertions:
      *
-     * Every correction route answers 401 without a login: Change, the name and the merge of the Face's Person, and Remove. The
-     * Face keeps its person, who keeps no name.
+     * Change, name, merge and Remove each answer 401. The Face keeps its person, who stays nameless.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId

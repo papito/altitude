@@ -22,19 +22,19 @@ trait FileStoreService:
   def getPreviewById(assetId: String): MimedPreviewData
 
   /**
-   * Writes the asset's edited image of `kind` (`Const.DataStore.PREVIEW`, the edited Preview, or `DISPLAY`, the Display image) to
-   * its temporary file beside the image, flushed to the disk, for [[publishEditedImage]] to move over the image. A render stages
-   * its images before its transaction opens, so the writing holds no lock; one render of an asset runs at a time.
+   * Writes the asset's edited image of `kind` (`Const.DataStore.PREVIEW` or `DISPLAY`) to a temporary file beside it, flushed to
+   * disk, for [[publishEditedImage]]. Renders stage before their transaction opens, so the write holds no lock; one render of an
+   * asset runs at a time, so one temporary file suffices.
    */
   def stageEditedImage(assetId: String, kind: String, data: Array[Byte]): Unit
 
   /**
-   * Moves the asset's staged edited image of `kind` over the one stored before, in one atomic rename, so a reader sees the old
-   * image or the new one, whole. A render publishes under the asset's locks, before the commit that names the new revision.
+   * Moves the staged edited image over the stored one in one atomic rename, so a reader sees the old image or the new one, whole.
+   * Called under the asset's locks, before the commit that names the new revision.
    */
   def publishEditedImage(assetId: String, kind: String): Unit
 
-  /** Deletes the asset's staged edited images, of both kinds, a render did not publish */
+  /** Deletes the staged edited images of both kinds that a render did not publish */
   def discardStagedEditedImages(assetId: String): Unit
 
   /** The asset's edited image of `kind`; a `NotFoundException` when it has none */
@@ -43,7 +43,7 @@ trait FileStoreService:
   /** Where the asset's edited image of `kind` is stored; it need not exist */
   def editedImagePath(assetId: String, kind: String): Path
 
-  /** Deletes the asset's edited images, of both kinds, and what a write of one cut off left */
+  /** Deletes the asset's edited images of both kinds, and any staged file an interrupted render left */
   def deleteEditedImages(assetId: String): Unit
 
   def addFace(face: Face, faceImages: FaceImages): Unit

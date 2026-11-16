@@ -76,16 +76,14 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A query of 25 rows a page sorted by file name descending, rendered on both engines as its first flat page and as the page
-     * that continues from a cursor.
+     * A 25-row page sorted by file name descending, rendered on both engines as a first page and as a continuation from a cursor.
      *
      * Assertions:
      *
-     * The candidates are a materialized slice of IDs and sort values, ordered by the sort and then the ID and limited to one row
-     * past the page; only the page's rows are joined back to the asset table in full, in the same order, with no window count, no
-     * offset and no explicit null ordering. A continuation starts after its cursor's anchor: a later sort value, or the anchor's
-     * own and a greater ID, under an inclusive bound on the sort value that an index can seek to. Only the first page carries the
-     * overall count, capped one past 10,000, and every placeholder has a bound value.
+     * The candidates are a materialized slice of IDs and sort values, ordered by the sort then the ID, one row past the page.
+     * Only the page's rows are joined back to the asset table, in the same order, with no window count, offset or explicit null
+     * ordering. A continuation starts after its cursor's anchor, under an inclusive bound an index can seek to. Only the first
+     * page counts the matches, capped one past 10,000, and every placeholder is bound.
      *
      * Edge cases:
      *
@@ -135,10 +133,9 @@ import altitude.core.util.SortValue
      *
      * Assertions:
      *
-     * The statement opens with a materialized CTE over the search documents, which the asset tests membership in, and the
-     * document source carries no repository filter of its own: the asset is scoped to it. PostgreSQL matches the document's
-     * tsvector with `to_tsquery`, SQLite matches through its full-text table, and only the text, the repository and the pipeline
-     * flag are bound.
+     * The statement opens with a materialized CTE over the search documents that the asset tests membership in. The CTE has no
+     * repository filter, since the asset is scoped. PostgreSQL matches with `to_tsquery`, SQLite through its full-text table, and
+     * only the text, the repository and the pipeline flag are bound.
      */
     val postgres = countSql(PostgresSearchDialect, textQuery("beach"))
     val sqlite = countSql(SqliteSearchDialect, textQuery("beach"))
@@ -148,7 +145,6 @@ import altitude.core.util.SortValue
         .findFirstIn(sql)
         .isDefined shouldBe true
       sql.contains("(asset0.id IN (SELECT asset_id FROM text_0_0_document))") shouldBe true
-      // The document source carries no repository of its own: the asset is scoped to it
       sql.contains("search_document0.repository_id") shouldBe false
       // the text, then the repository and the pipeline flag
       placeholders(sql) shouldBe 3
@@ -162,13 +158,12 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * The text `beach OR -lake "golden gate"` - a group of two alternatives, one of them excluded, and a phrase - rendered as an
-     * exact count on both engines.
+     * The text `beach OR -lake "golden gate"`: two alternatives, one excluded, and a phrase.
      *
      * Assertions:
      *
-     * Alternatives are OR-ed with the excluded one negated, the groups are AND-ed, each term's document source is built once at
-     * the head of the statement, and each term binds one query string.
+     * Alternatives are OR-ed with the excluded one negated, groups are AND-ed, each term's document source is built once at the
+     * head of the statement, and each term binds one query string.
      */
     for ((engine, dialect) <- engines) {
       val sql = countSql(dialect, textQuery("""beach OR -lake "golden gate""""))
@@ -195,8 +190,8 @@ import altitude.core.util.SortValue
      *
      * Assertions:
      *
-     * Each term binds one string in the engine's own full-text syntax - adjacent `<->` words on PostgreSQL, a quoted phrase on
-     * SQLite - with a prefix match on the last word of a word term and none on a phrase.
+     * Each term binds one string in the engine's full-text syntax, with a prefix match on the last word of a word term and none
+     * on a phrase.
      *
      * Edge cases:
      *
@@ -217,8 +212,7 @@ import altitude.core.util.SortValue
      *
      * Assertions:
      *
-     * Each term binds one string on both engines that ORs the split reading with the joined one, the word keeping its prefix
-     * match and the phrase taking none.
+     * Each term binds one string that ORs the split reading with the joined one, the word with its prefix match.
      */
     val text = """McDonald "LaGuardia airport""""
 
@@ -249,14 +243,12 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * The text "alice" resolved to an album, two people, three folders, a category and a Location, rendered as an exact count on
-     * both engines.
+     * The text "alice" resolved to an album, two people, three folders, a category and a Location.
      *
      * Assertions:
      *
-     * The term ORs one membership test per source in declaration order - person, Location, category, folder, album, document -
-     * each a CTE except the folder, which is the asset's own column. The person CTE reads faces by person ID, and each ID set is
-     * bound as one parameter in the engine's set form.
+     * The term ORs one membership test per source in declaration order, each a CTE except the folder, which is the asset's own
+     * column. The person CTE reads faces by person ID, and each ID set is bound as one parameter.
      */
     val ids = Map(
       SearchSource.Album -> Set("a1"),
@@ -272,8 +264,7 @@ import altitude.core.util.SortValue
       def in(source: String) = raw"\(asset0\.id IN \(SELECT asset_id FROM text_0_0_$source\)\)"
 
       withClue(s"$engine: $sql") {
-        // Sources in declaration order: person, Location, Category (as its Locations), folder, album, document. The folder is
-        // the asset's own column; every other source is a CTE.
+        // Person, Location, Category (as its Locations), folder, album, document
         (raw"${in("person")}\)* OR ${in("location")}\)* OR ${in("category")}\)* OR \(?asset0\.folder_id $inSet\)* OR " +
           raw"${in("album")}\)* OR ${in("document")}").r.findFirstIn(sql).isDefined shouldBe true
         raw"text_0_0_person \(asset_id\) AS MATERIALIZED \(SELECT face\d\.asset_id AS \w+ FROM face face\d WHERE \(?face\d\.person_id $inSet".r
@@ -322,16 +313,14 @@ import altitude.core.util.SortValue
      *
      * Assertions:
      *
-     * The probe has one branch per positive group, each read to one row past the limit. Every document source of alice, bob and
-     * beach is scoped to the repository; a person source is not, since its person was resolved from the repository's names, and
-     * reads nothing but the person and the asset. Every placeholder has a bound value.
+     * The probe has one branch per positive group, each reading one row past the limit. Every document source is scoped to the
+     * repository; a person source is not, since its person was resolved from the repository's names. Every placeholder is bound.
      *
      * Edge cases:
      *
-     * Text of an exclusion alone has no probe at all.
+     * Text of an exclusion alone has no probe.
      */
     for ((engine, dialect) <- engines) {
-      // Every term resolved to one person
       val text = resolved("alice OR bob beach -lake", Map(SearchSource.Person -> Set("p1"))).get
       val statement = SearchQueries.textProbe(dialect, text, "repo-1", 10).get
       val sql = statement.toString.replaceAll("\\s+", " ").trim
@@ -357,14 +346,13 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * The text `alice beach -lake` resolved to one person, with a probe outcome stitched in by hand: alice's group complete,
-     * beach too broad, and two candidate assets. The query is sorted by Relevance, 50 rows a page, on both engines.
+     * The text `alice beach -lake` resolved to one person, with a hand-made probe outcome: alice's group complete, beach too
+     * broad, two candidate assets. Sorted by Relevance.
      *
      * Assertions:
      *
-     * The count builds no text CTE: it filters by the candidate set and tests beach and lake as correlated `EXISTS` probes on the
-     * asset's own row through each source, the excluded term negated. The flat page scores the Relevance of alice and of beach,
-     * each as a `CASE` over its sources' probes.
+     * The count builds no text CTE: it filters by the candidates and tests beach and lake as correlated `EXISTS` probes on the
+     * asset's row, lake negated. The flat page scores the Relevance of alice and beach as a `CASE` over their sources' probes.
      */
     for ((engine, dialect) <- engines) {
       val text = resolved("alice beach -lake", Map(SearchSource.Person -> Set("p1"))).get
@@ -393,7 +381,6 @@ import altitude.core.util.SortValue
         "\\(NOT \\(EXISTS \\(SELECT".r.findAllIn(count).size shouldBe 2
       }
       withClue(s"$engine: $page") {
-        // The Relevance of alice and of beach, each a CASE over its sources' probes
         "CASE WHEN \\(EXISTS \\(SELECT face".r.findAllIn(page).size shouldBe 2
       }
     }
@@ -437,13 +424,12 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * Three metadata filters - a keyword, a number and a boolean - rendered on PostgreSQL.
+     * Three metadata filters (a keyword, a number and a boolean) rendered on PostgreSQL.
      *
      * Assertions:
      *
-     * The filters are one subquery on the asset ID over the metadata parameters that matches each field and value, groups by
-     * asset and keeps the assets carrying as many matches as there are filters. The outer query neither joins nor groups, and
-     * every value is bound.
+     * The filters are one subquery on the asset ID that matches each field and value, groups by asset and keeps the assets with
+     * as many matches as there are filters. The outer query neither joins nor groups, and every value is bound.
      */
     val query =
       new SearchQuery(metadataFilters = Map("kw_field" -> "beach", "num_field" -> 12, "bool_field" -> Query.EQUALS(false)))
@@ -458,7 +444,6 @@ import altitude.core.util.SortValue
       sql.contains("GROUP BY metadata_parameter1.asset_id") shouldBe true
       sql.contains("HAVING (COUNT(1) >= ?)") shouldBe true
 
-      // The outer query neither joins nor groups: the filter is entirely inside the subquery
       sql.contains("FROM asset asset0") shouldBe true
       "GROUP BY".r.findAllIn(sql).size shouldBe 1
       // repository, pipeline flag, the parameter repository, three field/value pairs and the count
@@ -482,7 +467,6 @@ import altitude.core.util.SortValue
       matchingSql(SqliteSearchDialect, new SearchQuery(personIds = Set("p1", "p2"), peopleMatch = PeopleMatch.Any))
     val albums = matchingSql(PostgresSearchDialect, new SearchQuery(albumIds = Set("a1")))
 
-    // The face's own person ID is all the filter reads
     withClue(people) {
       people.contains("asset0.id IN (SELECT") shouldBe true
       people.contains("FROM face face1") shouldBe true
@@ -501,13 +485,12 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A filter of two people, matching all of them and matching any of them, and a filter of one person each way, rendered on
-     * both engines.
+     * Filters of two people and of one person, each matching all and matching any.
      *
      * Assertions:
      *
-     * Matching all, the relation has one subquery on the asset ID per person, AND-ed, each reading the face's own person ID bound
-     * as a set of that one person; matching any, it has one subquery with both people bound as one set. Neither joins people.
+     * Matching all is one face subquery per person, AND-ed, each binding a set of one; matching any is one subquery binding both
+     * people as one set. Neither joins people.
      *
      * Edge cases:
      *
@@ -540,7 +523,6 @@ import altitude.core.util.SortValue
       }
       bound(dialect, people(Set("p1", "p2"), PeopleMatch.Any)).last shouldBe idSet("p1", "p2")
 
-      // One person is the same search either way
       matchingSql(dialect, people(Set("p1"), PeopleMatch.All)) shouldBe matchingSql(dialect, people(Set("p1"), PeopleMatch.Any))
     }
   }
@@ -550,13 +532,12 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A Date Taken range of June 2024, one open at its start and one open at its end, rendered on both engines.
+     * A Date Taken range of June 2024, one open at its start and one open at its end.
      *
      * Assertions:
      *
-     * The relation compares the engine's capture-day expression, spelled as `asset_search_date_taken` is built on it (a cast on
-     * PostgreSQL, `date()` on SQLite), with the first day inclusively from below and the last inclusively from above, each day
-     * bound. Nothing lets a row without a capture time through: its day is NULL, which fails either comparison.
+     * The relation compares the capture-day expression exactly as `asset_search_date_taken` indexes it with both days,
+     * inclusively, each bound. A row without a capture time fails either comparison, since its day is NULL.
      *
      * Edge cases:
      *
@@ -601,19 +582,17 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A server in New York. A Date Imported range of 1 and 2 June 2024, one open at its start, one open at its end, and the range
-     * of 10 March 2024 alone, the day New York's clocks go forward, rendered on both engines.
+     * A server in New York. Date Imported ranges of 1 to 2 June 2024, open at either end, and of 10 March 2024 alone, the day New
+     * York's clocks go forward.
      *
      * Assertions:
      *
-     * The relation compares the import time column itself, with no day expression around it, so that `asset_search_created` can
-     * seek: at or after the instant the first day begins in New York and before the instant the day after the last begins there,
-     * both bound as instants.
+     * The relation compares the bare import time column, so `asset_search_created` can seek: from the instant the first day
+     * begins in New York to before the instant the day after the last begins, both bound as instants.
      *
      * Edge cases:
      *
-     * A range open at one end renders the other end's comparison alone. The day the clocks go forward is the 23 hours the
-     * server's clock gives it.
+     * An open range renders the other end alone. The day the clocks go forward is 23 hours long.
      */
     def imported(from: Option[String], to: Option[String]): SearchQuery =
       new SearchQuery(importedRange = Some(DateRange(from.map(LocalDate.parse), to.map(LocalDate.parse))))
@@ -663,9 +642,9 @@ import altitude.core.util.SortValue
      *
      * Assertions:
      *
-     * The Location filter is a semi-join over the memberships with its ID set bound as one parameter. The box is one semi-join
-     * over the union of two ID sets, every edge bound: the repository's assets with a point of their own in the box, and the
-     * members without one of the Locations pinned in it.
+     * The Location filter is a semi-join over the memberships, its ID set bound as one parameter. The box is one semi-join over
+     * the union of the assets with their own point in the box and the pointless members of a Location pinned in it, every edge
+     * bound.
      *
      * Edge cases:
      *
@@ -680,7 +659,6 @@ import altitude.core.util.SortValue
       placeholders(byLocation) shouldBe 3
     }
 
-    // An asset's own point, or - with no point of its own - the pin of a Location it is in
     val inView = new SearchQuery(params = Map("is_recycled" -> false), bbox = Some(BoundingBox(48.0, 2.0, 49.0, 3.0)))
     val box = matchingSql(PostgresSearchDialect, inView)
     withClue(box) {
@@ -698,7 +676,6 @@ import altitude.core.util.SortValue
       placeholders(box) shouldBe 14
     }
 
-    // Across the antimeridian the longitude range is two open-ended halves
     val across = matchingSql(SqliteSearchDialect, new SearchQuery(bbox = Some(BoundingBox(-1.0, 179.0, 1.0, -179.0))))
     withClue(across) {
       across.contains("(asset0.longitude >= ? OR asset0.longitude <= ?)") shouldBe true
@@ -711,13 +688,12 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * The text "beach" with a recycled flag, a Location filter and a cap of 2, rendered as an exact and a capped count on both
-     * engines.
+     * The text "beach" with a recycled flag, a Location filter and a cap of 2, rendered as an exact and a capped count.
      *
      * Assertions:
      *
-     * Both counts are one `count(*)` over the matching relation after the text's CTE, carrying every filter and no ordering; the
-     * exact count is unlimited, and the capped one stops at one past its cap.
+     * Both are one `count(*)` over the matching relation after the text's CTE, with every filter and no ordering; only the capped
+     * one has a limit, one past its cap.
      */
     for ((engine, dialect) <- engines) withClue(engine) {
       val query = textQuery("beach", params = Map("is_recycled" -> false), locationIds = Set("l1"), totalCap = 2)
@@ -725,7 +701,6 @@ import altitude.core.util.SortValue
       val capped = SearchQueries.cappedCount(dialect, query, "repo-1").toString.replaceAll("\\s+", " ").trim
 
       for (sql <- List(exact, capped)) withClue(sql) {
-        // after the text's CTE
         sql.contains(") SELECT count(*) FROM (SELECT asset0.id AS ") shouldBe true
         sql.contains("FROM asset asset0") shouldBe true
         sql.contains("asset0.is_recycled = ?") shouldBe true
@@ -764,20 +739,19 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A query of 50 rows a page grouped by Date Taken, with a recycled flag, a folder and a metadata filter, rendered over every
-     * combination that changes its shape: both engines, both group directions, a first page and a continuation from either a
-     * dated or an undated anchor, sorted by the grouping column itself or by another.
+     * A 50-row page grouped by Date Taken with a recycled flag, a folder and a metadata filter, over every combination that
+     * changes its shape: engine, group direction, first page or continuation from a dated or undated anchor, and a sort by the
+     * grouping column or another.
      *
      * Assertions:
      *
-     * The undated slice and its guard appear only when a continuation from a dated anchor can run into undated assets that sort
+     * The undated slice and its guard appear only when a continuation from a dated anchor can run into undated assets sorted
      * after it. The day counts are separate dated and undated queries joined to the page null-safely, no null ordering is spelled
-     * out, only a first page counts the total (capped one past 10,000), and every placeholder has a bound value.
+     * out, only a first page counts the total (capped one past 10,000), and every placeholder is bound.
      *
      * Edge cases:
      *
-     * An undated anchor sorted by capture time continues within the undated group or past it, depending on where the engine puts
-     * nulls for the direction.
+     * An undated anchor sorted by capture time continues within or past the undated group, by where the engine puts nulls.
      */
     for {
       (engine, dialect) <- engines
@@ -817,7 +791,6 @@ import altitude.core.util.SortValue
         text.contains("OR (d.day IS NULL AND p.day IS NULL)") shouldBe true
         text.contains("NULLS FIRST") shouldBe false
         text.contains("NULLS LAST") shouldBe false
-        // Only a first page pays for the overall count, which stops one past the cap
         text.contains("total AS MATERIALIZED") shouldBe (position == "first")
         text.contains("LIMIT 10001) AS m)") shouldBe (position == "first")
         text.count(_ == '?') shouldBe binds(statement)
@@ -835,12 +808,12 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A query of 50 rows a page grouped by Date Taken descending, sorted by file name or by capture time.
+     * A 50-row page grouped by Date Taken descending, sorted by file name or by capture time.
      *
      * Assertions:
      *
-     * The slice orders by the engine's own day index expression, then the sort, then the ID. On SQLite a file name sort term
-     * carries the unary `+` that keeps the planner off its index, while a capture time sort does not.
+     * The slice orders by the engine's day index expression, then the sort, then the ID. On SQLite a file name sort term carries
+     * the unary `+` that keeps the planner off its index; a capture time sort does not.
      */
     def slice(dialect: SearchDialect, field: String): String =
       val query = new SearchQuery(
@@ -849,11 +822,11 @@ import altitude.core.util.SortValue
         grouping = Some(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC)))
       SearchQueries.grouped(dialect, query, "repo-1").toString.replaceAll("\\s+", " ")
 
-    // The day term is the engine's own index expression, and the ID is always the last, deterministic term
+    // The ID is always the last, deterministic term
     slice(PostgresSearchDialect, "filename").contains(
       "ORDER BY asset0.original_created_at::date DESC, asset0.filename ASC, asset0.id ASC LIMIT 51") shouldBe true
 
-    // SQLite is steered away from any index on a non-grouping sort term, so the day index stays in charge
+    // Kept off a non-grouping sort term's index, SQLite stays on the day index
     slice(SqliteSearchDialect, "filename").contains(
       "ORDER BY date(asset0.original_created_at) DESC, +asset0.filename ASC, asset0.id ASC LIMIT 51") shouldBe true
     slice(SqliteSearchDialect, "original_created_at").contains(
@@ -895,8 +868,8 @@ import altitude.core.util.SortValue
      *
      * Assertions:
      *
-     * The text is matched once, and the candidate slice, both day-count probes and the overall count all apply the same
-     * predicates through the one CTE of the term's document source.
+     * The text is matched once, and the candidate slice, both day-count probes and the overall count apply the same predicates
+     * through the one CTE of the term's document source.
      */
     val query = new SearchQuery(
       params = Map("is_recycled" -> false),
@@ -908,8 +881,6 @@ import altitude.core.util.SortValue
     )
     val text = SearchQueries.grouped(SqliteSearchDialect, query, "repo-1").toString.replaceAll("\\s+", " ")
 
-    // The candidate slice, both day-count probes and the overall count: four copies of the same predicate, all reading the one
-    // CTE of the term's document source
     withClue(text) {
       "search_document_fts MATCH \\?".r.findAllIn(text).size shouldBe 1
       "IN \\(SELECT asset_id FROM text_0_0_document\\)".r.findAllIn(text).size shouldBe 4
@@ -945,16 +916,15 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A query of 50 rows a page for "beach" grouped by Location, with a recycled flag and a folder, rendered over what changes
-     * its shape: both engines, a first page and a continuation from an anchor in a Location (Rome in Italy) or in the trailing
-     * "No location" group, sorted by a nullable timestamp or by a text column.
+     * A 50-row page for "beach" grouped by Location with a recycled flag and a folder, over both engines, a first page and
+     * continuations from a Location anchor or from the trailing "No location" group, sorted by a nullable timestamp or a text
+     * column.
      *
      * Assertions:
      *
      * Until the anchor is in the trailing group, the page has a located slice joining the memberships, the Location and its
-     * category, and a guarded unlocated slice of the matches in no Location. Located rows come first in path order whatever the
-     * engine does with nulls, the group counts are joined to the page null-safely, only a first page counts the total, every
-     * branch reads the one CTE of the term's document source, and every placeholder has a bound value.
+     * category, and a guarded unlocated slice. Located rows come first in path order on either engine, group counts are joined
+     * null-safely, only a first page counts the total, every branch reads the one text CTE, and every placeholder is bound.
      *
      * Edge cases:
      *
@@ -988,13 +958,11 @@ import altitude.core.util.SortValue
       val columns = "(id, location_id, path_key, location_name, category_name, sort_value, second_sort_value)"
 
       withClue(s"$engine/$position/$field: $text") {
-        // The located slice and its guard on the unlocated one exist until the anchor is in the trailing group
         text.contains(s"located $columns AS MATERIALIZED") shouldBe (position != "unlocated")
         text.contains(s"unlocated $columns AS MATERIALIZED") shouldBe (position != "unlocated")
         text.contains("LIMIT CASE WHEN (SELECT count(*) FROM located) > 50 THEN 0 ELSE 51 END") shouldBe (position != "unlocated")
         text.contains(s"candidates $columns AS MATERIALIZED") shouldBe true
-        // The located relation is the asset joined to its memberships, the Location and its category; the group counts join
-        // the memberships alone
+        // The group counts join the memberships alone
         text.contains("JOIN location_asset location_asset1 ON") shouldBe true
         text.contains("JOIN location location2 ON") shouldBe (position != "unlocated")
         text.contains("LEFT JOIN location location3 ON") shouldBe (position != "unlocated")
@@ -1007,11 +975,9 @@ import altitude.core.util.SortValue
         text.contains("OR (g.location_id IS NULL AND p.location_id IS NULL)") shouldBe true
         text.contains("NULLS FIRST") shouldBe false
         text.contains("NULLS LAST") shouldBe false
-        // Only a first page pays for the overall count, which counts assets, not memberships
+        // The total counts assets, not memberships
         text.contains("total AS MATERIALIZED") shouldBe (position == "first")
         text.count(_ == '?') shouldBe binds(statement)
-        // Every branch applies the same filters: the located slice, the unlocated slice, both group counts and the total, all
-        // reading the one CTE of the term's document source
         "search_document_fts MATCH \\?|tsv @@ to_tsquery\\('simple', \\?\\)".r.findAllIn(text).size shouldBe 1
         "IN \\(SELECT asset_id FROM text_0_0_document\\)".r.findAllIn(text).size shouldBe
           (if (position == "unlocated") 3 else if (position == "first") 5 else 4)
@@ -1031,7 +997,7 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A query of 50 rows a page grouped by Location and sorted by file name descending, on both engines.
+     * A 50-row page grouped by Location and sorted by file name descending.
      *
      * Assertions:
      *
@@ -1048,9 +1014,7 @@ import altitude.core.util.SortValue
     val pathKey = "COALESCE(location3.name_key || ?, '') || location2.name_key"
     slice(PostgresSearchDialect).contains(
       s"ORDER BY $pathKey ASC, location2.id ASC, asset0.filename DESC, asset0.id ASC LIMIT 51") shouldBe true
-    // The trailing group is ordered by the sort alone
     slice(PostgresSearchDialect).contains("ORDER BY asset0.filename DESC, asset0.id ASC LIMIT CASE") shouldBe true
-    // SQLite gets its planner hint on every sort term of a Location grouping: there is no grouping index to protect
     slice(SqliteSearchDialect).contains(
       s"ORDER BY $pathKey ASC, location2.id ASC, +asset0.filename DESC, asset0.id ASC LIMIT 51") shouldBe true
   }
@@ -1085,18 +1049,17 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * The text `alice OR bob paris -lake` resolved to a folder and a person, rendered as a flat page of 50 under the Relevance
-     * sort and again under a file name sort, on both engines.
+     * The text `alice OR bob paris -lake` resolved to a folder and a person, as a flat page sorted by Relevance and by file name.
      *
      * Assertions:
      *
-     * Under the Relevance sort each scoring group is one `CASE` - the alternatives share it and the exclusion has none - testing
-     * its best-scoring source first. The matches are scored once, in `scored`; the candidates read it and order by the Relevance
-     * and capture time it carries rather than computing them again, and so does the page.
+     * Under Relevance each scoring group is one `CASE` (alternatives share it, the exclusion has none) testing its best-scoring
+     * source first. The matches are scored once, in `scored`, and the candidates and the page order by the Relevance and capture
+     * time it carries.
      *
      * Edge cases:
      *
-     * A column sort renders no Relevance at all.
+     * A column sort renders no Relevance.
      */
     val ids = Map(SearchSource.Folder -> Set("f1"), SearchSource.Person -> Set("p1"))
     val text = "alice OR bob paris -lake"
@@ -1105,10 +1068,8 @@ import altitude.core.util.SortValue
       val sql = flatSql(dialect, textQuery(text, ids, searchSort = List(SearchSort.Relevance), rpp = 50))
 
       withClue(s"$engine: $sql") {
-        // The alternatives share one CASE, so their group scores once, as its best match; the exclusion scores nothing
         "CASE WHEN".r.findAllIn(sql).size shouldBe 2
         "THEN (\\d)".r.findAllMatchIn(sql).map(_.group(1)).mkString shouldBe "552211521"
-        // The candidates order by what `scored` carries, so the Relevance is not computed again for the order
         "scored \\(id, day, sort_value, second_sort_value\\) AS MATERIALIZED \\(SELECT .*\\(CASE WHEN .* ELSE 0 END \\+ CASE WHEN .* ELSE 0 END\\) AS \\w+, asset0\\.original_created_at AS".r
           .findFirstIn(sql)
           .isDefined shouldBe true
@@ -1128,19 +1089,18 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A continuation of a page for "beach" sorted by Relevance and grouped by Date Taken or by Location, on both engines, from an
-     * anchor with a capture time or with none.
+     * Continuations of a "beach" page sorted by Relevance and grouped by Date Taken, Location or Sequence, from an anchor with a
+     * capture time and from one without.
      *
      * Assertions:
      *
-     * The Relevance is computed once per match into a `scored` CTE and read from there: the continuation compares the Relevance,
-     * then the capture time with undated assets last, then the ID, and the slice, the candidates and the page all order by the
-     * scores. Every placeholder has a bound value.
+     * The Relevance is computed once per match into a `scored` CTE. The continuation compares the Relevance, then the capture
+     * time with undated assets last, then the ID; the slice, the candidates and the page order by the scores. Every placeholder
+     * is bound.
      *
      * Edge cases:
      *
-     * An anchor without a capture time continues among the undated assets, and a cursor missing the capture time altogether is
-     * refused.
+     * An anchor without a capture time continues among the undated assets, and a cursor without the capture time is refused.
      */
     for {
       (engine, dialect) <- engines
@@ -1173,7 +1133,6 @@ import altitude.core.util.SortValue
       val scored = "scored\\d+"
 
       withClue(s"$engine/$by/$second: $text") {
-        // The Relevance is computed once per match, into scored, and read from there
         text.contains("scored (id, day, sort_value, second_sort_value) AS MATERIALIZED (SELECT asset0.id AS ") shouldBe true
         "CASE WHEN \\(asset0".r.findAllIn(text).size shouldBe 1
         // Among the anchor's Relevance an older capture follows it, and so does every asset with none: they are last
@@ -1196,7 +1155,6 @@ import altitude.core.util.SortValue
         text.count(_ == '?') shouldBe binds(statement)
       }
 
-      // A cursor without the capture time is no position under this sort
       intercept[SearchCursorException](page(cursor.copy(secondSortValue = None)))
     }
   }
@@ -1206,15 +1164,14 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A query with a recycled flag and a Location filter, rendered as the cells of a box around Paris at a cell size of 0.25
-     * degrees on both engines.
+     * A query with a recycled flag and a Location filter, rendered as the 0.25-degree cells of a box around Paris.
      *
      * Assertions:
      *
-     * The plotted points are the union of an asset's own point in the box and, for an asset without one, the pin of each Location
-     * it is in that is in the box, both branches carrying the search's filters. The points are gridded into cells, and one window
-     * pass counts and averages each cell and picks its newest asset, undated last, read with its edited images' revision, with no
-     * null ordering spelled out and every placeholder bound.
+     * The plotted points are the union of the assets' own points in the box and, for an asset without one, the pins in the box of
+     * its Locations, both branches carrying the search's filters. One window pass over the gridded points counts and averages
+     * each cell and picks its newest asset, undated last, read with its Edit revision. No null ordering is spelled out and every
+     * placeholder is bound.
      */
     for ((engine, dialect) <- engines) withClue(engine) {
       val query = new SearchQuery(params = Map("is_recycled" -> false), locationIds = Set("l1"))
@@ -1222,7 +1179,6 @@ import altitude.core.util.SortValue
       val text = statement.toString.replaceAll("\\s+", " ")
 
       withClue(text) {
-        // An asset's own point in the box, and - without one - the pin of each Location it is in that is in the box
         text.contains("WITH points (asset_id, latitude, longitude, taken) AS (") shouldBe true
         text.contains("UNION ALL") shouldBe true
         text.contains(
@@ -1230,7 +1186,6 @@ import altitude.core.util.SortValue
         text.contains("JOIN location_asset location_asset1 ON") shouldBe true
         text.contains("JOIN location location2 ON") shouldBe true
         text.contains("(location2.latitude BETWEEN ? AND ? AND location2.longitude BETWEEN ? AND ?)") shouldBe true
-        // Both branches carry the search's own filters
         raw"location_asset\S*\.location_id (= ANY\(\?\)|IN \(SELECT value FROM json_each\(\?\)\))".r
           .findAllIn(text)
           .size shouldBe 2
@@ -1239,7 +1194,7 @@ import altitude.core.util.SortValue
         text.contains(
           "ROW_NUMBER() OVER (PARTITION BY cell_x, cell_y ORDER BY CASE WHEN taken IS NULL THEN 1 ELSE 0 END, taken DESC, asset_id ASC) AS rn") shouldBe true
         text.contains("WINDOW w AS (PARTITION BY cell_x, cell_y)") shouldBe true
-        // The cell's asset read with its edited images' revision, in the repository
+        // The cell's asset is read within the repository
         text.contains(
           "SELECT cells.n, cells.latitude, cells.longitude, cells.asset_id, asset.edit_rev FROM cells JOIN asset ON asset.id = cells.asset_id AND asset.repository_id = ? WHERE cells.rn = 1") shouldBe true
         text.contains("NULLS FIRST") shouldBe false
@@ -1258,8 +1213,8 @@ import altitude.core.util.SortValue
      *
      * Assertions:
      *
-     * The bounds are one min, max and count aggregate over the same plotted points, with no box, and both point sources apply the
-     * text through the one CTE of the term's document source.
+     * The bounds are one min, max and count aggregate over the same plotted points, with no box; both point sources apply the
+     * text through the one text CTE.
      */
     for ((engine, dialect) <- engines) withClue(engine) {
       val query = textQuery("beach", params = Map("is_recycled" -> false))
@@ -1271,7 +1226,6 @@ import altitude.core.util.SortValue
         text.contains("UNION ALL") shouldBe true
         text.contains("SELECT min(latitude), max(latitude), min(longitude), max(longitude), count(*) FROM points") shouldBe true
         text.contains("BETWEEN") shouldBe false
-        // The text filter is applied to both point sources, which read the one CTE of the term's document source
         "FROM search_document ".r.findAllIn(text).size shouldBe 1
         "IN \\(SELECT asset_id FROM text_0_0_document\\)".r.findAllIn(text).size shouldBe 2
         text.count(_ == '?') shouldBe binds(statement)
@@ -1284,13 +1238,12 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A query with a recycled flag and a folder filter, rendered as the map's Locations in a box across the antimeridian on both
-     * engines.
+     * A query with a recycled flag and a folder filter, rendered as the map's Locations in a box across the antimeridian.
      *
      * Assertions:
      *
      * The matching relation is materialized once, and the repository's pinned Locations in the box are joined to their matching
-     * members and their category and grouped per Location, with every placeholder bound.
+     * members and category and grouped per Location, every placeholder bound.
      *
      * Edge cases:
      *
@@ -1311,7 +1264,6 @@ import altitude.core.util.SortValue
             "JOIN matched ON matched.id = location_asset.asset_id " +
             "LEFT JOIN location AS category ON category.id = location.category_id") shouldBe true
         text.contains("WHERE location.repository_id = ? AND location.kind = ?") shouldBe true
-        // A box across the antimeridian covers both sides of it
         text.contains("(location.longitude >= ? OR location.longitude <= ?)") shouldBe true
         text.contains("GROUP BY location.id, location.name, category.name, location.latitude, location.longitude") shouldBe true
         text.count(_ == '?') shouldBe binds(statement)
@@ -1324,7 +1276,7 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A query of 50 rows a page with a recycled flag, grouped by Location and sorted by file name, on both engines.
+     * A 50-row page with a recycled flag, grouped by Location and sorted by file name.
      *
      * Assertions:
      *
@@ -1341,7 +1293,6 @@ import altitude.core.util.SortValue
       val counts = text.substring(text.indexOf("group_counts AS MATERIALIZED"), text.indexOf("UNION ALL SELECT p.location_id"))
 
       withClue(counts) {
-        // The page Location's memberships joined to the asset, under the search's own predicates
         "FROM asset asset\\d+ JOIN location_asset location_asset\\d+ ON \\(?asset\\d+\\.id = location_asset\\d+\\.asset_id".r
           .findFirstIn(counts)
           .isDefined shouldBe true

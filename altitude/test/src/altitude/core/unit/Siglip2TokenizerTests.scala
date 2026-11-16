@@ -10,9 +10,8 @@ import altitude.core.util.ModelFile
 import altitude.core.util.Siglip2Tokenizer
 
 /**
- * [[Siglip2Tokenizer]] against the reference processor of the SigLIP 2 checkpoint: `siglip2/tokens.json`, which
- * `scripts/siglip2-golden.py` writes, holds the 64 token IDs the processor gives each of its descriptions. Needs the tokenizer
- * file among the model files (`TestModelFiles`), as the Scene model tests need theirs.
+ * [[Siglip2Tokenizer]] against the SigLIP 2 checkpoint's reference processor: `siglip2/tokens.json`, written by
+ * `scripts/siglip2-golden.py`, holds the 64 token IDs the processor gives each description. Needs the tokenizer model file.
  */
 @DoNotDiscover class Siglip2TokenizerTests extends AnyFunSuite with TestFocus {
 
@@ -29,22 +28,18 @@ import altitude.core.util.Siglip2Tokenizer
     /**
      * Setup:
      *
-     * A tokenizer over the vocabulary file of the model files, and the golden file's descriptions, a few hundred: plain words,
-     * punctuation, digits, spaces at the ends and repeated, tabs and line breaks, apostrophes, accents and other scripts, CJK,
-     * emoji, mixed case, runs of one character.
+     * The tokenizer model file and a few hundred golden descriptions covering punctuation, digits, odd whitespace, accents, other
+     * scripts, emoji, mixed case and repeated characters.
      *
      * Assertions:
      *
-     * Each description tokenizes to exactly the 64 IDs the reference processor gives its lowercase: the same pieces in the same
-     * order, one EOS after them, and the pad ID to the end.
+     * Each description tokenizes to exactly the 64 IDs the reference gives its lowercase: the same pieces, one EOS, then pads.
      *
      * Edge cases:
      *
-     * The empty description is the EOS and 63 pads. A description of 63 tokens fills the 64 with its EOS, and a longer one keeps
-     * its first 63 and still ends in the EOS. A character with no piece becomes the pieces of its UTF-8 bytes. A capital whose
-     * lowercase is two characters or depends on its place (a dotted capital I, a final sigma) lowercases as the reference does. A
-     * special token, an HTML tag or a run of line feeds written in a description is the one piece the reference matches whole,
-     * and the text on either side of it is tokenized apart.
+     * The empty description is the EOS and 63 pads; a longer one than fits keeps its first 63 tokens and still ends in the EOS. A
+     * character with no piece becomes its UTF-8 byte pieces. A dotted capital I and a final sigma lowercase as the reference
+     * does. A special token, an HTML tag or a run of line feeds is one piece, with the text around it tokenized apart.
      */
     golden.size should be >= 200
     val tokenizer = Siglip2Tokenizer.load(TestModelFiles.models.path(ModelFile.Siglip2Tokenizer))

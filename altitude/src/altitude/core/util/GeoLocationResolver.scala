@@ -6,14 +6,11 @@ import altitude.core.models.ExtractedMetadata
 import altitude.core.models.GeoPoint
 
 /**
- * Where an asset was captured, from its persisted metadata alone, so resolution can be replayed later without the file. The EXIF
- * `GPS` directory is tried first, then a phone video's `QuickTime Metadata` / `ISO 6709` string, then the `MP4` directory's
- * decimal `Latitude` and `Longitude`.
+ * Where an asset was captured, from its persisted metadata alone, so resolution can be replayed without the file.
  *
- * metadata-extractor describes `GPS Latitude` / `GPS Longitude` as signed degrees-minutes-seconds strings, already converted
- * through the ref (`33° 51' 25.2"`, `-33° 51' 25.2"`). The degree part is an integer, so a value between -1 and 0 is described
- * without its sign; the `GPS Latitude Ref` / `GPS Longitude Ref` tags (`N`/`S`, `E`/`W`) are stored beside it and decide the
- * hemisphere whenever present.
+ * metadata-extractor describes the GPS coordinates as signed degrees-minutes-seconds strings, already converted through the ref
+ * (`-33° 51' 25.2"`). The degree part is an integer, so a value between -1 and 0 loses its sign; the stored ref tags therefore
+ * decide the hemisphere whenever present.
  */
 object GeoLocationResolver:
   // Degrees, minutes and seconds in the extractor's own format; the decimal separator follows the JVM's formatting locale
@@ -61,8 +58,8 @@ object GeoLocationResolver:
     }
 
   /**
-   * An ISO 6709 coordinate is degrees, or degrees and minutes, or degrees, minutes and seconds, told apart by how many digits
-   * precede the decimal point beyond the degrees: `+4012.22` is 40° 12.22'
+   * Degrees, degrees and minutes, or degrees, minutes and seconds, told apart by the integer digits past the degrees: `+4012.22`
+   * is 40° 12.22'
    */
   private def sexagesimal(raw: String, degreeDigits: Int): Double =
     val sign = if raw.startsWith("-") then -1 else 1

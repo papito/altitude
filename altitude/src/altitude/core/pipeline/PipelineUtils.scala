@@ -31,9 +31,8 @@ object PipelineUtils:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   /**
-   * Runs the work with the pipeline context's repository, account (or none, when the context has none) and the account's
-   * Permissions there (none with no account) as the request context, for the work alone, so a pooled thread never works under the
-   * request that last ran on it
+   * Runs the work under the context's repository, account and Permissions, scoped to the work alone so a pooled thread never
+   * works under the request that last ran on it
    */
   def withContext[A](ctx: PipelineContext)(work: => A): A =
     RequestContext.repository.withValue(Some(ctx.repository)) {
@@ -42,17 +41,14 @@ object PipelineUtils:
       }
     }
 
-  /** A cause a file can have for being dropped, which the user is told and the log records in one line, without a stack trace */
+  /** A drop cause the user is told and the log records in one line, without a stack trace */
   def isExpectedDrop(cause: Throwable): Boolean = cause match
     case _: UnsupportedMediaTypeException | _: ImageException | _: VideoException | _: DuplicateException |
         _: SamePersonDetectedTwiceException | _: ImporterUnavailableException | _: ImportDestinationException =>
       true
     case _ => false
 
-  /**
-   * Why a file was dropped, in words fit to show and to keep: the causes with a name by that name, and any other by its
-   * exception's class alone, never by its message, which may carry paths or SQL
-   */
+  /** Why a file was dropped, fit to show and keep: an unnamed cause by its class alone, never its message (paths, SQL) */
   def dropReason(cause: Option[Throwable]): String = cause match
     case Some(_: DuplicateException) => "Duplicate asset"
     case Some(_: UnsupportedMediaTypeException) => "Unsupported media type"
@@ -60,10 +56,10 @@ object PipelineUtils:
     case Some(_: VideoException) => "Cannot decode video"
     case Some(_: StorageException) => "Storage error"
     case Some(_: QueueRefusedException) => "Import queue unavailable"
-    // Its message is one of two fixed texts (Const.Msg.Err.IMPORTER_GONE, IMPORTER_DEACTIVATED)
+    // A fixed text (Const.Msg.Err.IMPORTER_GONE or IMPORTER_DEACTIVATED)
     case Some(unavailable: ImporterUnavailableException) => unavailable.getMessage
-    // Its message is a fixed text (Const.Msg.Err.DESTINATION_IN_TRASH), or one around the folder rule's own
-    // (DESTINATION_FOLDER_NAME), which names a length at most
+    // A fixed text (Const.Msg.Err.DESTINATION_IN_TRASH), or DESTINATION_FOLDER_NAME around the folder rule's, which names a
+    // length at most
     case Some(destination: ImportDestinationException) => destination.getMessage
     case other => other.fold("Unknown error")(_.getClass.getSimpleName)
 
@@ -81,15 +77,12 @@ object PipelineUtils:
       (result, ctx)
     }
 
-  /** [[guarded]] run on the dispatcher, the import dispatcher, off the stream's actor, which only routes the elements */
+  /** [[guarded]] on the import dispatcher, off the stream's actor, which only routes the elements */
   def guardedAsync(stage: String, dataAsset: AssetWithData, ctx: PipelineContext)(work: => TDataAssetOrInvalid)(using
       dispatcher: ExecutionContext): Future[TDataAssetOrInvalidWithContext] =
     Future(guarded(stage, dataAsset, ctx)(work))
 
-  /**
-   * A stage over the assets still in the pipeline: each is worked on under [[guardedAsync]], at most `parallelism` at once, and a
-   * dropped asset is passed on. The stage hands its assets on in the order they came, whatever order their work finishes in.
-   */
+  /** Works on the assets still in the pipeline, `parallelism` at once, passing dropped ones on; the input order is kept */
   def stage(name: String, parallelism: Int)(work: AssetWithData => TDataAssetOrInvalid)(using
       dispatcher: ExecutionContext): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
     Flow[TDataAssetOrInvalidWithContext].mapAsync(parallelism) {

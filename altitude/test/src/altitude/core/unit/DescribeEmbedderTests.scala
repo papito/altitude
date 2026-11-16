@@ -18,17 +18,15 @@ import altitude.core.models.SceneModel
 import altitude.core.util.OnnxDescribeEmbedder
 
 /**
- * [[OnnxDescribeEmbedder]] against the PyTorch model of the SigLIP 2 checkpoint: `siglip2/embeddings.json`, which
- * `scripts/siglip2-golden.py` writes, holds the embedding the model gives each of its descriptions, each run of whitespace handed
- * to it as one space, as the embedder hands a description to its tokenizer. Needs the text tower, the token-embedding table and
- * the tokenizer file among the model files (`TestModelFiles`), as the Scene model tests do.
+ * [[OnnxDescribeEmbedder]] against the PyTorch SigLIP 2 checkpoint: `siglip2/embeddings.json`, written by
+ * `scripts/siglip2-golden.py`, holds the reference embedding of each description, with each run of whitespace given as one space,
+ * as the embedder hands it to its tokenizer. Needs the Describe model files (`TestModelFiles`).
  */
 @DoNotDiscover class DescribeEmbedderTests extends AnyFunSuite with TestFocus {
 
-  /** What the golden embeddings and the application's must agree to */
+  /** The cosine the golden embeddings and the application's must reach */
   private val MIN_COSINE = 0.9999
 
-  /** The golden descriptions, each with the unit embedding the PyTorch model gives it */
   private val golden: Seq[(String, SceneEmbedding)] =
     ujson
       .read(getClass.getResourceAsStream("/siglip2/embeddings.json").readAllBytes())
@@ -36,7 +34,7 @@ import altitude.core.util.OnnxDescribeEmbedder
       .map(entry => entry("description").str -> SceneEmbedding(IArray.from(entry("embedding").arr.map(_.num.toFloat))))
       .toSeq
 
-  /** Runs `f` over an embedder of its own, closed afterwards: the text tower is 340 MB, opened by the first description */
+  /** Runs `f` over an embedder closed afterwards, since the text tower it opens holds hundreds of MB */
   private def withEmbedder[T](embedder: OnnxDescribeEmbedder = OnnxDescribeEmbedder(TestModelFiles.models))(
       f: OnnxDescribeEmbedder => T): T =
     try f(embedder)
@@ -58,12 +56,12 @@ import altitude.core.util.OnnxDescribeEmbedder
     /**
      * Setup:
      *
-     * The bit patterns of float16 values of every kind: zeros, ordinary values, the largest, and the subnormals, which have no
-     * implicit leading one.
+     * The bit patterns of float16 zeros, ordinary values, the largest, the subnormals (no implicit leading one), the infinities
+     * and a NaN.
      *
      * Assertions:
      *
-     * Each widens to the float of exactly its value, the sign kept.
+     * Each widens to the float of exactly its value, sign kept.
      *
      * Edge cases:
      *
@@ -95,17 +93,17 @@ import altitude.core.util.OnnxDescribeEmbedder
     /**
      * Setup:
      *
-     * The cosines SigLIP 2's constants give for an even chance of a match, for the default Describe match threshold of 0.00009,
-     * and for two probabilities at the ends of the scale.
+     * The cosines for an even chance of a match, for the default Describe minimum probability of 0.00009, and for two
+     * probabilities near the ends of the scale.
      *
      * Assertions:
      *
-     * An even chance is the cosine 0.1486 and the default threshold 0.0660. The cosine rises with the probability, and the
-     * probability the model's formula gives back for each cosine, `sigmoid(cosine * t + b)`, is the one it came from.
+     * An even chance is the cosine 0.1486 and the default 0.0660. The cosine rises with the probability, and the model's
+     * `sigmoid(cosine * t + b)` gives each probability back.
      *
      * Edge cases:
      *
-     * 0 and 1 are no probability, nor is anything outside them: each is refused.
+     * 0, 1 and anything outside them are refused.
      */
     SceneModel.siglip2Cosine(0.5) shouldBe 0.1486 +- 0.0001
     SceneModel.siglip2Cosine(0.00009) shouldBe 0.0660 +- 0.0001
@@ -127,18 +125,17 @@ import altitude.core.util.OnnxDescribeEmbedder
     /**
      * Setup:
      *
-     * The golden file's dozen descriptions: a few words, one word, mixed case, punctuation and digits, accents, CJK, an emoji, a
-     * line break, and one past the 64 tokens.
+     * The golden file's dozen descriptions: one word and a few, mixed case, punctuation and digits, accents, CJK, an emoji, a
+     * line break, and one past 64 tokens.
      *
      * Assertions:
      *
-     * Each description's embedding is of SigLIP 2's dimensions and of unit length, and its cosine to the PyTorch model's
-     * embedding is at least 0.9999: the normalization, the tokenizer, the float16 token embeddings and the exported text tower
-     * together give what the reference gives.
+     * Each embedding has SigLIP 2's dimensions and unit length, and is within a cosine of 0.9999 of the reference: normalization,
+     * tokenizer, float16 token embeddings and the exported tower together match PyTorch.
      *
      * Edge cases:
      *
-     * The description with a line break embeds as the reference embeds it with a space in the line break's place.
+     * The description with a line break embeds as the reference does with a space in its place.
      */
     golden.size should be >= 12
 
@@ -165,15 +162,13 @@ import altitude.core.util.OnnxDescribeEmbedder
      *
      * Assertions:
      *
-     * The same description again is answered with the embedding of the first time, the same object, and so is the description in
-     * another case or with its whitespace written differently: the cache's key is the text that is embedded, in lowercase with
-     * each run of whitespace as one space and none at the ends.
+     * The same description, also in another case or with other whitespace, gets the first embedding object back: the cache's key
+     * is the normalized text.
      *
      * Edge cases:
      *
-     * A description of other words has an embedding of its own. So have two descriptions the tokenizer lowercases differently
-     * though the JDK lowercases them alike, a capital sigma beside a digit and the same written with small sigmas: neither is
-     * served the other's embedding.
+     * Other words get an embedding of their own. So do a capital sigma beside a digit and the same in small sigmas, which the JDK
+     * lowercases alike but the tokenizer does not.
      */
     withEmbedder() {
       embedder =>
@@ -199,19 +194,17 @@ import altitude.core.util.OnnxDescribeEmbedder
     /**
      * Setup:
      *
-     * An embedder whose cache holds one description, so that a description asked after another one is embedded by a pass of the
-     * text tower and not served from the cache. "a woman in a park" is embedded, then, each after another description, the same
-     * words in capitals, between tabs, line breaks, doubled spaces and no-break spaces, and with spaces at the ends.
+     * An embedder with a one-description cache, so each ask after another description is a pass of the tower. "a woman in a park"
+     * is embedded, then variants in capitals, with tabs, line breaks, doubled and no-break spaces, and spaces at the ends.
      *
      * Assertions:
      *
-     * Each variant's embedding is a new object, the work of a pass of its own, and equal to that of "a woman in a park": what is
-     * embedded is the normalized text, so the embedding of one description does not depend on which way of writing it was asked
-     * first.
+     * Each variant gets a new embedding equal to the original's: the normalized text is what is embedded, so the result does not
+     * depend on which spelling was asked first.
      *
      * Edge cases:
      *
-     * The words in another order, which no normalization makes the same text, embed differently.
+     * The words in another order embed differently.
      */
     withEmbedder(OnnxDescribeEmbedder(TestModelFiles.models, cacheSize = 1)) {
       embedder =>
@@ -245,12 +238,12 @@ import altitude.core.util.OnnxDescribeEmbedder
     /**
      * Setup:
      *
-     * An embedder whose cache holds two descriptions. Three are embedded, the first asked for again before the third.
+     * An embedder with a two-description cache. Three are embedded, the first asked for again before the third.
      *
      * Assertions:
      *
-     * The first and the third description are still served from the cache. The second, the one used longest ago when the third
-     * came, is embedded again: its embedding is a new object, equal to the one before.
+     * The first and third are still cached. The second, least recently used when the third came, is embedded again into a new,
+     * equal object.
      */
     withEmbedder(OnnxDescribeEmbedder(TestModelFiles.models, cacheSize = 2)) {
       embedder =>
@@ -273,14 +266,13 @@ import altitude.core.util.OnnxDescribeEmbedder
     /**
      * Setup:
      *
-     * A new embedder that counts the times it opens its text tower, and eight threads released together, each embedding all the
-     * golden descriptions.
+     * A new embedder that counts how often it opens its text tower, and eight threads released together, each embedding every
+     * golden description.
      *
      * Assertions:
      *
-     * Nothing is opened before the first description. The threads' first descriptions find no tower and open it once between
-     * them; every thread gets every description's embedding, each within the golden cosine. Afterwards each description is served
-     * from the cache as one object, whichever thread's pass stored it.
+     * Nothing opens before the first description, and the threads open the tower once between them. Every thread gets every
+     * embedding within the golden cosine, and afterwards each description is served from the cache as one object.
      */
     val opens = AtomicInteger()
     val threads = 8
@@ -323,14 +315,14 @@ import altitude.core.util.OnnxDescribeEmbedder
     /**
      * Setup:
      *
-     * An embedder with its text tower open, and four threads each embedding one new description after another, so every ask is a
-     * pass of the model. Once each thread has an embedding, the embedder is closed under them.
+     * An embedder with its tower open and four threads each embedding new descriptions in a loop, so every ask is a pass. Once
+     * each thread has an embedding, the embedder is closed under them.
      *
      * Assertions:
      *
-     * Every thread stops on an `IllegalStateException`, the refusal of a closed embedder, and on nothing else: a pass under way
-     * at the close finishes with its embedding, and the next one finds the embedder closed. Afterwards a new description and one
-     * embedded before are both refused, and the tower is not opened again.
+     * Every thread stops on the closed embedder's `IllegalStateException` and nothing else: a pass under way finishes, and the
+     * next finds the embedder closed. Afterwards a new description and a cached one are both refused, and the tower is not opened
+     * again.
      *
      * Edge cases:
      *

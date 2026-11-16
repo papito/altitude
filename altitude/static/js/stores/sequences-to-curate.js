@@ -3,16 +3,13 @@ import { context } from "../context.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 
-/** "1 sequence", "3 sequences" */
 function sequencesText(count) {
     return count === 1 ? "1 sequence" : `${count} sequences`
 }
 
 /**
- * The number of Sequences in Curation's queue (`Const.state.sequencesToCurate`). Only the count endpoint sets it, through
- * `refresh`, so nothing adds or subtracts on the client. It is null until the first answer, which keeps Triage's
- * Curate row (`includes/search_results`) hidden until then. Called when the Triage results render, from `refreshCounts`
- * (`assets/asset-actions.js`), and by Curation itself when it opens and when its queue runs out.
+ * The number of Sequences in Curation's queue. Only the count endpoint sets it (`refresh`), never client arithmetic. It is
+ * null until the first answer, which keeps Triage's Curate row hidden until then.
  */
 export function createSequencesToCurateStore() {
     // An older answer never replaces a newer one
@@ -25,14 +22,12 @@ export function createSequencesToCurateStore() {
             return this.count > 0
         },
 
-        // The text of Triage's Curate button
         get label() {
             return this.count === 1
                 ? "Curate 1 sequence"
                 : `Curate all ${this.count} sequences`
         },
 
-        // Curation's header
         get remaining() {
             if (this.count === null) {
                 return ""
@@ -43,8 +38,8 @@ export function createSequencesToCurateStore() {
         },
 
         async refresh() {
-            // The count is a Curate Permission's, as all of Curation is: without one there is nothing
-            // to ask, and the Curate row stays hidden
+            // Curation needs a Curate Permission: without one there is nothing to ask, and the Curate
+            // row stays hidden
             if (
                 !context.holds(
                     Const.permission.curateOwn,

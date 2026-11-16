@@ -12,8 +12,7 @@ import scala.meta.*
 
 /**
  * Where transactions live, read from the application's sources: a service owns them, and nothing else opens one. The check is
- * syntactic, so it cannot see an operation that loops over several wrapped calls with no transaction around them; that rule is in
- * `altitude/AGENTS.md`.
+ * syntactic, so it cannot see an atomic operation written as a loop of wrapped calls, each committing on its own.
  */
 @DoNotDiscover class TransactionBoundaryTests extends AnyFunSuite {
   import TransactionBoundaryTests.*
@@ -27,13 +26,11 @@ import scala.meta.*
      *
      * Assertions:
      *
-     * Every DAO reference in a non-private service method sits inside a transaction wrapper (withTransaction, asReadOnly,
-     * withFaceVector, withFaceVectorReadOnly or withVectorSearch) within that method; any that does not is listed by file, line
-     * and method.
+     * Every DAO reference in a non-private service method sits inside a transaction wrapper within that method.
      *
      * Edge cases:
      *
-     * A private helper is exempt, as its caller's wrapper covers it, and a DAO's companion object does not count as a DAO.
+     * A private helper is exempt, as its caller's wrapper covers it, and a DAO's companion object is not a DAO.
      */
     val violations = for {
       file <- sources("service")
@@ -73,7 +70,7 @@ import scala.meta.*
      *
      * Assertions:
      *
-     * None of them selects the app's DAO registry, so pipeline flows and controllers reach data only through services.
+     * None of them selects the app's DAO registry.
      */
     val violations = for {
       file <- sources("pipeline") ++ sources("routes")
@@ -120,8 +117,8 @@ object TransactionBoundaryTests {
     ancestors(tree).takeWhile(!_.is[Template]).collect { case method: Defn.Def => method }.lastOption
 
   /**
-   * Whether a reference is inside a transaction wrapper within the method, such as `txManager.asReadOnly[Stats] { ... }`, or
-   * `txManager.withVectorSearch(limit) { ... }`, a wrapper that takes an argument list of its own before its block
+   * Whether a reference is inside a transaction wrapper within the method, including a typed one (`asReadOnly[Stats] { ... }`)
+   * and one with its own argument list before its block (`withVectorSearch(limit) { ... }`)
    */
   private def isInWrapper(ref: Tree, method: Defn.Def): Boolean =
     ancestors(ref).takeWhile(_ ne method).exists {

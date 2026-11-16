@@ -3,19 +3,10 @@ import { Const } from "../constants.js"
 import { runSearch } from "./search.js"
 
 /**
- * The quick search input of the nav.
- *
- * Enter submits the form, which searches for the text; the clear (×) control, the input's native
- * clear (Escape) and a submit of an empty input clear the text of the current search. The input
- * never holds state of its own: its value follows `searchParams.q`, so a URL with `q` fills it on
- * load and a folder, person, album or Location, which clear `q` (see `stores/search-params.js`),
- * empty it.
- *
- * The text searches the view it is typed in, in place: Browse, or Triage, among the triaged assets
- * alone. Text does not search the Trash, so typed there it opens Browse with the search.
- *
- * The form is in every page's nav. A page without this module (import, settings) submits it
- * natively: a GET of Browse with the text as `q`, which the main page seeds its search from.
+ * The quick search input of the nav. It holds no state of its own: its value follows
+ * `searchParams.q`, so a URL with `q` fills it and a place that clears `q` empties it. Text searches
+ * the view it is typed in; the Trash has no text search, so typed there it opens Browse. A page
+ * without this module submits the form natively, a GET of Browse with `q`.
  */
 export function bindSearchInput() {
     const formEl = document.getElementById("searchForm")
@@ -30,9 +21,9 @@ export function bindSearchInput() {
     const submit = () => {
         const q = inputEl.value.trim()
 
-        // Nothing typed and no text to clear. Running the search anyway would still apply the scope
-        // rules of `q` and leave the folder or the view being looked at. It also makes the second
-        // of the two events one gesture can fire (below) a no-op.
+        // Nothing typed and no text to clear: searching anyway would apply the scope rules of `q` and
+        // leave the folder or view. It also makes the second of the two events one gesture can fire
+        // (below) a no-op.
         if (q === "" && searchParams.q === null) {
             return
         }
@@ -50,9 +41,8 @@ export function bindSearchInput() {
         submit()
     })
 
-    // The native clear (Escape; the stylesheet hides its button) fires `search` and no submit. Enter
-    // fires it as well where the event exists (it is not standard), beside the submit, which is why
-    // only an emptied input is handled here.
+    // The native clear (Escape) fires `search` and no submit. Enter fires it too, beside the submit,
+    // where the event exists (it is not standard), so only an emptied input is handled here.
     inputEl.addEventListener("search", () => {
         if (inputEl.value === "") {
             submit()

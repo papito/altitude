@@ -57,7 +57,7 @@ object SqlExplainer:
   def isExplainable(sql: String): Boolean = EXPLAINABLE.findPrefixOf(sql).isDefined
 
   /**
-   * Whether the statement may write: a writing keyword appears somewhere in it. This errs toward "write" (a
+   * Whether the statement may write: a writing keyword appears anywhere in it. This errs toward "write" (a
    * `SELECT ... FOR UPDATE`, a data-modifying `WITH`), which is explained without being executed.
    */
   def isWrite(sql: String): Boolean = WRITING.findFirstIn(sql).isDefined
@@ -95,10 +95,9 @@ object SqlExplainer:
     }
 
   /**
-   * Where a statement comes from, given the stack with its innermost frame first: the innermost application frame, and, when that
-   * is a DAO's, the first application frame above it outside the DAOs - the caller a generic `BaseDao` statement is traced to. A
-   * lambda's frame that names no method (`$anonfun$1`) is given the method of the nearest frame of its class above it, the one
-   * the lambda is written in.
+   * Where a statement comes from, innermost frame first: the innermost application frame and, when that is a DAO's, the nearest
+   * non-DAO application frame above it, so a generic `BaseDao` statement is traced to its caller. A lambda frame naming no method
+   * (`$anonfun$1`) borrows the method of the nearest frame of its class above it.
    */
   def origin(stack: Seq[Frame]): (Option[Frame], Option[Frame]) =
     val frames = stack.filter(frame => frame.className.startsWith(APP_PACKAGE) && !frame.className.startsWith(OWN_PACKAGE))
@@ -157,7 +156,7 @@ object SqlExplainer:
 
 /**
  * The SQL explain log, a development aid: the first time a query of a new shape ([[SqlExplainer.shapeKey]]) is about to run, it
- * is explained on its own connection and the plan is appended to `file` with where the statement comes from. The file is emptied
+ * is explained on the connection it runs on and the plan is appended to `file` with the statement's origin. The file is emptied
  * when the explainer is created, so it holds each query of the running process once.
  *
  * PostgreSQL explains a read with `ANALYZE`, which runs it one extra time, and a write without, so nothing is written twice.
@@ -177,9 +176,8 @@ class SqlExplainer(engine: String, file: File) extends AutoCloseable:
   private var entryCount = 0
 
   /**
-   * Logs the statement if its shape is new. `conn` is the connection the statement is about to run on, so the explain sees what
-   * the statement will: the transaction's snapshot, its uncommitted rows and its settings. Nothing is thrown: a statement that
-   * cannot be explained is logged with the error in place of its plan.
+   * Logs the statement if its shape is new. Explaining on `conn`, the statement's own connection, sees what the statement will:
+   * the transaction's snapshot, uncommitted rows and settings. Never throws: a failed explain is logged in place of the plan.
    */
   def offer(conn: Connection, sql: String, binds: Map[Int, Bind]): Unit =
     // `add` admits a shape once, also when two threads meet it at the same time
@@ -212,7 +210,7 @@ class SqlExplainer(engine: String, file: File) extends AutoCloseable:
             frame.getMethodName)).toList.asScala.toList
     }
 
-  /** The engine's plan for the statement, with the values bound to it */
+  /** The engine's query plan for the statement, with its values bound */
   private def explain(conn: Connection, sql: String, binds: Map[Int, Bind]): String =
     val lines = engine match
       case Const.DbEngineName.POSTGRES =>

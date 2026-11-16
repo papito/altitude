@@ -3,7 +3,7 @@
 
 @(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), parentId: String)
 
-@* Return submits. Validation responses replace the form in the modal, keeping its values and errors. *@
+@* A validation response replaces this form, keeping its values and errors. *@
 <form action="#"
       id="addFolder"
       data-app-fragment="modal"
@@ -35,7 +35,7 @@
         }
 
         <input type="hidden" name="@{ Api.Field.Folder.PARENT_ID }" value="@{ parentId }">
-        @* A parent that is no folder of the repository: nothing in the form can fix it, so it is said under the name *@
+        @* A parent that is no folder of the repository cannot be fixed in the form, so its error shows under the name *@
         @if(fieldErrors.contains(Api.Field.Folder.PARENT_ID)) {
             <div class="error">@{ fieldErrors(Api.Field.Folder.PARENT_ID) }</div>
         }

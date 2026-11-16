@@ -12,18 +12,15 @@ import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.decorators.requirePermission
 
-/** Album JSON API: the list the Albums tab renders, and the membership changes made by drag/drop and the batch footer */
 class AlbumController(using logger: Logger) extends BaseController:
   private val prefix = "api/album"
 
-  /** Every album of the repository, by name: [ { "id": "uuid", "name": "album name", "numOfAssets": <count> }, ... ] */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/list")
   def getAlbumList(repoId: String)(using request: Request): Response[String] =
     val json = ujson.Arr.from(App.altitude.service.album.getAll.map(toJson))
     cask.Response(json.toString, 200, Seq(("Content-Type", "application/json")))
 
-  /** An unknown album, or another repository's, is a JSON 404 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/assets")
@@ -33,7 +30,6 @@ class AlbumController(using logger: Logger) extends BaseController:
 
     answeringJson(jsonResponse(ujson.Obj("added" -> App.altitude.service.album.addAssets(albumId, assetIds))))
 
-  /** An unknown album, or another repository's, is a JSON 404, and none of its memberships goes */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.delete(f"/$prefix/r/:repoId/assets")

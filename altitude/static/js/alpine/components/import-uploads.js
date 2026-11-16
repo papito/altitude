@@ -9,7 +9,7 @@ import {
 } from "../../import/chosen-files.js"
 import { runUpload } from "../../import/upload-run.js"
 
-// The units a number of bytes is written in, each 1024 of the one before
+// Each 1024 of the one before
 const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"]
 
 /** `sent` and `total` bytes in the unit that suits the total: "12.3 of 61.4 GB" */
@@ -26,61 +26,47 @@ function bytesOf(sent, total) {
     return `${inUnit(sent)} of ${inUnit(total)} ${BYTE_UNITS[unit]}`
 }
 
-/** A number of files, as a line says it: "1 file", "4,812 files" */
 function filesOf(count) {
     return count === 1 ? "1 file" : `${count.toLocaleString()} files`
 }
 
-/** A section as it starts: To Triage, no destination, nothing dragged over it and nothing to say */
 function newSection() {
     return {
-        // The option's second choice is on: Skip Triage, or Keep folder structure
+        // Skip Triage, or Keep folder structure, into `destination`
         sorting: false,
-        // The destination folder chosen, `{ id, label }`, its label the folder's path
+        // `{ id, label }`, the label being the folder's path
         destination: null,
-        // An upload was asked for with the option on and no destination chosen
+        // An upload was asked for with `sorting` on and no destination
         lacksDestination: false,
-        // Files are dragged over the zone
         over: false,
-        // What its last upload came to, or why none started; `warns` when files failed or were not sent
+        // What the last upload came to, or why none started; `warns` when files failed or were not sent
         notice: "",
         warns: false,
     }
 }
 
 /**
- * The Import page's upload sections (`includes/upload_sections`), File upload and Folder upload, on
- * their common root. A section's `kind` is `file` or `folder`. Each takes what is chosen in its
- * picker or dropped on its zone, with its own option (`sorting`: Skip Triage, or Keep folder
- * structure, into the destination chosen in its Folder field, a `filterCombobox` whose `change` it
- * reads), and uploads it (`import/chosen-files.js` for what is sent and under which paths,
- * `import/upload-run.js` for the sending). An account without Organize is rendered no option, and
- * every upload goes to Triage.
- *
- * One upload runs at a time (`running`): its section shows the progress and Cancel, and both
- * sections take nothing more until it ends, when the section says what it came to. A failure to
- * start, and a refusal that ends an upload early, go to the snackbar in the server's words.
+ * The Import page's File upload and Folder upload sections (`kind` is `file` or `folder`), each
+ * uploading what its picker or drop zone takes. One upload runs at a time, and both sections take
+ * nothing more until it ends.
  */
 export function importUploads() {
-    // The upload's AbortController while one runs: Cancel aborts it
     let canceller = null
 
     return {
         sections: { file: newSection(), folder: newSection() },
-        // The upload that runs, or the reading of what was picked before it: its section's kind, the files and
-        // bytes it is to send and those done so far, and whether it was cancelled; null while none runs
+        // The upload, or the reading of what was picked before it; null while none runs
         running: null,
 
         get importsUrl() {
             return this.$root.dataset.appImportsUrl
         },
 
-        /** The names imports ignore, the server's list */
+        /** The file names imports ignore, the server's list */
         get ignored() {
             return JSON.parse(this.$root.dataset.appIgnoredFiles)
         },
 
-        /** An upload runs, in either section: nothing can be chosen, dropped or switched */
         get isBusy() {
             return this.running !== null
         },
@@ -114,7 +100,7 @@ export function importUploads() {
             return this.sections[kind].lacksDestination
         },
 
-        /** The Folder field's value changed: its chip, if it has one, is the destination */
+        /** The Folder field's chip, if it has one, is the destination */
         onDestination(event, kind) {
             const chipEl = event.currentTarget.querySelector(
                 `[${Const.attributes.optionId}]`,
@@ -132,10 +118,7 @@ export function importUploads() {
             }
         },
 
-        /**
-         * Whether the section can take an upload now: none is running, and its option, when on, has
-         * a destination; otherwise the field says that one is needed
-         */
+        /** Also flags a missing destination, so the field says one is needed */
         isReady(kind) {
             const section = this.sections[kind]
             if (this.isBusy) {
@@ -150,7 +133,6 @@ export function importUploads() {
             return { over: this.sections[kind].over, waiting: this.isBusy }
         },
 
-        /** Files dragged over a zone that can take them: the zone says so, and a drop is allowed */
         onDragOver(event, kind) {
             if (!this.isBusy && event.dataTransfer.types.includes("Files")) {
                 event.preventDefault()
@@ -159,33 +141,31 @@ export function importUploads() {
             }
         },
 
-        /** The drag left the zone, not merely moved onto something inside it */
+        /** Ignores a move onto something inside the zone */
         onDragLeave(event, kind) {
             if (!event.currentTarget.contains(event.relatedTarget)) {
                 this.sections[kind].over = false
             }
         },
 
-        /** A drop on a zone uploads what was dropped, the dropped folders walked to their last file */
         onDrop(event, kind) {
             event.preventDefault()
             this.sections[kind].over = false
 
-            // The entries are read off the event now: they are gone once this handler returns
+            // Read now: the entries are gone once this handler returns
             const entries = entriesOfDrop(event.dataTransfer)
             if (entries.length > 0 && this.isReady(kind)) {
                 this.upload(kind, () => filesOfEntries(entries, this.ignored))
             }
         },
 
-        /** The section's button opens its picker */
         choose(kind) {
             if (this.isReady(kind)) {
                 this.$refs[`${kind}Input`].click()
             }
         },
 
-        /** What was chosen in a picker is uploaded; the picker is emptied, so the same choice can be made again */
+        /** The picker is emptied, so the same choice can be made again */
         onChosen(event, kind) {
             const inputEl = event.currentTarget
             const picked = filesOfInput(inputEl, this.ignored)
@@ -196,11 +176,7 @@ export function importUploads() {
             }
         },
 
-        /**
-         * Uploads what `pick` gathers, as the section's option says, and says what it came to when
-         * it ends. The section is busy from the gathering on, which for a dropped tree takes a
-         * while.
-         */
+        /** The section is busy from the gathering by `pick` on, which for a dropped tree takes a while */
         async upload(kind, pick) {
             const section = this.sections[kind]
             const destination = section.sorting ? section.destination : null
@@ -258,7 +234,7 @@ export function importUploads() {
             }
         },
 
-        /** Cancel stops the sending; the upload ends once the Import is closed */
+        /** Stops the sending; the upload ends once the Import is closed */
         cancel() {
             if (this.running) {
                 this.running.cancelled = true
@@ -266,13 +242,12 @@ export function importUploads() {
             }
         },
 
-        /** The share of the upload's bytes sent, in percent */
         get percent() {
             const { sent = 0, bytes = 0 } = this.running ?? {}
             return bytes > 0 ? Math.min(100, (sent / bytes) * 100) : 0
         },
 
-        /** "1,204 of 4,812 files · 12.3 of 61.4 GB", with the failed ones when there are any */
+        /** "1,204 of 4,812 files · 12.3 of 61.4 GB", plus the failed count when there are any */
         get progressText() {
             const upload = this.running
             if (!upload) {
@@ -297,7 +272,6 @@ export function importUploads() {
             this.sections[kind].warns = warns
         },
 
-        /** What an upload of `total` files came to; a refusal that ended it early is reported in the server's words */
         sayOutcome(kind, total, { done, failed, cancelled, stopped, closed }) {
             const sent = done - failed
             const parts = [

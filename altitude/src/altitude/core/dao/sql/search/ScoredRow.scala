@@ -5,12 +5,10 @@ import java.time.LocalDateTime
 import scalasql.Table
 
 /**
- * The `scored` CTE a grouped statement materializes first under the Relevance sort: every match with its group's day (none under
- * a Location grouping), its Relevance as `sort_value` and its capture time as `second_sort_value`, so the slices, the cursor
- * comparison and the order read the Relevance instead of computing it again.
- *
- * It is a table to ScalaSql only so that the slices over it can be typed queries, rendered as `FROM scored scored0`; no row is
- * ever read back as one, so the column types matter only to the compiler.
+ * The `scored` CTE a statement under a scored sort (Relevance or similarity) materializes first: every match with its day (under
+ * a day grouping), its score as `sort_value` and its capture time as `second_sort_value`, so the slices, the cursor comparison
+ * and the order read the score instead of computing it again. A table to ScalaSql only so the slices over it can be typed
+ * queries; no row is read back as one, so the column types matter only to the compiler.
  */
 private[search] case class ScoredRow[T[_]](
     id: T[String],

@@ -7,8 +7,7 @@ abstract class BaseModel:
   val createdAt: Option[LocalDateTime]
   val updatedAt: Option[LocalDateTime]
 
-  // Should be always used to get the ID of an object, unless we are positive that
-  // the object has not been persisted yet
+  // The ID of a stored model; throws for one not saved yet
   def persistedId: String =
     id match
       case None => throw RuntimeException("Cannot get persisted ID for a model that has not been saved yet")

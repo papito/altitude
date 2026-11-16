@@ -5,11 +5,10 @@ export function dragged(event) {
     target.style.left = "auto"
     event.target.style.transform = "translate(0px, 0px)"
 
-    // reset the position attributes for draggables (on failed drag, it will resume from the last position)
+    // Without this reset, the next drag would resume from where this one ended
     event.target.removeAttribute("data-x")
     event.target.removeAttribute("data-y")
 
-    // Remove the placeholder element
     const placeholder = document.querySelector(".drag-placeholder")
     if (placeholder) {
         placeholder.remove()
@@ -28,15 +27,12 @@ export function dragMoveListener(event) {
     target.setAttribute("data-y", y)
 }
 
-/**
- * The batch ops' Move button (`includes/batch_ops`, in the toolbar or the footer): it carries no asset ID, so a drop of
- * it acts on the selection store's assets.
- */
+/** The batch ops' Move button: it carries no asset ID, so its drop acts on the selection */
 export function isBatchMoverElement(element) {
     return element.classList.contains("batch-mover")
 }
 
-// Setting element as "fixed" will let us drag it outside the parent container boundaries (between panels)
+// Fixed, the element can be dragged out of its container (between panels); a placeholder holds its place
 export function setFixedPositionWhileDragging(event) {
     let target = event.target
     let position = target.getBoundingClientRect()
@@ -55,9 +51,9 @@ export function setFixedPositionWhileDragging(event) {
 }
 
 /**
- * The drop-target highlighting every dropzone shares: `drop-active` on the zone while a
- * compatible drag is in progress, `drop-target` on the zone and `can-drop` on the dragged element
- * while it hovers. `ondrop` runs after the classes are cleared.
+ * The drop-target highlighting every dropzone shares: `drop-active` on the zone during a compatible
+ * drag, `drop-target` on it and `can-drop` on the dragged element while it hovers. `ondrop` runs after
+ * the classes are cleared.
  */
 export function dropzoneListeners(ondrop) {
     return {

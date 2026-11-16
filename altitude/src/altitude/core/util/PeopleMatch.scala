@@ -1,9 +1,6 @@
 package altitude.core.util
 
-/**
- * How a search with several people chosen combines them (`peopleMatch`): the assets every one of them appears in, or those any of
- * them does. With one person the two are the same search.
- */
+/** How a search with several people combines them: the assets with every one of them, or with any */
 enum PeopleMatch(val apiValue: String):
   case All extends PeopleMatch("all")
   case Any extends PeopleMatch("any")

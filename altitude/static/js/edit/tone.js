@@ -1,22 +1,19 @@
 /**
- * The Edit's per-pixel math (`docs/image-edits.md`, **Per-pixel math**), as the
- * server's renderer has it (`util/EditRenderer.scala`): the tables of steps 1 to 6 (to linear, white
- * balance, exposure, back to sRGB, the tone steps and the curve), each channel's 4096 entries over
- * the input value read with linear interpolation; step 7's saturation and vibrance; and what steps 8
- * to 10 are made of (the Gaussian kernel of Clarity's and Sharpen's blurs, the vignette's weight, the
- * grain's hash and value noise). The WebGL renderer (`renderer.js`) bakes the tables into a texture
- * and runs the rest in its shaders. DOM-free, so the parity tests run it unchanged under Node
- * (`scripts/test-js/edit.test.mjs`, against `test/resources/edit/vectors.json`).
+ * The Edit's per-pixel math, as the server's renderer has it (`util/EditRenderer.scala`): the tone
+ * tables (to linear, white balance, exposure, back to sRGB, tone, curve), saturation and vibrance,
+ * and the effects' parts (the blurs' Gaussian kernels, the vignette's weight, the grain's hash and
+ * noise). The renderer bakes the tables into a texture and runs the rest in its shaders. DOM-free,
+ * so the parity tests run it under Node.
  */
 import { clamp } from "./geometry.js"
 
-/** Entries of each channel's table of the tone steps (1 to 6), over the input value 0 to 1 */
+/** Entries of each channel's tone table, over the input value 0 to 1, read with linear interpolation */
 export const TABLE_SIZE = 4096
 
 /** The output long edge at which the sizes of Sharpen's blur and of Grain's cells are given; they scale with the output */
 export const REFERENCE_LONG_EDGE = 3840
 
-/** The weights of red, green and blue in the luminance the Edit's steps 2, 7 and 8 read (Rec. 709's) */
+/** Rec. 709 luminance weights, read by white balance, saturation, Clarity and Sharpen */
 export const LUMA = Object.freeze([0.2126, 0.7152, 0.0722])
 
 /** The sRGB EOTF: an sRGB-encoded value to linear light */
@@ -29,7 +26,7 @@ export function linearToSrgb(l) {
     return l <= 0.0031308 ? 12.92 * l : 1.055 * Math.pow(l, 1 / 2.4) - 0.055
 }
 
-/** The white balance's gains of red, green and blue (step 2), divided by their luminance so a neutral gray keeps its own */
+/** The white balance's red, green and blue gains, divided by their luminance so a neutral gray keeps its own */
 export function whiteBalanceGains(recipe) {
     const t = recipe.temperature / 100
     const tint = recipe.tint / 100
@@ -40,13 +37,12 @@ export function whiteBalanceGains(recipe) {
     return [r / luminance, g / luminance, b / luminance]
 }
 
-/** The smoothstep of t clamped to [0, 1]: t²(3 − 2t) */
 export function smoothstep(t) {
     const x = clamp(t)
     return x * x * (3 - 2 * x)
 }
 
-/** Step 5, the tone of one sRGB-encoded value, in [0, 1] */
+/** The tone sliders on one sRGB-encoded value, in [0, 1] */
 export function tone(value, recipe) {
     const blackPoint = (-0.1 * recipe.blacks) / 100
     const whitePoint = 1 - (0.15 * recipe.whites) / 100
@@ -82,11 +78,11 @@ export function tone(value, recipe) {
 }
 
 /**
- * Step 6: the monotone cubic Hermite through the points (Fritsch–Carlson), held flat outside the
- * first and last x and clamped to [0, 1], as a function of x. The tangents are Fritsch–Carlson's as
- * `docs/image-edits.md` gives them (step 6): the end ones the end secants (each secant over at least 1e-6 of x), an inner one the mean of its
- * two secants (0 where they differ in sign), then, segment by segment in order, both zero on a flat
- * segment, or scaled down by 3 / √(α² + β²) when α² + β² is over 9.
+ * The curve: the monotone cubic Hermite through the points, flat outside the first and last x and
+ * clamped to [0, 1]. Fritsch–Carlson tangents: the end ones the end secants (each secant over at
+ * least 1e-6 of x), an inner one the mean of its two secants (0 where they differ in sign); then,
+ * segment by segment in order, both zeroed on a flat segment, or scaled by 3 / √(α² + β²) when
+ * α² + β² is over 9.
  */
 export function createCurve(points) {
     const xs = points.map((p) => p[0])
@@ -146,7 +142,7 @@ export function createCurve(points) {
     }
 }
 
-/** The curve sampled at `size` evenly spaced x from 0 to 1, for drawing it (the Edit panel's curve editor) */
+/** The curve sampled at `size` evenly spaced x from 0 to 1, for drawing it */
 export function curveLut(points, size = 256) {
     const curve = createCurve(points)
     const lut = new Float32Array(size)
@@ -156,7 +152,7 @@ export function curveLut(points, size = 256) {
     return lut
 }
 
-/** Steps 1 to 6 on one channel's sRGB-encoded value: `channel` 0 is red, 1 green, 2 blue */
+/** The tone table's math on one channel's sRGB-encoded value: `channel` 0 is red, 1 green, 2 blue */
 export function channelValue(v, channel, recipe, curve = null) {
     const gain = whiteBalanceGains(recipe)[channel]
     const toned = tone(
@@ -166,10 +162,7 @@ export function channelValue(v, channel, recipe, curve = null) {
     return (curve ?? createCurve(recipe.curve))(toned)
 }
 
-/**
- * The tables of steps 1 to 6, red, green and blue: entry i of a channel is its value for the input
- * i / 4095, held as a 32-bit float, as the server's are
- */
+/** The red, green and blue tone tables: entry i is the value for the input i / 4095, a 32-bit float as the server's */
 export function tables(recipe) {
     const curve = createCurve(recipe.curve)
     const gains = whiteBalanceGains(recipe)
@@ -206,7 +199,7 @@ export function lookup(table, v) {
         : table[i] + (table[i + 1] - table[i]) * (f - i)
 }
 
-/** Step 7: each channel moved from the luminance by the saturation's and the vibrance's factor */
+/** Saturation and vibrance: each channel moved from the luminance by their factor */
 export function saturate(r, g, b, recipe) {
     const y = LUMA[0] * r + LUMA[1] * g + LUMA[2] * b
     const chroma = Math.max(r, g, b) - Math.min(r, g, b)
@@ -236,11 +229,9 @@ export function grainCell(width, height) {
 }
 
 /**
- * What Grain's strength is multiplied by: 1 while its cell is a pixel or more, and below that the
- * cell's size in pixels. A Display image shown at a smaller size, as on the stage, is averaged over
- * about 1/c² of its cells per pixel shown (c its cell in the pixels shown), which takes the noise's
- * spread down by c; the canvas, drawn at that size with its cell floored at a pixel, draws
- * independent cells, so its noise is scaled by c to look as strong.
+ * Grain's strength factor: 1 while its cell c is a pixel or more, else c. A Display image shown
+ * smaller averages about 1/c² cells per pixel shown, cutting the noise's spread by c; the canvas,
+ * its cell floored at a pixel, draws independent cells, so its noise is scaled by c to match.
  */
 export function grainScale(width, height) {
     return Math.min(1, rawGrainCell(width, height))
@@ -251,9 +242,8 @@ function rawGrainCell(width, height) {
 }
 
 /**
- * The half of OpenCV's Gaussian kernel for `sigma` that the blur of a float image takes
- * (`GaussianBlur` with no size given): `round(8σ + 1) | 1` taps, each exp(−x²/2σ²), normalized.
- * Answers the weights from the center out: entry k weighs the taps k from the center.
+ * Half of OpenCV's Gaussian kernel for `sigma` on a float image (`GaussianBlur` with no size given):
+ * `round(8σ + 1) | 1` taps, each exp(−x²/2σ²), normalized; entry k weighs the taps k from the center.
  */
 export function gaussianHalfKernel(sigma) {
     const size = Math.round(sigma * 8 + 1) | 1
@@ -270,9 +260,8 @@ export function gaussianHalfKernel(sigma) {
 }
 
 /**
- * Step 9's weight at the pixel (x, y), integer columns and rows from the top left, of a
- * `width` × `height` output: the smoothstep of the distance d from the center, the offsets being
- * fractions of the half width and half height, starting at d = 0.39375 and reaching 1 over 0.65625
+ * The vignette's weight at the integer pixel (x, y) from the top left: the smoothstep of the distance
+ * d from the center in half widths and heights, starting at d = 0.39375 and reaching 1 over 0.65625
  */
 export function vignetteWeight(x, y, width, height) {
     const dx = (x - width / 2) / (width / 2)
@@ -280,14 +269,14 @@ export function vignetteWeight(x, y, width, height) {
     return smoothstep((Math.sqrt((dx * dx + dy * dy) / 2) - 0.39375) / 0.65625)
 }
 
-/** The grain's integer hash of a cell (`docs/image-edits.md`, step 10), in [0, 1]: 32-bit integer arithmetic, each product wrapping */
+/** The grain's hash of a cell, in [0, 1]: 32-bit integer arithmetic, each product wrapping */
 export function hash(x, y) {
     let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0
     h = Math.imul(h ^ (h >>> 13), 1274126177)
     return ((h ^ (h >>> 16)) >>> 0) / 4294967295
 }
 
-/** Step 10's value noise at the pixel (x, y) over cells of `cell` pixels: the hash bilinearly between the cell's corners, −½ */
+/** The grain's value noise at (x, y) over cells of `cell` pixels: the hash bilinearly between the cell's corners, −½ */
 export function grainNoise(x, y, cell) {
     const gx = x / cell
     const gy = y / cell

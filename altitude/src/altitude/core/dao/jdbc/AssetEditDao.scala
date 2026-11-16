@@ -12,10 +12,7 @@ import altitude.core.dao.sql.tables.AssetEditRow
 import altitude.core.models.AssetEdit
 import altitude.core.models.EditRecipe
 
-/**
- * An asset's Edit (`asset_edit`), scoped to the context repository: every statement here is hand-written and carries
- * `repository_id`. The Edit is JSON, `jsonb` on PostgreSQL, which pgJDBC hands back as its text.
- */
+/** Every statement here is hand-written and carries `repository_id`. The recipe is `jsonb` on PostgreSQL, read back as text. */
 abstract class AssetEditDao(override val config: Config) extends BaseDao[AssetEdit] with altitude.core.dao.AssetEditDao:
   final override val tableName = "asset_edit"
 
@@ -56,15 +53,11 @@ abstract class AssetEditDao(override val config: Config) extends BaseDao[AssetEd
 
   private def repositoryId: String = RequestContext.getRepository.persistedId
 
-  // The bind value of the current moment, for `created_at` and `updated_at`
   private def now: Any = nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC))
 
   private val byAsset = s"${FieldConst.REPO_ID} = ? AND ${F.ASSET_ID} = ?"
 
-  /**
-   * The condition of an Edit whose edit version is not rendered, `rendered_version` NULL counting as unlike any: spelled as the
-   * partial index `asset_edit_01` is on the engine, so the planner takes the index
-   */
+  /** An unrendered edit version, NULL counting as unlike any: spelled as partial index `asset_edit_01` is, so it is used */
   protected def versionNotRendered: String
 
   override def get(assetId: String): Option[AssetEdit] =

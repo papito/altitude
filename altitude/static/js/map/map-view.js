@@ -14,27 +14,13 @@ import {
 } from "./map-state.js"
 
 /**
- * The map view (`data-app-fragment="map-view"`, `htmx/map_view.scala.html`): the results of the
- * current search plotted on a Leaflet map, in place of the grid (`layout=map`).
- *
- * The browser never receives a result set. On every settled move (debounced) the map asks
- * `/api/map/r/:repoId/cells` for its viewport at its zoom, sending the store's search parameters
- * verbatim, and gets back aggregates: cells (a count of plotted points, a centroid and the asset
- * that represents the cell) and the Locations pinned in the viewport that hold a matching asset.
- * The cells are clustered once more on screen with supercluster, so cells that overlap at this
- * zoom merge into one pin, and each pin is a Leaflet div icon:
- *
- * - a cell of one point is a thumbnail pin whose click opens the asset's detail modal, through the
- *   same `hx-get` a grid cell's image carries;
- * - a crowded pin (a cluster, or a cell of several points) shows the representative thumbnail with
- *   a count badge; a click flies to the zoom the cluster splits at, or, when it would not split
- *   below the maximum zoom, opens the crowded-pin panel (js/map/map-panel.js) for the pin's area;
- * - a Location's pin shows the glyph and the Location's path, and a click scopes the search to it.
- *
- * The initial view is the one last looked at in this scope (js/map/map-state.js), else the server's
- * bounds of everything plotted, else the world. Leaflet and supercluster are the plain scripts
- * `window.L` and `window.Supercluster` (static/js/lib/README.md), loaded by the first map. One map
- * exists at a time: a new results fragment disposes of the previous one.
+ * The map layout: the current search plotted on a Leaflet map. The browser never gets a result set:
+ * on each settled move it asks for aggregates in its viewport at its zoom (cells with a count, a
+ * centroid and a representative asset, plus the Locations pinned there), which supercluster merges
+ * where they would overlap on screen. A single-point pin opens the asset's detail; a crowded pin zooms
+ * in until it splits, and at the deepest zoom opens the crowded-pin panel for its area; a Location's
+ * pin scopes the search to it. The first view is the one last looked at in this scope, else the
+ * server's bounds, else the world. One map exists at a time.
  */
 
 // The tile layer's maximum, and the deepest zoom the cells are asked at
@@ -122,11 +108,7 @@ export async function hydrateMapViewFragment({ fragmentEl }) {
         cellsTimer = setTimeout(requestCells, CELLS_DEBOUNCE_MS)
     }
 
-    /**
-     * Rebuilds the pins from one response: the cells are clustered for this zoom and viewport, so
-     * a cell stays a pin of its own until it would overlap another on screen. A cluster's count is
-     * the sum of its cells', and the largest cell's asset represents it.
-     */
+    /** A cluster's count is the sum of its cells', and its largest cell's asset represents it */
     function renderPins({ cells, locations }, { zoom, viewport }) {
         const index = new Supercluster({
             radius: CLUSTER_RADIUS_PX,
@@ -228,8 +210,8 @@ export async function hydrateMapViewFragment({ fragmentEl }) {
     }
 
     /**
-     * A thumbnail pin; without `onClick` it is a single asset, whose click opens its detail. An
-     * edited asset (`editRev` above 0) shows its edited Preview by its revision, as the grid does.
+     * Without `onClick` the pin is a single asset, whose click opens its detail. An edited asset shows
+     * its edited Preview by `editRev`, as the grid does.
      */
     function addAssetPin({ point, assetId, editRev, count, onClick }) {
         const iconEl = document.createElement("div")
@@ -272,7 +254,6 @@ export async function hydrateMapViewFragment({ fragmentEl }) {
         }
     }
 
-    /** The Location's glyph and path (`Category › Name`); a click scopes the results to the Location */
     function addLocationPin({ point, location }) {
         const iconEl = document.createElement("div")
         const glyphEl = document.createElement("i")
@@ -350,9 +331,8 @@ export async function hydrateMapViewFragment({ fragmentEl }) {
 }
 
 /**
- * Releases the map on screen, if any: its listeners, its pending request, and its registered view.
- * The results fragment hydrator calls it for every new results fragment outside the crowded-pin
- * panel, whether or not that one holds a map; the panel's fragments leave the map on screen. A removal that throws (the container may be gone already) is logged, not raised.
+ * Runs for every new results fragment outside the crowded-pin panel, map or not; the panel's fragments
+ * leave the map on screen. The container may be gone already, so a failing removal is only logged.
  */
 export function disposeMapView() {
     if (!current) {
@@ -453,11 +433,9 @@ function nearestCopyOf(longitude, centerLongitude) {
 }
 
 /**
- * The `bbox` search filter covering `cells`, `s,w,n,e`: the union of the cells' own extents (a
- * centroid lies in its cell, which is `cellDegrees` square on a grid from the origin), since the
- * assets of a cell can be anywhere in it. Longitudes are taken in the world copy nearest the
- * centre, so cells on both sides of the antimeridian make a box that crosses it (`west > east`),
- * as the server reads it.
+ * The `bbox` (`s,w,n,e`) covering `cells`: the union of their extents, since a cell's assets can lie
+ * anywhere in it. Longitudes are taken nearest the centre, so a box across the antimeridian comes out
+ * with `west > east`, as the server reads it.
  */
 function bboxOfCells(cells, cellDegrees, centerLongitude) {
     let south = Infinity

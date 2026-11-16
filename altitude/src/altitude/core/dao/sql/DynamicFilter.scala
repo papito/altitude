@@ -8,11 +8,8 @@ import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
 
 /**
- * A `Query`'s string-keyed parameters as one typed predicate.
- *
- * The supported parameter types are the two the hand-built WHERE clause supported, `EQ` and `IN`; anything else throws, as
- * before. `negate` now throws too: it was silently dropped before, which quietly turned a `NOT_EQUALS` into an `EQUALS`. Nothing
- * in the codebase asks for one.
+ * A `Query`'s string-keyed parameters as one typed predicate. Only `EQ` and `IN` are supported; anything else throws, `negate`
+ * included, rather than be silently dropped (which would turn a `NOT_EQUALS` into an `EQUALS`).
  */
 object DynamicFilter:
 

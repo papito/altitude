@@ -1,9 +1,8 @@
 /**
- * The textures of the farmland's fields in the setup page's background scene, as seen from high altitude: ten ways a
- * field is worked, each painted over a cell's color in translucent dark and light ink, so the field's color shows
- * through. Most are tiles of TILE × TILE px repeated by a pattern anchored to the cell's corner, so a texture scrolls
- * with its cell; the strip crops' headland and the centre pivot are drawn to the cell, since they are edged or centred
- * on it. The Worker (setup-background-worker.js) builds them once and paints one per cell.
+ * The textures of the farmland's fields in the setup page's background scene: ten ways a field is worked, painted
+ * over a cell's color in translucent dark and light ink. Most are tiles repeated by a pattern anchored to the cell's
+ * corner, so a texture scrolls with its cell; the strip crops' headland and the centre pivot are drawn to the cell,
+ * since they are edged or centred on it.
  */
 
 const TAU = 2 * Math.PI
@@ -52,7 +51,6 @@ function diagonals(c, step, color, width) {
     c.stroke()
 }
 
-/** A dot of `radius` at (x, y) */
 function dot(c, x, y, radius, color) {
     c.fillStyle = color
     c.beginPath()
@@ -129,9 +127,8 @@ function centrePivot(ink) {
 }
 
 /**
- * The ten textures in the order of their numbers, each a `name` and a `paint(c, w, h, seed)` that paints a cell of
- * w × h px at the origin of `c`, `seed` a number constant for the cell. `ink.dark(alpha)` and `ink.light(alpha)` are
- * the scene's shadow and cloud colors at an alpha. The patterns are made on `ctx`, the context they are painted with.
+ * The ten textures, each a `name` and a `paint(c, w, h, seed)` that paints a cell of w × h px at the origin of `c`,
+ * `seed` constant for the cell. `ink.dark(alpha)` and `ink.light(alpha)` are the scene's shadow and cloud colors.
  */
 export function buildFieldTextures(ctx, ink) {
     const tiled = (name, draw) => {

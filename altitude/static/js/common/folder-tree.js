@@ -1,45 +1,11 @@
 /**
- * JSON-driven folder tree renderer.
+ * JSON-driven folder tree. The tree endpoint returns every folder, so expansion and context menus
+ * need no request; a rebuild restores expansion, the viewed folder scope and focus.
  *
- * Public API:
- *   reloadFolderTree(repoId) — fetch the full tree from the server, snapshot
- *   currently-expanded folder IDs and the focused tree control, re-render,
- *   restore expanded state, the viewed folder scope, and focus.
- *   refreshFolderCounts(repoId) — fetch the tree and patch only the asset
- *   counts in place, keeping the rendered DOM; falls back to a full render when
- *   the tree gained a folder the DOM does not have.
- *
- * Every non-root row shows its folder's recursive asset count (`.asset-count`,
- * directly after the name): the folder's own sorted assets plus those of every
- * folder beneath it, with triaged and recycled assets excluded. A zero renders
- * empty, so a row without assets ends at its name (`common/asset-count.js`).
- * The root row shows no count; the nav already carries the repository total.
- *
- * The DOM structure produced mirrors what the old Twirl templates generated so
- * that the existing Folder JS model, CSS, and drag-and-drop wiring all continue
- * to work without modification.
- *
- * Each non-root row's icon is a button. On a branch (a folder with child
- * folders) it expands and collapses: single-click reveals the direct children or
- * closes the branch, double-click on a collapsed branch reveals every level (see
- * `_bindBranchGestures`). On a leaf it is a search trigger for the folder, as the
- * name is. The folder model (`models/folder.js`) owns the expansion state the
- * control changes. Expansion needs no request: the tree endpoint returns every
- * folder.
- *
- * Each folder's context menu is built with the tree too, as a native
- * `popover="auto"` panel next to its ⋯ trigger (`common/context-menu-markup.js`, shared
- * with the album list), so opening a menu needs no request. The panel holds Search here,
- * which opens the advanced search panel on the folder (`_buildMenuCtrl`), and the folder's
- * actions, each requesting a popover dialog through HTMX. The `contextMenu` Alpine
- * component (`alpine/components/context-menu.js`) places and dismisses the menu;
- * the modal owner closes it when the dialog opens.
- *
- * Indentation is not structural: every non-root `.folder` carries a `--depth`
- * CSS custom property, and its `.controls` row holds a `.trace` cell (between
- * the ⋯ menu button and the icon) whose width is derived from `--depth`. The
- * trace both indents the icon/name and draws the dotted guide back to the ⋯
- * button, which stays flush left at every depth.
+ * A non-root row shows its folder's recursive asset count, excluding triaged and recycled assets;
+ * the root shows none, since the nav carries the repository total. A branch's icon button expands
+ * and collapses it; a leaf's is a search trigger, as the name is. Indentation is the `--depth`
+ * custom property, from which the CSS sizes the `.trace` cell between the ⋯ button and the icon.
  */
 import { Const } from "../constants.js"
 import { context } from "../context.js"
@@ -58,8 +24,8 @@ import { bindSearchTriggers } from "../search-results/search-triggers.js"
 
 // ─── public ─────────────────────────────────────────────────────────────────
 
-// Monotonic reload counter: if another reload starts while a fetch is in
-// flight, the older response is discarded so a stale tree is never rendered.
+// A reload started while a fetch is in flight discards the older response, so a stale tree is never
+// rendered
 let _reloadSeq = 0
 
 export async function reloadFolderTree(repoId) {
@@ -83,10 +49,9 @@ export async function reloadFolderTree(repoId) {
 let _countsSeq = 0
 
 /**
- * Re-fetches the tree after an asset mutation and patches each row's asset count in place, so
- * expansion, focus, and open menus are untouched. A full reload started meanwhile carries fresh
- * counts itself, so this one stands down. Restoring assets can un-recycle their folders; if the
- * response holds a folder the DOM lacks, the tree is rendered in full instead.
+ * Patches each row's asset count in place, leaving expansion, focus and open menus alone, and
+ * stands down if a full reload started meanwhile. Restoring assets can un-recycle their folders,
+ * so a folder the DOM lacks means a full render.
  */
 export async function refreshFolderCounts(repoId) {
     const seq = ++_countsSeq
@@ -110,56 +75,44 @@ export async function refreshFolderCounts(repoId) {
     }
 }
 
-/**
- * Replaces the rendered tree with `treeData`, preserving expansion, the viewed scope, and focus.
- */
 function _renderTree(treeData, repoId) {
     const container = document.getElementById("rootFolderList")
     if (!container) return
 
-    // Snapshot expansion and focus only now, immediately before the DOM is replaced: both may
-    // have changed while the fetch was in flight (a branch expanded or collapsed; a dialog
-    // returning focus to a folder menu control as its operation completes), and an older
-    // snapshot would undo that
+    // Snapshot only now: expansion or focus may have changed while the fetch was in flight (a
+    // dialog returns focus to a menu control as its operation completes)
     const expandedIds = _getExpandedFolderIds()
     const focusedId = _getFocusedTreeControlId()
 
-    // Tear down and rebuild
     container.innerHTML = ""
     container.appendChild(_renderRootNode(treeData, repoId))
     _ensureAddControl(treeData, repoId)
 
-    // Let HTMX wire up the new elements. Alpine needs no call: its mutation observer
-    // initializes the appended subtree, and an explicit `initTree` here would initialize
-    // every component a second time, duplicating their listeners.
+    // Alpine's mutation observer initializes the new subtree; an explicit `initTree` would
+    // initialize every component twice, duplicating listeners
     if (window.htmx) {
         htmx.process(container)
     }
 
-    // The tree is built after the folders tab has already settled, so it is not covered by the
-    // fragment hydration that binds every other search trigger
+    // Built after the tab settled, so the fragment hydration of search triggers missed it
     bindSearchTriggers(container)
 
     _restoreExpandedState(expandedIds)
 
-    // The highlight follows the displayed results, not the tree: the latest scope is applied
-    // even if a navigation changed it while this request was pending, and it is independent
-    // of the expansion snapshot
+    // The highlight follows the displayed results, so the latest scope applies even if a
+    // navigation changed it during the fetch
     applyViewedFolderScope()
 
-    // Keep keyboard focus on the rebuilt copy of the control that had it, if it still exists
     if (focusedId) {
         document.getElementById(focusedId)?.focus()
     }
 }
 
 /**
- * Writes each folder's count into its rendered row. Returns false as soon as a folder has no row,
- * leaving the caller to render in full; rows with no folder in the JSON are left alone, since
- * folder operations always reload the whole tree.
+ * Returns false as soon as a folder has no row. Rows missing from the JSON are left alone: folder
+ * operations always reload the whole tree.
  */
 function _patchAssetCounts(folder) {
-    // The root row has no count cell
     if (!folder.isRoot) {
         const el = document.getElementById(`folder-count-${folder.id}`)
         if (!el) return false
@@ -171,14 +124,13 @@ function _patchAssetCounts(folder) {
 }
 
 /**
- * Builds the "Add folder" control above the tree on the first render after the tab loads: the
- * same control as the album list's add button, requesting the add dialog for the root folder.
- * The host (`#folderActions`) lives outside the tree, so rebuilds leave it alone.
+ * Builds the "Add folder" control on the first render; its host lives outside the tree, so
+ * rebuilds leave it alone.
  */
 function _ensureAddControl(rootFolder, repoId) {
     const hostEl = document.getElementById("folderActions")
     if (!hostEl || hostEl.childElementCount > 0) return
-    // Adding a folder is Organize's: without it the host stays hidden
+    // Without Organize the host stays hidden
     if (!context.holds(Const.permission.organize)) return
 
     hostEl.appendChild(
@@ -210,10 +162,7 @@ function _getExpandedFolderIds() {
     return ids
 }
 
-/**
- * Folder tree nodes in document order: the `.folder` elements carrying a folder ID (the controls
- * and children containers carry the ID too, but are not nodes).
- */
+/** The `.folder` nodes in document order (controls and children containers carry the ID too) */
 function _getFolderNodes() {
     return document.querySelectorAll(
         `#rootFolderList .folder[${Const.attributes.folderId}]`,
@@ -228,13 +177,10 @@ function _getFocusedTreeControlId() {
 }
 
 /**
- * Re-expands the surviving branches that were expanded before the rebuild. Nodes are visited in
- * document order, so a parent is decided before its children, and a branch is restored only when
- * its parent is expanded: whatever moved beneath a collapsed parent is normalized to collapsed,
- * and that parent's next single-click reveals one level, as the model's reset invariant requires.
- * Root is always expanded and has no parent, so it is never restored; deleted folders are simply
- * absent, and a folder that lost its last child is no longer a branch, which `expand()` ignores.
- * The model keeps the icon and `aria-expanded` in step.
+ * Re-expands surviving branches. Document order decides a parent before its children, and a branch
+ * is restored only under an expanded parent, so whatever moved beneath a collapsed parent comes
+ * back collapsed and that parent's next click reveals one level, as the model's reset invariant
+ * requires.
  */
 function _restoreExpandedState(expandedIds) {
     _getFolderNodes().forEach((el) => {
@@ -250,11 +196,8 @@ function _restoreExpandedState(expandedIds) {
 // ─── DOM builders ────────────────────────────────────────────────────────────
 
 /**
- * Build the root folder node.
- * The root folder is always shown as expanded and has a plain folder icon that
- * navigates to the root, as its name does. The root is the whole repository, so
- * in Triage, which describes a folder rather than search it, both do nothing
- * (`search-results/search-triggers.js`) and anchor nothing.
+ * The root is always expanded; its icon and name search the root. In Triage, which describes a
+ * folder rather than searching it, the root is the whole repository, so both do nothing.
  */
 function _renderRootNode(folder, repoId) {
     const folderEl = document.createElement("div")
@@ -262,7 +205,7 @@ function _renderRootNode(folder, repoId) {
     folderEl.id = `folder-${folder.id}`
     folderEl.setAttribute(Const.attributes.numOfChildren, folder.numOfChildren)
     folderEl.setAttribute(Const.attributes.folderId, folder.id)
-    // Root has no parent attribute: the model walks parents until there is none
+    // No parent attribute: the model walks parents until there is none
     folderEl.setAttribute(Const.attributes.isRoot, "true")
     folderEl.setAttribute(Const.attributes.expanded, "true")
 
@@ -277,16 +220,13 @@ function _buildRootControls(folder, repoId) {
     controlsEl.classList.add("controls", "dropzone")
     controlsEl.setAttribute(Const.attributes.folderId, folder.id)
 
-    // Clickable folder icon → navigate to root (same as clicking the name; nothing in Triage)
     const iconEl = document.createElement("i")
     iconEl.id = `folder-icon-${folder.id}`
     iconEl.className = "fas fa-folder folder-icon"
     _makeSearchTrigger(iconEl, folder.id)
 
-    // Folder name
     const nameEl = _buildFolderNameEl(folder, "/")
 
-    // ⋯ menu button (leftmost column)
     const menuCtrlEl = _buildMenuCtrl(folder, repoId, "Root")
 
     // ⋯ menu button | icon | folder-name (no asset count on the root row)
@@ -297,11 +237,7 @@ function _buildRootControls(folder, repoId) {
     return controlsEl
 }
 
-/**
- * Build a non-root folder node.
- * `depth` is 1 for direct children of the root; the CSS derives the row's
- * indent (the `.trace` width) from it.
- */
+/** `depth` is 1 for direct children of the root */
 function _renderFolderNode(folder, repoId, depth) {
     const folderEl = document.createElement("div")
     folderEl.classList.add("folder")
@@ -326,7 +262,6 @@ function _buildFolderControls(folder, repoId) {
     _anchorDialogsTo(nameEl)
     const iconCtrlEl = _buildFolderIconCtrl(folder)
 
-    // ⋯ menu button (leftmost column)
     const menuCtrlEl = _buildMenuCtrl(folder, repoId, folder.name)
 
     // Dotted guide from the ⋯ button to the icon; its width is the row's indent
@@ -346,16 +281,9 @@ function _buildFolderControls(folder, repoId) {
 }
 
 /**
- * Build a non-root folder's icon control (pure JS, no HTMX): a native button, so Enter and Space
- * activate it and it never submits a form or jumps the page. It keeps the stable IDs
- * `expand-folder-children-<id>` (focus restoration after a rebuild, focus recovery after a
- * collapse, and a leaf's dialog anchor) and `folder-icon-<id>` (the model's glyph updates); the
- * icon itself is decorative.
- *
- * A branch's control toggles expansion and never navigates: it names the folder, points
- * `aria-controls` at the children container, and carries `aria-expanded`, which the model keeps
- * synchronized. A leaf's control, "Open folder <name>", is a search trigger for the folder, as the
- * name is (`_makeSearchTrigger`), and the anchor of the scope dialog its click opens in Triage.
+ * A non-root folder's icon button. Its IDs are stable across rebuilds, for focus restoration, a
+ * leaf's dialog anchor and the model's glyph updates. A branch's toggles expansion and never
+ * navigates, with `aria-expanded` kept by the model; a leaf's is a search trigger, as the name is.
  */
 function _buildFolderIconCtrl(folder) {
     const isBranch = folder.numOfChildren > 0
@@ -391,19 +319,14 @@ function _buildFolderIconCtrl(folder) {
  * Single- and double-click on a branch control.
  *
  * A pointer double-click arrives as click (`detail` 1), click (`detail` 2), then `dblclick`. The
- * first click acts immediately, so a collapsed branch opens one level with no single-click delay.
- * The second click must not act: two ordinary toggles would close what the first opened, and the
- * double-click would then find the branch collapsed and expand it, the reverse of what was meant.
- * So every click after the first of a pointer sequence (`detail` 2 and higher, a triple-click's
- * third included) is ignored, and `dblclick` applies the recursive action from the state captured
- * before the first click, never from the state or glyph after it: a branch that started collapsed
- * opens every level; one that started expanded was closed by the first click and stays closed.
+ * first click toggles at once, with no single-click delay. Every later click of the sequence is
+ * ignored, since a second toggle would undo the first. `dblclick` then acts on the state captured
+ * before the first click: a branch that started collapsed opens every level, one that started
+ * expanded stays closed.
  *
- * Keyboard activation (Enter, Space) dispatches a click with `detail` 0 and never a `dblclick`,
- * so each is an independent single-click action. The captured state is local to this control and
- * cleared once used, so a control replaced by a tree rebuild between the clicks has nothing to act
- * on, and a detached control ignores its events. Both gestures stop propagation and the default
- * action: a branch control never navigates.
+ * Keyboard activation sends a click with `detail` 0 and no `dblclick`, so each is a plain toggle.
+ * The captured state belongs to this control and is cleared once used, so a control replaced by a
+ * rebuild between the clicks acts on nothing.
  */
 function _bindBranchGestures(ctrlEl, folderId) {
     let startedExpanded = null
@@ -457,11 +380,9 @@ function _buildFolderNameEl(folder, label) {
 }
 
 /**
- * Navigating to a folder is a search like any other: the element declares the one parameter it
- * knows about and `search-results/search-triggers.js` combines it with the rest of the current
- * search. That hydrator also owns where a folder trigger's click goes outside Browse: in Triage the
- * root does nothing and any other folder opens its scope dialog, a popover dialog anchored to the
- * clicked trigger (`_anchorDialogsTo`), and in the Trash it does nothing.
+ * Navigating to a folder is a search: the element declares its one parameter and
+ * `search-results/search-triggers.js` combines it with the current search and decides what the
+ * click does outside Browse.
  */
 function _makeSearchTrigger(el, folderId) {
     el.setAttribute("data-app-search", "click")
@@ -469,10 +390,8 @@ function _makeSearchTrigger(el, folderId) {
 }
 
 /**
- * Makes a non-root row's trigger, its name or a leaf's icon control, the anchor of the popover
- * dialog its click requests in Triage: it carries `anchor-name: --<its id>` and names that ID in
- * `data-app-dialog-anchor`, as the triggers `context-menu-markup.js` builds do. The ID is stable,
- * so a rebuild of the tree re-anchors an open dialog.
+ * Makes `el` the anchor of the popover dialog its click requests in Triage. The ID is stable, so a
+ * rebuild re-anchors an open dialog.
  */
 function _anchorDialogsTo(el) {
     el.style.anchorName = `--${el.id}`
@@ -480,18 +399,9 @@ function _anchorDialogsTo(el) {
 }
 
 /**
- * The folder's ⋯ menu cell (see `buildContextMenuCtrl`). The IDs are stable across rebuilds:
- * `folderMenuCtrl-<id>` is the trigger the folder dialogs return focus to, `menu-<id>` the panel.
- *
- * A non-root folder's menu opens with Search here, which opens the advanced search panel with the
- * folder chosen and every other field as the search in force has it, and searches nothing until
- * the panel's Search; any account can search, so it is offered to every one. The root is the whole
- * repository and no filter, so it has none.
- *
- * Then, after a rule, the folder's actions, each requesting a popover dialog; the root can only gain
- * children, so it offers Add folder alone. Every one is Organize's, and Delete of a folder holding
- * assets also Recycle's; a menu left with no action at all, the root's without Organize, is the
- * empty cell.
+ * The folder's ⋯ menu cell. The trigger ID is stable across rebuilds, since folder dialogs return
+ * focus to it. Search here is offered to every account but not on the root, which is no filter;
+ * the folder's actions follow, and a menu with no action is the empty cell.
  */
 function _buildMenuCtrl(folder, repoId, folderName) {
     const searchHere = folder.isRoot
@@ -529,7 +439,7 @@ function _buildMenuCtrl(folder, repoId, folderName) {
     })
 }
 
-/** The folder's own actions the account holds the Permissions of, each naming its dialog */
+/** The folder's actions the account holds the Permissions of: all need Organize */
 function _folderActions(folder) {
     if (!context.holds(Const.permission.organize)) {
         return []
@@ -549,8 +459,7 @@ function _folderActions(folder) {
             dialog: "rename-folder",
             vals: { id: folder.id },
         })
-        // Deleting a folder recycles the assets in it and in its subfolders (the recursive count),
-        // which takes Recycle; an empty one any holder of Organize deletes
+        // Deleting recycles the assets in the folder and its subfolders, which takes Recycle
         if (
             folder.numOfAssets === 0 ||
             context.holds(Const.permission.recycle)
@@ -572,7 +481,6 @@ function _buildChildrenDiv(folder, repoId, isRoot, depth) {
     childrenEl.id = `children-${folder.id}`
     childrenEl.setAttribute(Const.attributes.folderId, folder.id)
 
-    // Root starts expanded; non-root starts collapsed
     if (!isRoot) {
         childrenEl.style.display = "none"
     }

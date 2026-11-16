@@ -15,9 +15,7 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two top-level folders and a child of the second, with two assets in each:
-     *
-     * folder1 folder2 folder2_1
+     * Top-level folder1 and folder2, folder2_1 under folder2, and two assets in each.
      *
      * Assertions:
      *
@@ -30,7 +28,6 @@ import altitude.core.util.Query
 
     val folder2_1: Folder = testApp.service.folder.add(name = "folder2_1", parentId = folder2.id)
 
-    // fill up the hierarchy with assets x times over
     (1 to 2).foreach {
       n =>
         testContext.persistAsset(folder = Some(folder1))
@@ -65,7 +62,7 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Three folders with three assets in each; ALL nine assets are moved into the last folder.
+     * Three folders with three assets in each; all nine assets are moved into the last folder.
      *
      * Assertions:
      *
@@ -127,7 +124,6 @@ import altitude.core.util.Query
       .records
       .length shouldBe 1
 
-    // SECOND REPO
     val repo2 = testContext.persistRepository()
     switchContextRepo(repo2)
 

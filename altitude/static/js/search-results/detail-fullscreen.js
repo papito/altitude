@@ -1,22 +1,10 @@
 /**
- * Fullscreen for Asset detail: `f` (`global.js`), the toolbar's toggle (`includes/html_common`,
- * `data-app-fullscreen-toggle`) and the player's own fullscreen button all put the Asset detail
- * container (`#imageDetailModalContainer`, the host) in fullscreen, on an image as on a Video, so
- * the Detail panel, the Face highlights and the player's control bar come along; `core.css` hides
- * the toolbar under `:fullscreen` and makes the box the whole screen, which the stage fits the media
- * to. Fullscreen is never remembered. Stepping stays in it; closing Asset detail leaves it
- * (`common/modal.js`, on every close path), and Escape leaves it before a second Escape closes
- * Asset detail (the browser's own exit, which `global.js` leaves alone).
- *
- * The player's button goes through the same element: each fragment's `<media-controller>` gets the
- * container as its `fullscreenElement` once media-chrome has defined it, so its button requests
- * fullscreen on the container and shows the state the container is in. The toolbar's toggle is left
- * out where the browser allows no fullscreen (`document.fullscreenEnabled`), as the player leaves its
- * own out.
- *
- * The snackbar's stacks are popovers outside the container: one open as fullscreen begins would sit
- * under the fullscreen element in the top layer, so they are shown again on entering, which puts
- * them above it (`raiseSnackbarStacks`).
+ * Fullscreen for Asset detail: `f`, the toolbar's toggle and the player's own button all put the Asset
+ * detail container in fullscreen, image or Video, so the Detail panel, the Face highlights and the
+ * player's bar come along. It is never remembered and survives stepping; Escape, the browser's, leaves
+ * it before a second Escape closes Asset detail. The toggles are removed where fullscreen is not
+ * allowed. Entering raises the snackbar's stacks, popovers outside the container that would otherwise
+ * sit under the fullscreen element in the top layer.
  */
 import { Const } from "../constants.js"
 import { raiseSnackbarStacks } from "../common/snackbar.js"
@@ -28,13 +16,11 @@ export function createDetailFullscreen() {
         return document.getElementById(CONTAINER_ID)
     }
 
-    /** Whether the Asset detail container is the fullscreen element */
     function isFullscreen() {
         const fullscreenEl = document.fullscreenElement
         return Boolean(fullscreenEl && fullscreenEl === containerEl())
     }
 
-    /** Binds the toolbar's toggle once, or removes it where fullscreen is not allowed, and follows the state */
     function start() {
         const toggleEls = document.querySelectorAll(
             `[${Const.attributes.fullscreenToggle}]`,
@@ -58,13 +44,11 @@ export function createDetailFullscreen() {
     }
 
     /**
-     * A new Asset detail fragment arrived: its player's fullscreen button acts on the container.
-     * The property is set once media-chrome has defined the element, since a property set on an
-     * element not yet upgraded would shadow the class's accessor; a fragment replaced before then
-     * is left alone.
+     * Points the player's fullscreen button at the container, once media-chrome has defined the
+     * element: a property set before the upgrade would shadow the class's accessor.
      */
     function attach(fragmentEl) {
-        // The key legend's fullscreen entry goes where the toolbar's toggle went; the legend comes with each fragment
+        // The key legend comes with each fragment, so its fullscreen entry is removed here
         if (!document.fullscreenEnabled) {
             fragmentEl
                 .querySelectorAll(`[${Const.attributes.fullscreenKey}]`)
@@ -83,7 +67,7 @@ export function createDetailFullscreen() {
         })
     }
 
-    /** Puts Asset detail in fullscreen, or leaves it; a refused request (no gesture) is logged and nothing changes */
+    /** A refused request (no user gesture) is logged and nothing changes */
     function toggle() {
         if (document.fullscreenElement) {
             document.exitFullscreen().catch(() => {})

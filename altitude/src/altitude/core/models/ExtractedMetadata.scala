@@ -30,6 +30,10 @@ object ExtractedMetadata:
 
   given Conversion[ujson.Value, ExtractedMetadata] = json => JsonCodec.read[ExtractedMetadata](json)
 
+/**
+ * Raw extracted metadata as metadata-extractor groups it: directory name to field name to value, e.g. `Nikon Maker Note` / `ISO` =
+ * `ISO 125`
+ */
 case class ExtractedMetadata(var data: ExtractedMetadata.MetadataType = Map[String, ExtractedMetadata.FieldValuesType]())
   extends BaseModel
   with NoId
@@ -37,20 +41,12 @@ case class ExtractedMetadata(var data: ExtractedMetadata.MetadataType = Map[Stri
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
-  /**
-   * The raw extracted metadata is stored in a map of directories, each containing a map of field/value pairs.
-   *
-   * This follows the pattern of MetadataExtractor: https://github.com/drewnoakes/metadata-extractor/wiki/Getting-Started-(Java)
-   *
-   * Nikon Maker Note [Directory] ** Firmware Version [Field] = 2.10 [Value] ** ISO [Field] = ISO 125 [Value]
-   */
-
   def addValue(directoryName: String, fieldName: String, value: String): Unit =
     val directory = data.getOrElse(directoryName, Map())
     val updatedDirectory = directory + (fieldName -> value)
     data = data + (directoryName -> updatedDirectory)
 
-  /** Preserve upstream synthetic fields while letting freshly extracted fields win within each directory. Neither input changes. */
+  /** Keeps this metadata's fields (upstream synthetic ones) while `other`'s win within each directory; neither input changes */
   def merge(other: ExtractedMetadata): ExtractedMetadata =
     ExtractedMetadata(other.data.foldLeft(data) {
       case (merged, (directory, fields)) =>

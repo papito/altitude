@@ -11,16 +11,12 @@ import altitude.core.models.User
 
 object PipelineTypes:
   /**
-   * What a pipeline element's work runs in: its repository, the account that queued it, which an import always has and the
-   * startup's requeue of purge-pending assets does not, and the account's Permissions in the repository when it queued it (none
-   * without an account)
+   * What a pipeline element's work runs in. `account` is the one that queued it: an import always has one, the startup's requeue
+   * of purge-pending assets does not. `permissions` are that account's when it queued the work.
    */
   case class PipelineContext(repository: Repository, account: Option[User], permissions: Permissions = Permissions.none)
 
-  /**
-   * An asset the pipeline dropped, with its staged file if it still has one, for the pipeline's end to discard, and the Import
-   * file it is a file of, if any, for the pipeline's end to settle
-   */
+  /** An asset the pipeline dropped, with its staged file for the pipeline's end to discard and its Import file to settle */
   case class InvalidAsset(
       payload: Asset,
       cause: Option[Throwable],

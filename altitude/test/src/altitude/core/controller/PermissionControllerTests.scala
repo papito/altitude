@@ -12,9 +12,8 @@ import altitude.core.models.Permission
 import altitude.core.models.Permissions
 
 /**
- * What a route answers for lack of a Permission that its decorators cannot see, since it depends on the asset or on a parameter
- * (the view a Guest asks for), and the controls a page renders only where the account holds the Permission. Which account may
- * call which route at all is `RouteTableTests`'.
+ * Permission checks a route's decorators cannot make, since they depend on the asset or on a parameter, and the controls a page
+ * renders only for a holder. Which account may call which route at all is `RouteTableTests`'.
  */
 @DoNotDiscover class PermissionControllerTests extends ControllerTestCore {
 
@@ -33,13 +32,13 @@ import altitude.core.models.Permissions
     /**
      * Setup:
      *
-     * A User holding Recycle and Organize, but no Curate Permission, logged in to a Library holding a triaged asset of theirs, a
-     * recycled triaged asset of theirs, and a folder holding a sorted asset.
+     * A User holding Recycle and Organize but no Curate Permission, logged in to a Library with a triaged asset, a recycled
+     * triaged asset, and a folder holding a sorted asset.
      *
      * Assertions:
      *
-     * Recycling the triaged asset, and restoring the recycled one, is a JSON 403 whose `error` says how many assets the account
-     * cannot recycle or restore, and nothing is recycled or restored.
+     * Recycling the triaged asset or restoring the recycled one is a JSON 403 saying how many assets the account cannot recycle
+     * or restore, and nothing changes.
      *
      * Edge cases:
      *
@@ -88,15 +87,13 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The Guest's request for the Triage view or the Trash view of the main page, the search results and the map's cells and
-     * bounds, or for the triaged assets Browse adds with `triaged=true` (the search, the People list of Triage's explorer, and
-     * the advanced search panel's form and People options, which count them), is a 403, in JSON from the map; the same requests
-     * for Browse answer 200. The panel's form and People options asked for with the Triage view are a 403 too.
+     * For the Guest, the Triage and Trash views and `triaged=true` are 403s on the main page, the search results and the map (in
+     * JSON there), and `triaged=true` also on the People list and the advanced search panel's form and People options, which
+     * refuse the Triage view too. The same requests for Browse answer 200.
      *
      * Edge cases:
      *
-     * The User holding no Permission is a member, and gets every view. The Guest's panel has no "Search in" row, holds neither a
-     * view nor a triage filter, and its People options carry none: its searches are the repository view's.
+     * The User holding no Permission is a member and gets every view. The Guest's panel offers no view or triage filter.
      */
     val guestLibrary = loginAs(AccountType.Guest, Permissions.none)
     val guestCookies = testContext.cookies
@@ -105,7 +102,6 @@ import altitude.core.models.Permissions
     testContext.grant(member, userLibrary, Permissions.none)
     val viewport = Map("viewport" -> "-90,-180,90,180", "zoom" -> "3")
 
-    /** The requests of a view: the main page, the search results, the map's cells and bounds */
     def viewRequests(host: String, repoId: String, params: Map[String, String]): List[(String, Map[String, String])] =
       List(
         s"$host/r/$repoId" -> params,
@@ -164,25 +160,22 @@ import altitude.core.models.Permissions
     /**
      * Setup:
      *
-     * A Library with an asset bearing a Face of a Person, another Person named "Taken", and with access to it a User holding
-     * every Permission, a User holding none, a Guest, a User holding none but with the Create Libraries flag, Users holding
-     * Recycle, Curate own or Edit metadata alone, and an Admin.
+     * A Library with an asset bearing a Face of a Person, another Person named "Taken", and with access to it: a User holding
+     * every Permission, a User holding none, a Guest, a User holding none with the Create Libraries flag, Users holding Recycle,
+     * Curate own or Edit metadata alone, and an Admin.
      *
      * Assertions:
      *
-     * The User holding every Permission gets the nav's Import entry, the batch operations' Move, Recycle, Add to album and Curate
-     * Selected, the Trash's Purge, the Detail panel's Face corrections, the People list's rename pencil and the results title's
-     * name of a Person as the editor's trigger. The User holding none gets none of them, but the nav's Triage and Trash entries,
-     * and the Detail panel's People section is read-only. The Guest gets neither Triage nor Trash in the nav. Recycle follows the
-     * view: the User holding Recycle alone gets it in Browse and not in Triage, the User holding Curate own alone in Triage and
-     * not in Browse; Curate Selected is offered in Triage for a Curate Permission and in Browse only with Recycle as well, since
-     * the frames not picked are recycled. A rename to a taken name offers the merge into its holder only to a holder of Organize,
-     * and renames nobody. New library in the nav's Library menu is the Admin's and the flagged User's, not the User's holding
-     * every Permission without the flag.
+     * The User holding every Permission gets every gated control: the nav's Import, the batch Move, Recycle, Add to album and
+     * Curate Selected, the Trash's Purge, the Face corrections, the rename pencil and the title's name editor. The User holding
+     * none gets none of them but keeps the nav's Triage and Trash, which the Guest lacks, and a read-only People section. Recycle
+     * follows the view: Recycle alone offers it in Browse, Curate own alone in Triage. Curate Selected needs a Curate Permission,
+     * plus Recycle in Browse. A rename to a taken name offers the merge only to a holder of Organize, and renames nobody. New
+     * library is offered to the Admin and the flagged User only.
      *
      * Edge cases:
      *
-     * The main page's body lists the Permissions held, which the scripts build their controls by.
+     * The main page's body lists the Permissions held, for the scripts.
      */
     val library = testContext.persistRepository()
     val repoId = library.persistedId
@@ -275,7 +268,7 @@ import altitude.core.models.Permissions
         withClue("Recycle, holding Curate own alone: ") {
           List(recycleOffered(curatorCookies, browse), recycleOffered(curatorCookies, triage)) shouldBe List(false, true)
         }
-        // Curating a selection recycles the frames not picked, which in Browse are sorted, and take Recycle too
+        // Curating recycles the frames not picked, which in Browse are sorted and so need Recycle
         def curateOffered(cookies: Map[String, java.net.HttpCookie], view: String) =
           requests
             .get(s"$host/r/$repoId", params = Map(Api.Field.Search.VIEW -> view), cookies = cookies)
@@ -318,8 +311,8 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * For the first User and the Guest, each tab opens with a warning naming what it cannot create: folders, albums or Locations,
-     * as it may not organize the Library. The holder of Organize's tabs carry none.
+     * For the first User and the Guest, each tab opens with a warning naming what it cannot create. The holder of Organize sees
+     * none.
      */
     val tabs = List("folder" -> "folders", "album" -> "albums", "location" -> "Locations")
     val callers = List(
@@ -348,14 +341,13 @@ import altitude.core.models.Permissions
     /**
      * Setup:
      *
-     * A Library holding a sorted asset, a triaged one and a recycled one, each imported with its Preview and original, and a
-     * Guest and a User holding no Permission, both with access to it.
+     * A Library holding a sorted, a triaged and a recycled asset, each with its Preview and original, and a Guest and a User
+     * holding no Permission, both with access to it.
      *
      * Assertions:
      *
-     * For the Guest, the triaged and the recycled asset are a 404 through every route that takes an asset's ID: the Detail panel,
-     * the asset-detail modal and its JSON, the asset's page, its Preview and its original. The sorted asset is a 200 through
-     * each.
+     * For the Guest, the triaged and the recycled asset are 404s through every route that takes an asset's ID, and the sorted
+     * asset is a 200.
      *
      * Edge cases:
      *

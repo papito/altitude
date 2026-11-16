@@ -2,8 +2,8 @@
 
 @(person: Person)
 
-@* The inside of the person's results title (htmx/person). The name is the inline editor's host: #personName is where
-   htmx/edit_person_name swaps in and where Escape restores htmx/view_person_name (js/listeners/people.js). *@
+@* #personName hosts the inline name editor: htmx/edit_person_name swaps in there, and Escape restores
+   htmx/view_person_name. *@
 @includes.html.results_title_inner("fa-user", person = Some(person)) {
     <span id="personName">@htmx.html.view_person_name(person)</span>
 }

@@ -122,17 +122,17 @@ import altitude.core.transactions.SqlExplainer.Frame
     /**
      * Setup:
      *
-     * A stack, innermost frame first, of the explainer's own frames, driver frames, two DAO frames, a service lambda and a
-     * controller; then a stack with no DAO frame.
+     * A stack, innermost first, of the explainer's and the driver's frames, two DAO frames, a service lambda and a controller;
+     * then a stack with no DAO frame.
      *
      * Assertions:
      *
-     * The origin is the first DAO frame and the caller is the service frame, with the lambda's name reduced to its method. A
-     * statement issued outside a DAO has an origin and no caller.
+     * The origin is the first DAO frame and the caller the service frame, the lambda's name reduced to its method. A statement
+     * issued outside a DAO has an origin and no caller.
      *
      * Edge cases:
      *
-     * A lambda's frame that names no method takes the method of the nearest frame of its class above it, and keeps its line.
+     * A lambda frame naming no method takes the method of the nearest frame of its class above it, and keeps its line.
      */
     val stack = List(
       Frame("altitude.core.transactions.SqlExplainer", "SqlExplainer.scala", 10, "offer"),
@@ -168,13 +168,11 @@ import altitude.core.transactions.SqlExplainer.Frame
      *
      * Assertions:
      *
-     * The entry is laid out exactly: a double rule, the number, kind and time, the two origin lines, a rule, the statement with
-     * its common indentation and surrounding blank lines removed, the runnable statement, a rule and the plan.
+     * The entry is laid out exactly, the statement stripped of its common indentation and surrounding blank lines.
      *
      * Edge cases:
      *
-     * A statement with no bound values has no runnable form, which would repeat it, and one issued outside a DAO has no caller
-     * line.
+     * A statement with no bound values has no runnable form, which would repeat it, and one outside a DAO has no caller line.
      */
     val sql = "\n      SELECT id FROM asset\n       WHERE repository_id = ?\n    "
     val origin = Frame("altitude.core.dao.jdbc.SearchDao", "SearchDao.scala", 275, "countByFolder")

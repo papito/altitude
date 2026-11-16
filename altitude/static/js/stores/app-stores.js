@@ -10,7 +10,6 @@ export function initializeFrontendStores() {
     Alpine.store(Const.context.repoId, "")
     Alpine.store(Const.context.gridMetadataFields, new Set())
 
-    // The selected asset IDs (search-results/selection.js)
     Alpine.store(Const.state.selectedAssets, createSelectedAssetsStore())
 
     // The results total in the toolbar; a capped one was counted only up to the server's cap
@@ -35,17 +34,12 @@ export function initializeFrontendStores() {
         },
     })
 
-    // The whole search parameter set; every search request is built from it (search-results/search.js)
+    // Every search request is built from it
     Alpine.store(Const.state.searchParams, createSearchParamsStore())
 
-    // The number of Sequences in Curation's queue (stores/sequences-to-curate.js)
     Alpine.store(Const.state.sequencesToCurate, createSequencesToCurateStore())
 
-    /**
-     * The view as a behaviour, for `x-show` / `:class` bindings. Derived from `searchParams.view`,
-     * which is the parameter itself, and written once at page load - the view only ever changes by
-     * navigating to a new page.
-     */
+    // Written once at page load from `searchParams.view`: the view changes only by navigating to a new page
     Alpine.store(Const.state.currentView, {
         view: null,
 
@@ -66,6 +60,5 @@ export function initializeFrontendStores() {
         },
     })
 
-    // The modal hosts, asset detail's spinner and the snackbar, with the focus plugin (stores/html-common.js)
     registerHtmlCommonBindings()
 }

@@ -2,11 +2,9 @@
 @import altitude.core.models.Permissions
 @import altitude.core.models.Repository
 
-@* An account's Libraries as an account card on the Users page (htmx/user_accounts) and the account info dialog
-   (htmx/account_info_dialog) show them: "All Libraries" for an Admin; for anyone else a summary counting the Libraries, and for a
-   User the Permissions too ("2 Libraries · 7 Permissions"), that expands to each Library with its Permissions' labels ("Access
-   only" for none; a Guest's carry none), the Library of `currentId` marked as this one; "None" without a Library. Styled by
-   static/css/includes/account_libraries.css. *@
+@* An account's Libraries on an account card and in the account info dialog: "All Libraries" for an Admin, "None" without
+   a Library, otherwise a summary counting the Libraries (and a User's Permissions) that expands to each Library, a User's
+   with its Permissions ("Access only" for none), the one of `currentId` marked. *@
 @(accountType: AccountType, libraries: List[(Repository, Permissions)], currentId: Option[String] = None)
 
 @count(n: Int, one: String, many: String) = @{ s"$n ${if (n == 1) one else many}" }

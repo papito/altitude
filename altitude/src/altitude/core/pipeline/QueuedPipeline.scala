@@ -34,11 +34,10 @@ import scala.util.control.NonFatal
 import altitude.core.QueueRefusedException
 
 /**
- * A pipeline's flow run for the life of the app behind a queue that elements are offered to: the import, purge and edit-render
- * queues. The queue buffers `bufferSize` elements, and an offer made while it is full waits, however many are made at once: the
- * offers take turns, in the order they were made ([[offer]]). The stream runs until [[shutdown]] completes the queue, finishing
- * what it holds, or [[stop]] ends it, dropping that. A stream that fails stays down, unless `restartOnFailure` (development only,
- * `dev.restart_pipeline`) starts it again after a backoff, with a new queue. `describe` names an element in the log.
+ * A pipeline flow run for the life of the app behind a queue (the import, purge and edit-render queues). An offer made while the
+ * queue is full waits, offers taking turns in order. [[shutdown]] finishes what the queue holds, [[stop]] drops it. A failed
+ * stream stays down unless `restartOnFailure` (development only, `dev.restart_pipeline`) restarts it after a backoff with a new
+ * queue.
  */
 class QueuedPipeline[In](
     name: String,
@@ -52,8 +51,8 @@ class QueuedPipeline[In](
   private given ExecutionContext = system.executionContext
 
   /**
-   * The last resort for a failure outside a stage's work, which `PipelineUtils.guarded` does not see: the element is dropped and
-   * the queue goes on. It reaches no sink, so it is neither reported nor discarded; the stages never rely on this.
+   * The last resort for a failure outside a stage's work, which `PipelineUtils.guarded` does not see: the element is dropped
+   * without reaching a sink, so it is neither reported nor discarded. The stages never rely on this.
    */
   private val resumeOnFailure: Supervision.Decider = {
     ex =>
@@ -61,17 +60,17 @@ class QueuedPipeline[In](
       Supervision.Resume
   }
 
-  // The queue of the stream's latest start, which offers go to; during a restart's backoff, the failed stream's, stopped
+  // The latest start's queue, which offers go to; during a restart's backoff, the failed stream's, stopped
   private val currentQueue = AtomicReference[SourceQueueWithComplete[In]]()
 
   // Set by shutdown, after which a restart ends the stream instead of starting it again
   private val stopping = AtomicBoolean(false)
 
-  // Ends when the offer made last has its answer, which is when the next one's turn comes. A `Source.queue` fails an offer made
-  // while as many as it admits are waiting for room, rather than making it wait, so the queue is handed one offer at a time.
+  // Completes when the last offer has its answer, which starts the next one's turn. A `Source.queue` fails an offer beyond
+  // `maxConcurrentOffers` instead of making it wait, so the queue is handed one offer at a time.
   private val lastOffer = AtomicReference[Future[Unit]](Future.unit)
 
-  /** One start of the stream: a new queue, the current one from here on, run through the flow */
+  /** One start of the stream, with a new queue that becomes the current one */
   private def start(): Source[Any, NotUsed] =
     logger.info(s"Starting the $name queue")
     val (queue, source) = Source
@@ -101,9 +100,8 @@ class QueuedPipeline[In](
   }
 
   /**
-   * Offers an element to the queue, waiting while the queue is full: for its turn, behind the offers made before it, and then for
-   * room in the queue. No thread waits meanwhile. The future fails with [[QueueRefusedException]] when the queue does not take
-   * the element: it dropped it, it is closed, or its stream has stopped.
+   * Waits, without holding a thread, for its turn behind earlier offers and then for room in the queue. Fails with
+   * [[QueueRefusedException]] when the queue drops the element, is closed, or its stream has stopped.
    */
   def offer(element: In): Future[Unit] =
     val turnOver = Promise[Unit]()
@@ -131,8 +129,8 @@ class QueuedPipeline[In](
     refusal
 
   /**
-   * Takes no more elements and waits, up to the timeout, for the stream to finish those it has accepted, so they are not cut off
-   * by the database closing under them. What the timeout cuts off is left for the next startup.
+   * Takes no more elements and waits, up to the timeout, for the accepted ones to finish before the database closes under them.
+   * What the timeout cuts off is left for the next startup.
    */
   def shutdown(): Unit =
     val timeout = shutdownTimeout()
@@ -148,8 +146,8 @@ class QueuedPipeline[In](
     catch case _: TimeoutException => logger.warn(s"The $name queue did not finish within $timeout; it is left as it is")
 
   /**
-   * Takes no more elements and ends the stream at once through its kill switch, dropping what it has buffered: for a queue whose
-   * elements the next startup finds again by itself. The work a stage has started is not waited for here; its owner waits for it.
+   * Ends the stream at once, dropping what it has buffered: for a queue whose elements the next startup finds again by itself.
+   * Work a stage has started is its owner's to wait for.
    */
   def stop(): Unit =
     val timeout = shutdownTimeout()

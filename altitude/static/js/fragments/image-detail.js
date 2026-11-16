@@ -2,22 +2,12 @@ import { getModalOpenSource, ModalHost, openModal } from "../common/modal.js"
 import { parseEdit } from "../edit/edit-stage.js"
 
 /**
- * Asset detail fragment (`data-app-fragment="image-detail"`): opens the asset-detail host right
- * away, with its loading indicator, attaches the Detail panel to the fragment (its dock, its
- * divider and whether it is open, `search-results/detail-panel.js`), fullscreen to its player
- * (`search-results/detail-fullscreen.js`), the Edit's stage to its canvas (`edit/edit-stage.js`) and
- * the Edit panel to its panel, its divider and its tools (`edit/edit-panel.js`),
- * and hands the media load to the detail coordinator, which shows the fragment's `<img>` (or, for an
- * edited image, the Display image or the Edit's canvas, by the Edit the fragment carries in
- * `data-app-image-detail-edit`) or its video player by the asset's media type and has the panel
- * load the asset's details while it is open. The coordinator only
- * applies the result if this open is still active and the load was not superseded by
- * previous/next navigation.
+ * Asset detail fragment: opens the asset-detail host at once, attaches the Detail panel, fullscreen,
+ * the Edit stage and the Edit panel to the fragment, and hands the media load to the coordinator.
  *
- * Navigation starts from the cell whose thumbnail requested the detail, when it was one: a grid can
- * hold an asset in several cells (a Location grouping), so the cell itself is remembered, not the
- * asset. A detail opened from elsewhere (a map pin, an asset's URL) has no cell, and no previous
- * or next.
+ * Navigation starts from the cell whose thumbnail opened the detail: a grid can hold an asset in
+ * several cells (a Location grouping), so the cell is remembered, not the asset. A detail opened from
+ * elsewhere (a map pin, an asset's URL) has no previous or next.
  */
 export function hydrateImageDetailFragment({
     fragmentEl,

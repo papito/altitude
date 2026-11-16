@@ -5,9 +5,8 @@
 
 @(folder: Folder, title: String, watchFolders: List[WatchFolder] = Nil)
 
-@* The Delete confirmation of a folder's ⋯ menu. `watchFolders` are the Watch folders whose destination is the folder or a
-   folder below it: deleting it pauses them until it is restored or they are given another destination, which the dialog
-   warns of, naming them. Focus returns to the parent's menu control, which survives the deletion *@
+@* `watchFolders` are the Watch folders whose destination is the folder or one below it; the delete pauses them. Focus returns
+   to the parent's menu control, which survives the deletion *@
 <div id="deleteFolder"
      data-app-fragment="modal"
      data-app-modal-title="@{title}"

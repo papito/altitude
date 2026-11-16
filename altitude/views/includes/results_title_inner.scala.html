@@ -4,17 +4,12 @@
 @import altitude.core.models.Permission
 @import altitude.core.models.Person
 
-@* The inside of a results title (see includes/results_title for the block, and views/AGENTS.md **Results title**): the kind's
-   icon, the title the caller renders, the way back to the whole result set, and the subtitle, or a filtered search's row of
-   filters (includes/search_filter_chips) in its place. A person's
-   title also holds the cover face (the no-cover placeholder for a person with none) before the text and the Hide / Show /
-   Discard link after it; those parts are the person
-   scope's alone, so they are rendered here from the person rather than passed in. Rendered on its own by htmx/person_inner,
-   which the Hide / Show / Discard responses swap into the person's block. Choosing the cover and Hide / Show / Discard are
-   Organize's, rendered only for the account holding it (`RequestContext.holds`). *@
+@* The inside of a results title: the kind's icon, the title the caller renders, the way back to the whole result set,
+   and the subtitle, or a filtered search's chips in its place. A person's title also holds the cover face and the Hide /
+   Show / Discard link, rendered here from the person since they are the person scope's alone; choosing the cover and
+   those links are Organize's. *@
 @(icon: String, subtitle: Option[String] = None, person: Option[Person] = None, filters: Option[Html] = None)(title: Html)
 
-@* What a click on the cover, or on the no-cover placeholder in its place, asks for: the Choose cover face modal *@
 @chooseCover(p: Person) = {hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/modals/choose-person-cover-face"
          hx-target="#modalContent"
          hx-vals='{"personId": "@{p.persistedId}"}'
@@ -42,9 +37,8 @@
   <div class="title">
     <i class="fas @icon kind-icon" aria-hidden="true"></i>
     @title
-    @* The way back: a search trigger clearing the person scope, which the searchParams store's scope rules widen to every
-       other place (a folder, an album, a Location, a Triage subset), the map area and the Search text, while the view,
-       the sort, the grouping and the layout stay (js/stores/search-params.js): back to all of Browse, or all of Triage *@
+    @* The way back clears the person scope, which the search params' scope rules widen to every other place, the map area
+       and the Search text; the view, the sort, the grouping and the layout stay *@
     <button type="button"
             class="clear-scope"
             title="Back to all results"
@@ -58,8 +52,6 @@
 
 @for(p <- person.filter(_ => organizes)) {
 <div class="actions">
-    @* A successful hide or show announces PEOPLE_CHANGED_EVENT (js/listeners/htmx-requests.js), so the People tab moves
-       the person between its buckets *@
     @if(!p.isBadMatch && p.isMatched) {
         @if(p.isHidden) {
             <a href="#"
@@ -84,8 +76,6 @@
         }
     }
 
-    @* A successful discard announces itself (js/listeners/htmx-requests.js); its listener re-dispatches PEOPLE_CHANGED_EVENT, and
-       the People tab reloads its panes *@
     @if(p.numOfFaces < FaceRecognition.MIN_FACES_THRESHOLD && !p.isBadMatch) {
         <a href="#"
            class="mark-discarded"

@@ -1,9 +1,7 @@
-/* The page's palette. The setup page is an illustration and a form in a look of its own, so its colors are the page's:
-   declared here on its body (zero specificity, inherited by the scene's canvas and by the form), not :root tokens of
-   core.css, and literals with no light-dark() pair, since the page keeps this look in either theme. The style guide's
-   scan leaves this file out (StyleGuideController.excludedFiles). Besides these the scene reads three tokens of
-   core.css: --error-color and --success-color for the jet's navigation lights, --theme-neutral-4 for its strobe. The six
-   fields of the farmland, seen from above */
+/* The page's own palette, declared on its body (zero specificity, inherited by the scene's canvas and the form) rather
+   than as :root tokens, in literals with no light-dark() pair, since the page keeps this look in either theme. The style
+   guide's scan skips this file. The scene also reads --error-color and --success-color (the jet's navigation lights)
+   and --theme-neutral-4 (its strobe). The six fields of the farmland, seen from above */
 body:where(.setup) {
     --setup-background-field-1: #3f5a3a;
     --setup-background-field-2: #5a6b3c;
@@ -19,8 +17,7 @@ body:where(.setup) {
     --setup-background-cloud-shadow: #000;
     --setup-background-jet: #efeeee;
     --setup-background-jet-outline: #363636;
-    /* The form's carve-out: a surface, a line color and a hue, from which the form's other colors follow. The card's
-       surface */
+    /* The form's colors follow from a surface, a line color and a hue. The card's surface */
     --setup-form-base: #181c24;
     /* The edges of the form's fields */
     --setup-form-muted: #636a78;
@@ -49,8 +46,7 @@ body:where(.setup) :focus-visible {
     outline-color: var(--setup-form-accent);
 }
 
-/* The page's own layout. The bundle applies on every page, so these rules are scoped to its body's class;
-   :where() adds no specificity, so they win and lose exactly as they did inline */
+/* The page's layout, scoped to the body's class since the bundle applies on every page; :where() adds no specificity */
 
 body:where(.setup) {
     display: grid;
@@ -70,13 +66,13 @@ body:where(.setup) {
     transition: opacity 600ms;
 }
 
-/* Added by setup-page.js once the Worker has drawn its first frame */
+/* Added once the Worker has drawn its first frame */
 #setupBackground.ready {
     opacity: 1;
 }
 
-/* The content row stretches to fill the viewport, and the card centers in it; the padding is the same at the top and
-   the bottom, so the card is centered exactly and still clears the viewport's top and the footer on a short viewport */
+/* The card centers in the content row; equal top and bottom padding keeps it exactly centered while still clearing the
+   viewport's top and the footer on a short viewport */
 :where(body.setup) main {
     padding-block: calc(var(--section-vertical-space) * 2);
     display: grid;
@@ -99,7 +95,7 @@ body:where(.setup) {
     border-radius: 6px;
 }
 
-/* The card's first row, the product's name in the card's outline color */
+/* The product's name in the card's outline color */
 #setupTitle {
     margin: 0;
     text-align: center;

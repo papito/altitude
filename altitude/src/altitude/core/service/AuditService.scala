@@ -12,10 +12,8 @@ import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
 
 /**
- * The audit log: one place every account event is written through, with or without a Library in the context. An event goes into
- * the append-only `audit_event` table, in the caller's transaction when there is one, so it commits or rolls back with the change
- * it records, and is logged at INFO once that transaction has committed (`TransactionManager.afterCommit`), so a rolled-back
- * event is never logged. Nothing updates or deletes an event, so the service has no generic writes.
+ * The audit log of account events. An event is written in the caller's transaction, so it commits or rolls back with the change
+ * it records, and is logged only after commit. The table is append-only, so the service has no generic writes.
  */
 class AuditService(val app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -23,9 +21,8 @@ class AuditService(val app: Altitude):
   private val txManager: TransactionManager = app.txManager
 
   /**
-   * Records `event`: `actor` is the account that acted (None for a failed login, which names no account) and `target` the account
-   * acted on, both kept as they are now (`AccountSnapshot`), since either may change or be deleted later; `detail` says what
-   * changed, and `clientIp` where the request came from. The stored event.
+   * `actor` is None for a failed login, which names no account. Actor and target are snapshotted, since either may change or be
+   * deleted later.
    */
   def record(
       event: AuditEventType,

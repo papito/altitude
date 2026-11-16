@@ -4,13 +4,11 @@ import altitude.core.util.DateRange
 import altitude.core.util.PeopleMatch
 
 /**
- * A folder or a Location as the advanced search panel names it: its ID and its path, the names from the top level down to its
- * own, which is the last. A folder's path opens with its top-level ancestor, the root left out; a Location's with its Category,
- * when it has one.
+ * A folder or a Location as the advanced search panel names it, `path` running from the top level down to its own name. A
+ * folder's path leaves out the root; a Location's opens with its Category, when it has one.
  */
 case class NamedPath(id: String, path: List[String]):
 
-  /** The names above its own, the top-level one first */
   def ancestors: List[String] = path.init
 
   def name: String = path.last
@@ -21,17 +19,10 @@ case class NamedPath(id: String, path: List[String]):
 object NamedPath:
   val SEPARATOR = " › "
 
-/**
- * What the IDs of a search name in its repository, for the chips of the advanced search panel: the folder, the people and the
- * Locations, each list in the order its IDs were given in. An ID that names nothing there has no entry.
- */
+/** What a search's IDs name in its repository, each list in the order the IDs were given; an ID that names nothing is left out */
 case class SearchFilterNames(folder: Option[NamedPath], people: List[Person], locations: List[NamedPath])
 
-/**
- * The filters of a filtered search as its results title names them, one chip each (includes/search_results): the description the
- * search ranks its matches by, when it has one, the Search text, when it has a usable term, what its IDs name in the repository
- * (an ID that names nothing has no chip), how several people combine, and the two date ranges.
- */
+/** The filters a filtered search's results title names, one chip each; `text` is set only when it has a usable term */
 case class SearchFilters(
     description: Option[String],
     text: Option[String],
@@ -40,10 +31,7 @@ case class SearchFilters(
     takenRange: Option[DateRange],
     importedRange: Option[DateRange]):
 
-  /**
-   * Whether the title names a filter beside the description, one the description's results are found within: an empty result of a
-   * description is then said to be these filters', and otherwise the Library's
-   */
+  /** Whether another filter narrows the description's results, so an empty result is said to be these filters', not the Library's */
   def narrowsDescription: Boolean =
     text.isDefined || names.folder.isDefined || names.people.nonEmpty || names.locations.nonEmpty || takenRange.isDefined ||
       importedRange.isDefined

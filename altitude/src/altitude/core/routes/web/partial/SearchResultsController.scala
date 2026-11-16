@@ -34,55 +34,18 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/search"
 
   /**
-   * Search results for the whole app.
+   * Search results for the whole app. The client sends the complete parameter set on every request, so this route reads only its
+   * own query string, never the browser URL. The bookmarkable URL it pushes back (`HX-Replace-Url`) is a projection of those
+   * parameters that the client never reads back.
    *
-   * The client owns the complete parameter set: the `searchParams` Alpine store holds every parameter and the single funnel in
-   * `static/js/search-results/search.js` sends all of them on every request. So this route reads nothing but its own query string -
-   * no merging with the browser URL, no "is this a new search" flag.
+   * A search with a description ranks the still images its other filters match by likeness. Sorted by similarity it is one ranked
+   * list ending in the weaker matches; under another sort, or grouped, it is two parts, the matches and then the weaker ones,
+   * each sorted and grouped as asked. Either way the page holding the first weaker match has a header before it.
    *
-   * The response still pushes the user-friendly, bookmarkable browser URL via a special HTMX header. That URL is a projection of
-   * the parameters we were given; the client never reads it back. The one thing still taken from the browser URL is its "#tab"
-   * fragment, so replacing the URL does not switch the explorer tab.
+   * Pages are continued by the `after` cursor the last cell carries, never by page number. The map layout renders bounds and a
+   * total without fetching rows. A first page's total counts up to `SearchQuery.totalCap`.
    *
-   * `triaged` changes the view's scope (`SearchRequestParser`): `true` adds the triaged assets to the repository view, which
-   * leaves them out by default. The View settings dialog offers that switch there alone. A Guest sees Browse alone: the Triage
-   * and Trash views, and `triaged=true`, are a 403 for it (`refusedView`).
-   *
-   * `subset` narrows the view to a Triage subset, `unknownPeople` or `noLocation` (`SearchRequestParser`), in every layout and
-   * view; any other value is a 400. The results title names it, and the browser URL keeps it.
-   *
-   * An advanced search (`SearchRequestParser`) names several people or Locations, comma-separated in `personId` and `locationId`,
-   * says with `peopleMatch` whether the people match `all` or `any`, and narrows by the Date Taken range (`takenFrom`, `takenTo`)
-   * and the Date Imported range (`importedFrom`, `importedTo`); a malformed one is a 400, as is any of them with the trash view,
-   * and the browser URL keeps them. A filtered search (`isFiltered`) is titled by its filters, a chip each, and an ID among them
-   * that names nothing in the repository is no 404: it matches nothing and has no chip.
-   *
-   * `sort` defaults to similarity when the request has a description, to Relevance when it has Search text (`q` with a usable
-   * term) and no description, and to the newest import first when it has neither; `sort=relevance` without text and
-   * `sort=similarity` without a description are a 400, as is text with the trash view, which text does not search.
-   *
-   * A search with a description (`describe`, `SearchRequestParser`) answers the still images that look like it among the assets
-   * its other filters match (the Search text, a folder, people, Locations, the two date ranges, and `triaged=true`, which adds
-   * the triaged assets), on the grid, continued by cursor like any other. In its own order, similarity, most alike first, it is
-   * one ranked list whose weaker matches are its end; under another sort, or grouped, it is two parts, the matches above the line
-   * of the weaker ones and then the weaker ones, each sorted and grouped as the request says (`SearchService.describe`,
-   * `describeGrouped`). Either way the page that holds the first weaker match has a header before it. A blank or overlong
-   * description, and an album, a subset, a map area, the trash or the map layout beside one, is a 400. It is a filtered search
-   * whatever else it holds (`isFiltered`), so the fragment holds the description as the first of its filters' chips, which is
-   * also what tells the template to offer the similarity sort and no map layout, and the browser URL carries it with its sort.
-   *
-   * With `groupBy`, a header opens each date, Location or, in the Triage view, Sequence (`parseGrouping`). Grouped or not, a page
-   * is `rpp` assets, 1 to `Const.Search.MAX_RPP`, and is continued by the `after` cursor its last cell carries
-   * (`data-app-search-after`), never by page number (`parseCursor`).
-   *
-   * `layout=map` renders bounds and a total without fetching asset rows; grouping, paging and the `bbox` filter have no effect on
-   * them (`bbox` scopes the panel and the grid, and stays in the URL).
-   *
-   * A first page's total, and the map layout's, counts the matches up to `SearchQuery.totalCap`; the template says when there are
-   * more.
-   *
-   * Results are HTML only: the detail modal walks the rendered grid, so nothing asks for them as JSON, and a JSON request is
-   * refused.
+   * Results are HTML only: the detail modal walks the rendered grid, so a JSON request is refused.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId")
@@ -152,8 +115,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     if layout != Const.Search.Layout.GRID && layout != Const.Search.Layout.MAP then return textError("Unknown layout", 400)
 
-    // A search that names no sort is in the order its filters ask for: likeness with a description, whatever else it holds,
-    // Relevance with Search text, and otherwise the newest import first
+    // Without a sort: likeness with a description, whatever else it holds, Relevance with Search text, else newest import first
     def defaultSort: String =
       if scope.description.isDefined then Const.Search.SORT_SIMILARITY
       else if scope.text.isDefined then Const.Search.SORT_RELEVANCE
@@ -173,11 +135,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         s"${Api.Field.Search.SORT}=${Const.Search.SORT_SIMILARITY} needs a description (${Api.Field.Search.DESCRIBE})",
         400)
 
-    // What the results title names. A filtered search is named by its filters, a chip each, through what its IDs name in the
-    // repository (`SearchService.filterNames`): an ID that names nothing there, unknown or another repository's, matches nothing and
-    // has no chip. Its names are read for a first page alone, since a continuation renders cells and no title. Any other search
-    // names one scope at most, the person, the folder's path, the album, the Location or the subset the results are scoped to,
-    // read by ID on every page, and one that is not the repository's is a 404 that names nothing of it
+    // What the results title names. A filtered search's chips are read for a first page alone, since a continuation renders no
+    // title, and an ID that names nothing in the repository matches nothing and has no chip. Any other search names one scope at
+    // most, read by ID on every page, and an ID that is not the repository's is a 404
     val isFilteredSearch = isFiltered(scope)
     val filters = Option.when(isFilteredSearch && !isContinuousScroll)(filtersOf(scope))
     val (person, folderPath, album, location) =
@@ -201,7 +161,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     )
 
     if layout == Const.Search.Layout.MAP then
-      // In map layout `bbox` is the crowded-pin panel's scope (the URL keeps it): the map itself plots the whole search
+      // In map layout `bbox` scopes only the crowded-pin panel (the URL keeps it): the map itself plots the whole search
       val query = scope.copy(bbox = None).query()
       logger.trace(s"MAP QUERY: $query")
       val library = App.altitude.service.library
@@ -233,7 +193,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         "HX-Replace-Url" -> browserUrl
       )
 
-    // Every grid page is bounded; zero is refused too, since to a flat search it means no limit, every match
+    // Zero is refused too, since to a flat search it means no limit
     if rpp < 1 || rpp > Const.Search.MAX_RPP then
       return textError(s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_RPP}", 400)
 
@@ -250,7 +210,6 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
       logger.trace(s"GROUPED QUERY: ${searchQuery.toString}")
 
-      // With a description the scope's assets are grouped in two parts, the weaker matches last
       val results: GroupedSearchResult =
         try
           scope.description match
@@ -260,7 +219,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           case ex: SearchCursorException => return textError(ex.getMessage, 400)
           case _: QueryTimeoutException => return timedOut
 
-      // With Curate own alone, a Sequence's Curate follows the frames Curation would show the account: its own
+      // With Curate own alone, a Sequence's Curate counts only the account's own frames, as Curation would show them
       val sequenceIds = results.groups.map(_.key).collect { case SearchGroupKey.Sequence(Some(id), _) => id }.toSet
       val curatable =
         if sequenceIds.isEmpty || !RequestContext.holds(Permission.CurateOwn, Permission.CurateAll) then None
@@ -295,8 +254,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         ("HX-Replace-Url", browserUrl)
       )
 
-    // With a description the scope's assets are ranked by how much they look like it, in that order, which its query does not
-    // name, or shown in the sort's, in two parts; anything else is a flat search of the scope by the sort
+    // The similarity order is the Describe search's own ranking, which the query does not name
     val searchQuery =
       scope.query(rpp = rpp, searchSort = if searchSort.isSimilarity then Nil else List(searchSort), cursor = cursor)
     logger.trace(s"${if scope.description.isDefined then "DESCRIBED " else ""}QUERY: ${searchQuery.toString}")
@@ -313,19 +271,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       // The continuation ran dry: results are live, and the images past the cursor may be gone by now
       if results.isEmpty then return noContentResponse
 
-      /** This is a request for another page of search results for continuous scroll. */
       return htmlResponse(htmx.html.results_grid(results = results, isContinuousScroll = true))
 
-    /**
-     * This is a new request (first page) for search results.
-     *
-     * We may need to add more entities, depending on what is needed, for example if it's a person view.
-     */
     htmlResponse(
       includes.html.search_results(
         total = results.total.getOrElse(0),
-        // What the query counted the total up to, as on the grouped grid and the map; a Describe search's total is exact, the
-        // count of what it ranked, which its result limit keeps at the cap or under (Settings)
+        // A Describe search's total is exact: its result limit keeps what it ranked at the cap or under
         totalCap = searchQuery.totalCap,
         sort = searchSort,
         grouping = None,
@@ -347,12 +298,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     )
 
   /**
-   * The grouping of a request, validated up front; a problem is the message of a 400. `groupBy` is `dateTaken`, `location` or
-   * `sequence`, and `groupDirection` (`asc`/`desc`, default `desc`) orders the days of `dateTaken` and is refused with the other
-   * two, whose order is fixed.
-   *
-   * Only a frame in triage carries a Sequence, so `sequence` outside the Triage view is no grouping and not a 400: grouping
-   * survives a change of view, and the search store goes on asking for it, so a return to Triage groups by Sequence again.
+   * `groupDirection` applies to date grouping alone. Only a frame in triage carries a Sequence, so `sequence` outside the Triage
+   * view is no grouping rather than a 400: the client keeps asking for it across a change of view, so a return to Triage groups
+   * by Sequence again.
    */
   private def parseGrouping(
       view: String,
@@ -375,10 +323,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     Right(Option.unless(by == GroupBy.Sequence && view != Const.Search.View.TRIAGE)(SearchGrouping(by, direction)))
 
-  /**
-   * The cursor of the previous page, which `after` carries and which is sent with `isContinuousScroll`, or the message of a 400.
-   * Without `after` the request is for a first page.
-   */
+  /** `after` is valid only with `isContinuousScroll`; without it the request is for a first page */
   private def parseCursor(after: Option[String], isContinuousScroll: Boolean): Either[String, Option[SearchCursor]] =
     val cursor: Option[SearchCursor] =
       try after.map(SearchCursor.decode)
@@ -392,10 +337,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   private def parseDirection(value: String): Option[SortDirection] =
     SortDirection.values.find(_.toString.equalsIgnoreCase(value))
 
-  /**
-   * The sort argument is one of the results UI's fields with the direction appended as a single digit, e.g. "filename0", or
-   * "relevance" or "similarity" alone, each of which has one direction: best match first
-   */
+  /** A sort field with a one-digit direction, e.g. "filename0", or "relevance" or "similarity", which are best match first */
   private def parseSort(sort: String): Option[SearchSort] =
     if sort == Const.Search.SORT_RELEVANCE then return Some(SearchSort.Relevance)
     if sort == Const.Search.SORT_SIMILARITY then return Some(SearchSort.Similarity)
@@ -405,15 +347,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       .filter(_ => Const.Search.SORT_FIELDS.contains(field))
       .map(direction => SearchSort(field = field, direction = direction))
 
-  /** A plain-text 503 for a search that ran past the engine's time limit for reads */
   private def timedOut: Response[String] =
     textError(Const.Msg.Err.SEARCH_TIMED_OUT, 503)
 
   /**
-   * Whether the search is a filtered search (`CONTEXT.md`): one with a description, whatever else it holds, a date range, two
-   * people or more, two Locations or more, or more than one of the Search text, a folder, a person and a Location. The root
-   * folder is the whole repository, so it is no folder here. Any other search has one scope at most, which its results title
-   * names on its own.
+   * A filtered search is titled by its filters rather than one scope. The root folder is the whole repository, so it is no folder
+   * here.
    */
   private def isFiltered(scope: SearchRequestParser.Scope): Boolean =
     val folders = App.altitude.service.folder
@@ -425,10 +364,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     scope.description.isDefined || scope.takenRange.isDefined || scope.importedRange.isDefined || scope.personIds.size > 1 ||
     scope.locationIds.size > 1 || scopes.count(identity) > 1
 
-  /**
-   * The filters a filtered search's title names, the description first, the people and the Locations in the order the request
-   * gives them
-   */
+  /** The people and the Locations keep the request's order */
   private def filtersOf(scope: SearchRequestParser.Scope): SearchFilters =
     SearchFilters(
       description = scope.description,
@@ -442,15 +378,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   private def personOf(personId: Option[String]): Person =
     personId.map(App.altitude.service.person.getById).orNull
 
-  /**
-   * The folder scope as a breadcrumb reads it: the top-level folder first, the folder itself last. The repository root is the
-   * whole repository, so it is no scope and has no path.
-   */
+  /** The folder scope as a breadcrumb, top-level folder first; the repository root has no path */
   private def folderPathOf(folderId: Option[String]): List[Folder] =
     val folders = App.altitude.service.folder
     folderId.filterNot(folders.isRootFolder).map(id => folders.getAncestors(id) :+ folders.getById(id)).getOrElse(Nil)
 
-  /** The Location scope with its category's name, which the typed read leaves out */
+  /** With its category's name, which the typed read leaves out */
   private def locationOf(locationId: Option[String]): Option[Location] =
     locationId.map {
       id =>
@@ -460,9 +393,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     }
 
   /**
-   * The bookmarkable URL for this search. Only parameters that are not at their default are included, and always in the same
-   * order, so the same search always yields the same URL. `rpp` and `after` are left out on purpose - a shared link opens at the
-   * first page. A search with a description carries it, without the white space around it, after its other filters.
+   * The bookmarkable URL of this search, its parameters in a fixed order so one search always yields one URL. `rpp` and `after`
+   * are left out so a shared link opens at the first page.
    */
   private def browserViewUrl(
       search: SearchRequestParser.Params,

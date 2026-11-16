@@ -5,7 +5,6 @@
 
 @(title: String, mergeSourcePerson: Person, mergeDestPerson: Person, returnFocusPencil: Option[(String, String)] = None)
 
-@* A person's cover face, or the no-cover placeholder for a person with none, named by the person's side of the merge *@
 @cover(person: Person, side: String) = {
     @person.coverFaceId match {
     case Some(faceId) => {<img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{faceId}" alt="@side person face for @{person.name}">}
@@ -13,11 +12,9 @@
     }
 }
 
-@* The Merge people modal. `returnFocusPencil` is the pane and the Person ID of the People tab's rename pencil
-   (htmx/people_list) whose rename dialog offered this merge: that dialog is gone once this modal shows, and the control
-   that asked for the modal with it, so the modal names the pencil as the control focus goes back to when it closes. A merge
-   that completes takes the source Person's pencil out of the list, and focus then goes nowhere. Without a pencil (a drop,
-   the results title's name editor) focus goes back to the control that asked for the modal. *@
+@* The Merge people modal. `returnFocusPencil` (pane, Person ID) names the People tab rename pencil whose dialog offered
+   this merge, since that dialog is gone once this modal shows; a completed merge removes the source's pencil, and focus then
+   goes nowhere. Without one, focus returns to the control that asked for the modal. *@
 <form action="#"
       id="mergePeople"
       data-app-fragment="modal"

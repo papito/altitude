@@ -55,10 +55,7 @@ object SearchService:
   val MIN_ZOOM = 0
   val MAX_ZOOM = 20
 
-  /**
-   * A cell is a quarter of a tile's width at the zoom, about 64 pixels on screen, on both axes; a zoom outside the range is
-   * clamped
-   */
+  /** A cell is a quarter of a tile's width at the zoom (about 64 screen pixels) on both axes; the zoom is clamped to the range */
   def cellDegrees(zoom: Int): Double = 360.0 / math.pow(2, zoom.max(MIN_ZOOM).min(MAX_ZOOM)) / 4
 
 class SearchService(val app: Altitude):
@@ -84,13 +81,10 @@ class SearchService(val app: Altitude):
     }
 
   /**
-   * The Search text with each term resolved against the names of the repository's people, Locations, Categories, folders and
-   * albums, none of which is stored in a Search document: the candidates of every name source are read in one read-only
-   * transaction and matched in memory by the readings of their [[SearchWords]], the rule a document is matched by. A Category's
-   * matches become the IDs of its Locations, and a folder's the folder with every folder below it, so each source is a plain ID
-   * filter for the search that follows.
-   *
-   * In the same transaction the resolution is probed ([[probed]]), which decides how the search matches the text.
+   * The Search text with each term resolved against the repository's names (people, Locations, Categories, folders, albums),
+   * which no Search document stores. They are read in one transaction and matched in memory by their [[SearchWords]] readings,
+   * the rule a document is matched by. A Category resolves to its Locations and a folder to its subtree, so each source is a
+   * plain ID filter. The resolution is then probed ([[probed]]), which decides how the search matches the text.
    */
   def resolveText(expression: SearchExpression, probeLimit: Int = Const.Search.TEXT_PROBE_LIMIT): ResolvedSearchText =
     txManager.asReadOnly {
@@ -134,38 +128,31 @@ class SearchService(val app: Altitude):
     }
 
   /**
-   * The search as every statement over it needs it, resolved against the repository as it is now: its folder as the folder with
-   * every folder below it, and its Search text against the repository's names ([[resolveText]]). Both are resolved afresh on
-   * every request and every page, in the caller's transaction, before the query reaches the DAO.
+   * The search resolved against the repository as it is now: its folder as its subtree, its Search text against the current
+   * names. Done afresh on every request and page, so a rename, merge or move shows in the next search.
    */
   def withResolvedScope(query: SearchQuery): SearchQuery =
     txManager.asReadOnly {
       withResolvedText(withResolvedFolderScope(query))
     }
 
-  /** The names a Search text matches are resolved on every request, so a rename, a merge or a move shows in the next search */
   private def withResolvedText(query: SearchQuery): SearchQuery =
     query.textExpression.fold(query)(expression => query.withResolvedText(resolveText(expression, query.textProbeLimit)))
 
-  /** Folder membership is resolved on every request: a folder filter means the folder and all of its current descendants */
   private def withResolvedFolderScope(query: SearchQuery): SearchQuery =
     if query.folderIds.isEmpty then return query
     if query.folderIds.size > 1 then throw IllegalOperationException("Currently cannot search in multiple folders at once")
 
     val folderId = query.folderIds.head
 
-    // If the root folder is selected, treat it as "no folder filter" so that
-    // triaged assets (which have an empty folderId) are included — matching the default view.
+    // The root folder means no folder filter, so triaged assets, which have no folder, are included as in the default view
     if app.service.folder.isRootFolder(folderId) then query.withFolderIds(Set.empty)
     else
       val allFolders = app.service.folder.getChildrenRecursive(rootId = folderId)
       val allFolderIds = (folderId :: allFolders.map(_.persistedId)).toSet
       query.withFolderIds(allFolderIds)
 
-  /**
-   * The folders the advanced search panel offers for the text typed so far ([[offered]]), each by its path, in path order: a
-   * folder directly before the folders below it, as the folder tree lists them. The root and the recycled folders are no option.
-   */
+  /** The folders offered for the typed text, each by its path, in folder-tree order; never the root or a recycled one */
   def folderOptions(typed: String): List[NamedPath] =
     txManager.asReadOnly {
       val folders = searchDao.searchNames(Set(SearchSource.Folder))(SearchSource.Folder)
@@ -174,8 +161,8 @@ class SearchService(val app: Altitude):
     }
 
   /**
-   * The Locations the advanced search panel offers for the text typed so far ([[offered]]), each with its Category's name before
-   * its own, by their own names. A Category is no option, and text naming one offers none of its Locations.
+   * The Locations offered for the typed text, by their own names, each with its Category's name before its own. Categories are
+   * not offered, and text naming one offers none of its Locations.
    */
   def locationOptions(typed: String): List[NamedPath] =
     txManager.asReadOnly {
@@ -186,10 +173,8 @@ class SearchService(val app: Altitude):
     }
 
   /**
-   * The people the advanced search panel offers for the text typed so far ([[offered]]), by name: the people a Search text
-   * resolves names against, named and neither hidden, merged away nor a bad match, each with their cover and the number of assets
-   * a search of them finds among the `counted` assets, the ones the search covers: the sorted assets, the triaged ones, or both.
-   * A Person the search would find nothing for is no option, as the People tab lists none (`PersonService.getListedSearchable`).
+   * The people offered for the typed text, by name: those a Search text resolves names against, each with the number of `counted`
+   * assets a search of them finds; one with nothing to find is not offered
    */
   def peopleOptions(typed: String, counted: CountedAssets): List[ListedPerson] =
     txManager.asReadOnly {
@@ -201,11 +186,9 @@ class SearchService(val app: Altitude):
     }
 
   /**
-   * What the IDs of a search name in the repository as it is now, each read by its ID in one snapshot, for the chips of the
-   * advanced search panel and of a filtered search's results title. The folder is any but the root, which is the whole
-   * repository, and a recycled one; a person is any live one, hidden or with no name included, since a search can be scoped to
-   * them; a Location is no Category. An ID that names none of these (one that no longer exists, another repository's) has no
-   * entry.
+   * What the IDs of a search name now, read in one snapshot, for the filter chips. The folder is any but the root and a recycled
+   * one; a person any live one, hidden or nameless included, as a search can be scoped to them; a Location no Category. An ID
+   * naming none of these has no entry.
    */
   def filterNames(folderId: Option[String], personIds: List[String], locationIds: List[String]): SearchFilterNames =
     txManager.asReadOnly {
@@ -230,13 +213,10 @@ class SearchService(val app: Altitude):
     }
 
   /**
-   * The names that have the typed text, in the order of their `sortKey`s (names, compared by their name keys, segment by
-   * segment), the first `Const.Search.MAX_FILTER_OPTIONS` of them. The text is read as a Search text is and matched as one
-   * matches a name ([[SearchTerm.isIn]] over the readings of the name's [[SearchWords]]): every group of its terms must be in the
-   * name itself, an excluded term must not, and text with no usable term, nothing typed included, is in every name.
-   *
-   * Each name's key is built once, and the first of them are picked without sorting the rest ([[firstOf]]), so a Library's whole
-   * folder tree, which nothing typed matches, costs one pass over it.
+   * The first `Const.Search.MAX_FILTER_OPTIONS` names that have the typed text, ordered by `sortKey` segment by segment, compared
+   * by name key. The text is matched as a Search text matches a name ([[SearchTerm.isIn]]): every group must be in the name, an
+   * excluded term must not, and text with no usable term is in every name. The first are picked without sorting the rest
+   * ([[firstOf]]), so a Library's whole folder tree, which an empty text matches, costs one pass.
    */
   private def offered(names: Seq[SearchName], typed: String)(sortKey: SearchName => List[String]): List[SearchName] =
     val started = System.currentTimeMillis
@@ -260,8 +240,8 @@ class SearchService(val app: Altitude):
     options
 
   /**
-   * The first `count` of `items` in their order, as sorting them all and taking that many gives, items that compare equal in the
-   * order they came in: one pass that keeps the first so far in a heap with the last of them on top, so the rest are never sorted
+   * The first `count` of `items` as a stable sort would give them, in one pass over a heap topped by the last kept item, so the
+   * rest are never sorted
    */
   private def firstOf[A](items: Seq[A], count: Int)(using order: Ordering[A]): List[A] =
     // An item with its place among the items, which orders the ones that compare equal
@@ -286,9 +266,8 @@ class SearchService(val app: Altitude):
     path
 
   /**
-   * The resolution with what its probe found: each positive group whose hits number at most the limit is complete, and the
-   * candidates are the intersection of the complete groups' hits. Text with no complete group, or with no positive group at all,
-   * which is not probed, is left broad.
+   * The resolution with what its probe found: a positive group with at most `limit` hits is complete, and the candidates are the
+   * intersection of the complete groups' hits. Text with no complete group, or no positive group (not probed), stays broad.
    */
   private def probed(text: ResolvedSearchText, limit: Int): ResolvedSearchText =
     val positive = text.groups.indices.filter(text.groups(_).isPositive)
@@ -301,10 +280,7 @@ class SearchService(val app: Altitude):
       candidates = Option.when(complete.nonEmpty)(complete.map(index => hits.getOrElse(index, Nil).toSet).reduce(_ intersect _))
     )
 
-  /**
-   * A flat page: the DAO returns the rows, the continuation cursor is assembled here ([[cursorAt]]). Sorted by capture time the
-   * search is ordered by day first, and the cursor carries the last image's day.
-   */
+  /** A flat page with its continuation cursor; by capture time it orders by day first, so the cursor carries the day */
   def search(query: SearchQuery, scopeFingerprint: String): SearchResult =
     val started = System.currentTimeMillis
     val page = txManager.asReadOnly {
@@ -324,24 +300,14 @@ class SearchService(val app: Altitude):
     result
 
   /**
-   * One page of a Describe search on the flat grid: the still images of the context repository that `query` matches and that look
-   * like `description`, the words that say what a photo shows. The query is the search's filters, its view's flags, its page size
-   * and its cursor, with no grouping ([[describeGrouped]] reads a grouped one). The filters decide which assets are ranked and
-   * nothing of where they stand; with no filter the search ranks the whole view. The page is the `query.rpp` assets after the
-   * cursor, or the first ones without it, and a first page carries the total.
+   * One flat page of a Describe search: the context repository's still images that `query` matches and that look like
+   * `description`. The filters decide which assets are ranked, not where they stand. With no sort the order is likeness, by the
+   * cosine distance of each SigLIP 2 Scene embedding from the description's, and the page holding the first weaker match says
+   * where (`SearchResult.weaker`); with a sort the matches come in two parts ([[describedInParts]]).
    *
-   * With no sort the order is likeness, most alike first, which the query does not name: the assets are ranked by the cosine
-   * distance of their SigLIP 2 Scene embedding from the description's, in the database (`SearchDao.describe`), and the page that
-   * holds the first weaker match says where (`SearchResult.weaker`). With a sort the matches are in two parts, each in the sort's
-   * order ([[describedInParts]]).
-   *
-   * The description is embedded by SigLIP 2's text tower (`DescribeEmbedder`), before the transaction, since a pass holds no
-   * connection. Inside it the query is resolved as any search's is ([[withResolvedScope]]). Three Settings, read from one
-   * snapshot ([[rankingBy]]), say where the results end, whatever the filters, and where the weaker matches begin. The cursor's
-   * fingerprint is the description with what identifies the query to a cursor (`SearchCursor.describeFingerprint`): a cursor of
-   * any other search is refused (`SearchCursorException`). Every page ranks again, so the results are live, as any search's are.
-   *
-   * An embedder that embeds nothing, a test instance's whose suite has not turned the model on, finds nothing.
+   * The description is embedded before the transaction, so the model pass holds no connection. The cursor's fingerprint carries
+   * the description, so a cursor of any other search is refused. Every page ranks again, so the results are live. An embedder
+   * that embeds nothing (a test instance with the model off) finds nothing.
    */
   def describe(description: String, query: SearchQuery): SearchResult =
     require(query.rpp >= 1, "A page of a Describe search holds at least one asset")
@@ -381,10 +347,9 @@ class SearchService(val app: Altitude):
     result
 
   /**
-   * One page of a grouped Describe search: the matches of [[describe]] in two parts, each grouped and sorted as the query says
-   * ([[describedInParts]]), so a group with matches in both parts is in the page twice, once in each. Under the similarity sort a
-   * group's assets are most alike first. The first weaker match's group is named by `GroupedSearchResult.weaker`, its place among
-   * the page's groups with the count of the weaker matches.
+   * One grouped page of a Describe search: the matches in two parts, each grouped and sorted as the query says
+   * ([[describedInParts]]), so a group with matches in both parts is in the page twice. `weaker` gives the first weaker group's
+   * place among the page's groups and the count of weaker matches.
    */
   def describeGrouped(description: String, query: SearchQuery): GroupedSearchResult =
     require(query.isGrouped, "A flat Describe search is read as one")
@@ -396,7 +361,6 @@ class SearchService(val app: Altitude):
         cursorAt(part, scope, last.group.cursorKey, last.group.cursorGroupId, last.asset, last.sortValue, last.secondSortValue)
     )
 
-    // Each part's rows are grouped apart: a group in both parts is two groups of the page
     val (nearer, weaker) = page.rows.splitAt(page.weaker.fold(page.rows.length)(_._1))
     val nearerGroups = GroupedSearchResult.groupsOf(nearer)
     val groups = nearerGroups ++ GroupedSearchResult.groupsOf(weaker)
@@ -417,12 +381,12 @@ class SearchService(val app: Altitude):
   /** The rows of one part's page, whether the part has more after them and, on a page that counts it, the part's total */
   private case class PartPage[Row](rows: List[Row], total: Option[Int], hasMore: Boolean)
 
-  /** A flat page of a search among one part of a description's matches, read in the transaction of [[describedInParts]] */
+  /** A flat page of one part's search, read in the transaction of [[describedInParts]] */
   private def flatPart(part: SearchQuery): PartPage[SearchRow] =
     val page = searchDao.search(part)
     PartPage(page.rows, page.total, page.hasMore)
 
-  /** A grouped page of a search among one part of a description's matches, read in the transaction of [[describedInParts]] */
+  /** A grouped page of one part's search, read in the transaction of [[describedInParts]] */
   private def groupedPart(part: SearchQuery): PartPage[GroupedSearchRow] =
     val page = searchDao.searchGrouped(part)
     PartPage(page.rows, page.total, page.hasMore)
@@ -440,21 +404,14 @@ class SearchService(val app: Altitude):
       continuesCursor: Boolean)
 
   /**
-   * A page of a Describe search that is sorted or grouped. Its matches are in two parts, the ones above the line of the weaker
-   * matches and then the weaker ones (`DescribedPart`), and each part is a search of its own among the description's ranked
-   * matches of that part (`SearchQuery.described`), ordered and grouped as `query` says: `read` reads a page of such a search and
-   * `cursorAfter` makes the cursor that continues one after a row.
+   * A sorted or grouped Describe page. The matches are in two parts, the nearer and then the weaker ones (`DescribedPart`), each
+   * a search of its own among the ranked matches (`SearchQuery.described`), ordered and grouped as `query` says.
    *
-   * A cursor says which part it continues by its fingerprint, the description's with the part
-   * (`SearchCursor.describeFingerprint`); a cursor of neither is refused. A page of the first part that ends it goes on with the
-   * weaker matches from their start, as many as it has room for, and says where they begin; a page with no room left still looks
-   * for one, and when there is one its cursor is the last row's of the first part, which the next page, finding nothing after it,
-   * continues from into the weaker matches. So a part's pages are continued by that part's own cursors, and no page names a place
-   * in both.
-   *
-   * A first page's total is the two parts' together: the first part's, and the weaker matches', counted when the page does not
-   * reach them. The ranking is read as the engine reads it for the query's matches once, for every statement of the page
-   * (`SearchDao.rankingFor`), each of which ranks again.
+   * A cursor names its part by its fingerprint; a cursor of neither is refused. A page that ends the first part fills its room
+   * from the start of the weaker matches. With no room left it still looks for one, and if there is one its cursor is the first
+   * part's last row, which the next page continues past into the weaker part. So each part's pages are continued by that part's
+   * own cursors, and no cursor names a place in both. A first page's total is both parts'. The ranking is read once for all the
+   * page's statements (`SearchDao.rankingFor`), each of which ranks again.
    */
   private def describedInParts[Row](description: String, query: SearchQuery)(
       read: SearchQuery => PartPage[Row],
@@ -516,10 +473,8 @@ class SearchService(val app: Altitude):
     }
 
   /**
-   * What a description ranks by, from one snapshot of the Settings: its embedding; the Describe match threshold, the least
-   * probability by the model that an image matches, as the least cosine (`SceneModel.siglip2Cosine`); the Describe result limit,
-   * the most assets ranked; and the Describe weaker matches ratio. None when the embedder embeds nothing, a test instance's whose
-   * suite has not turned the model on.
+   * What a description ranks by, from one Settings snapshot: its embedding, the match threshold (the least model probability, as
+   * a cosine), the result limit and the weaker matches ratio. None when the embedder embeds nothing.
    */
   private def rankingBy(description: String): Option[DescribeRanking] =
     val settings = app.settings.current
@@ -532,7 +487,7 @@ class SearchService(val app: Altitude):
           settings.searchDescribeMaxResults,
           settings.searchDescribeWeakerMatchRatio))
 
-  /** A page of a Describe search, logged with its description: escaped, since one is typed, line breaks and all */
+  /** Logs a Describe page with its description, escaped, as it is typed text, line breaks and all */
   private def logDescribed(
       description: String,
       query: SearchQuery,
@@ -552,8 +507,8 @@ class SearchService(val app: Altitude):
         s"limit ${settings.searchDescribeMaxResults}, in ${System.currentTimeMillis - started}ms")
 
   /**
-   * The cursor that continues a search after the image at this position. It carries the scope fingerprint of the search as
-   * requested and, under a scored sort, the Relevance or the similarity, which orders by the capture time next, that too.
+   * The cursor that continues a search after the image at this position, with the search's scope fingerprint. Under a scored sort
+   * (Relevance, similarity), which orders by capture time next, it carries the capture time too.
    */
   private def cursorAt(
       query: SearchQuery,
@@ -616,10 +571,7 @@ class SearchService(val app: Altitude):
     logger.trace(s"Map bounds ${bounds.getOrElse("of nothing plotted")}, in ${System.currentTimeMillis - started}ms")
     bounds
 
-  /**
-   * A grouped page: the DAO returns the rows and counts, the groups and the continuation cursor are assembled here. The cursor
-   * points at the last returned image ([[cursorAt]]).
-   */
+  /** A grouped page, its groups and continuation cursor assembled from the DAO's rows */
   def searchGrouped(query: SearchQuery, scopeFingerprint: String): GroupedSearchResult =
     val started = System.currentTimeMillis
     val page = txManager.asReadOnly {
@@ -657,8 +609,8 @@ class SearchService(val app: Altitude):
     result
 
   /**
-   * Indexes a value just added to the asset, of any field type: a metadata parameter when the type is faceted, and the asset's
-   * Search document rewritten from the asset as given, which must already carry the value
+   * Indexes a value just added to the asset: a metadata parameter when the field type is faceted, and the asset's Search document
+   * rewritten from the asset as given, which must already carry the value
    */
   def addMetadataValue(asset: Asset, field: UserMetadataField, value: String): Unit =
     txManager.withTransaction {

@@ -27,18 +27,12 @@ import altitude.core.util.SearchResult
 import altitude.core.util.Sha256
 import altitude.core.util.TriageSubset
 
-/**
- * What is the difference between this and the AssetService?
- *
- * The LibraryService is a higher-level service that deals with the library as a whole, where methods touch multiple sub-services.
- * While it's not a strict separation, and sub-services can mingle on their own, anything that has to do with high-level library
- * concepts should be in this service.
- */
+/** Operations on the library as a whole that span several services, above `AssetService` and its peers */
 object LibraryService:
   private val SUPPORTED_MEDIA_TYPES: Set[String] = Set(
     "image",
     "video",
-    "x-none" // in test, this is used to force zero-length preview data
+    "x-none" // used by tests to force empty preview data
   )
 
 class LibraryService(val app: Altitude):
@@ -53,9 +47,8 @@ class LibraryService(val app: Altitude):
     stagedFileToAsset(importAsset.fileName, app.service.staging.stageCopy(importAsset.path))
 
   /**
-   * The asset of a staged file: its media type by content, its checksum (the file's SHA-256, streamed), its size, and the context
-   * account as its owner and in its importer record, which [[persistAndIndex]] builds again from the account as stored when it
-   * inserts the asset; the pipeline owns the file from here
+   * The asset of a staged file: its media type by content, its SHA-256 checksum, its size, and the context account as owner. The
+   * pipeline owns the file from here.
    */
   def stagedFileToAsset(fileName: String, staged: Path): AssetWithData =
     val importer = RequestContext.getAccount
@@ -90,10 +83,9 @@ class LibraryService(val app: Altitude):
     }
 
   /**
-   * The import pipeline's index stage: the asset persisted and its Search document written, together or not at all. Its importer
-   * record is built here from the importing account as stored now (`UserService.lockImporter`), not as it was at upload, so an
-   * account change made while the file waited in the pipeline is in it, or rewrites it once the insert commits; an account gone
-   * or deactivated by then fails the file with `ImporterUnavailableException`.
+   * The index stage: persists the asset and writes its Search document, together. The importer record is rebuilt from the account
+   * as stored now (`UserService.lockImporter`), not at upload, so an account change made while the file waited is in it, and one
+   * made meanwhile waits and rewrites it; an account gone or deactivated by then fails the file.
    */
   def persistAndIndex(asset: Asset): Asset =
     txManager.withTransaction {
@@ -105,16 +97,11 @@ class LibraryService(val app: Altitude):
     }
 
   /**
-   * The import pipeline's completion stage, one transaction: the asset marked complete, with its Image quality and perceptual
-   * hash stored alongside the flag (`markAsCompleted`), then placed and counted in the stats, and, when it is a file of an Import
-   * (`origin`), its Import file settled as imported with the asset (`ImportService.settle`), so the record says imported exactly
-   * when the asset is complete. A file of an Import with no destination, and an asset with no origin, stays in Triage, in the
-   * Sequence of its burst if it has one (`SequenceService.assign`, for which the earlier uploads of the burst are completed
-   * candidates already). A file of an Import with a destination is sorted on arrival ([[sortInto]]): into the folder its path
-   * names under the destination, which is where a folder is born, with the first asset that lands in or below it. A destination
-   * in the Trash, a folder name the folder rule refuses and one that is taken by the time the folder is added fail the completion
-   * with `ImportDestinationException`, which is a drop that creates nothing and never a duplicate. An asset that never gets here
-   * is purged at startup, so it is never counted.
+   * The completion stage, in one transaction: marks the asset complete (with its Image quality and perceptual hash), places it,
+   * counts it and settles its Import file as imported, so the record says imported exactly when the asset is complete. Without a
+   * destination the asset stays in Triage, in its burst's Sequence if any; with one it is sorted on arrival ([[sortInto]]). A
+   * lost destination or an uncreatable folder fails it with `ImportDestinationException`, a drop that creates nothing and is
+   * never a duplicate. An asset that never gets here is discarded at startup, so it is never counted.
    */
   def completeImport(asset: Asset, origin: Option[ImportOrigin] = None): Asset =
     txManager.withTransaction {
@@ -130,17 +117,16 @@ class LibraryService(val app: Altitude):
     }
 
   /**
-   * Sorts a just-completed asset into the folder `folderPath` names under `destination`, the destination itself for no names
-   * (`FolderService.ensurePath`: the folders of the path that exist are reused, a recycled one restored, a missing one created),
-   * and returns it as it is then: in that folder and out of Triage, so in no Sequence, as an asset moved out of Triage is.
+   * Sorts a just-completed asset into the folder `folderPath` names under `destination` (`FolderService.ensurePath`), out of
+   * Triage and so in no Sequence
    */
   private def sortInto(asset: Asset, destination: Folder, folderPath: Seq[String]): Asset =
     val folder =
       try app.service.folder.ensurePath(destination.persistedId, folderPath)
       catch
         case refused: ValidationException => throw uncreatable(refused.message)
-        // A name another folder took there meanwhile, past the creators' turn-taking, or that the root holds. Never left a
-        // DuplicateException: that cause is a file whose content the Library has, and would settle the file as a duplicate
+        // A name taken meanwhile past the turn-taking, or held by the root. Never left a DuplicateException, which would settle
+        // the file as a duplicate of content in the Library
         case _: DuplicateException => throw uncreatable(altitude.core.Const.Msg.Err.FOLDER_NAME_TAKEN)
 
     app.service.asset.updateById(
@@ -154,13 +140,11 @@ class LibraryService(val app: Altitude):
     ImportDestinationException(altitude.core.Const.Msg.Err.DESTINATION_FOLDER_NAME.format(reason))
 
   /**
-   * Undoes what the import of an asset wrote, for an asset the pipeline dropped or an import a crash cut off. Nothing to undo for
-   * an asset that was never persisted (dropped before the index stage, or a duplicate it refused) or that completed. In one
-   * transaction: the people of its faces are locked, so a face another import gives one of them meanwhile keeps that person; a
-   * cover on one of its faces moves to the person's best face elsewhere, as on purge (`PersonService.moveCoversOff`); the face
-   * counts it added are given back; its row goes, with its faces, its Search document and its metadata; and a person left with no
-   * face, which only this import can have started, goes too. Once that commits, its files go: its faces', its stored file and its
-   * preview. Its stats need nothing: an asset counts once its import completes.
+   * Undoes what an asset's import wrote, for an asset the pipeline dropped or a crash cut off; nothing for one never persisted or
+   * already complete. In one transaction it locks the people of its faces, so a face another import gives one of them meanwhile
+   * keeps that person; moves covers off its faces as a purge does; gives back its face counts; and deletes its row and any person
+   * left with no face, whom only this import can have started. Its files go after the commit. Stats need nothing: an asset counts
+   * once its import completes.
    */
   def discardImport(asset: Asset): Unit =
     asset.id.foreach {
@@ -203,20 +187,17 @@ class LibraryService(val app: Altitude):
       app.service.asset.query(_query)
     }
 
-  /** A flat page with its assets, continued by cursor as a grouped page is ([[continued]]) */
+  /** A flat page, continued by cursor ([[continued]]) */
   def search(query: SearchQuery): SearchResult =
     continued(query)(app.service.search.search)
 
-  /** How many assets a search matches, exactly, scoped like `search`: what merging people recounts a person's assets by */
+  /** The exact number of assets a search matches, scoped like `search` */
   def count(query: SearchQuery): Int =
     txManager.asReadOnly {
       app.service.search.count(app.service.search.withResolvedScope(query))
     }
 
-  /**
-   * The counts of the Triage summary, exact and read in one snapshot: the Triage view, then its two Triage subsets, the `subset`
-   * scopes its links search
-   */
+  /** The exact counts of the Triage view and its two Triage subsets, read in one snapshot */
   def triageSummary(): TriageSummary =
     txManager.asReadOnly {
       def triage(subset: Option[TriageSubset]) = count(new SearchQuery(params = SearchQuery.TRIAGE_VIEW, subset = subset))
@@ -229,10 +210,7 @@ class LibraryService(val app: Altitude):
       summary
     }
 
-  /**
-   * How many assets a search matches up to the query's cap, scoped like `search`, for a total the results UI shows without
-   * rendering rows of its own (the map layout); one past the cap means more than it
-   */
+  /** How many assets a search matches up to the query's cap, scoped like `search`; one past the cap means more */
   def cappedCount(query: SearchQuery): Int =
     txManager.asReadOnly {
       app.service.search.cappedCount(app.service.search.withResolvedScope(query))
@@ -250,14 +228,14 @@ class LibraryService(val app: Altitude):
       app.service.search.mapBounds(app.service.search.withResolvedScope(query))
     }
 
-  /** A grouped page with its assets, for the grouped grid, continued by cursor ([[continued]]) */
+  /** A grouped page, continued by cursor ([[continued]]) */
   def searchGrouped(query: SearchQuery): GroupedSearchResult =
     continued(query)(app.service.search.searchGrouped)
 
   /**
-   * Runs a page of a search that a cursor may continue. A cursor is accepted only for the search it was issued for, fingerprinted
-   * as requested: a folder filter by the folder given and the Search text as typed, since a folder's descendants and the names
-   * the text matches are resolved afresh on every page.
+   * Runs a page of a search that a cursor may continue, accepting a cursor only for the search it was issued for. The fingerprint
+   * is of the request as given (the folder, the Search text as typed), since descendants and matched names resolve afresh per
+   * page.
    */
   private def continued[T](query: SearchQuery)(page: (SearchQuery, String) => T): T =
     txManager.asReadOnly {
@@ -267,17 +245,14 @@ class LibraryService(val app: Altitude):
     }
 
   /**
-   * Delete a folder by ID, including its children. Does not allow deleting the root folder, or any system folders. A folder of
-   * another repository, or none, is not found. The folders' assets are recycled ([[recycleAssets]]), so deleting a folder that
-   * holds any takes Recycle. The delete takes its turn with the imports that sort files into the tree (`FolderService.lockTree`),
-   * so no asset and no folder is left live under a deleted folder by an import completing meanwhile.
+   * Deletes a folder (never the root) and its descendants, recycling their assets, so a folder holding any takes Recycle. It
+   * takes its turn with imports sorting into the tree (`FolderService.lockTree`), so no import leaves anything live under it.
    */
   def deleteFolderById(id: String): Unit =
     if app.service.folder.isRootFolder(id) then throw IllegalOperationException("Cannot delete the root folder")
 
     txManager.withTransaction {
-      // Before anything is read: an import that is sorting a file into one of these folders has committed by then, so its
-      // asset, and the folders it created, are among what is recycled here
+      // Before any read: an import sorting into these folders has committed by then, so what it created is recycled here
       app.service.folder.lockTree()
       val folder: Folder = app.service.folder.getById(id)
       logger.debug(s"Deleting folder $folder")
@@ -296,11 +271,9 @@ class LibraryService(val app: Altitude):
     }
 
   /**
-   * Restores recycled assets, all in one transaction: an asset whose content is live again (imported anew after it was recycled)
-   * stays in the trash and is reported, and any other failure restores nothing. An ID that is no asset of the repository fails
-   * the restore; a live asset, or one marked for purging, is ignored. Restoring takes what recycling the asset would
-   * (`AssetRules.requireRecycle`), checked once the assets are read, so an asset of another repository is not found rather than
-   * refused.
+   * Restores recycled assets in one transaction. An asset whose content is live again (imported anew since) stays in the Trash
+   * and is reported; any other failure restores nothing. A live or purge-marked asset is ignored. Restoring takes what recycling
+   * would, checked after the read, so another repository's asset is not found rather than refused.
    */
   def restoreRecycledAssets(assetIds: Set[String]): RestoreResult =
     logger.debug(s"Restoring recycled assets [${assetIds.mkString(",")}]")
@@ -344,26 +317,21 @@ class LibraryService(val app: Altitude):
     logger.debug(s"Restoring recycled asset [${asset.persistedId}]")
     app.service.asset.setRecycledProp(asset, isRecycled = false)
 
-    // Assets recycled directly from triage have no folder assigned — skip folder restoration
+    // An asset recycled from Triage has no folder
     if !asset.isTriaged then
-      // Restore the full ancestor chain (top-down) so the folder tree is consistent.
-      // getAncestors returns from root -> direct parent, so we can iterate in order.
+      // Its ancestors top-down (from the top-level folder to the parent), then its own folder, so the tree stays consistent
       val ancestors: List[Folder] = app.service.folder.getAncestors(asset.folderId)
       ancestors.foreach {
         ancestor => if ancestor.isRecycled then app.service.folder.setRecycledProp(folder = ancestor, isRecycled = false)
       }
 
-      // Restore the immediate folder of the asset
       val folder: Folder = app.service.folder.getById(asset.folderId)
       if folder.isRecycled then app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
 
   /**
-   * Moves assets into a folder, which is also how an asset is moved out of the recycle bin into a folder, or out of triage. An
-   * asset leaving triage leaves its Sequence in the same update: a sorted asset never carries one, so a Sequence whose last
-   * member moves is gone with it. The column is written NULL for every moved asset in the one update: a sorted asset has none
-   * already, and an asset recycled from triage keeps its Sequence until it is moved into a folder. A destination that is no
-   * folder of the context repository, unknown or another repository's, is a `NotFoundException` that moves nothing. An asset
-   * moved out of the trash is restored, which takes what recycling it would (`AssetRules.requireRecycle`).
+   * Moves assets into a folder, which also takes them out of the Trash or Triage. The update clears every moved asset's Sequence:
+   * a sorted asset never carries one, so a Sequence whose last member moves is gone, and an asset recycled from Triage keeps its
+   * Sequence until moved into a folder. An asset moved out of the Trash is restored, taking what recycling it would.
    */
   def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit =
     if destFolderId == null then throw IllegalOperationException("Destination folder ID cannot be null")
@@ -397,9 +365,8 @@ class LibraryService(val app: Altitude):
     }
 
   /**
-   * Recycles the live assets among the IDs, in one transaction; an ID that is no live asset of the context repository is left
-   * out. A sorted asset takes Recycle and a triaged one a Curate Permission (`AssetRules.requireRecycle`): one refused asset
-   * recycles nothing.
+   * Recycles the live assets among the IDs in one transaction, leaving out the rest; one asset the account may not recycle
+   * (`AssetRules.requireRecycle`) recycles nothing
    */
   def recycleAssets(assetIds: Set[String]): Unit =
     txManager.withTransaction {
@@ -450,10 +417,7 @@ class LibraryService(val app: Altitude):
       logger.info(s"Marked ${assets.size} assets for purging")
     assets
 
-  /**
-   * Hands assets marked for purging in the context repository to the purge queue, once their mark has committed, with the context
-   * account, if there is one, as the pipeline's
-   */
+  /** Hands assets marked for purging to the purge queue, with the context account, if any, as the pipeline's */
   private def queueForPurging(assets: List[Asset], account: Option[User] = RequestContext.account.value): Unit =
     val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = account)
     app.service.purgePipeline.enqueue(assets.map((_, pipelineContext)))
@@ -493,8 +457,8 @@ class LibraryService(val app: Altitude):
     }
 
   /**
-   * Runs the operation in every repository's context, then restores the caller's own repository context. The operation opens its
-   * own transactions, so what it does after one commits, such as deleting files, happens after that commit.
+   * Runs the operation in each repository's context, restoring the caller's after. The operation opens its own transactions, so
+   * work it does after a commit, such as deleting files, follows that commit.
    */
   def forEachRepository(operation: Repository => Unit): Unit =
     app.service.repository.getAll.foreach {

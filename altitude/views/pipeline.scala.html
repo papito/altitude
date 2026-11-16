@@ -22,15 +22,13 @@
       @includes.html.nav(stats = stats, current = Const.NavEntry.IMPORT)
     </nav>
 
-    @* Two columns, which stack in this order on a narrow screen (static/css/pages/pipeline.css): what delivers files, the
-       upload sections and under them the Watch folders, and the Import history, which the status feed keeps live *@
+    @* Two columns, which stack in this order on a narrow screen: the upload sections over the Watch folders, then the
+       Import history *@
     <main>
       <div id="importSources">
         @includes.html.upload_sections()
 
-        @* The Library's Watch folders (htmx/watch_folders), which the page reads again when the status feed says they
-           changed, and after an Admin's action on one (js/import/watch-folders.js). An Admin adds one here; the dialog
-           opens in the general modal host *@
+        @* The Library's Watch folders; an Admin adds one here *@
         <section id="watchFolders" aria-labelledby="watchFoldersTitle">
           <header>
             <h2 id="watchFoldersTitle">Watch folders</h2>
@@ -51,9 +49,8 @@
         <h2 id="importHistoryTitle">Import history</h2>
         @* Shown once the status feed gives up reconnecting (js/import-status.js) *@
         <p id="importStatusLost" class="notice warning" hidden>The import status stopped. Reload the page to reconnect.</p>
-        @* The Library's status feed (ImportController.pipelineStatus). Each message is JSON that names the element it
-           replaces, an Import's status in the history below, so the element itself takes nothing; the page's script reads
-           the history again for an Import it does not show yet and for one that closed (js/import-status.js) *@
+        @* The Library's status feed. Each message names the element it replaces, an Import's status in the history below,
+           so this element itself takes nothing *@
         <div hx-ws:connect="/import/r/@{RequestContext.getRepository.persistedId}/status"></div>
         @htmx.html.import_history(history, Const.ImportHistory.IMPORTS_STEP)
       </section>
@@ -61,14 +58,13 @@
 
     <footer></footer>
 
-    @* The snackbar and the dialog hosts, for the New library dialog of the nav's Library menu (js/nav-page.js) *@
+    @* The snackbar and the dialog hosts, for the nav's New library dialog *@
     @includes.html.html_common()
 
-    @* Keeps the nav counts fresh while imports run; `current` keeps this page's entry marked. The filter (htmx 4 reads it
-       after the event's name) skips a tick while the page is hidden, and while the nav's Library menu, its advanced search
-       panel or the New library dialog is open: the Library menu's host and the search panel are `hx-preserve`
-       (includes/library_menu, includes/nav), which keeps an open panel open only where the browser has `moveBefore`. A failed tick is not reported (`data-app-silent-failure`): the next one tries
-       again, and a server answering 5xx while it restarts would otherwise raise an error every 5 s *@
+    @* Keeps the nav counts fresh while imports run. The filter (htmx 4 reads it after the event's name) skips a tick while
+       the page is hidden, and while the nav's Library menu, its advanced search panel or the New library dialog is open,
+       since a `hx-preserve`d panel stays open only where the browser has `moveBefore`. A failed tick is not reported: the
+       next one tries again, and a server answering 5xx while it restarts would otherwise raise an error every 5 s *@
     <div hx-get="/htmx/nav/r/@{RequestContext.getRepository.persistedId}?current=@{Const.NavEntry.IMPORT}"
          hx-trigger="every[document.visibilityState === 'visible' && !document.querySelector('nav .context-menu:popover-open, #searchPanel:popover-open, #popoverDialog:popover-open')] 5s"
          hx-target="nav"

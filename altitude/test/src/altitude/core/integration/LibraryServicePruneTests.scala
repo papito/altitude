@@ -18,13 +18,11 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Three imported assets in the root folder, all then flagged as not pipeline-processed, the state an import that never
-     * finished leaves an asset in.
+     * Three imported assets flagged as not pipeline-processed, as an unfinished import leaves them.
      *
      * Assertions:
      *
-     * The three are found as dangling and pruned, after which none of them is left to query or to search, and their search
-     * documents are deleted with them.
+     * All three are dangling, and pruning removes them from queries, from search and their search documents with them.
      */
     val assetCount = 3
     for (_ <- 1 to assetCount)
@@ -53,7 +51,6 @@ import altitude.core.util.SearchQuery
     val danglingAssets: List[Asset] = testApp.service.asset.getDanglingAssets
     danglingAssets.length shouldBe assetCount
 
-    // this will remove all assets in undefined state
     testApp.service.library.pruneDanglingAssets()
 
     testApp.service.asset.queryAll(assetQuery).total shouldBe 0
@@ -67,12 +64,11 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Two repositories with one asset each, both flagged as not pipeline-processed, and the second repository's asset discarded
-     * in the first repository's context.
+     * A dangling asset in a second repository, discarded from the first repository's context.
      *
      * Assertions:
      *
-     * Nothing is discarded: the second repository's asset is still there, dangling, with its file.
+     * Nothing is discarded: the asset is still there, dangling, with its file.
      */
     val unprocessed = Map(FieldConst.Asset.IS_PIPELINE_PROCESSED -> false)
     val firstRepo: Repository = testContext.repository
@@ -95,15 +91,14 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * `people/meme-ben2.png` imported, which starts a Person with one Face. Then two imports cut off before completing, each
-     * persisted, indexed, stored, previewed and its faces recognized through the services: `people/meme-ben3.png`, which adds a
-     * second Face to that Person, and `people/bullock.jpg`, which starts a Person of its own. Then the dangling assets pruned.
+     * A completed import that starts a Person, then two imports cut off before completing: one adds a second Face to that Person,
+     * the other starts a Person of its own. Then the dangling assets are pruned.
      *
      * Assertions:
      *
-     * Neither cut-off asset is left, nor its file, its preview, its Faces or their files. The first Person is back to one Face,
-     * the first import's, whose files remain; the Person the cut-off import started is gone. The stats, which count an asset only
-     * once its import completes, are unchanged.
+     * Neither cut-off asset is left, nor its file, preview, Faces or face files. The first Person is back to one Face, whose
+     * files remain, and the Person the cut-off import started is gone. The stats, which count an asset only once its import
+     * completes, are unchanged.
      */
     val complete = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/meme-ben2.png"))
     val (coverFace, person) = testApp.service.person.getAssetFacesWithPeople(complete.persistedId).head
@@ -140,16 +135,16 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * A Person with a Face at a detection score of 0.5 on a completed asset and one at 0.7 on an asset marked for purging. An
-     * import cut off before it completed adds a Face of theirs at 0.9, which becomes their cover; then that import is discarded.
+     * A Person with a Face scored 0.5 on a completed asset and one scored 0.7 on an asset marked for purging. A cut-off import
+     * adds their cover Face, scored 0.9, and is then discarded.
      *
      * Assertions:
      *
-     * The Person stays, and their cover is their Face on the completed asset. The cut-off import's Face is gone, row and images.
+     * The Person stays with the completed asset's Face as cover. The cut-off Face is gone, row and images.
      *
      * Edge cases:
      *
-     * The Face on the asset marked for purging scores higher than the new cover, but is never picked.
+     * The higher-scoring Face on the asset marked for purging is never picked.
      */
     val added = testApp.service.person.addPerson(Person())
     def person: Person = testApp.service.person.getPersonById(added.persistedId)

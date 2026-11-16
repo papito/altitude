@@ -20,16 +20,15 @@ import { getHttpErrorMessage, http } from "../http/client.js"
 import { loadMediaChrome } from "../common/vendor-loader.js"
 import { originalUrl, previewUrl } from "../common/content-urls.js"
 
-// A Video shorter than this loops, like a Live Photo; a longer one stops at the end
+// A Video shorter than this loops, like a Live Photo
 const LOOP_MAX_DURATION_SECONDS = 10
 
 // Pending load listeners per media element, removed when a newer `src` supersedes the load
 const pendingMediaLoads = new WeakMap()
 
 /**
- * Sets the element's `src` and resolves once it can be shown: an image once loaded, a video once
- * its metadata (its size and duration) is in, so playback needs nothing more than the ranges the
- * player asks for. A later call on the same element supersedes the wait, which rejects with an
+ * Sets `src` and resolves once the element can be shown: an image once loaded, a video once its
+ * metadata (size, duration) is in. A later call on the same element rejects this wait with an
  * `AbortError`.
  */
 export function setMediaSrcAndWait({ mediaEl, url }) {
@@ -65,11 +64,9 @@ export function setMediaSrcAndWait({ mediaEl, url }) {
 }
 
 /**
- * Starts a Video that was just shown. A browser that refuses playback with sound here (Safari,
- * without a gesture on the element) plays it muted instead, and the mute button unmutes it; one
- * that refuses even that (iPhone in Low Power Mode) leaves it paused with its controls.
- * `AbortError` means navigation, closing, or a pause interrupted the play. `isCurrent` tells
- * whether the Video is still the one the modal shows.
+ * Starts a Video that was just shown. A browser that refuses sound without a gesture (Safari) plays
+ * it muted; one that refuses even that (iPhone in Low Power Mode) leaves it paused. `AbortError`
+ * means navigation, closing or a pause interrupted the play.
  */
 async function playShownVideo({ videoEl, isCurrent }) {
     try {
@@ -102,46 +99,16 @@ async function playShownVideo({ videoEl, isCurrent }) {
 }
 
 /**
- * Coordinates previous/next navigation and image loading inside the asset-detail modal.
+ * Previous/next navigation and media loading inside the asset-detail modal.
  *
- * The results grid is the modal's source of truth: next and previous move between the grid's
- * `.cell`s in document order, skipping the group headers of a grouped grid, and a cell removed from
- * the grid drops out of navigation with it. A page folded into a spacer (js/search-results/page-window.js)
- * is reloaded as the walk meets it (`reloadSpacer`), whichever way it steps, and the step continues
- * into it. At the end of the loaded grid, next loads the following page exactly as the scroll
- * observer does (`loadNextPage`) and continues into it; at the true end, and at the true first cell,
- * nothing happens.
+ * The grid is the source of truth: a step moves to the next `.cell` in document order past group
+ * headers, reloads a folded page spacer it meets, and past the last loaded cell loads the next page.
+ * The cell is remembered, not the asset, since a Location grouping shows one asset under several
+ * groups and the walk stays in the group the user was in. Every media request gets a token; only the
+ * latest one for the still-active open may touch the modal.
  *
- * What is remembered is the cell the modal was opened from or stepped to, not the asset: a Location
- * grouping holds an asset in a cell under each of its Locations, and stepping from the cell keeps
- * the walk in the group the user was looking at. A detail opened with no cell (a map pin, an
- * asset's URL) has nowhere to step to.
- *
- * Every media request gets its own token. Only the latest request for the still-active
- * asset-detail open may change the media, box size, title, or loading state; superseded or
- * orphaned completions are ignored, and none can reopen a modal.
- *
- * The fragment holds an `<img>` and a media-chrome player (a `<media-controller>` around the
- * `<video>` and its control bar); the asset's media type decides which one is shown and loaded, and
- * the other is hidden and unloaded. The player is hidden while any asset loads. A shown Video
- * starts playing, muted when the browser refuses sound, loops when it is a short clip, and is
- * described to the OS media controls; it is paused when navigation moves on.
- *
- * The box is fitted from the shown element's size (`naturalWidth`, `videoWidth`), not the stored
- * one: the stored size is the file header's, while a browser turns an image upright by its EXIF
- * orientation. The Detail panel (`detail-panel.js`) is told of each asset as its load starts, under
- * the same request token, so it empties, loads the asset's details while they are wanted and drops a
- * superseded answer, and of the shown size, which its dimensions row and the Face highlights read.
- *
- * A still image is shown by the Edit's stage (`edit/edit-stage.js`), which picks its source by the
- * asset's Edit (the original, the Display image, or the Edit drawn on the canvas), fits the box and
- * tells the Detail panel; a Video is shown here. The asset's Edit, whether the account may edit
- * it and why not come with the fragment (`data-app-image-detail-edit`, `-editable`,
- * `-edit-refusal`) on opening and with the asset's JSON (`edit`, `editable`, `editRefusal`) on a
- * step. A step asks the Edit panel (`edit/edit-panel.js`) first, which warns of a change pending
- * and may keep the asset shown; the panel is told of each asset as its load starts, before the
- * stage, so it ends what was open on the last one and has the stage draw this one's Edit while it
- * is open, and again once a still image is shown.
+ * The box is fitted from the shown element's size, not the stored one: the stored size is the file
+ * header's, while the browser turns an image upright by its EXIF orientation.
  */
 export function createSearchDetailCoordinator({
     context,
@@ -157,7 +124,6 @@ export function createSearchDetailCoordinator({
         return getActiveModalHost() === ModalHost.assetDetail
     }
 
-    /** The current cell while it is still in the grid */
     function currentCellEl() {
         return currentCell?.isConnected ? currentCell : null
     }
@@ -179,13 +145,12 @@ export function createSearchDetailCoordinator({
     }
 
     /**
-     * Shows the nearest cell in `direction`. A folded page met on the way is reloaded first, and at
-     * the edge of the loaded grid `loadBeyond`, if given, brings the page beyond it in; either way
-     * the step then looks again, since a page whose assets are gone brings no cell, only the
-     * spacer after it, if any. The page may still be arriving for a detail view that moved on.
+     * Shows the nearest cell in `direction`, reloading a folded page met on the way or, at the edge
+     * of the loaded grid, loading the page beyond with `loadBeyond`. It looks again after each load,
+     * since a page whose assets are gone brings only the spacer after it.
      */
     async function step({ direction, loadBeyond = null }) {
-        // A change pending in the Edit panel is asked about first, and staying is no step
+        // The Edit panel may keep the asset shown when a change is pending
         if (
             !isAssetDetailActive() ||
             !(await editPanel.beforeLeave()) ||
@@ -230,7 +195,6 @@ export function createSearchDetailCoordinator({
         }
     }
 
-    /** At the last loaded cell, the next page is loaded as the scroll observer loads it */
     function handleShowNext() {
         return step({
             direction: "nextElementSibling",
@@ -242,20 +206,14 @@ export function createSearchDetailCoordinator({
         return step({ direction: "previousElementSibling" })
     }
 
-    /**
-     * Whether the image request `token` is still the latest one for a displayed asset-detail open.
-     */
     function isCurrentImageRequest({ token, openId }) {
         return token === imageRequestToken && isModalOpenActive(openId)
     }
 
     /**
-     * Makes `cellEl` (the cell the asset is shown in, or null for a detail opened from no cell) the
-     * navigation origin immediately, then loads the media into the element its type calls for,
-     * unloading the other. If the request is still current when the media is ready, applies the
-     * asset's size and title, and starts a Video: looping when it is a short clip, muted when the
-     * browser refuses sound, and described to the OS media controls. A still image goes to the
-     * Edit's stage with its `edit` and `editable`, which sizes the box itself.
+     * Loads the media into the element its type calls for and unloads the other. A still image goes
+     * to the Edit's stage, which sizes the box itself. `cellEl` is null for a detail opened from no
+     * cell (a map pin, an asset's URL), which has nowhere to step to.
      */
     async function showMedia({
         openId,
@@ -280,7 +238,7 @@ export function createSearchDetailCoordinator({
 
         const isVideo = mediaType === "video"
         const mediaEl = isVideo ? videoEl : imgEl
-        // A Video shows as its player: the media-chrome controller holding the <video> and its controls
+        // A Video shows as its player, the media-chrome controller around the <video>
         const playerEl = videoEl.closest("media-controller")
         const shownEl = isVideo ? playerEl : imgEl
         const isCurrent = () => isCurrentImageRequest({ token, openId })
@@ -302,13 +260,12 @@ export function createSearchDetailCoordinator({
         if (isVideo) {
             imgEl.removeAttribute("src")
             imgEl.hidden = true
-            // Nothing of an Edit stays on the stage: its canvas, its toggle and its badge
             editStage.clear()
         }
 
         try {
             if (isVideo) {
-                // The player's controls are defined by media-chrome, loaded by the first Video alongside it
+                // media-chrome loads lazily, with the first Video
                 await Promise.all([
                     setMediaSrcAndWait({ mediaEl, url }),
                     loadMediaChrome(),
@@ -384,12 +341,9 @@ export function createSearchDetailCoordinator({
     }
 
     /**
-     * Navigates the active asset-detail modal to `assetId`, shown by `cellEl`: fetches the asset's
-     * metadata, then its media. Both steps are skipped if the request is superseded or the modal
-     * goes away. A playing video is paused first, and the Detail panel is told at once, so the last
-     * asset's details and Face highlights leave as this one starts loading; its details load from
-     * `showMedia`, once the metadata is in, so a failed fetch is one error and no request the
-     * panel would have to drop.
+     * Fetches the asset's metadata, then shows its media, unless the request is superseded. The
+     * Detail panel empties at once but loads the details only from `showMedia`, so a failed fetch
+     * makes a single error.
      */
     async function loadAssetDetail(assetId, cellEl) {
         const repoId = context.getRepoId()
@@ -452,7 +406,7 @@ export function createSearchDetailCoordinator({
         })
     }
 
-    /** Plays or pauses the shown Video (Space outside the player); does nothing on an image or while a Video loads */
+    /** Plays or pauses the shown Video; does nothing on an image or while a Video loads (its player is hidden) */
     function togglePlayback() {
         const videoEl = document.querySelector("#imageDetailModalContent video")
 

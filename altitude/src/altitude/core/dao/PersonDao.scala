@@ -6,45 +6,35 @@ import altitude.core.models.Person
 trait PersonDao extends BaseDao[Person]:
   def getAll: Map[String, Person]
 
-  /**
-   * The people in any of the given People buckets (`Const.PeopleBucket`), named first and then by sort name. An empty set is an
-   * empty list; a name that is no bucket is an `IllegalArgumentException`.
-   */
+  /** The people in any of the buckets (`Const.PeopleBucket`), named first, then by sort name */
   def getInBuckets(buckets: Set[String]): List[Person]
 
   /**
-   * How many triaged assets outside the trash each person has a Face on, for the people who have any: the part of
-   * `Person.numOfFaces` a search leaves out while triaged items are hidden. An asset still being imported counts, as its Faces
-   * are in `numOfFaces` and it is triaged.
+   * Per person, the triaged assets outside the trash they have a Face on: the part of `Person.numOfFaces` a search leaves out
+   * while triaged items are hidden. An asset still being imported counts, as its Faces are in `numOfFaces`.
    */
   def getTriagedAssetCounts: Map[String, Int]
 
-  /** The live person of the repository (neither merged away nor a bad match, hidden or not) whose sort name is the name key */
+  /** The live person (neither merged away nor a bad match, hidden or not) whose sort name is the name key */
   def getLiveByNameKey(nameKey: String): Option[Person]
 
   /**
-   * Makes the transactions that may create the repository's person of a name key take turns until they end, so the second finds
-   * the person the first created instead of failing on the unique index over live people's name keys; see `BaseDao.advisoryLock`
+   * Makes the transactions that may create a person of the name key take turns, so the second finds the person the first created
+   * instead of failing on the unique index (`BaseDao.advisoryLock`)
    */
   def lockName(nameKey: String): Unit
 
-  /**
-   * The people a Face can be given to: the live people of the repository (neither merged away nor a bad match, hidden or not,
-   * with or without an asset outside the trash), named first and then by sort name
-   */
+  /** The people a Face can be given to: every live one, hidden or not, named first, then by sort name */
   def getAssignable: List[Person]
 
   def recycleFacesForAssets(assetIds: Set[String]): Unit
   def restoreFacesForAssets(assetIds: Set[String]): Unit
 
-  /** Locks the people with a Face on any of the assets for the caller's transaction, in ID order as `lockAndGetLive` locks */
+  /** Locks the people with a Face on any of the assets, in ID order as `lockAndGetLive` locks */
   def lockAssetPeople(assetIds: Set[String]): Unit
 
-  /**
-   * Locks the people for the caller's transaction, in ID order so that transactions locking the same people cannot deadlock, and
-   * gives back the IDs of those still live (neither merged away nor a bad match)
-   */
+  /** Locks the people in ID order, so transactions locking the same people cannot deadlock; returns the live ones' IDs */
   def lockAndGetLive(personIds: Set[String]): Set[String]
 
-  /** Deletes those of the people who have no Face left, and gives back their IDs */
+  /** Deletes those with no Face left; returns their IDs */
   def deleteFaceless(personIds: Set[String]): Set[String]

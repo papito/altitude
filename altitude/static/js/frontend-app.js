@@ -20,11 +20,7 @@ import { initializeFrontendStores } from "./stores/app-stores.js"
 import { createEditPanel } from "./edit/edit-panel.js"
 import { createEditStage } from "./edit/edit-stage.js"
 
-/**
- * The composition root: initializes the stores, creates the feature coordinators, registers the
- * listeners, starts Alpine, binds drag/drop, and hydrates the fragments of the initial page.
- * Feature logic lives in the modules it composes.
- */
+/** The composition root; feature logic lives in the modules it composes. */
 export class FrontendApp {
     constructor({ context }) {
         this.context = context
@@ -78,18 +74,8 @@ export class FrontendApp {
         bindSearchInput()
         bindSearchPanel()
 
-        /*
-         * Hydrate any declarative app fragments already present in the initial page HTML.
-         *
-         * This is safe to call with `document` even though many HTMX fragments are loaded later:
-         *
-         * 1. `hydrateAppFragments()` only initializes fragment roots that already exist in the
-         *    current DOM, so on first load it hydrates just the initial page content.
-         * 2. Fragments injected later by HTMX are hydrated from `htmx:after:settle`
-         *    (`listeners/htmx-requests.js`) for the newly swapped nodes only.
-         * 3. Individual fragment hydrators are written to be idempotent (using `data-app-*`
-         *    bound flags where needed), so re-hydrating overlapping DOM is harmless.
-         */
+        // The initial page's fragments; later swaps hydrate their own nodes on `htmx:after:settle`.
+        // Hydrators are idempotent, so overlapping DOM is harmless.
         this.hydrateFragments(document)
 
         return this
@@ -112,8 +98,7 @@ export class FrontendApp {
     }
 
     reloadNav() {
-        // `current`: the view shown, whose entry the reload marks again (the reload keeps the quick
-        // search form, `hx-preserve`)
+        // `current` marks the shown view's entry again; the quick search form survives (`hx-preserve`)
         const view = Alpine.store(Const.state.searchParams).view
         htmx.ajax(
             "GET",
@@ -141,7 +126,6 @@ export class FrontendApp {
         this.reloadTriageSummary()
     }
 
-    /** Reloads the Triage summary in Triage, once for every change however many paths ask (listeners/triage.js) */
     reloadTriageSummary() {
         reloadTriageSummary()
     }

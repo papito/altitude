@@ -7,10 +7,8 @@ object Query:
   case class QueryParam(values: Set[Any], paramType: ParamType, negate: Boolean = false):
     require(values.nonEmpty)
 
-    // types that requires two values
     if paramType == ParamType.RANGE || paramType == ParamType.OR then require(values.size == 2)
 
-    // overloaded to accept one value
     def this(value: Any, paramType: ParamType, negate: Boolean) =
       this(Set(value), paramType, negate)
 
@@ -36,7 +34,7 @@ object Query:
   def NOT_OR(values: List[Any]): QueryParam = QueryParam(values.toSet, ParamType.OR, negate = true)
 
   def IN(values: Set[Any], negate: Boolean = false): QueryParam =
-    // if only one value given - simplify this to be just an equals
+    // One value is an equality
     if values.size == 1 then QueryParam(values, ParamType.EQ, negate)
     else QueryParam(values, ParamType.IN, negate)
   def NOT_IN(values: Set[Any]): QueryParam = IN(values, negate = true)
@@ -68,5 +66,5 @@ class Query(val params: Map[String, Any] = Map(), val rpp: Int = 0, val page: In
 
   val isSorted: Boolean = sort.nonEmpty
 
-  // append new params to the query and return a new copy
+  // A copy with the params added
   def add(_params: (String, Any)*): Query = Query(params = params ++ _params, rpp = rpp, page = page, sort = sort)

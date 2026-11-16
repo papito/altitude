@@ -1,6 +1,5 @@
-/* The toolbar sticks to the top of the scrolling pane, under the results title when there is one (its height, written by
-   js/search-results/sticky-offsets.js), so its former margin is padding, painted with the pane's background: the pane's
-   tint, if any, over the page background, so the grid does not show through */
+/* The toolbar sticks under the results title, so its spacing is padding painted with the pane's background (its tint over
+   the page's) and the grid does not show through */
 #searchControl {
   position: sticky;
   top: var(--results-title-height, 0);
@@ -8,12 +7,10 @@
   /* The view band's top edge (pages/index.css) */
   anchor-name: --results-toolbar;
   padding: var(--space-6) var(--space-8);
-  /* A wrapping row of three groups (includes/search_results). The lead (the total, then the batch ops) and the trail (the
-     trash view's Purge button) grow from the same zero basis, so they split what the controls leave evenly and the
-     controls sit on the bar's center whatever the sides hold (a flex row with an auto margin on the total would center
-     them in what the total leaves instead). Neither side shrinks below its content, so the batch ops push the controls
-     right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one,
-     --space-6 below; the groups keep --space-9 apart */
+  /* Three groups in a wrapping row. The lead (the total, the batch ops) and the trail (the trash view's Purge) grow from
+     the same zero basis, so they split what the controls leave evenly and the controls sit at the bar's center whatever
+     the sides hold. Neither side shrinks below its content, so the batch ops push the controls right, and once the lead
+     and the controls no longer fit one row the controls and the trail wrap */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -21,7 +18,6 @@
   background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-neutral-2);
 }
 
-/* The total holds the left edge, followed by the batch ops while assets are selected */
 #searchControl .lead {
   flex: 1 1 0;
   display: flex;
@@ -35,14 +31,14 @@
   gap: var(--space-9);
 }
 
-/* The trash view's Purge button holds the right edge */
 #searchControl .trail {
   flex: 1 1 0;
   display: flex;
   justify-content: flex-end;
 }
 
-/* Triage's row after the toolbar: the toolbar's bottom padding is the space above the line, which stops at its side padding */
+/* Triage's Curate row after the toolbar: the toolbar's bottom padding is the space above its line, which stops at the side
+   padding */
 #curateQueue {
   display: grid;
   place-items: center;
@@ -55,7 +51,7 @@
   padding-inline: var(--space-9);
 }
 
-/* The icon's gap in the batch ops' Curate */
+/* The icon's gap, as in the batch ops' buttons */
 #curateSequences span {
   margin-left: var(--space-5);
 }
@@ -64,8 +60,8 @@
   white-space: nowrap;
 }
 
-/* The total's "Total:" label is an eyebrow before the count, which is a step up from the body text so it reads at a
-   glance; tabular digits keep its width steady as assets leave the grid */
+/* The "Total:" label is an eyebrow before the count; tabular digits keep the count's width steady as assets leave the
+   grid */
 #searchControl .total strong {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
@@ -80,22 +76,20 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* In map layout the fragment is a column that hands the map every pixel under the controls
-   (js/map/map-view.js sizes the map to it) */
+/* In map layout the fragment is a column that hands the map everything under the controls */
 [data-app-fragment="search-results"].map-layout {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
-/* The "Map area" chip (a .filter-chip): the bbox scope of the crowded-pin panel, set off from the total */
+/* The "Map area" chip, the crowded-pin panel's bbox scope */
 #bboxScope {
   margin-left: var(--space-5);
 }
 
-/* The controls' direct children only: as a descendant selector this would also match the View control's popover
-   panel, and an ID selector outranks `.context-menu:popover-open`, so the closed panel would be
-   forced back to display: grid and stay on screen. The layout toggle keeps its .toggle-group flex row. */
+/* Direct children only: a descendant selector would also match the View control's popover panel, and this ID selector
+   outranks `.context-menu:popover-open`, so the closed panel would stay on screen. The layout toggle keeps its flex row */
 #searchControl .controls > div:not(.toggle-group) {
   display: grid;
   place-items: center;
@@ -115,8 +109,8 @@
   cursor: pointer;
 }
 
-/* Hidden until at least one field is shown: the grid carries one `show-<field>` class per visible field
-   (js/search-results/metadata-visibility.js), and these rules do the rest, for every cell loaded or not */
+/* Hidden until a field is shown: the grid carries a `show-<field>` class per visible field, so these rules reach every
+   cell, loaded or not */
 #assets .cell .metadata {
   display: none;
   background-color: rgb(from var(--theme-secondary) r g b / 40%);
@@ -130,15 +124,14 @@
   color: var(--theme-neutral-4);
 }
 
-/* Shrink-wrapped and centered by the cell's grid, so its box is exactly the rendered thumbnail:
-   the target a box selection hit-tests against (js/search-results/box-selection.js) */
+/* Shrink-wrapped and centered by the cell's grid, so its box is exactly the rendered thumbnail, which a box selection
+   hit-tests against */
 #assets .drag-drop {
   position: relative;
   cursor: pointer;
 }
 
-/* The box-selection rectangle. Viselect draws it inside its own fixed, clipped container on
-   <body>; only its look is styled here */
+/* The box-selection rectangle; Viselect places it in a container of its own, so only its look is styled here */
 .selection-area {
   border: var(--border-hairline) var(--theme-neutral-3);
   pointer-events: none;
@@ -152,8 +145,8 @@
   width: var(--marker-size);
   height: var(--marker-size);
   border-radius: 50%;
-  /* The primary disc, with the check cut out of --theme-on-primary through a mask: a data URI cannot read a token, a
-     mask lets the fill be one */
+  /* The disc; ::after draws the check in --theme-on-primary through a mask, since a data URI cannot read a token but a
+     mask's fill can be one */
   background: var(--theme-primary);
   box-shadow: var(--drop-shadow);
 }
@@ -204,29 +197,26 @@
   --cell-box: calc(var(--preview-box) + 10px);
   padding: 0 var(--space-5) var(--space-5);
   display: grid;
-  /* As many columns as fit, each a cell's margin box, and the remainder split evenly between the left and right
-     edges, so the grid stays centered at any pane width. Cells still fill the columns from the left, so a
-     group's short last row lines up under the rest of it and under its header rather than floating in the
-     middle of the pane; auto-fill keeps the empty columns of a short result, so the left edge does not move
-     with the count */
+  /* As many columns as fit, the remainder split between the edges, so the grid stays centered. Cells fill from the
+     left, so a group's short last row lines up under the rest; auto-fill keeps a short result's empty columns, so the
+     left edge does not move with the count */
   grid-template-columns: repeat(auto-fill, calc(var(--cell-box) + var(--space-2) * 2));
   justify-content: center;
   /* Keeps the date headers' z-index inside the grid, so the drag stand-in and other overlays still paint above them */
   isolation: isolate;
-  /* The page window (js/search-results/page-window.js) folds, reloads and drops pages above and below the viewport
-     and corrects the scroll position itself, so the browser's own anchoring must not correct it a second time */
+  /* The page window folds and reloads pages off screen and corrects the scroll position itself, so the browser's
+     anchoring must not correct it a second time */
   overflow-anchor: none;
 }
 
-/* A page folded above the window: a full row of about the page's height, carrying the page's cursor */
+/* A folded page: a full row of about the page's height */
 #assets .page-spacer {
   grid-column: 1 / -1;
 }
 
-/* A group header (a day, a Location or a Sequence) of a grouped grid spans the whole row and sticks to the top of the scrolling
-   pane, below the results title and the toolbar (their heights together, written by js/search-results/sticky-offsets.js).
-   Every header sticks at the same offset, so the next group's header paints over the previous one as it arrives - which
-   reads as a replacement only because the background is opaque: the pane's tint, if any, over the page background. */
+/* A group header spans the row and sticks below the results title and the toolbar. Every header sticks at the same
+   offset, so the next one paints over the previous as it arrives, which reads as a replacement only because the
+   background is opaque */
 #assets .result-group {
   grid-column: 1 / -1;
   position: sticky;
@@ -241,15 +231,13 @@
   background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-neutral-2);
 }
 
-/* The gap between groups. It hangs off the header rather than the cells above it, so the first
-   group still starts flush against the controls, and a group continued onto the next page - which
-   repeats no header - gains no gap in its middle */
+/* The gap between groups hangs off the header rather than the cells above it, so the first group starts flush against
+   the controls, and a group continued onto the next page, which repeats no header, gains no gap in its middle */
 #assets .result-group:not(:first-child) {
   margin-top: var(--space-7);
 }
 
-/* A Describe search's weaker matches open under a header of their own (includes/weaker_matches_header). On a grouped grid the
-   first of their groups follows it at once, with no gap between the two headers */
+/* No gap between the weaker matches' header and the first group under it */
 #assets .weaker-matches + .result-group {
   margin-top: 0;
 }
@@ -266,7 +254,7 @@
   font-size: var(--font-size-small);
 }
 
-/* Selects the group's loaded cells as a set (js/alpine/components/date-group-selectable.js) */
+/* Selects the group's loaded cells as a set */
 #assets .result-group .group-checkmark {
   width: var(--marker-size-small);
   height: var(--marker-size-small);
@@ -290,7 +278,7 @@
   color: var(--theme-neutral-3);
 }
 
-/* The Preview of an asset that plays (a Video, an animated GIF) wears a play badge, so a still and a clip tell apart */
+/* The play badge of an asset that plays (a Video, an animated GIF) */
 #assets .cell .drag-drop .play-badge {
   position: absolute;
   top: 50%;
@@ -330,13 +318,12 @@
   background-color: var(--warning-background-color);
 }
 
-/* Hide triage marker when in triage view (all items are triaged there) */
+/* Every asset in the Triage view is triaged, so the marker says nothing there */
 #content.triage #assets .cell .drag-drop .triage-marker {
   display: none;
 }
 
-/* Hide cell badges while the cell is being dragged, and while the move it
-   triggered is still in flight - otherwise it blinks back on a successful drop */
+/* Hidden while the cell is dragged and while its move is in flight, or the badge blinks back on a successful drop */
 #assets .cell .drag-drop.dragging .triage-marker,
 #assets .cell.move-pending .drag-drop .triage-marker,
 #assets .cell .drag-drop.dragging .no-date-marker,

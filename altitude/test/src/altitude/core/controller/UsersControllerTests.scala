@@ -15,11 +15,7 @@ import altitude.core.models.User
 import altitude.core.routes.web.SessionController
 import altitude.core.util.Util
 
-/**
- * The Users page and its dialogs: who opens the page and sees which accounts, the nav's Users entry, the Add User form rendered
- * to the creator's ceiling and its round trip, the refusal of anything above the ceiling, an Admin's edit, password, deactivation
- * and delete, and every account's change of its own password and its account info dialog.
- */
+/** The Users page and its dialogs, and every account's own password change and account info dialog */
 @DoNotDiscover class UsersControllerTests extends ControllerTestCore {
 
   private def users = testApp.service.user
@@ -51,7 +47,7 @@ import altitude.core.util.Util
   private def created(creator: User, accountType: AccountType, grants: Map[String, Permissions]): User =
     users.create(creator.persistedId, testContext.makeUser().copy(accountType = accountType), "password 1", grants)
 
-  /** The Add User form's body, a User given `permissions` in each of `libraries`, its password confirmed */
+  /** The Add User form's body: a User given its listed Permissions in each of `libraries`, its password confirmed */
   private def addBody(username: String, libraries: Map[Repository, List[Permission]], accountType: String = "User"): ujson.Obj =
     ujson.Obj(
       Api.Field.User.NAME -> "Jane Doe",
@@ -75,10 +71,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The page answers 200 with the nav's Users entry marked as the page shown, the three tabs with their counts (one Admin, one
-     * User, one Guest), each account's name and `@username`, the User's Libraries summary ("1 Library · 2 Permissions") and their
-     * Permissions, "All Libraries" for the Admin, the Guest's status "Deactivated", and a ⋯ menu on each card: Edit, Set password
-     * and Delete, with Reactivate for the Guest.
+     * The page marks the nav's Users entry as current, counts one account under each tab, and shows each account's card with its
+     * name, username and menu: the User's Libraries and Permissions, All Libraries for the Admin, and the Guest as deactivated,
+     * with Reactivate.
      *
      * Edge cases:
      *
@@ -128,8 +123,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The page answers 200 with the account the User created and its first Library, and neither the second Library's name, nor
-     * the Admin's account, nor any card's menu.
+     * The page shows the account the User created with its first Library only, no card menu, and not the Admin's account.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.CreateUsers))
     val creator = testContext.user
@@ -168,8 +162,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The page opens on the Guests tab with no account, and again once the Guest is there; that tab's section is the one shown
-     * before the page's script runs. The empty tabs say so, naming their account type as the tab does ("No Admins").
+     * The page opens on the Guests tab before and after the Guest exists, its section shown before the page's script runs. The
+     * empty tabs say they hold no accounts of their type.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.CreateGuests))
 
@@ -195,13 +189,12 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The main page's nav carries the Users entry, linking to the Users page of its Library, for the Admin and the holder of
-     * Create Guests, and not for the other two. Every nav carries the account's cell in its account type's color, its trigger
-     * showing the username, named after it and the type, and requesting the account info dialog of the Library.
+     * The nav links to the Library's Users page for the Admin and the holder of Create Guests only. Every nav carries the
+     * account's cell in its type's color, showing the username and opening the account info dialog.
      *
      * Edge cases:
      *
-     * The nav holds no account menu and no info button: Change password and Log out are the dialog's.
+     * The nav holds no account menu and no info button: Change password and Log out live in the dialog.
      */
     val callers = List(
       (AccountType.Admin, Permissions.all, true),
@@ -239,9 +232,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The form answers 200 in the general modal titled "Add User", with Name, Username, Email, Password and its confirmation, the
-     * three type cards, a row for each Library, a column for each of the ten Permissions, the Create Libraries switch and the
-     * new-Library grant's switch and chips.
+     * The form offers the account fields, all three types, a row for each Library, a column for each Permission, and the Create
+     * Libraries and new-Library grant switches.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val other = library()
@@ -282,9 +274,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The form offers the User and Guest cards and no Admin card; a row for the first two Libraries and none for the third; the
-     * columns of Import, Curate own and Create Users alone; no Create Libraries or new-Library grant; and in the second Library's
-     * row no Permission cell. The Library it was opened from starts checked, with Import and Curate own in the form's state.
+     * The form offers the User and Guest types, rows for the first two Libraries, the columns of Import, Curate own and Create
+     * Users alone, no Permission cell in the second Library's row, and neither Admin switch. The Library it was opened from
+     * starts checked with Import and Curate own.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import, Permission.CurateOwn, Permission.CreateUsers))
     val creator = testContext.user
@@ -317,15 +309,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin logged in to a Library; a submission with a username the rule refuses and no account type, then one with that
-     * username alone refused, then a valid one giving Import and Organize in the Library.
+     * An Admin logged in to a Library; a submission with a refused username and no account type, then one with only the username
+     * refused, then a valid one giving Import and Organize.
      *
      * Assertions:
      *
-     * The first two answer 200 as a validation replacement (`HX-Retarget: this`): the form with the type's error beside the
-     * username rule's, then the username rule's error alone, under their fields, the typed values kept. The third answers 200
-     * with the success detail naming the account, which is stored, created by the Admin, holding Import and Organize in the
-     * Library.
+     * The first two answer the form as a validation replacement with each refused field's error, the typed values kept. The third
+     * names the account in its success detail and stores it, created by the Admin with Import and Organize.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val mine = testApp.service.repository.getById(repoId)
@@ -362,13 +352,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin logged in to a Library; a submission whose confirmation differs from its password and whose username the rule
-     * refuses, then one with a valid username and no confirmation, then one with the confirmation matching.
+     * An Admin logged in to a Library; a submission with a mismatched confirmation and a refused username, then one with a valid
+     * username and no confirmation, then one that matches.
      *
      * Assertions:
      *
-     * The first answers the form as a validation replacement with `PASSWORDS_DO_NOT_MATCH` under the confirmation beside the
-     * username rule's error, both passwords kept; the second with the mismatch alone; neither adds an account. The third adds it.
+     * The first answers the form with the mismatch beside the username error, both passwords kept; the second with the mismatch
+     * alone; neither adds an account. The third adds it.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val mine = testApp.service.repository.getById(repoId)
@@ -408,8 +398,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * A User given Organize in its Library, a User given the other Library, an Admin, and a User with the Create Libraries flag
-     * are each answered 403, and no account of their usernames exists.
+     * Adding a User with Organize, a User in the other Library, an Admin, or a User with the Create Libraries flag is each a 403
+     * that adds no account.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import, Permission.CreateUsers))
     val mine = testApp.service.repository.getById(repoId)
@@ -443,12 +433,10 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The edit form is the Add User form titled "Edit <name>", holding the User's values, the state it was opened over and no
-     * password field; its save, carrying that state, renames the User, and a second save of the same form, over the change the
-     * first made, comes back as the form with `ACCOUNT_CHANGED` and renames nothing. Set password answers 200, and the User's old
-     * password fails at login while the new one logs in, its session opening the Library. Deactivate refuses that session;
-     * Reactivate lets the User log in again. The Delete dialog names the one asset that moves to the Admin; the delete answers
-     * 200, the account is gone and the asset is the Admin's.
+     * The edit form holds the User's values and the state it was opened over, with no password field. Its save renames the User;
+     * a second save over the same state is refused as changed meanwhile and renames nothing. After Set password only the new
+     * password logs in. Deactivate refuses the User's session and Reactivate lets it log in again. The Delete dialog names the
+     * one asset moving to the Admin, and the delete removes the account and hands the asset over.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val admin = testContext.user
@@ -516,13 +504,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin logged in to a Library, whose account's version is bumped after the login (its token is stale and rebuilt at the
-     * next request); it changes its own password, then, stale again, sets its own password from the Users page.
+     * An Admin logged in to a Library, its account version bumped so its token is stale; it changes its own password, then, stale
+     * again, sets it from the Users page.
      *
      * Assertions:
      *
-     * Each answer sets one session cookie, the new token's, which opens the Library; the rebuilt token, minted before the
-     * password changed, is not set after it.
+     * Each answer sets one session cookie, the new token's, which opens the Library; the token rebuilt for the stale one before
+     * the change is not set.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val admin = testContext.user
@@ -572,16 +560,13 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The User's dialog, a popover dialog in its type's color, names the account (name, username and email address), its type
-     * with the type's description, the three Permissions it holds in this Library, its two Libraries and thirteen Permissions
-     * with each Library's Permissions and this one marked, no Create Libraries, and as instants for the browser to show in its
-     * zone the account's addition, its last login and when this session's token expires; then Change password, requesting its
-     * dialog, and Log out, submitting the nav's logout form.
+     * The User's dialog, in its type's color, shows the account and its type, the three Permissions held here, its two Libraries
+     * and 13 Permissions with this Library marked, no Create Libraries, and as instants for the browser's zone its creation, last
+     * login and this session's expiry. It offers Change password and Log out, which submits the nav's form.
      *
      * Edge cases:
      *
-     * The Admin's reads every Permission here, all Libraries and Create Libraries; the Guest's access alone, here and in its one
-     * Library.
+     * The Admin's shows every Permission, all Libraries and Create Libraries; the Guest's access only, in its one Library.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import, Permission.CurateOwn, Permission.Organize))
     val user = testContext.user
@@ -650,14 +635,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A Guest logged in to a Library, and a second session of it; the Guest sends a wrong current password, then a repeat that
-     * differs, then a valid change.
+     * A Guest logged in to a Library, and a second session of it; the Guest sends a wrong current password, then a mismatched
+     * repeat, then a valid change.
      *
      * Assertions:
      *
-     * The first two answer the dialog again with the error under its field (`WRONG_PASSWORD`, `PASSWORDS_DO_NOT_MATCH`). The
-     * valid change answers 200 and sets a new session cookie, which opens the Library, while the second session is refused, and
-     * the new password logs in.
+     * The first two answer the dialog with the error under its field. The valid change sets a new session cookie that opens the
+     * Library, the second session is refused, and the new password logs in.
      */
     val repoId = loginAs(AccountType.Guest, Permissions.none)
     val guest = testContext.user
@@ -699,9 +683,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Through the second Library, where it holds neither create Permission, the first User's nav carries the Users entry, and the
-     * Users page, its cards and the Add User form answer 200; the form offers the first Library, where it may give access. The
-     * second User has no Users entry there, and is answered 403 by the page.
+     * Through the second Library, where it holds neither create Permission, the first User gets the Users entry, page, cards and
+     * Add User form, which offers the first Library. The second User gets no entry and a 403 from the page.
      */
     val first = testApp.service.repository.getById(loginAs(AccountType.User, Permissions.of(Permission.CreateUsers)))
     val creator = testContext.user
@@ -737,8 +720,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Before the flag, the User's session is refused the New library dialog (403); after it, the same session opens it (200).
-     * Once a Guest, the same session is refused Triage (403), which it saw before.
+     * The User's open session is refused the New library dialog before the flag and opens it after. Once a Guest, the same
+     * session is refused Triage, which it saw before.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val admin = testContext.user
@@ -786,13 +769,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin logged in to a Library, and a User it created there; the Admin saves the User's edit form with a name the account
-     * rules refuse and the new-Library switch off, whose chips the form then does not send.
+     * An Admin logged in to a Library, and a User it created there; the Admin saves the User's edit form with a refused name and
+     * the new-Library switch off, so the form sends no chips.
      *
      * Assertions:
      *
-     * The form comes back with the name's error, titled "Edit" and the User's stored name, not the name typed, and its state
-     * holds the new-Library preset, Import and Curate own, for the chips to show once the switch is turned on.
+     * The refused form is titled with the stored name, not the typed one, and its state holds the new-Library preset, Import and
+     * Curate own, for the chips once the switch is turned on.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val user = created(testContext.user, AccountType.User, Map(repoId -> Permissions.none))
@@ -828,9 +811,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * An account ID that is no UUID is a 400 in the edit, Set password and Delete dialogs' query, in the delete's, and in the
-     * body of the edit, the password, the deactivation and the reactivation; a Library ID that is no UUID is a 400 among an added
-     * account's Libraries and in its Permissions. No account of the added username exists, and the User stays active.
+     * A non-UUID account ID is a 400 in every dialog's and the delete's query and in every write's body; a non-UUID Library ID is
+     * a 400 in an added account's Libraries or Permissions. No account is added, and the User stays active.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val user = created(testContext.user, AccountType.User, Map(repoId -> Permissions.none))

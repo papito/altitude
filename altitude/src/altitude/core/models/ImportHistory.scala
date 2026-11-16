@@ -3,9 +3,8 @@ package altitude.core.models
 import java.time.Instant
 
 /**
- * An Import as the Import history shows it. `openedAt` is the moment it was opened; `deliveredBy` the name of the account that
- * delivered it, none for a Watch folder's scan and once that account is deleted; `destination` the path of the folder its files
- * were sorted into, none for Triage; `isInterrupted` whether a restart failed files of it.
+ * An Import as the Import history shows it. `deliveredBy` is the delivering account's name, none for a Watch folder's scan or
+ * once that account is deleted; `destination` is none for Triage; `isInterrupted` is whether a restart failed files of it.
  */
 case class ImportEntry(
     anImport: Import,

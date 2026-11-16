@@ -29,7 +29,7 @@ abstract class WatchFolderFileDao(override val config: Config)
 
   private def repositoryId: String = RequestContext.getRepository.persistedId
 
-  // One file of one Watch folder of the context repository, as it is remembered with a size and a modified time
+  // A file only as it is remembered, with this size and modified time
   private val ASIS = s"""
        WHERE ${FieldConst.REPO_ID} = ?
          AND ${F.WATCH_FOLDER_ID} = ?

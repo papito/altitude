@@ -2,8 +2,7 @@
  * The search parameters' rules for the advanced search panel's "Search in" row
  * (`altitude/static/js/stores/search-params.js`): a pick of Library, Triage or All is the search's
  * view and triage filter, lasts for the search it was made for, and is never remembered. The
- * store's module is the browser's as it is, behind the stand-ins `search-params.test.mjs`
- * describes. Run by `make test-js`.
+ * module loads behind the same stand-ins as in `search-params.test.mjs`. Run by `make test-js`.
  */
 import { beforeEach, test } from "node:test"
 import assert from "node:assert/strict"

@@ -14,30 +14,22 @@ import { viewSettings } from "./view-settings.js"
 // Referenced by name from Twirl templates
 window.initDateGroupSelectable = initDateGroupSelectable
 
-// Referenced as `x-data="contextMenu"` by the folder tree and album list renderers
 Alpine.data("contextMenu", contextMenu)
 
-// Referenced as `x-data="localTime"` by htmx/account_info_dialog.scala.html, which the nav's account trigger opens
 Alpine.data("localTime", localTime)
 
-// Referenced as `x-data="viewSettings"` by htmx/view_settings_dialog.scala.html
 Alpine.data("viewSettings", viewSettings)
 
-// Referenced as `x-data="peopleTab"` by htmx/people.scala.html
 Alpine.data("peopleTab", peopleTab)
 
-// Referenced as `x-data="curation"` by htmx/curation.scala.html
 Alpine.data("curation", curation)
 
-// Referenced as `x-data="faceCombobox"` by htmx/detail_panel_people.scala.html
 Alpine.data("faceCombobox", faceCombobox)
 
-// Referenced as `x-data="editPanel"` by includes/edit_panel.scala.html, in Asset detail's fragment
 Alpine.data("editPanel", editPanel)
 
-// Referenced as `x-data="searchPanel"`, `x-data="filterCombobox"` and `x-data="dateRange"` by
-// htmx/search_panel.scala.html, the advanced search panel's form and its fields, which the nav loads on every page
-// (nav-page.js registers them too)
+// The advanced search panel's, which the nav loads on every page; nav-page.js registers them
+// for the pages outside the app
 Alpine.data("searchPanel", searchPanel)
 Alpine.data("filterCombobox", filterCombobox)
 Alpine.data("dateRange", dateRange)

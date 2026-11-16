@@ -5,32 +5,13 @@ import Split from "../../lib/split.es.js"
 import { effectiveSide, isVerticalAxis } from "../../common/explorer-dock.js"
 
 /**
- * The People tab (`htmx/people.scala.html`): the owner of its People buckets, its Split view and
- * its pane loads, as `viewSettings` owns the grid's metadata switches.
+ * The People tab's buckets, Split view and pane loads. The browser owns the state, remembered in
+ * `localStorage`; the server only renders a pane's list for the buckets it asks for. Every pane
+ * reloads when people change and when "Show triaged items" flips.
  *
- * The browser owns the state. It is remembered in `localStorage` under
- * `Const.localStore.peopleView` as
- * `{ split, buckets: { main: [...], duplicate?: [...] }, paneSizes: { stacked, sideBySide } }`:
- * whether Split view is on, the buckets each pane shows, the Duplicate pane's only once it has had
- * any, and the two panes' Split.js sizes on each axis. A first visit shows Matched alone, with no
- * split. The server knows nothing of it: it renders a pane's list (`htmx/people_list`) for the
- * buckets the pane asks for, and this component loads each pane's list into its `.list` host
- * itself, on init, when a switch flips, when a person changes (`Const.events.peopleChanged`: a
- * merge, a hide, a show, a discard or a rename moves people between buckets, and an asset mutation
- * or a Face correction can change a person's number, so every pane reloads with its own) and when
- * "Show triaged items" flips. Each load reads `triaged` from the `searchParams` store, so each
- * person's number is what opening them from the repository view finds. In Triage every load asks for
- * triaged items whatever the store holds, so the tab lists every Person of its buckets, those
- * found only in triaged assets included; the numbers are not displayed there.
- *
- * Split view adds the Duplicate pane under the shell's `x-if` and divides the two panes with
- * Split.js along the axis the Dock side calls for (`js/common/explorer-dock.js`): stacked, a
- * vertical instance, under a left or right dock, where the explorer is tall; side by side, a
- * horizontal one, under a top or bottom dock, where it is wide. Each axis remembers its own sizes.
- * A Dock side change (`Const.events.dockSideChanged`) rebuilds the instance on the new axis.
- * Turning Split view off destroys the instance, which takes its gutter and the sizes it set with
- * it, and then drops the pane. The Duplicate pane keeps its remembered buckets across split off
- * and on; it copies the Main pane's only the first time.
+ * Split view divides the Main and Duplicate panes with Split.js: stacked under a left or right dock,
+ * where the explorer is tall, side by side under a top or bottom one. Each axis remembers its own
+ * sizes, and the Duplicate pane copies the Main pane's buckets only the first time.
  */
 
 const DEFAULT_SIZES = [50, 50]
@@ -38,25 +19,22 @@ const MIN_SIZE = 120
 const { main: MAIN, duplicate: DUPLICATE } = Const.people.panes
 const KNOWN_BUCKETS = Object.values(Const.people.buckets)
 
-// The pane names before the Main and Duplicate panes, still read from an older remembered state
+// Older pane names, still read from a remembered state
 const LEGACY_PANES = { [MAIN]: "top", [DUPLICATE]: "bottom" }
 
-// The two axes a Split.js instance divides the panes along, and the Split.js direction of each
+// The Split.js direction of each axis
 const STACKED = "stacked"
 const SIDE_BY_SIDE = "sideBySide"
 const DIRECTIONS = { [STACKED]: "vertical", [SIDE_BY_SIDE]: "horizontal" }
 
 export function peopleTab() {
-    // The Split.js instance while Split view is on, and the listeners that reload the panes and
-    // rebuild the instance. Closure state rather than component data: Alpine would proxy them,
-    // and nothing reactive reads any.
+    // Closure state rather than component data: Alpine would proxy them, and nothing reactive reads any
     let splitInstance = null
     let onPeopleChanged = null
     let onDockSideChanged = null
 
     return {
-        // The remembered state, reactive: every switch's `aria-checked` and the Duplicate pane's
-        // `x-if` follow it
+        // The remembered state; the switches and the Duplicate pane's `x-if` follow it
         split: false,
         buckets: { [MAIN]: [Const.people.buckets.matched] },
         paneSizes: { [STACKED]: DEFAULT_SIZES, [SIDE_BY_SIDE]: DEFAULT_SIZES },
@@ -70,7 +48,7 @@ export function peopleTab() {
                 onPeopleChanged,
             )
 
-            // The axis changes with the Dock side: the panes stay, the instance is remade
+            // The axis follows the Dock side: the panes stay, the instance is remade
             onDockSideChanged = () => {
                 if (!this.split) {
                     return
@@ -83,7 +61,7 @@ export function peopleTab() {
                 onDockSideChanged,
             )
 
-            // Each Person's number follows "Show triaged items"
+            // Each Person's count depends on "Show triaged items"
             this.$watch("$store.searchParams.triaged", () => this.reloadPanes())
 
             this.loadPane(MAIN)
@@ -93,7 +71,6 @@ export function peopleTab() {
             }
         },
 
-        // Alpine calls this when another tab's fragment replaces the shell
         destroy() {
             document.body.removeEventListener(
                 Const.events.peopleChanged,
@@ -137,12 +114,9 @@ export function peopleTab() {
         },
 
         /**
-         * Loads the pane's list from the server, for the buckets it has on; nothing with no pane.
-         * The request names the pane, which the ID of each rename pencil carries: a Person can be
-         * in both panes, and a pencil anchors its own dialog.
-         * The `.list` host is the request's source (htmx takes the target as the source when none
-         * is given), and its `hx-sync="replace"` aborts a load of the pane still in flight, so
-         * the latest bucket set always lands.
+         * The request names the pane for the rename pencils' IDs: a Person can be in both panes, and
+         * each pencil anchors its own dialog. The `.list` host is the source (htmx's default, the
+         * target), so its `hx-sync="replace"` aborts a load still in flight and the latest buckets land.
          */
         loadPane(pane) {
             const listEl = this.paneEl(pane)?.querySelector(".list")
@@ -151,7 +125,7 @@ export function peopleTab() {
             }
 
             // Triage lists everyone, whatever the switch: its people may be in triaged items alone.
-            // Sent only when on: the store's null would go out as `triaged=null`, which the server refuses
+            // Sent only when on: null would go out as `triaged=null`, which the server refuses
             const showsTriaged =
                 Alpine.store(Const.state.currentView).isTriageView() ||
                 Alpine.store(Const.state.searchParams).showsTriaged()
@@ -174,20 +148,16 @@ export function peopleTab() {
             }
         },
 
-        /** The pane's buckets; a pane never shown has none */
+        /** A pane never shown has none */
         bucketsOf(pane) {
             return this.buckets[pane] ?? []
         },
 
-        /** The pane's section in this shell, or null while it is not rendered */
+        /** Null while the pane is not rendered */
         paneEl(pane) {
             return this.$root.querySelector(`[data-app-people-pane="${pane}"]`)
         },
 
-        /**
-         * Divides the two panes along the current axis at the sizes remembered for it, then fills
-         * the Duplicate pane. A drag remembers the sizes under the axis they were dragged on.
-         */
         openSplit() {
             const panes = [this.paneEl(MAIN), this.paneEl(DUPLICATE)]
             if (panes.some((pane) => !pane)) {
@@ -208,8 +178,8 @@ export function peopleTab() {
             this.loadPane(DUPLICATE)
         },
 
-        // Split.js's `destroy()` also clears the inline sizes it set along its own axis, so the
-        // next instance, on either axis, starts from the stylesheet's layout
+        // `destroy()` also clears the inline sizes Split.js set, so the next instance, on either
+        // axis, starts from the stylesheet's layout
         closeSplit() {
             splitInstance?.destroy()
             splitInstance = null
@@ -228,15 +198,13 @@ export function peopleTab() {
     }
 }
 
-/** The axis Split view divides the panes along for the Dock side the explorer is on */
 function currentAxis() {
     return isVerticalAxis(effectiveSide()) ? SIDE_BY_SIDE : STACKED
 }
 
 /**
- * The gutter between the panes: Split.js's own classes, which it sizes and drags by, and the
- * page's `.divider` (core.css), so the grip is the explorer's divider's. Split.js names the
- * direction of the split, so its "vertical" gutter is the bar that runs across
+ * Split.js's classes, which it sizes and drags by, plus the page's `.divider`, so the grip matches
+ * the explorer's. Split.js names the split's direction, so its "vertical" gutter runs across.
  */
 function buildGutter(index, direction) {
     const gutterEl = document.createElement("div")
@@ -246,12 +214,7 @@ function buildGutter(index, direction) {
     return gutterEl
 }
 
-/**
- * The remembered state, or the first visit's when none is remembered or it cannot be read. Only
- * the bucket names the tab knows are kept, the Duplicate pane's list only when it is one, and an
- * axis's sizes only when they are two percentages. A pane's buckets remembered under its older
- * name are read as its own.
- */
+/** Keeps only known bucket names and valid sizes; falls back to the first visit's state */
 function rememberedView() {
     const saved = remembered(Const.localStore.peopleView, null)
     const savedBuckets = (pane) =>
@@ -276,12 +239,10 @@ function rememberedView() {
     return { split: saved.split === true, buckets, paneSizes }
 }
 
-/** Those of `names` that are People buckets, in their order */
 function knownBuckets(names) {
     return names.filter((name) => KNOWN_BUCKETS.includes(name))
 }
 
-/** `sizes` when they are two percentages, else the default */
 function sizesOrDefault(sizes) {
     const isPercentage = (size) =>
         Number.isFinite(size) && size >= 0 && size <= 100
@@ -292,7 +253,6 @@ function sizesOrDefault(sizes) {
         : DEFAULT_SIZES
 }
 
-/** The JSON value remembered under `key`, or `fallback` when there is none or it does not parse */
 function remembered(key, fallback) {
     try {
         return JSON.parse(localStorage.getItem(key)) ?? fallback

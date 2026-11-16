@@ -29,12 +29,11 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Setting the field to a value that is not a number, "one" or a lone ".", fails validation, while numbers in a variety of
-     * spellings are accepted and stored as given.
+     * Values that are not numbers ("one", a lone ".") fail validation; numbers in various spellings are stored as given.
      *
      * Edge cases:
      *
-     * Leading and trailing dots and leading zeros; a blank value among them is dropped rather than refused.
+     * Leading and trailing dots and leading zeros are accepted; a blank value among them is dropped rather than refused.
      */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.NUMBER))
     val asset: Asset = testContext.persistAsset()
@@ -49,7 +48,6 @@ import altitude.core.util.Util
       testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
     }
 
-    // these should be ok
     data = Map[String, Set[String]](field.persistedId -> Set("000.", "0", "", "0000.00123", ".000", "36352424", "234324221"))
     testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
 
@@ -68,11 +66,7 @@ import altitude.core.util.Util
      * Assertions:
      *
      * Values that are not booleans ("one", "on") and conflicting values (TRUE and FALSE together) fail validation. Letter-case
-     * variants of one boolean are a single value rather than a conflict, and every recognized spelling is stored as given.
-     *
-     * Edge cases:
-     *
-     * TRUE, FALSE, true, False, 1 and 0 are all recognized; TRUE and true together collapse into one value.
+     * variants of one boolean are stored as one value, and every recognized spelling, 1 and 0 included, is stored as given.
      */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.BOOL))
     val asset: Asset = testContext.persistAsset()
@@ -87,17 +81,14 @@ import altitude.core.util.Util
       testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
     }
 
-    // cannot have conflicting boolean values
     data = Map[String, Set[String]](field.persistedId -> Set("TRUE", "FALSE"))
     intercept[ValidationException] {
       testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
     }
-    // ... but letter-case variants of one value are non-conflicting duplicates, stored as one value
     data = Map[String, Set[String]](field.persistedId -> Set("TRUE", "true"))
     testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
     testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value.toLowerCase) shouldBe Set("true")
 
-    // every recognized spelling is ok, and stored as given
     Seq("TRUE", "FALSE", "true", "False", "1", "0").foreach {
       value =>
         data = Map[String, Set[String]](field.persistedId -> Set(value))
@@ -115,8 +106,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Metadata naming a field the repository does not have is refused as not found, even alongside a known field; valid keyword
-     * and number values are stored and both fields read back.
+     * Metadata naming a field the repository does not have is not found, even alongside a known field; valid keyword and number
+     * values are stored and read back.
      */
     val keywordMetadataField =
       testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
@@ -126,7 +117,6 @@ import altitude.core.util.Util
 
     val asset: Asset = testContext.persistAsset()
 
-    // add a field we do not expect
     val badData =
       Map[String, Set[String]](keywordMetadataField.persistedId -> Set("one", "two", "three"), BaseDao.genId -> Set("four"))
 
@@ -134,7 +124,6 @@ import altitude.core.util.Util
       testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(badData))
     }
 
-    // valid
     val data = Map[String, Set[String]](
       keywordMetadataField.persistedId -> Set("one", "two", "three"),
       numberMetadataField.persistedId -> Set("1", "2", "3.002", "14.1", "1.25", "123456789"))
@@ -159,10 +148,6 @@ import altitude.core.util.Util
      *
      * A field given no values is not stored, and updating the remaining field to no values removes it, leaving the asset with no
      * metadata.
-     *
-     * Edge cases:
-     *
-     * Empty value sets, both on set and on update.
      */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
@@ -178,7 +163,6 @@ import altitude.core.util.Util
     storedMetadata.data.keys should contain(field1.persistedId)
     storedMetadata.data.keys shouldNot contain(field2.persistedId)
 
-    // update with nothing
     data = Map[String, Set[String]](field1.persistedId -> Set())
 
     testApp.service.metadata.updateMetadata(asset.persistedId, UserMetadata(data))
@@ -196,8 +180,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * An update naming the number field and the new field keeps the keyword field it leaves out, adds the new field, and replaces
-     * the number field's values, dropping the ones the update does not repeat.
+     * An update keeps the field it leaves out, adds the new field, and replaces the number field's values with the ones given.
      */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
@@ -281,8 +264,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Setting metadata on the unknown asset and deleting a field by the unknown ID are each a `NotFoundException`, never a write
-     * that changes nothing; reading the unknown asset's metadata is not found too. The field is still there.
+     * Setting or reading metadata of the unknown asset and deleting a field by the unknown ID are each not found, never a write
+     * that changes nothing. The field is still there.
      */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
     val unknownId = BaseDao.genId
@@ -309,17 +292,14 @@ import altitude.core.util.Util
     testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
     testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
-    // SECOND USER
     val user2 = testContext.persistUser()
     switchContextUser(user2)
 
     testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
-    // FIRST USER
     switchContextUser(testContext.users.head)
     testApp.service.metadata.getAllFields.size shouldBe 3
 
-    // THIRD USER
     val user3 = testContext.persistUser()
     switchContextUser(user3)
     testApp.service.metadata.getAllFields.size shouldBe 3
@@ -353,9 +333,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Adding a field named 250 of U+FB2C (250 characters as typed, 750 in NFC) fails validation with the name field's too-long
-     * error, and one named 100 of U+FDFA (whose name key NFKC spells out to 3300 bytes) with the name key error. The repository
-     * still has no fields.
+     * A name of 250 U+FB2C (750 characters in NFC) fails validation as too long, and one of 100 U+FDFA (a 3300-byte name key
+     * under NFKC) as a too-long name key. The repository still has no fields.
      */
     val max = Api.Constraints.MAX_METADATA_FIELD_NAME_LENGTH
     val tooLong = Const.Msg.Err.VALUE_TOO_LONG.format(max)
@@ -379,9 +358,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The asset's metadata JSON lists all five fields in the order of their name keys: "alpha", "Ｂeta", "Charlie", "Straße"
-     * ("strasse") and "Strasz", the field with a value and the fields without alike. Each field reads as its ID, name and type,
-     * with no name key.
+     * The asset's metadata JSON lists all five fields, with a value or not, in name key order: "alpha", "Ｂeta", "Charlie",
+     * "Straße" ("strasse"), "Strasz". Each field reads as its ID, name and type, with no name key.
      *
      * Edge cases:
      *
@@ -410,8 +388,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Adding a field named "STRASSE" (the case fold of "ß"), "Café" with an "e" and a combining accent (the canonical form) or
-     * "Ｓummer" with a full-width "S" (the compatibility form) is a duplicate, whatever its type.
+     * Adding a field named "STRASSE" (case fold), "Café" with a combining accent (canonical form) or "Ｓummer" with a full-width
+     * "S" (compatibility form) is a duplicate, whatever its type.
      */
     val clashes = List("Stra\u00DFe" -> "STRASSE", "Caf\u00E9" -> "Cafe\u0301", "Summer" -> "\uFF33ummer")
 
@@ -432,8 +410,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The field is returned and reads back as "Café" with a precomposed "é". Adding "Istanbul" again under the root locale is a
-     * duplicate: the Turkish locale's dotless "ı" never reaches the key.
+     * The field is returned and reads back with a precomposed "é". Adding "Istanbul" again under the root locale is a duplicate:
+     * the Turkish locale's dotless "ı" never reaches the key.
      *
      * Edge cases:
      *
@@ -545,8 +523,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * A stored value gets an ID, adding a value of another field leaves that ID unchanged, and metadata given at asset creation
-     * gets IDs too.
+     * A stored value gets an ID that adding a value of another field leaves unchanged, and metadata given at asset creation gets
+     * IDs too.
      */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
@@ -572,7 +550,6 @@ import altitude.core.util.Util
     storedMetadata.get(field1.persistedId).get.head.id should not be None
     storedMetadata.get(field1.persistedId).get.head.id shouldBe field_1_valueId
 
-    // now set the metadata on asset creation and make sure the auto-generated IDs are there
     asset = testContext.persistAsset(metadata = metadata)
 
     storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
@@ -588,11 +565,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Adding a blank value fails validation.
-     *
-     * Edge cases:
-     *
-     * An empty string, spaces only, and a mix of spaces, a tab and a newline.
+     * Adding a blank value (empty, spaces only, or mixed whitespace) fails validation.
      */
     val _metadataField = UserMetadataField(
       name = Util.randomStr(),
@@ -624,7 +597,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Each value replaces the previous one without a duplicate error, so the field ends with the last value, false, alone.
+     * Each value replaces the previous one without a duplicate error, so the field ends with false alone.
      */
     val _metadataField = UserMetadataField(
       name = Util.randomStr(),
@@ -706,8 +679,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Values compare case-insensitively, yet changing the value to "TAG1" by its ID is not refused as a duplicate of itself: the
-     * new case is stored under the same ID.
+     * Changing the value to "TAG1" by its ID is not refused as a duplicate of itself, though values compare case-insensitively:
+     * the new case is stored under the same ID.
      */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
@@ -777,7 +750,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Updating the value by its ID to whitespace only, spaces and a tab, fails validation.
+     * Updating the value by its ID to whitespace only fails validation.
      */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
@@ -833,8 +806,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Adding "STRASSE" (the case fold of "ß"), "Café" with an "e" and a combining accent (the canonical form) or "Ｓummer" with a
-     * full-width "S" (the compatibility form) fails validation as a duplicate, and the field keeps its four values.
+     * Adding "STRASSE" (case fold), "Café" with a combining accent (canonical form) or "Ｓummer" with a full-width "S"
+     * (compatibility form) fails validation as a duplicate, and the field keeps its four values.
      *
      * Edge cases:
      *

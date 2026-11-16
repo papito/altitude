@@ -2,9 +2,9 @@ import { Const } from "../constants.js"
 import { dropzoneListeners, isBatchMoverElement } from "./helpers.js"
 
 /**
- * Location rows accept assets: a single thumbnail, or the batch mover when assets are selected.
- * Dropping adds pointers to the Location and leaves the assets where they are, so nothing in the
- * grid moves. Category rows are not drop targets (they hold no assets), and rows are not draggable.
+ * Location rows accept a thumbnail or the batch mover. A drop adds the assets to the Location without
+ * moving them, so the grid stays as it is. Category rows hold no assets and take no drops; no row is
+ * draggable.
  */
 export function bindLocationDragDrop({ dispatch }) {
     interact("#locationList .dropzone").dropzone({

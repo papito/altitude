@@ -14,10 +14,7 @@ import altitude.core.models.ImageQuality
 import altitude.core.models.Person
 import altitude.core.service.FaceDetectionService
 
-/**
- * The partials of Curation: the modal's shell, the queue's rows and the fragment of a Curation set, from a Sequence or a
- * selection
- */
+/** The partials of Curation: the modal's shell, the queue's rows, and a Curation set's fragment from a Sequence or a selection */
 @DoNotDiscover class CurationActionControllerTests extends ControllerTestCore {
   private val sequenceId = UUID.randomUUID().toString
 
@@ -27,10 +24,7 @@ import altitude.core.service.FaceDetectionService
   // Identity encoding because the client cannot read a compressed empty body (the 204)
   private val identity = Map("Accept-Encoding" -> "identity")
 
-  /**
-   * A frame in triage with the Image quality, inserted without the import pipeline (`insertAsset`): no file, Preview or other
-   * measurement, and in no Sequence until a test stamps one
-   */
+  /** A triaged frame with the Image quality, inserted without the pipeline: no file, Preview or other measurement, no Sequence */
   private def frame(quality: ImageQuality = fine): Asset = {
     val asset = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
     testContext.setAssetImageQuality(asset.persistedId, Some(quality))
@@ -89,9 +83,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The shell is an HTML partial with the host each set's fragment swaps into, and no set of its own. Its too-few state says
-     * so, its report state holds the report and its unread state says the set could not be read and offers Try again, each
-     * offering Undo and Exit.
+     * The shell is an HTML partial with the host a set's fragment swaps into, and no set of its own. Its too-few, report and
+     * unread states each offer Undo and Exit, and the unread state offers Try again.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -125,16 +118,15 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A logged-in user's repository with a Sequence of three frames captured on 12 March 2026, imported before a Sequence of two
-     * frames captured on 1 June 2024, whose frames are persisted out of capture order; an undated Sequence of two frames, the
-     * second imported before the first; a Sequence of one frame; and a frame of no Sequence.
+     * A logged-in user's repository with a Sequence of three frames from 12 March 2026, persisted before a Sequence of two from 1
+     * June 2024; an undated Sequence of two; a Sequence of one frame; and a frame of no Sequence. Within each Sequence the frames
+     * are persisted out of capture and import order.
      *
      * Assertions:
      *
-     * The fragment is an HTML partial of one row per Sequence in the queue's order: the one captured first, then the other, and
-     * the undated one last. Each row carries its Sequence's ID in `data-rail-sequence-id`, the Preview of its cover, the frame
-     * captured first, or imported first for the undated Sequence, its frame count ("2 frames") and its first capture's day ("1
-     * Jun 2024"), or "No date" for the undated Sequence.
+     * The fragment has one row per Sequence, earliest capture first and the undated one last. Each row carries its Sequence's ID,
+     * the Preview of its cover (the frame captured first, or imported first when undated), its frame count and its first
+     * capture's day, or "No date".
      *
      * Edge cases:
      *
@@ -156,7 +148,7 @@ import altitude.core.service.FaceDetectionService
         val imported = OffsetDateTime.parse("2026-04-01T10:00:00Z")
         def sequence(assets: List[Asset], taken: Option[LocalDateTime]): String = {
           val id = UUID.randomUUID().toString
-          // Later frames captured and imported before earlier ones, so the cover is told from the first persisted
+          // Each frame persisted later is captured and imported a second earlier, so the cover is the last persisted
           assets.zipWithIndex.foreach {
             (asset, index) =>
               testContext.setAssetDates(asset.persistedId, taken.map(_.minusSeconds(index)), imported.minusSeconds(index))
@@ -180,7 +172,6 @@ import altitude.core.service.FaceDetectionService
         def previewOf(asset: Asset) = s"/content/r/$repoId/preview/${asset.persistedId}"
         rows.zip(List(earlierFrames, laterFrames, undatedFrames)).foreach {
           (row, frames) =>
-            // The frames were persisted latest first, so the cover is the last persisted
             row should include(previewOf(frames.last))
             frames.init.foreach(frame => (row should not).include(previewOf(frame)))
         }
@@ -198,18 +189,16 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A Sequence of a frame with nothing wrong, a frame too dark, and a frame blurry that is also too bright. A frame of no
+     * A Sequence of a frame with nothing wrong, a frame too dark, and a blurry frame that is also too bright. A frame of no
      * Sequence.
      *
      * Assertions:
      *
-     * The fragment names each frame by its ID once, under the heading of its one Bundle or as the Contender, which is marked as
-     * the only frame with no problem. Each Bundle gives its count and says what is wrong, how much and compared to what, and the
-     * blurry frame's other problem shows as a chip beside it. A Bundle's header holds the switch of its details before its
-     * Recycle, its reason line and its frames' reasons show by that switch, and the Contenders have none. `data-problems` names
-     * what is wrong with a frame, its Bundle first and then its chips, and the Contender has none. The set is not Too close to
-     * call, and it opens on the rail's first two frames: its one Contender pinned, and the first frame of its first Bundle
-     * focused.
+     * Each frame appears once, under its one Bundle or as the Contender, marked as the only frame with no problem. Each Bundle
+     * gives its count and its reason with the measured and compared values, and the blurry frame's other problem is a chip. A
+     * Bundle's details switch sits before its Recycle and shows its reasons; the Contenders have none. `data-problems` lists a
+     * frame's Bundle, then its chips. The set is not Too close to call, and opens with the Contender pinned and the first
+     * Bundle's frame focused.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -274,9 +263,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The first set says Too close to call and "Every frame: 8% blown highlights", and both frames are Contenders under no marker
-     * and no Bundle, the first pinned and the second focused when it opens. The second is Too close to call as well, and notes
-     * the unmeasured frame.
+     * The first set is Too close to call with a notice of the shared problem, and both frames are unmarked Contenders, the first
+     * pinned and the second focused. The second set is Too close to call too, and notes the unmeasured frame.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -315,9 +303,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The Bundle lists its frame and nothing in the fragment collapses it. The frame in an album is marked, and no other. The
-     * face strip's row holds a crop from the content route with its box in upright pixels for each of the three frames, and a
-     * dash for the fourth.
+     * The Bundle lists its frame and nothing collapses it. Only the frame in an album is marked. The face strip holds a crop with
+     * its box in upright pixels for each of the three frames, and a dash for the fourth.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -358,8 +345,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The results of the Triage view hold the Curate button, bound to the count store, and neither the repository view's nor the
-     * trash view's do.
+     * The Triage view's results hold the Curate button, and the repository and trash views' do not.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -384,9 +370,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The toolbar's copy (the results) and the footer's (the main page) each hold one Curate button, in the template of the views
-     * outside the trash, shown from two selected images and carrying `Const.Curation.MAX_SELECTION`. The trash's template holds
-     * none.
+     * The results and the main page each hold one Curate button in the non-trash template, shown from two selected images and
+     * carrying `Const.Curation.MAX_SELECTION`. The trash's template holds none.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -424,8 +409,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The Sequence answers 204 with no body while one frame is left, and so does a Sequence that does not exist. Restoring the
-     * frame brings its fragment back.
+     * The Sequence answers 204 with no body while one frame is left, as does an unknown Sequence. Restoring the frame brings its
+     * fragment back.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -456,8 +441,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * Over the window the fragment names the first `MAX_SEQUENCE_FRAMES` frames and says it shows them of all the Sequence's, and
-     * that the Sequence stays in the queue. At the window it says neither.
+     * Over the window the fragment holds the first `MAX_SEQUENCE_FRAMES` frames, says how many of how many it shows, and that the
+     * Sequence stays in the queue. At the window it says neither.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -490,8 +475,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * An ID that is not a UUID, and one of the 40 characters that overflow the column, are each a plain-text 400 with the reason,
-     * not the no content of a Sequence that does not exist.
+     * A non-UUID ID, and one of 40 characters that would overflow the column, are each a plain-text 400 with the reason, not the
+     * 204 of an unknown Sequence.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -517,8 +502,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * A body that is an array, a string, a number, a null or no JSON at all is each a plain-text 400 naming what is expected, as
-     * for a body with no valid selection.
+     * An array, a string, a number, a null or no JSON at all is each a plain-text 400 naming the expected field.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -551,8 +535,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The selection of all three, and an ID that is no asset, reads the two left. Outside a Sequence the frames' exposure is not
-     * compared, so a frame darker than the other is not bundled for it.
+     * The selection of all three plus an unknown ID reads the two left. Outside a Sequence exposure is not compared, so the
+     * darker frame is not bundled for it.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -579,14 +563,12 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A frame with its metrics and a Histogram whose tallest bin is the blue channel's last, and a frame inserted without the
-     * pipeline, with no metrics or Histogram, as an image the measurement could not decode is left.
+     * A frame with its metrics and a Histogram, and a frame with neither, as an image the measurement could not decode is left.
      *
      * Assertions:
      *
-     * The measured frame's rail item carries the Histogram's relative bytes in Base64, a byte per bin on one scale, and the
-     * stored fractions of its pixels crushed and blown, which the stage's strip shows. The unmeasured frame's carries none of the
-     * three.
+     * The measured frame's rail item carries the Histogram's relative bytes in Base64 and its stored crushed and blown fractions.
+     * The unmeasured frame's carries none of the three.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -627,8 +609,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The selection of both, of the one left, and of an ID that is no asset each answers 200 with a fragment that says too few
-     * are left and names no frame.
+     * The selection of both, of the one left, and of an unknown ID each answers a fragment that says too few are left and names
+     * no frame.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -659,16 +641,15 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * Two frames, and enough IDs that are no asset to make their selection exactly 100, then 101.
+     * Two frames, padded with unknown IDs to a selection of exactly 100, then 101.
      *
      * Assertions:
      *
-     * The selection of 100 reads the two frames. The selection of 101 is a plain-text 400 that names the limit.
+     * The selection of 100 reads the two frames. The selection of 101 is a plain-text 400 naming the limit.
      *
      * Edge cases:
      *
-     * A repeated ID counts once, so 100 IDs and a repeat of one are still 100. An empty selection and an ID that is not a UUID
-     * are plain-text 400s as well.
+     * A repeated ID counts once. An empty selection and a non-UUID ID are plain-text 400s too.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -708,8 +689,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * Asked of the user's own repository, the second user's Sequence is no content, and a selection of its frames says too few
-     * are left.
+     * Through the user's own repository, the second user's Sequence is a 204, and a selection of its frames says too few are
+     * left.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -743,8 +724,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The shell, the queue's fragment, the Sequence's fragment and the selection's are each a 404 through the second user's
-     * repository, as for any foreign entity.
+     * The shell, the queue, the Sequence and the selection are each a 404 through the second user's repository.
      */
     testContext.persistRepository()
     login()
@@ -778,8 +758,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The shell, the queue's fragment, the Sequence's fragment and the selection's each redirect to the login page, naming where
-     * the client was going. Accepting JSON makes each a 401 instead.
+     * The shell, the queue, the Sequence and the selection each redirect to login, naming where the client was going. Accepting
+     * JSON makes each a 401 instead.
      */
     testContext.persistRepository()
     val base = s"/htmx/curation/r/${testContext.repository.persistedId}"

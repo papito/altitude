@@ -3,10 +3,8 @@
 @import altitude.core.RequestContext
 @import altitude.core.models.WatchFolder
 
-@* The Remove dialog of a Watch folder card's ⋯ menu on the Import page (GET /htmx/watch-folders/r/:repoId/dialogs/remove,
-   an Admin's), a popover dialog below the card's trigger. Removing a Watch folder deletes nothing on the server and
-   nothing of the Library, which it says. As every confirmation of a removal, it leaves initial focus on the close
-   control, so opening it cannot press its button. *@
+@* An Admin's Remove of a Watch folder, which deletes nothing on the server or in the Library. Like every confirmation of a
+   removal, it leaves initial focus on the close control, so opening it cannot press Remove. *@
 @(watchFolder: WatchFolder)
 
 <div id="removeWatchFolder"

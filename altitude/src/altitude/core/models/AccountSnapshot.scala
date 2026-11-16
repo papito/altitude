@@ -9,9 +9,6 @@ object AccountSnapshot:
   def of(account: User): AccountSnapshot =
     AccountSnapshot(id = account.persistedId, name = account.name, username = account.username, email = account.email)
 
-/**
- * An account as it was when a record was written, kept as JSON beside the record since the account may change or be deleted
- * later: an asset's importer record (`asset.original_owner`) and an audit event's actor and target
- */
+/** An account as it was when a record was written, kept as JSON beside the record since the account may change or be deleted */
 final case class AccountSnapshot(id: String, name: String, username: String, email: String):
   lazy val toJson: ujson.Value = JsonCodec.writeJs(this)

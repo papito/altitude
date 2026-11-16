@@ -104,14 +104,13 @@ import altitude.core.util.CurationRule
     /**
      * Setup:
      *
-     * Two frames of a selection sharing a Person at one size, the second's Face at under half, at exactly half and above half of
-     * the first's sharpness; then the second's box twice the area, and just over twice.
+     * Two frames of a selection sharing a Person at one size, the second's Face under and at exactly half the first's sharpness;
+     * then the second's box at twice the area, half the area, and just over twice.
      *
      * Assertions:
      *
-     * Under the ratio the softer frame is Blurry, with the Person, its sharpness and the best as the reason, and the other frame
-     * is a Contender. Exactly half is not under it. A box of twice the area is still a similar size, in either direction; a box
-     * just over that is not compared.
+     * Under the ratio the softer frame is Blurry, with the Person, its sharpness and the best as the reason, and the other is a
+     * Contender; exactly half is not under it. Boxes within twice the area either way are compared, larger ones are not.
      */
     val sharp = frame("a", faces = List(face("anna", sharpness = Some(100))))
 
@@ -141,8 +140,8 @@ import altitude.core.util.CurationRule
      *
      * Assertions:
      *
-     * The middle frame is Blurry against the smallest. The largest is compared only with the middle one, level with it, and is
-     * not Blurry, though it is under half of the smallest's sharpness.
+     * The middle frame is Blurry against the smallest. The largest is compared only with the middle one and is not Blurry, though
+     * it is under half the smallest's sharpness.
      */
     val set = assess(
       frame("small", faces = List(face("anna", sharpness = Some(100), width = 100))),
@@ -185,13 +184,13 @@ import altitude.core.util.CurationRule
     /**
      * Setup:
      *
-     * Frames of one Sequence with no Faces, the second's whole-frame sharpness under, at and above half of the first's. Then a
-     * set mixing a Sequence with a frame in none; a Sequence whose third frame sets the sharpest.
+     * Frames of one Sequence with no Faces, the second's whole-frame sharpness under and at half the first's. Then a Sequence
+     * mixed with frames in none, and a Sequence whose third frame is the sharpest.
      *
      * Assertions:
      *
-     * Under the ratio it is Blurry with the whole-frame reason; exactly half is not. A frame in no Sequence is not judged by it,
-     * nor set the sharpest. The reason names the sharpest frame's value.
+     * Under the ratio the frame is Blurry with the whole-frame reason, naming the sharpest frame's value; exactly half is not. A
+     * frame in no Sequence is neither judged nor taken as the sharpest.
      */
     val set = assess(frame("a", sequence = Burst), frame("b", measuring(sharpness = 49), Burst))
     bundlesOf(set) shouldBe List(BundleKind.Blurry -> List("b"))
@@ -235,13 +234,13 @@ import altitude.core.util.CurationRule
     /**
      * Setup:
      *
-     * Frames of a Sequence with a soft whole frame: sharing a Person sharp in both; sharing a Person whose Face has no sharpness;
-     * sharing a Person at very different sizes; holding a Person found nowhere else, in too few of the frames to be missed.
+     * Frames of a Sequence, one with a soft whole frame, sharing a Person sharp in both, a Person with no Face sharpness, a
+     * Person at very different sizes, or a Person found in no other frame. Then frames in no Sequence with no comparable Person.
      *
      * Assertions:
      *
-     * With a comparable Person sharp in both, the whole frame is not consulted, since a soft background is no fault. The other
-     * three have no comparable Person and fall back. A frame with neither comparison, in no Sequence, is never Blurry.
+     * A comparable Person sharp in both keeps the whole frame out of it, since a soft background is no fault. With no comparable
+     * Person the frame falls back to the whole frame. In no Sequence it is never Blurry.
      */
     def sequenceOf(left: Face, right: Face): CurationSet =
       assess(frame("a", sequence = Burst, faces = List(left)), frame("b", measuring(sharpness = 10), Burst, List(right)))
@@ -272,12 +271,12 @@ import altitude.core.util.CurationRule
     /**
      * Setup:
      *
-     * One Person small and sharp in one frame and large with a quarter of the sharpness in the other, since a Face's sharpness
-     * falls as it fills the frame, and whole frames of the same sharpness: in a Sequence, and in a selection.
+     * One Person small and sharp in one frame and large with a quarter of the sharpness in the other (a Face's sharpness falls as
+     * it fills the frame), with level whole frames, in a Sequence and in a selection.
      *
      * Assertions:
      *
-     * The Faces are not compared, at four times the area, and the whole frames are level, so neither set has a Bundle.
+     * At four times the area the Faces are not compared, and the whole frames are level, so neither set has a Bundle.
      */
     val small = face("anna", sharpness = Some(400), width = 100, height = 100)
     val large = face("anna", sharpness = Some(100), width = 200, height = 200)
@@ -293,13 +292,13 @@ import altitude.core.util.CurationRule
     /**
      * Setup:
      *
-     * Two frames in no Sequence sharing a Person, the second's quality exactly the gap below the first's, and just inside it.
-     * Frames holding one Person each at very different quality. A frame where one of two Persons is poor. A Face with no Person.
+     * Two frames sharing a Person, the second's quality exactly the gap below the first's, then just inside it. Frames of one
+     * Person each at very different quality, a frame where one of two Persons is poor, and a Face with no Person.
      *
      * Assertions:
      *
-     * At the gap it has Poor faces, with the Person, the quality and the best as the reason; inside the gap it does not. Quality
-     * is never compared across Persons, and a Face with no Person is compared with nothing.
+     * At the gap the frame has Poor faces, with the Person, the quality and the best as the reason; inside it, not. Quality is
+     * never compared across Persons, and a Face with no Person is compared with nothing.
      */
     val set = assess(frame("a", faces = List(face("anna", quality = 20))), frame("b", faces = List(face("anna", quality = 18))))
     bundlesOf(set) shouldBe List(BundleKind.PoorFaces -> List("b"))
@@ -330,13 +329,13 @@ import altitude.core.util.CurationRule
     /**
      * Setup:
      *
-     * A frame holding a Person twice at very different quality (a Person seen twice in one image), alone in the set with that
-     * Person, and then beside a frame holding the Person at a quality between the two.
+     * A frame holding a Person twice at very different quality, first the only frame with that Person, then beside a frame
+     * holding the Person at a quality between the two.
      *
      * Assertions:
      *
-     * Alone, no Pick can fix it, so it is no problem. Beside the other frame, its weaker Face is inside the gap of the other
-     * frame and it holds the better Face itself, so only the other frame has Poor faces.
+     * Alone, no Pick can fix it, so it is no problem. Beside the other frame, its weaker Face is within the gap of the other
+     * frame's, so only the other frame has Poor faces.
      */
     val twins = frame("twins", faces = List(face("anna", quality = 22), face("anna", quality = 15)))
     bundlesOf(assess(twins, frame("other"))) shouldBe empty
@@ -351,14 +350,13 @@ import altitude.core.util.CurationRule
     /**
      * Setup:
      *
-     * A Sequence of four frames with a Person in two of them, then in one of them. A Sequence of three with the Person in two and
-     * in one. A selection of frames in no Sequence with the Person in two of three. A selection mixing part of a Sequence and a
-     * frame in none.
+     * Sequences of four and of three frames with a Person in two frames, then in one. Three frames in no Sequence with the Person
+     * in two. A selection mixing two Sequences and a frame in none.
      *
      * Assertions:
      *
-     * In exactly half, the frames without the Person have Poor faces, with how many frames hold it as the reason. In fewer than
-     * half nothing does. Out of a Sequence the clause does not apply, and it counts only the frames of the Sequence.
+     * With the Person in at least half, the frames without it have Poor faces, with the count as the reason; in fewer, nothing
+     * does. Out of a Sequence the clause does not apply, and it counts only the frames of the Sequence.
      */
     val withAnna = List(face("anna"))
 
@@ -441,14 +439,13 @@ import altitude.core.util.CurationRule
     /**
      * Setup:
      *
-     * Frames of a Sequence, none past an absolute limit, around a frame nearest the target: below the target by more and by less
-     * than the gap beyond that frame, then above it. Then a nearest frame on the far side of the target from the frame judged.
+     * Frames of a Sequence, none past an absolute limit, beside the frame nearest the target: below it and above it by more and
+     * by less than the gap. Then a nearest frame on the other side of the target from the frame judged.
      *
      * Assertions:
      *
-     * Farther than the gap below is Too dark, above is Too bright, each with the frame's luminance and the nearest's as the
-     * reason. Inside the gap nothing holds. The distance is measured from the target, so a nearest frame on the other side counts
-     * its own distance and not the distance between the two.
+     * Past the gap below is Too dark and above Too bright, with the frame's luminance and the nearest's as the reason; inside the
+     * gap nothing holds. The gap compares distances from the target, not the distance between the two frames.
      */
     def sequenceOf(nearest: Double, judged: Double): CurationSet =
       assess(frame("a", measuring(luminance = nearest), Burst), frame("b", measuring(luminance = judged), Burst))
@@ -510,8 +507,8 @@ import altitude.core.util.CurationRule
      *
      * Assertions:
      *
-     * Each is a notice with the mildest value among the frames, so it is true of every frame, and no Bundle holds them: they are
-     * Contenders, and the set is Too close to call. With one frame inside the limit, there is no notice and the other is bundled.
+     * Each is a notice with the mildest value among the frames, so it holds for every frame, and no Bundle holds them: they are
+     * Contenders and the set is Too close to call. With one frame inside the limit there is no notice and the other is bundled.
      */
     def bothOf(left: Option[ImageQuality], right: Option[ImageQuality]): CurationSet = assess(frame("a", left), frame("b", right))
 
@@ -646,9 +643,9 @@ import altitude.core.util.CurationRule
      *
      * Assertions:
      *
-     * The unmeasured frame is a Contender, not measured, even where its Face is poor or the Person is missing from it. Its Face
-     * still sets the Person's best for the measured frame. It sets neither the sharpest nor the nearest of its Sequence. It keeps
-     * a notice from saying every frame, since nothing is known of it, and it can be the sole Contender.
+     * The unmeasured frame is a Contender, marked unmeasured, even with a poor Face or a missing Person. Its Face still sets the
+     * Person's best for the measured frames, but it is neither the sharpest nor the nearest of its Sequence. Since nothing is
+     * known of it, no notice covers every frame, and it can be the sole Contender.
      */
     val poorFace = assess(
       frame("unmeasured", None, faces = List(face("anna", quality = 10))),
@@ -689,9 +686,9 @@ import altitude.core.util.CurationRule
      *
      * Assertions:
      *
-     * Level frames are all Contenders and Too close to call, with no sole Contender. One frame with no problem is the sole
-     * Contender and the set is not Too close to call. Two have no marker. With no Contender there is no marker and the set is not
-     * Too close to call. A lone frame has nothing to be separated from, so it has no marker.
+     * Level frames are all Contenders and Too close to call. One frame with no problem is the sole Contender, two are not. With
+     * no Contender there is no sole Contender and the set is not Too close to call. A lone frame has nothing to be separated
+     * from, so it is no sole Contender either.
      */
     val level = assess(frame("a"), frame("b"), frame("c"))
     level.isTooCloseToCall shouldBe true
@@ -751,13 +748,13 @@ import altitude.core.util.CurationRule
     /**
      * Setup:
      *
-     * Three frames with no capture time, two of them imported at one moment and the third a second later, and two frames of one
-     * capture time imported a second apart, each pair's IDs in the other order.
+     * Three frames with no capture time, two imported at one moment and the third a second later, and two frames of one capture
+     * time imported a second apart, each pair's IDs against import order.
      *
      * Assertions:
      *
-     * The dated pair comes first, in import order; the undated frames follow in import order, the ID breaking the tie of the two
-     * imported at one moment, so an undated Sequence shows as it was uploaded rather than by its random IDs.
+     * The dated pair comes first, then the undated frames, each in import order with the ID breaking a tie, so an undated
+     * Sequence shows as it was uploaded rather than by its random IDs.
      */
     def importedAt(seconds: Int): Option[LocalDateTime] = Some(takenAt.plusHours(1).plusSeconds(seconds))
 
@@ -820,18 +817,18 @@ import altitude.core.util.CurationRule
     /**
      * Setup:
      *
-     * A selection of a blown frame and a dark one captured before two Contenders. Anna shows in both Contenders, in the first
-     * twice over, and Ben only in the first.
+     * A selection of a blown frame and a dark one captured before two Contenders. Anna shows in both Contenders, twice in the
+     * first, and Ben only in the first.
      *
      * Assertions:
      *
-     * The rail lists the Contenders, then each Bundle in the rule's order. The set opens on the rail's first two frames, here its
-     * first two Contenders. The row of the Person in the most frames comes first and holds that Person's better Face of a frame.
+     * The rail lists the Contenders, then each Bundle in the rule's order, and the set opens on its first two frames. The row of
+     * the Person in the most frames comes first, holding that Person's better Face of each frame.
      *
      * Edge cases:
      *
-     * One Contender opens pinned beside the first frame of a Bundle, and with none the set opens on the first two frames of its
-     * Bundles. A single frame opens alone. A frame with no Person adds no row, and a Face with no Person is left out.
+     * One Contender opens pinned beside the first frame of a Bundle, and with none the set opens on the first two bundled frames.
+     * A single frame opens alone. A frame with no Person adds no row, and a Face with no Person is left out.
      */
     val betterAnna = face("anna", quality = 22)
     val set = assess(

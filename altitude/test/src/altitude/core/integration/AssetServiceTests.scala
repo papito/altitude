@@ -42,14 +42,14 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two assets added straight through the asset service and marked complete as an import completes them: one in triage,
-     * carrying an Image quality of five metrics and a perceptual hash with the high bit set, then put in a Sequence through the
-     * DAO's `setSequence` (which writes only a row in triage), and one carrying none of them.
+     * Two assets added through the asset service and completed as an import completes them: a triaged one (only a triaged row
+     * takes a Sequence) carrying an Image quality and a perceptual hash with the high bit set, then put in a Sequence, and one
+     * carrying none of them.
      *
      * Assertions:
      *
-     * The metrics, the hash and the Sequence survive a read by ID, a query, and the hand-written locking read that builds the
-     * model from its own row map; the asset without them reads back with none on every path.
+     * The metrics, the hash and the Sequence survive a read by ID, a query and the hand-written locking read; the other asset
+     * reads back with none on every path.
      */
     val quality = ImageQuality(sharpness = 123.5, luminance = 0.45, clippedHighlights = 0.01, crushedShadows = 0.002, score = 87)
     val hash = PerceptualHash(Long.MinValue + 42)

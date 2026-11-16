@@ -1,7 +1,5 @@
-/* The Import files of an expanded Import (htmx/import_files), scoped by the Import history's section; an outcome's colors
-   are pages/pipeline.css's and the count line's rule htmx/import_history.css's */
-
-/* The panel under an Import: the filter, the files, the count line */
+/* The Import files of an expanded Import. Outcome colors are set in pages/pipeline.css, the count line in
+   import_history.css */
 #importHistory .files {
   display: grid;
   gap: var(--space-4);
@@ -11,13 +9,12 @@
   background-color: hsl(from var(--theme-neutral-3) h s l / 0.08);
 }
 
-/* The host before the page has loaded the list into it (htmx/import_history) */
+/* The host until the list loads into it */
 #importHistory [data-app-view-url]:empty {
   display: none;
 }
 
-/* The outcome filter: a chip for every file, in the text's color, and one per outcome in its own; the one shown is
-   filled */
+/* The outcome filter: an all-files chip in the text's color and one per outcome in its own; the shown one is filled */
 #importHistory .filters {
   --outcome-color: var(--theme-neutral-4);
   --outcome-fill: hsl(from var(--theme-neutral-4) h s l / 0.16);

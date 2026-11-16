@@ -27,18 +27,14 @@ import altitude.core.util.JsonCodec.++
 class AssetActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/asset"
 
-  // A name given to a Face's Person, or to the Person a Face is given to, is trimmed and held to the name editor's length rules
+  // A Person name in a Face correction is trimmed and held to the name editor's length rules
   private val nameScrubber = DataScrubber(trim = List(Api.Field.Person.NAME))
   private val nameMaxLength = Map(Api.Field.Person.NAME -> Api.Constraints.MAX_NAME_LENGTH)
   private val nameMinLength = Map(Api.Field.Person.NAME -> Api.Constraints.MIN_NAME_LENGTH)
 
   /**
-   * The asset's detail modal, or its JSON when JSON is asked for; an unknown asset, or another repository's, is a 404 of either,
-   * as is a triaged asset or one in the trash for a Guest, who sees Browse alone (`visibleOnly`). Both carry the asset's Edit
-   * (`edit`, `EditController.stateJson`), when it has one, and whether the account may edit the asset (`editable`): it holds Edit
-   * images, and an Edit may change the asset (`AssetEditService.whyNotEditable`). For a holder of Edit images, an asset no Edit
-   * may change also carries why (`editRefusal`), which the Edit toggle's title shows; the fragment carries the same as data
-   * attributes, with the measurement's clipping levels and box, which the Edit panel's Clipping blink reads.
+   * The asset's detail modal, or its JSON when asked for. Both carry the asset's Edit when it has one, whether the account may
+   * edit it, and, for a holder of Edit images, why an asset no Edit may change is refused.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/asset-detail/:assetId")
@@ -51,7 +47,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
         (accept != null && accept.contains("application/json"))
     def asset: Asset = visibleOnly(App.altitude.service.asset.getById(assetId))
     def editOf(asset: Asset): Option[ujson.Obj] = App.altitude.service.assetEdit.editOf(asset).map(EditController.stateJson)
-    // Why the account's Edit toggle is disabled on the asset: nothing without Edit images, which has no toggle
+    // Without Edit images there is no Edit toggle, so no refusal to explain
     def refusal(asset: Asset): Option[String] =
       if RequestContext.holds(Permission.EditImages) then AssetEditService.whyNotEditable(asset) else None
     def editable(asset: Asset): Boolean =
@@ -71,12 +67,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
         htmlResponse(htmx.html.view_image_detail_modal(shown, editOf(shown).map(ujson.write(_)), editable(shown), refusal(shown)))
       }
 
-  /**
-   * The Detail panel's two sections, People and Details, for the asset, read in one snapshot (`AssetService.detailOf`): its Faces
-   * with their people (bad matches left out, Hidden marked), the folder path (nothing for the root or for triage), its albums and
-   * Locations, and the frames of its Sequence. An asset in the trash gets the same panel with its People section read-only; an
-   * unknown asset, or another repository's, is a 404, as is a triaged asset or one in the trash for a Guest (`visibleOnly`).
-   */
+  /** The Detail panel's People and Details sections, read in one snapshot; for an asset in the trash, People is read-only */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/detail-panel/:assetId")
   def showDetailPanel(repoId: String, assetId: String)(using request: Request): Response[String] =
@@ -88,11 +79,8 @@ class AssetActionController(using logger: Logger) extends BaseController:
     }
 
   /**
-   * Change: gives the Face to the Person of the body's `personId`, or to the Person named by its `name` (found in any case, or
-   * created), and answers the asset's People section with the result in its data attributes. A body that is not a JSON object or
-   * not JSON at all, one naming both or neither, a name outside the length rules of the name editor, a reserved name or the
-   * Face's own Person is a 400; a Face gone or moved meanwhile, or an unknown or no longer live Person, a 404; a Face of an asset
-   * in the trash a 409.
+   * Change: gives the Face to the Person of `personId`, or to the Person named `name` (matched in any case, or created). A Face
+   * gone or moved meanwhile is a 404; a Face of an asset in the trash, a 409.
    */
   @requireLogin()
   @requirePermission(Permission.EditMetadata)
@@ -124,12 +112,8 @@ class AssetActionController(using logger: Logger) extends BaseController:
     }
 
   /**
-   * Name: names the Face's Person as a whole (`PersonService.nameFacePerson`), the body's `personId` being the Person the panel
-   * showed with the Face and its `name` the new name, and answers the asset's People section with the result in its data
-   * attributes. A body that is not a JSON object, a `personId` that is not a UUID, a name outside the length rules of the name
-   * editor, a reserved name or a name another live Person holds is a 400; a Face gone or given to someone else meanwhile, or a
-   * Person no longer live, a 404; a Face of an asset in the trash, or a Person who has a name by now, a 409, as the section the
-   * client shows is stale.
+   * Name: names the Face's Person as a whole, `personId` being the Person the panel showed with the Face. A Face given to someone
+   * else meanwhile is a 404; a Person who has a name by now, a 409, as the client's section is stale.
    */
   @requireLogin()
   @requirePermission(Permission.EditMetadata)
@@ -160,13 +144,8 @@ class AssetActionController(using logger: Logger) extends BaseController:
     }
 
   /**
-   * Merge: merges the Face's Person as a whole into a named Person (`PersonService.mergeFacePerson`), the body's `personId` being
-   * the Person the panel showed with the Face and its `destPersonId` the Person they are merged into, and answers the asset's
-   * People section with the result in its data attributes, the merged Person's ID and the destination's among them. A body that
-   * is not a JSON object, an ID that is not a UUID, a destination with no name or the Person themselves is a 400; a Face gone or
-   * given to someone else meanwhile, or a Person or destination no longer live or of another Library, a 404; a Face of an asset
-   * in the trash, or a Person who has a name by now, a 409, as the section the client shows is stale. It merges People, so it is
-   * Organize's, not Edit metadata's as the other corrections are.
+   * Merge: merges the Face's Person as a whole into the named Person `destPersonId`, with the same stale-state answers as Name.
+   * It merges People, so it needs Organize rather than Edit metadata as the other corrections do.
    */
   @requireLogin()
   @requirePermission(Permission.Organize)
@@ -190,10 +169,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
         merge = Some(merge.before -> merge.after))
     }
 
-  /**
-   * Remove: deletes the Face and its files, and answers the asset's People section with the result in its data attributes. A Face
-   * gone or moved meanwhile is a 404, a Face of an asset in the trash a 409.
-   */
+  /** Remove: deletes the Face and its files */
   @requireLogin()
   @requirePermission(Permission.EditMetadata)
   @cask.delete(f"/$prefix/r/:repoId/face/:faceId")
@@ -210,10 +186,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
         Option.when(removal.personDeleted)(removal.person))
     }
 
-  /**
-   * The People section after a correction, its root carrying the message, any Person the correction deleted and, after a merge,
-   * the merged Person and the Person they were merged into
-   */
+  /** The People section after a correction, carrying its message, any Person it deleted and, after a merge, both People */
   private def peopleSection(
       assetId: String,
       message: String,

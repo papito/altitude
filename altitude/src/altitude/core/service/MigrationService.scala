@@ -28,10 +28,7 @@ class MigrationService(app: Altitude, currentVersion: Int, migrationsDir: String
   private def executeCommand(command: String): Unit =
     val stmt = RequestContext.getConn.createStatement()
 
-    /**
-     * Postgres next_val returns values, confusing `executeUpdate`. Yet, using `execute` for both blows up Sqlite dev server
-     * ¯\_(ツ)_/¯ I don't got time for this.
-     */
+    // `executeUpdate` fails on a Postgres script whose statements return values (nextval); `execute` fails on SQLite
     app.dataSourceType match {
       case Const.DbEngineName.SQLITE =>
         stmt.executeUpdate(command)
@@ -68,10 +65,8 @@ class MigrationService(app: Altitude, currentVersion: Int, migrationsDir: String
     }
 
   /**
-   * A fresh database (version 0) gets the whole current schema from `all.sql` in one step, is stamped with the current version,
-   * and has the connections opened before its schema existed replaced (`TransactionManager.schemaCreated`). An existing database
-   * is brought forward one version at a time with `<version>.sql`, in every environment, so a development database keeps its data
-   * across schema changes just as a production one does. A database at the current version is left alone.
+   * A fresh database (version 0) gets the whole schema from `all.sql`, the current version, and fresh connections in place of
+   * those opened before its schema existed. An existing one is brought forward a version at a time with `<version>.sql`.
    */
   def migrate(): Unit =
     val oldVersion = version
@@ -88,7 +83,7 @@ class MigrationService(app: Altitude, currentVersion: Int, migrationsDir: String
       for version <- oldVersion + 1 to currentVersion do
         runSqlScript(s"$migrationsDir/$version.sql")
 
-        // must have schema changes committed
+        // After the script's own transaction, so the version's code sees its schema committed
         txManager.withTransaction {
           migrateVersion(version)
           setVersion(version)

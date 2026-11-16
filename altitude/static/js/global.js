@@ -1,39 +1,23 @@
 /**
- * Document-level keyboard handling and the nav's theme switch, loaded on every page. The switch's
- * click is delegated, so a nav reload needs no binding and a page without Alpine has the switch too.
+ * Document-level keys and the nav's theme switch, on every page. The switch's click is delegated, so a
+ * nav reload needs no rebinding and a page without Alpine has the switch too.
  *
- * Escape closes one thing at a time, wherever focus is, and is consumed by it, so a background
- * inline edit (the person name editor) survives: in fullscreen it is the browser's, which leaves
- * fullscreen (and in Chrome never delivers the key), and Asset detail stays open; else the open
- * listbox of a People row's Change combobox in the Detail panel closes alone; else an open context
- * menu, with focus back on its trigger (the Detail panel's Dock side menu is the one menu that
- * opens inside a dialog, and outside a dialog no menu and dialog are open together); else the nav's
- * advanced search panel, with focus back on its filter button (an open listbox or calendar inside it
- * has consumed the key before it gets here: `filter-combobox.js`, `date-range.js`); else, in
- * Asset detail, the selected People row, which clears; else the active modal or popover dialog; else the map view's crowded-pin panel; and with none of those
- * open, Escape is broadcast for such editors to cancel. Consuming it also keeps the browser's own
- * Escape handling for the popover dialog and the menus from running a second time. An open select
- * picker's Escape is left to the picker, which closes itself and nothing else.
- * While asset detail is active and no text is being edited, the arrow keys navigate between assets,
- * except on the video player's timeline and volume slider, which they step, and on the Detail
- * panel's divider, which they move; Space plays or pauses a Video and does nothing on an image,
- * except on a control in the player or in the Detail panel, which it presses; `m` opens or
- * closes the Detail panel, `p` shows or hides the Face highlights and `f` puts Asset detail in
- * fullscreen or leaves it, wherever focus is, each ignoring a held key and any modifier. `\` shows
- * an edited asset's original for as long as it is held (Show original): its press and its release
- * are announced, the key's repeats swallowed, and a release is announced wherever focus has gone.
+ * Escape closes one thing per press, wherever focus is, and is consumed, so a background inline edit
+ * survives and the browser's own Escape for popovers and menus never runs a second time. The order: in
+ * fullscreen the key is the browser's; an open People combobox listbox; an open context menu (focus
+ * back on its trigger); the advanced search panel; in Asset detail, the Edit panel's unsaved-changes
+ * warning, then the Edit panel's own Escape, then the selected People row; the active modal or popover
+ * dialog; the map's crowded-pin panel. With none open, Escape is broadcast for inline edits to cancel.
+ * An open select picker keeps its Escape.
  *
- * The Edit panel's keys (`listeners/edit.js`), in Asset detail and never in a text field: `e` opens
- * or closes the panel, `c` opens or closes its Crop tool; in the Crop tool `o` cycles the guide and
- * `x` swaps the aspect's orientation; while the panel's changes are held Enter is Done (on a
- * control, Enter presses it); Ctrl/Cmd+Z is Undo and Ctrl/Cmd+Shift+Z or Ctrl+Y Redo. Escape closes
- * the Edit panel's warning of changes not saved (Keep editing), then the panel's own (the Level tool
- * off, the changes held cancelled or the warning about them, the Crop tool closed), ahead of the
- * selected People row and the dialog, whose close the warning may hold; while the warning is open,
- * Asset detail's keys are left to it. The arrows and Space are left to focus in the Edit panel, on
- * its divider, in the Crop tool and on the stage's bar, as in the Detail panel. The warning's and the
- * Edit panel's part is read through `common/edit-keys.js`, which the Edit panel registers on the page
- * that holds Asset detail, so this module, on every page, imports no edit module.
+ * In Asset detail, outside text fields and while the Edit panel's warning is closed: the arrows step
+ * between assets and Space plays or pauses a Video, except where focus takes them itself (the player's
+ * sliders, the Detail and Edit panels, the Crop tool); `m` Detail panel, `p` Face highlights, `f`
+ * fullscreen, `e` Edit panel, `c` Crop tool, and in the Crop tool `o` cycles the guide and `x` swaps
+ * the aspect; Ctrl/Cmd+Z Undo, Ctrl/Cmd+Shift+Z or Ctrl+Y Redo; Enter is Done while changes are held,
+ * unless on a control. The plain letter keys ignore repeats and any modifier. Holding `\` shows an
+ * edited asset's original. The Edit panel's state is read through `common/edit-keys.js`, so this
+ * module imports no edit module.
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
 import {
@@ -66,25 +50,18 @@ document.addEventListener("keydown", (event) => {
             return
         }
 
-        // The browser leaves fullscreen (Asset detail's `f`) on its own; the dialog stays for a
-        // second Escape
+        // The browser leaves fullscreen on its own (Chrome never delivers the key); Asset detail
+        // stays for a second Escape
         if (document.fullscreenElement) {
             return
         }
 
-        // The Change combobox's listbox closes alone, before `closeModal` could take Asset detail
-        // with it; focus is in its input already
+        // Ahead of `closeModal`, which would take Asset detail with it
         if (closeOpenFaceCombobox()) {
             event.preventDefault()
             return
         }
 
-        // A menu closes alone, with focus back on its trigger, so the Detail panel's Dock side menu
-        // leaves Asset detail open; the advanced search panel closes the same way, the browser
-        // returning focus to its filter button; so does a selected Face's row in its People section,
-        // and a closing modal or popover dialog restores focus itself
-        // In Asset detail, the Edit panel's warning closes alone (Keep editing), then the panel's own
-        // Escape (the Level tool, the changes held, the Crop tool), before the selected Face and the dialog
         if (
             closeOpenContextMenu({ reason: "Escape", returnFocus: true }) ||
             closeOpenSearchPanel() ||
@@ -113,8 +90,6 @@ document.addEventListener("keydown", (event) => {
         return
     }
 
-    // The player's timeline and volume slider step with the arrows themselves, the Detail panel's
-    // divider moves with them, and so do the Edit panel's controls, its divider and the Crop tool
     const stepsWithArrows =
         isPlayerSlider(event.target) ||
         isDetailDivider(event.target) ||
@@ -130,10 +105,8 @@ document.addEventListener("keydown", (event) => {
         !isInDetailPanel(event.target) &&
         !isInEditTools(event.target)
     ) {
-        // Plays or pauses a Video, and does nothing on an image, instead of pressing the focused
-        // toolbar control (focus is trapped in the detail). Inside the player, media-chrome plays
-        // or pauses, or the focused control presses itself, and in the Detail panel the focused
-        // control (a group's summary, a link, the divider) presses itself.
+        // Keeps Space from pressing the focused toolbar control (focus is trapped in the detail);
+        // on an image it does nothing
         event.preventDefault()
         if (!event.repeat) {
             document.body.dispatchEvent(
@@ -197,8 +170,8 @@ function announce(eventName) {
     document.body.dispatchEvent(new CustomEvent(eventName))
 }
 
-// The release of `\` ends Show original wherever focus is and whatever modifier is held by then, so a
-// key held into a field, or let go after Ctrl was pressed, never sticks
+// The release ends Show original wherever focus is and whatever modifier is held by then, so a key
+// held into a field, or let go after Ctrl was pressed, never sticks
 document.addEventListener("keyup", (event) => {
     if (event.key === "\\") {
         announceShowOriginal(false)
@@ -206,9 +179,8 @@ document.addEventListener("keyup", (event) => {
 })
 
 /**
- * A press of the key that types `\`, however the layout reaches it: with Shift, Option or AltGr
- * (which a browser on Windows reports as Ctrl and Alt) where it needs one, never with Cmd or a
- * plain Ctrl, which are shortcuts. A held key's repeats are the caller's to swallow.
+ * The key that types `\` on any layout: Shift, Option or AltGr (reported on Windows as Ctrl+Alt) are
+ * allowed, Cmd or a plain Ctrl are not, since those are shortcuts. Repeats are the caller's to swallow.
  */
 function isShowOriginalPress(event) {
     const altGraph = event.getModifierState?.("AltGraph") ?? false
@@ -221,10 +193,6 @@ function announceShowOriginal(held) {
     )
 }
 
-/**
- * `key` pressed once with Ctrl or Cmd, and Shift exactly when `shift` says (Ctrl+Z, Ctrl+Shift+Z), never Alt: a held
- * key repeats nothing
- */
 function isModifiedKey(event, key, { shift = false } = {}) {
     return (
         event.key.toLowerCase() === key &&
@@ -235,7 +203,6 @@ function isModifiedKey(event, key, { shift = false } = {}) {
     )
 }
 
-/** `key` pressed on its own, once: a held key or any modifier (Ctrl+P, Shift+M) is left to the browser */
 function isPlainKey(event, key) {
     return (
         event.key.toLowerCase() === key &&
@@ -251,9 +218,8 @@ function isPlainKey(event, key) {
 const supportsOpenPseudoClass = CSS.supports("selector(:open)")
 
 /**
- * Focus is in a customizable select's open picker (`appearance: base-select`), whose Escape bubbles
- * to the document, unlike a native select's: the picker closes itself, and the dialog holding the
- * select stays open.
+ * A customizable select's open picker (`appearance: base-select`) lets Escape bubble to the document,
+ * unlike a native select; the picker closes itself and the dialog holding it must stay open.
  */
 function isInOpenSelectPicker(target) {
     return Boolean(
@@ -262,30 +228,23 @@ function isInOpenSelectPicker(target) {
     )
 }
 
-/** Focus is in the asset's video player: the <video>, its controller, or one of its controls */
 function isInPlayer(target) {
     return Boolean(target?.closest?.("media-controller"))
 }
 
-/** Focus is on the player's timeline or volume slider */
 function isPlayerSlider(target) {
     return Boolean(target?.closest?.("media-time-range, media-volume-range"))
 }
 
-/** Focus is in the Detail panel: on its header's menu, its divider or a control of its sections */
 function isInDetailPanel(target) {
     return Boolean(target?.closest?.("#detailPanel, #detailPanelDivider"))
 }
 
-/** Focus is on the Detail panel's divider, which the arrow keys move */
 function isDetailDivider(target) {
     return Boolean(target?.closest?.("#detailPanelDivider"))
 }
 
-/**
- * Focus is in the Edit panel (a slider, a tab), on its divider, on Before/after's divider or in the Crop tool (the
- * crop, which the arrows nudge, and its bar), which take the arrows and Space themselves
- */
+/** Edit controls that take the arrows and Space themselves (`#editSplitHandle` is Before/after's divider) */
 function isInEditTools(target) {
     return Boolean(
         target?.closest?.(

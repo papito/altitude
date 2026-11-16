@@ -21,8 +21,8 @@ import altitude.core.routes.web.SessionController
 class SetupFormController(using logger: Logger) extends BaseController:
   private val prefix = "htmx"
 
-  // The Library name is neither scrubbed nor checked by the request validator: the Library name rule normalizes and checks it
-  // (Repository.validName), and a trim here would drop the control characters at its ends that the rule refuses
+  // The Library name is not scrubbed: its rule (Repository.validName) normalizes and checks it, and a trim would hide the
+  // control characters at its ends that the rule refuses
   private val dataScrubber = DataScrubber(
     trim = List(
       Api.Field.Setup.ADMIN_EMAIL,
@@ -67,7 +67,6 @@ class SetupFormController(using logger: Logger) extends BaseController:
         statusCode = 400
       )
     else
-      // Parse JSON from request body
       val jsonIn: ujson.Obj = dataScrubber.scrub(jsonData.get)
 
       val validationException: ValidationException =
@@ -92,7 +91,6 @@ class SetupFormController(using logger: Logger) extends BaseController:
       val password = jsonIn.obj.get(Api.Field.Setup.PASSWORD).flatMap(_.strOpt).getOrElse("")
       val password2 = jsonIn.obj.get(Api.Field.Setup.PASSWORD2).flatMap(_.strOpt).getOrElse("")
 
-      // Secondary validation checks
       if !validationException.errors.contains(Api.Field.Setup.PASSWORD) &&
         !validationException.errors.contains(Api.Field.Setup.PASSWORD2)
       then
@@ -101,8 +99,7 @@ class SetupFormController(using logger: Logger) extends BaseController:
             Api.Field.Setup.PASSWORD -> C.Msg.Err.PASSWORDS_DO_NOT_MATCH
           )
 
-      // The username rule's error, beside the request validator's (which says a missing one is required); UserService.add applies
-      // the rule again, to the same effect
+      // The username rule, checked here too so its error shows beside the others; UserService.add applies it again
       if !validationException.errors.contains(Api.Field.Setup.ADMIN_USERNAME) then
         try User.validUsername(username)
         catch
@@ -111,7 +108,7 @@ class SetupFormController(using logger: Logger) extends BaseController:
               error => validationException.errors += (Api.Field.Setup.ADMIN_USERNAME -> error)
             }
 
-      // The Library name rule's error, beside the request validator's; addRepository applies the rule again, to the same effect
+      // The Library name rule, likewise; addRepository applies it again
       try Repository.validName(repositoryName)
       catch
         case ex: ValidationException =>
@@ -119,12 +116,10 @@ class SetupFormController(using logger: Logger) extends BaseController:
             error => validationException.errors += (Api.Field.Setup.REPOSITORY_NAME -> error)
           }
 
-      // If we have errors, return form with errors
       if validationException.errors.nonEmpty then
         val payload = "<!doctype html>" + htmx.html.setup_form(jsonIn, validationException.errors.toMap)
         cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
       else
-        // Initialize system
         val userModel = User(
           email = email,
           username = username,
@@ -140,11 +135,10 @@ class SetupFormController(using logger: Logger) extends BaseController:
           clientIp = BaseController.clientIpOf(request)
         )
 
-        // Auto-login the newly created admin user
+        // Log the new Admin in
         val claims = App.altitude.service.user.claimsOf(RequestContext.getAccount.persistedId).get
         val token = App.altitude.service.paseto.createToken(claims)
 
-        // Send HTML redirect header with auth cookie
         cask.Response(
           data = "",
           statusCode = 200,

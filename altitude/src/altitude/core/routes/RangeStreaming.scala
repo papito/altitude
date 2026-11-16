@@ -18,15 +18,13 @@ import org.slf4j.LoggerFactory
 import altitude.core.NotFoundException
 
 /**
- * Serves a stored file by streaming a window of it, so a Video is never read into the heap and a player can seek: a plain request
- * gets the whole file as a `200` offering byte ranges, a single `bytes=a-b` range gets a `206` with `Content-Range`, and a range
- * past the end gets a `416`. Anything else the `Range` header might carry (several ranges, other units) is ignored, as the
- * standard allows, and the whole file is sent. The `200` and the `206` name the file inline, so a browser shows or plays it as
- * before and saves it under its own name. A file that is not there is a `NotFoundException`, thrown before any response is made;
- * one removed while it streams fails the response already sent.
+ * Streams a window of a stored file, so a Video is never read into the heap and a player can seek. Only a single `bytes=a-b`
+ * range is honored; anything else the `Range` header carries (several ranges, other units) is ignored, as the standard allows,
+ * and the whole file is sent. A missing file is a `NotFoundException` before any response; one removed mid-stream fails the
+ * response already sent.
  *
- * A player drops the connection whenever it has what it wants (a Video's metadata, before asking for the range it plays from; the
- * asset the user stepped away from), so a client that goes away mid-stream ends the response, and is not an error.
+ * A player drops the connection whenever it has what it wants (a Video's metadata, an asset the user stepped away from), so a
+ * client leaving mid-stream is not an error.
  */
 object RangeStreaming:
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -35,14 +33,13 @@ object RangeStreaming:
 
   private val SingleRange = """^bytes=(\d*)-(\d*)$""".r
 
-  /** The RFC 5987 attr-chars, which the UTF-8 form of a file name keeps; all ASCII, so never a byte of a wider character */
+  /** The RFC 5987 attr-chars, kept unencoded; all ASCII, so never a byte of a wider character */
   private val AttrChars: Set[Char] = (('A' to 'Z') ++ ('a' to 'z') ++ ('0' to '9')).toSet ++ "!#$&+-.^_`|~"
 
   /**
-   * An inline `Content-Disposition` with the file name in both RFC 6266 forms: `filename`, a quoted string of printable ASCII
-   * where every other character, and the `"` and `\` that would end or escape the string, is a `_`; and `filename*`, which a
-   * browser prefers, the name's UTF-8 bytes with every one that is not an attr-char percent-encoded. Neither form carries a
-   * control character, so no file name can end the header.
+   * An inline `Content-Disposition` with both RFC 6266 forms: `filename`, printable ASCII with `_` for anything else and for the
+   * `"` and `\` that would end or escape it, and `filename*`, which a browser prefers, as percent-encoded UTF-8. Neither carries
+   * a control character, so no file name can end the header.
    */
   def contentDisposition(fileName: String): String =
     val ascii = fileName.codePoints.toArray.map {
@@ -55,7 +52,7 @@ object RangeStreaming:
   /** A range position; a run of digits too long for a Long is past the end of any file */
   private def position(digits: String): Long = digits.toLongOption.getOrElse(Long.MaxValue)
 
-  /** The client refused a write: it closed the connection, which tells a failed write apart from a failed read of the file */
+  /** A failed write, told apart from a failed read of the file: the client closed the connection */
   private class ClientDisconnectedException(cause: IOException) extends IOException(cause)
 
   /** The response's channel, where any failure to write is the client's going away */

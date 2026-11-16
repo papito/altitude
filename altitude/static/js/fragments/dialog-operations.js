@@ -1,23 +1,9 @@
 /**
- * Lifecycle of the operations that dialogs submit.
- *
- * A dialog is a server-rendered form completing one user action, hydrated from its
- * `data-app-fragment` kind. Its presentation (a modal host, or some other container) is the kind's
- * concern; what every kind shares is declared on the fragment root and handled here: the success
- * event and its detail (`data-app-success-*`, see `readSuccessEvent`), dispatched once the
- * operation completes, after which the dialog is closed. An outcome only the server knows (how many
- * assets a membership change applied) arrives as JSON in the `App-Success-Detail` response header
- * (`BaseController.dialogSuccessResponse`) and is merged over the declared detail.
- *
- * Each kind registers with `registerDialogKind`, supplying a handle for the dialog a request was
- * issued from: `isActive()` tells whether that same dialog is still shown, and `close()` dismisses
- * it after a successful operation.
- *
- * An operation is tracked from `htmx:before:request` so that everything it needs later (the handle
- * of the dialog it belongs to, its success event and detail) is captured while the dialog is still
- * in the DOM. Its response is handled from `htmx:after:request` regardless of whether the dialog
- * has since been closed or replaced: page updates and success events always happen, but only the
- * still active initiating dialog may be closed or have its form replaced by the response.
+ * Lifecycle of the operations dialogs submit. An operation is captured at `htmx:before:request`,
+ * while its dialog is still in the DOM, and settled at `htmx:after:request` even when the dialog has
+ * since closed or been replaced: the success event always fires, its declared detail merged with the
+ * server's `App-Success-Detail` header, but only the still active initiating dialog is closed or has
+ * its form replaced by the response.
  */
 import { Const } from "../constants.js"
 import {
@@ -42,8 +28,7 @@ export function registerDialogKind(fragmentName, { createHandle }) {
 
 /**
  * `htmx:before:request` hook: captures an operation issued from a dialog fragment, or drops the
- * request when that fragment already has one pending. Returns whether the request came from a
- * dialog fragment.
+ * request when that fragment already has one pending. Returns whether it came from a dialog.
  */
 export function trackDialogOperationRequest(event) {
     const ctx = event.detail.ctx
@@ -82,9 +67,8 @@ export function isDialogOperationRequest(event) {
 }
 
 /**
- * `htmx:after:request` hook: completes a tracked operation. Returns whether the event belonged to
- * one. Runs before htmx swaps the response, so cancelling the event here is what keeps a stale
- * response from touching a newer dialog.
+ * `htmx:after:request` hook: completes a tracked operation; returns whether the event belonged to
+ * one. Runs before htmx swaps, so cancelling the event keeps a stale response from a newer dialog.
  */
 export function settleDialogOperation(event, { dispatch }) {
     const ctx = event.detail.ctx
@@ -103,9 +87,8 @@ export function settleDialogOperation(event, { dispatch }) {
         return true
     }
 
-    // A response retargeted at the submitting form (`BaseController.dialogFormValidationResponse`)
-    // is a validation replacement, not a completed operation: it swaps into the active dialog and
-    // is re-hydrated, or is reported and dropped.
+    // A response retargeted at the submitting form is a validation failure, not a completed
+    // operation: it swaps into the active dialog, or is reported and dropped.
     if (getResponseRetarget(event)) {
         if (!stillActive) {
             event.preventDefault()
@@ -133,7 +116,6 @@ export function settleDialogOperation(event, { dispatch }) {
     return true
 }
 
-/** The fragment of a registered dialog kind enclosing `sourceEl`, if any. */
 function findDialogFragment(sourceEl) {
     const selector = [...dialogKinds.keys()]
         .map((fragmentName) => `[data-app-fragment="${fragmentName}"]`)

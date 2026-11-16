@@ -6,13 +6,9 @@
 
 @(title: String, folder: Folder, path: List[Folder], assets: List[Asset], total: Int)
 
-@* Quick view (GET /htmx/triage/r/:repoId/modals/quick-view), opened from a folder's scope dialog in Triage into the general
-   modal host, which static/css/htmx/quick_view_modal.css widens for it. Its header is the folder's path, top-level first, as
-   plain crumbs: the Results title's look (`.crumbs`) with no search trigger. Below it the Previews of the first assets Browse
-   shows for the folder by default, newest import first, to look at only: plain images, with none of a grid cell's hooks (no
-   `.cell`, `.drag-drop` or `data-asset-id` for the selection, the drag or Asset detail, and no search trigger), and loaded by
-   the browser as they scroll into view, since js/search-results/lazy-images.js watches the results grid alone. With more assets
-   than it shows, the footer says how many there are and opens the folder in Browse in a new tab. *@
+@* Quick view of a folder, from Triage's scope dialog: Previews of the first assets Browse shows for it, to look at only.
+   They carry none of a grid cell's hooks and load natively, since js/search-results/lazy-images.js watches the results grid
+   alone. *@
 
 <div id="quickView"
      data-app-fragment="modal"

@@ -3,7 +3,6 @@ package altitude.core.dao.sql.tables
 import java.time.OffsetDateTime
 import scalasql.Table
 
-/** The `import_file` table */
 case class ImportFileRow[T[_]](
     id: T[String],
     repositoryId: T[String],

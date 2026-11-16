@@ -6,9 +6,8 @@ import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 
 /**
- * A stub of a Nominatim-compatible endpoint on localhost, so a geocoder test touches no network: it answers `/search` with
- * whatever `response` holds (status and body, an empty list by default) and remembers the last request's query string and
- * `User-Agent`
+ * A Nominatim-compatible endpoint on localhost, so a geocoder test touches no network: it answers `/search` with `response` and
+ * remembers the last request
  */
 class NominatimStub {
   private val server: HttpServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0)

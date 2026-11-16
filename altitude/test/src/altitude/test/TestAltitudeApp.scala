@@ -8,10 +8,7 @@ trait TestAltitudeApp {
 
 object TestAltitudeApp {
 
-  /**
-   * A test instance on the engine, its Scene models and its Describe model switched off until a suite turns them on
-   * (`SwitchableSceneEmbedder`, `SwitchableDescribeEmbedder`)
-   */
+  /** A test instance on the engine, its Scene and Describe models off until a suite turns them on */
   def build(dbEngine: String): Altitude =
     new Altitude(
       dbEngineOverride = Some(dbEngine),

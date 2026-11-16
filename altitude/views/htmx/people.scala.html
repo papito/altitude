@@ -2,21 +2,10 @@
 
 @()
 
-@* The People tab's shell. The browser owns the buckets and the split: the `peopleTab` Alpine component
-   (js/alpine/components/people-tab.js) remembers which People buckets each pane shows and whether Split view is on,
-   and loads each pane's list itself, so nothing here is a list; the server renders only htmx/people_list, per pane,
-   for the buckets the pane asks for. A pane is a `section.pane` named by `data-app-people-pane`, which is how the
-   component finds it: its bucket switches over the empty `.list` host. The Main pane is always shown; the Duplicate
-   pane exists only while Split view is on (`x-if`, one root element, the section), and Split.js divides the two panes
-   along the axis the Dock side calls for: stacked under a left or right dock, side by side under a top or bottom
-   one (static/css/htmx/people.css lays `#people` out as a column or a row by `html[data-dock-side]`). The `.list` host
-   is the source of the component's `htmx.ajax` loads, so its `hx-sync="replace"` makes a newer load of the pane
-   abort the one in flight: the latest bucket set always lands. `#people` keeps
-   `--face-box`, the face detection box size, for the cells (static/css/htmx/people.css) and the design tweaks
-   panel's control. A switch is the View dialog's: a `button[role="switch"]` and a `<label for>`, whose click flips
-   the switch with no script; the ids carry the pane name so the labels' `for` stay unique across the two panes. A switch
-   may carry a legend, a faint line after its label that the switch is described by (`aria-describedby`), so the label
-   stays the switch's name; the Duplicate Split View switch has one. *@
+@* The People tab's shell. The `peopleTab` component owns the buckets and the split and loads each pane's list itself,
+   finding a pane by `data-app-people-pane`. Its loads come from the `.list` host, so `hx-sync="replace"` aborts the one in
+   flight and the latest bucket set always lands. Switch IDs carry the pane name, so the labels' `for` stay unique across the
+   two panes. A legend describes its switch (`aria-describedby`), so the label stays the switch's name. *@
 
 @switch(id: String, label: String, checked: String, flip: String, legend: String = "") = {
   <div>

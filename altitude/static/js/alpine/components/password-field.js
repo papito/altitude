@@ -1,15 +1,13 @@
-/** How long a generated password is: 20 characters of 56, about 116 bits */
+/** 20 characters of a 57-character alphabet: about 117 bits */
 const GENERATED_LENGTH = 20
 
 // Letters and digits that no font confuses with one another (no 0/O, 1/l/I)
 const ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 /**
- * A new password's field with its Generate and Show buttons (`includes/password_field`), on the
- * Users page's Add User form and Set password dialog, and the Add User form's confirmation field
- * beside it (`x-ref="repeat"`, whose type binds to `inputType()` too): Generate writes a random
- * password from the browser's cryptographic source into both and shows it, so it can be copied
- * and passed on; Show shows or hides what both hold.
+ * A new password's field with Generate and Show, plus an optional confirmation field
+ * (`x-ref="repeat"`) that both buttons also act on. Generate shows the password, so it can be copied
+ * and passed on.
  */
 export function passwordField() {
     return {
@@ -28,7 +26,7 @@ export function passwordField() {
         },
 
         generate() {
-            // A rejection sampling of bytes, so every character of the alphabet is as likely
+            // Rejection sampling, so every character is equally likely
             const limit = 256 - (256 % ALPHABET.length)
             let password = ""
             while (password.length < GENERATED_LENGTH) {

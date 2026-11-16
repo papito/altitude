@@ -33,7 +33,6 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     testApp.service.library.addAsset(
       testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.getImportAsset(relPath)))
 
-  /** The asset's `asset_edit` row as stored, None when it has none */
   private def storedRow(assetId: String): Option[Map[String, AnyRef]] = testApp.txManager.asReadOnly {
     query("SELECT * FROM asset_edit WHERE asset_id = ?", assetId).headOption
   }
@@ -47,10 +46,9 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      *
      * Assertions:
      *
-     * Before any save the asset has no Edit (`editOf` is None) and its state is the original's: version 0, the identity, not
-     * edited and no edited size. A first save cropping it to half its width, built on version 0, answers version 1, the Edit as
-     * sent, edited, the edited size of 75 × 150, not rendered yet and revision 0. The same state is read back, `editOf` now has
-     * it, and the asset's one `asset_edit` row holds version 1 and the Edit.
+     * Before any save the asset has no Edit and reads as the original: version 0, the identity, not edited, no edited size. A
+     * first save cropping half its width answers version 1 with that Edit, edited, 75 × 150, not rendered yet and at revision 0.
+     * The same state reads back, and the asset's one `asset_edit` row holds it.
      */
     val asset = testContext.persistAsset()
     val assetId = asset.persistedId
@@ -89,8 +87,8 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      *
      * Assertions:
      *
-     * `editOf` given the asset as read before the render answers the rendered state: edit version 1, rendered at 1, revision 1,
-     * never the revision of the asset as it was read with the versions of the Edit as it is now.
+     * `editOf` given the asset as read before the render answers the rendered state (edit version 1, rendered at 1, revision 1),
+     * never the stale revision mixed with the current versions.
      */
     val asset = testContext.persistAsset()
     val assetId = asset.persistedId
@@ -111,8 +109,8 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      *
      * Assertions:
      *
-     * The versions are 1, 2 and 3; the state read back is the third Edit at version 3, and the asset has one `asset_edit` row,
-     * holding it, written by the account that saved.
+     * The versions are 1, 2 and 3, and the asset has one `asset_edit` row holding the third Edit, written by the account that
+     * saved.
      */
     val assetId = testContext.persistAsset().persistedId
 
@@ -302,9 +300,8 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      *
      * Assertions:
      *
-     * The second waits for the first (for the asset's row, which every save locks first, on PostgreSQL; for the one write
-     * connection on SQLite) and is then refused with a conflict carrying the first's Edit, which is the one stored, one edit
-     * version on.
+     * The second waits for the first (on the asset's row lock on PostgreSQL, the one write connection on SQLite), then is refused
+     * with a conflict carrying the first's Edit, which is the one stored, one version on.
      *
      * Edge cases:
      *

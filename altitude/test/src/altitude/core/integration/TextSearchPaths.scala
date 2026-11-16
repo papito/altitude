@@ -7,17 +7,16 @@ import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 
 /**
- * Text searches run on both paths a Search text can take, which must agree on the assets, their order, the groups and the totals.
- * Under a probe limit of 0 every positive group with a hit is too broad to be answered from its hits, so the text is matched over
- * the whole library; under one no test reaches, every positive group is complete, and the search reads its candidates alone. A
- * search without text takes neither path and runs once.
+ * Runs each text search on both paths a Search text can take, which must agree on the assets, their order, the groups and the
+ * totals. A probe limit of 0 forces the broad path (the text matched over the whole library); one no test reaches forces the
+ * selective path (only the candidates read). A search without text runs once.
  */
 trait TextSearchPaths { self: IntegrationTestCore =>
 
   private val ALWAYS_BROAD = 0
   private val ALWAYS_SELECTIVE = 1000000
 
-  /** The search run on the broad path and on the selective one, which must agree on `outcome`; the result of the broad one */
+  /** Runs the search on both paths, which must agree on `outcome`, and returns the broad one's result */
   protected def onBothPaths[T](query: SearchQuery)(run: SearchQuery => T)(outcome: T => Any): T =
     if (!query.isText) run(query)
     else {

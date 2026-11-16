@@ -1,22 +1,12 @@
 /**
- * The Edit panel's changes to an Edit (`CONTEXT.md`), as pure functions of the Edit and the upright original's size:
- * what a control of Crop & rotate does to the crop (a quarter turn, a flip, an aspect lock, Straighten re-fitting or
- * shrinking it, a section's reset), what the Level tool and a drag around the crop set
- * Straighten to, and the curve editor's rules on its points. DOM-free, so the tests run it under Node
- * (`scripts/test-js/edit-adjust.test.mjs`); `edit-panel.js` and the Crop tool (`crop-tool.js`) call it.
+ * The Edit panel's changes to an Edit, as pure functions of the Edit and the upright original's size; DOM-free, so the
+ * tests run it under Node. Each takes a normalized Edit and returns a new normalized one. A crop covering the whole
+ * frame is stored as `null`, so such an Edit is the identity again.
  *
- * Every function takes an Edit as `recipe.js` normalizes it and answers a new one, normalized, leaving its argument as
- * it is. A crop is stored as the server keeps it (`normalizeCrop`), and as `null` when it is the whole frame, so an Edit
- * whose crop covers the frame is the identity again.
- *
- * **Keeping the crop inside** (`keepInside`): the crop's four corners stay inside the image's outline in the frame
- * (`geometry.outline`). A crop never set by hand (`cropFitted`) re-fits to the largest rectangle at its aspect as the
- * geometry changes (`fitMaxCentered`); a crop the user set shrinks around its center only as much as it must
- * (`shrinkToValid`).
- *
- * **A quarter turn and a flip** turn or mirror the edited image as it is shown: the crop and Straighten are carried
- * into the new frame, so nothing else of the picture moves. A mirror applied after the turn
- * reverses the turn's sense, so with one flip on, a turn to the right steps `rotate` back by 90.
+ * With `keepInside`, the crop's corners stay inside the image's outline in the frame: a crop never set by hand
+ * (`cropFitted`) re-fits to the largest rectangle at its aspect as the geometry changes; one the user set shrinks
+ * around its center only as much as it must. A quarter turn or a flip carries the crop and Straighten into the new
+ * frame, so nothing else of the picture moves.
  */
 import {
     aspectRatio,
@@ -43,7 +33,7 @@ import {
 // Steps per unit of a curve coordinate (3 decimals, `recipe.js`)
 const CURVE_STEPS = 1000
 
-/** How near in x a click may be to a point of the curve and still add one: nearer, it is that point's */
+/** A click nearer than this in x to a curve point takes that point instead of adding one */
 export const CURVE_ADD_DISTANCE = 0.02
 
 /** How far past the curve's box a point is dragged to be removed on release, in fractions of the box */
@@ -56,7 +46,6 @@ export const LEVEL_MIN_LENGTH = 12
 // again, so rounding never leaves a transparent sliver along a straightened edge
 const ROUNDING_INSET = 0.0001
 
-/** The frame's size, W × H, of the upright original under the Edit */
 function frameOf(recipe, upright) {
     return frameSize(upright.width, upright.height, recipe)
 }
@@ -91,16 +80,11 @@ export function storedCrop(rect, quad = null) {
     return isWholeFrame(crop) ? null : crop
 }
 
-/** The Edit's crop rectangle, the whole frame when it has none */
 export function cropRect(recipe) {
     return recipe.crop ?? WHOLE_FRAME
 }
 
-/**
- * The crop kept true to the geometry: a fitted crop re-fits to the largest rectangle at the aspect, centered; a crop
- * the user set shrinks around its center only as much as it must to stay inside the image (when the Edit keeps it
- * inside)
- */
+/** The crop kept true to the geometry: a fitted crop re-fits, centered; a set one shrinks only as it must */
 export function refit(recipe, upright) {
     const edit = normalize(recipe)
     const { width, height } = frameOf(edit, upright)
@@ -111,25 +95,21 @@ export function refit(recipe, upright) {
     return normalize({ ...edit, crop: storedCrop(rect, quad) })
 }
 
-/**
- * A slider set to `value`: Straighten moves the image's outline, so the crop is kept true to it (`refit`)
- */
+/** A slider set to `value`; Straighten moves the image's outline, so it refits the crop */
 export function withSlider(recipe, key, value, upright) {
     const edit = normalize({ ...normalize(recipe), [key]: value })
     return key === "straighten" ? refit(edit, upright) : edit
 }
 
 /**
- * A drag of a slider (a range's, or the Crop tool's turn of Straighten), as a function of the value reached: each value is
- * applied to the Edit the drag started from, so a crop the user set that shrank on the way grows back as the drag returns,
- * rather than shrinking step by step
+ * A slider drag as a function of the value reached, each applied to the Edit the drag started from, so a set crop that
+ * shrank on the way grows back as the drag returns rather than shrinking step by step
  */
 export function sliderDrag(start, key, upright) {
     const edit = normalize(start)
     return (value) => withSlider(edit, key, value, upright)
 }
 
-/** The tone curve set to `points` */
 export function withCurve(recipe, points) {
     return normalize({ ...normalize(recipe), curve: points })
 }
@@ -143,7 +123,7 @@ export function withAspect(recipe, aspect, upright) {
     return reshapedToAspect(edit, upright)
 }
 
-/** A crop the lock's ratio, after the lock changed */
+/** The crop reshaped to the lock's ratio */
 function reshapedToAspect(edit, upright) {
     if (edit.cropFitted) {
         return refit(edit, upright)
@@ -188,9 +168,9 @@ export function swappedOrientation(recipe, upright) {
 }
 
 /**
- * A quarter turn of the edited image as it is shown, right (`direction` 1, clockwise) or left (−1): the crop turns with
- * the frame, Straighten stays, and a set lock orientation flips. One flip on reverses the
- * turn's sense in the frame (a mirror after a turn), so `rotate` steps the other way.
+ * A quarter turn of the image as shown, right (`direction` 1) or left (−1): the crop turns with the frame, Straighten
+ * stays, and a set lock orientation flips. With one flip on, the mirror applies after the turn and reverses its sense,
+ * so `rotate` steps the other way.
  */
 export function rotated(recipe, direction, upright) {
     const edit = normalize(recipe)
@@ -249,11 +229,7 @@ export function withCrop(recipe, rect, upright) {
     })
 }
 
-/**
- * A section back to its defaults: its sliders at 0, Light's curve the diagonal, and for Crop & rotate no turn, flip,
- * Straighten or crop, the lock back to Original and fitted; whether the crop is kept inside stays, being
- * a preference rather than a change of the picture
- */
+/** A section back to its defaults; `keepInside` stays, being a preference rather than a change of the picture */
 export function resetSection(recipe, sectionId, upright) {
     const edit = normalize(recipe)
     const base = defaults()
@@ -266,7 +242,7 @@ export function resetSection(recipe, sectionId, upright) {
     return sectionId === "cropRotate" ? refit(reset, upright) : normalize(reset)
 }
 
-/** Every section back to its defaults (the header's Reset all), the crop kept inside as it was */
+/** Every section back to its defaults, `keepInside` as it was */
 export function resetAll(recipe, upright) {
     return SECTIONS.reduce(
         (edit, section) => resetSection(edit, section.id, upright),
@@ -357,7 +333,7 @@ export function isRemovableCurvePoint(curve, index) {
     )
 }
 
-/** The curve without its point `index`, when it may be removed; the curve as it is otherwise */
+/** The curve without its point `index`, when it may be removed */
 export function removeCurvePoint(curve, index) {
     return isRemovableCurvePoint(curve, index)
         ? curve.filter((_, i) => i !== index).map((p) => [...p])

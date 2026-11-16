@@ -9,11 +9,7 @@ import altitude.core.models.AccountType
 import altitude.core.models.Permissions
 import altitude.core.models.Settings
 
-/**
- * The Settings screen: an Admin's page and save, a User's and a Guest's 403, the admin-only nav link, a validation replacement
- * that writes nothing, a save that announces its success event, a note beside its Setting, and the PostgreSQL-only Settings
- * absent on SQLite.
- */
+/** The Settings screen: an Admin's page and save, refused to everyone else. */
 @DoNotDiscover class SettingsControllerTests extends ControllerTestCore {
 
   private def pageUrl(host: String, repoId: String) = s"$host/settings/r/$repoId"
@@ -27,13 +23,13 @@ import altitude.core.models.Settings
       cookies = testContext.cookies,
       check = false)
 
-  /** The stored value of a Setting, read fresh from the database through the test instance */
+  /** The stored value of a Setting, reloaded from the database */
   private def storedValue(name: String): String = {
     testApp.settings.load()
     testApp.settings.current.value(name)
   }
 
-  /** The field of `name` rendered with `value`, wherever its attributes fall */
+  /** A regex for the `name` input carrying `value`, whatever attributes sit around and between them */
   private def field(name: String, value: String): String = s"""<input[^>]*name="${name.replace(".", "\\.")}"[^>]*value="$value""""
 
   test("An Admin opens the Settings page") {
@@ -70,8 +66,8 @@ import altitude.core.models.Settings
      *
      * Assertions:
      *
-     * The page answers 403 as plain text for a browser request and as JSON for a request that accepts JSON; the save route is
-     * refused the same way. The main page carries no Settings link in the nav for either.
+     * The page answers 403 as plain text to a browser and as JSON to a JSON request, and the save is refused too. Neither sees
+     * the Settings link in the nav.
      */
     for (accountType <- List(AccountType.User, AccountType.Guest)) {
       testContext = new TestContext(testApp)
@@ -135,8 +131,8 @@ import altitude.core.models.Settings
      *
      * Assertions:
      *
-     * The answer is a validation replacement (retargeted to the form), naming both errors beside their fields and keeping the
-     * submitted values in those fields; neither row changed.
+     * The answer is a validation replacement of the form with both errors beside their fields, which keep the submitted values;
+     * no row changed.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
 
@@ -173,8 +169,8 @@ import altitude.core.models.Settings
      *
      * Assertions:
      *
-     * The answer is the form itself (no retarget) carrying the success event and the saved values; the rows hold them; a Setting
-     * that was not submitted keeps its value. An unchecked flag is saved as false.
+     * The answer is the form itself, not retargeted, carrying the success event and the saved values, which the rows hold. A
+     * Setting not submitted keeps its value; an unchecked flag is saved as false.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
 
@@ -209,13 +205,11 @@ import altitude.core.models.Settings
     /**
      * Setup:
      *
-     * An Admin's save carries a JSON boolean for the place-name search and a JSON number for the match count, then a JSON array
-     * for the match count.
+     * An Admin saves a JSON boolean and a JSON number, then a JSON array.
      *
      * Assertions:
      *
-     * The boolean and the number are stored as text; the array is answered as a validation replacement naming the field, and
-     * nothing is written.
+     * The boolean and the number are stored as text. The array is refused as a validation replacement, and nothing is written.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
 
@@ -241,20 +235,18 @@ import altitude.core.models.Settings
     /**
      * Setup:
      *
-     * An Admin's page, then three saves of the Describe match threshold, whose default of 0.00009 a JVM prints as 9.0E-5: the
-     * default as the form submits it, as text; a smaller probability as a JSON number; and a probability written with an
-     * exponent, as text.
+     * An Admin's page, then three saves of the Describe match threshold, whose default 0.00009 a JVM prints as 9.0E-5: the
+     * default as text, a smaller value as a JSON number, and a value with an exponent.
      *
      * Assertions:
      *
-     * The page has a Search section with the threshold, the result limit and the weaker matches ratio, the threshold's field, its
-     * Reset default and its help all showing 0.00009. Saving the default back answers the form with 0.00009 in the field and
-     * leaves the row as it was. The JSON number is stored and shown as the plain decimal 0.00002.
+     * The Search section lists the threshold, the result limit and the weaker matches ratio, and the threshold's field, Reset
+     * default and help show 0.00009. Saving the default back leaves the field and the row at 0.00009. The JSON number is stored
+     * and shown as 0.00002.
      *
      * Edge cases:
      *
-     * The probability written with an exponent is refused beside its field, which says to write a plain decimal with no exponent
-     * and not that it is no number, and nothing is written, so neither the form nor the row ever holds an exponent.
+     * The value with an exponent is refused as not a plain decimal, rather than as not a number, and nothing is written.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val threshold = Settings.SEARCH_DESCRIBE_MIN_PROBABILITY
@@ -328,8 +320,8 @@ import altitude.core.models.Settings
      *
      * Assertions:
      *
-     * The page carries the running line, the one note of the form. The save's answer still carries it, since the saved value runs
-     * only from the next start, and renders it between the restart notice and the field's help.
+     * The page carries the running line as the form's only note. A save's answer keeps it, since the saved value runs only from
+     * the next start, between the restart notice and the field's help.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
 

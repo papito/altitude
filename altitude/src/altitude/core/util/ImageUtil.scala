@@ -27,13 +27,13 @@ import altitude.core.ImageException
 
 object ImageUtil:
 
-  // Get OPENCV image Mat from a byte array
+  // OpenCV applies the EXIF orientation as it decodes (the ImageIO fallback does not); the alpha channel is dropped
   def matFromBytes(data: Array[Byte]): Mat = decode(data, Imgcodecs.IMREAD_ANYCOLOR, keepAlpha = false)
 
   /**
-   * Decodes an image with OpenCV or, for a format the bundled OpenCV has no codec for (GIF among them), with ImageIO, which gives
-   * an animated image's first frame. `keepAlpha` is what the flags ask of OpenCV, for the fallback to do the same. Data neither
-   * decodes is an [[ImageException]]: the size is read from the header alone, so a file whose data is corrupt is found here.
+   * With OpenCV or, for a format the bundled OpenCV has no codec for (GIF among them), with ImageIO, which gives an animated
+   * image's first frame. `keepAlpha` tells the fallback what `flags` ask of OpenCV. The size is read from the header alone, so
+   * corrupt data is first found here.
    */
   private def decode(data: Array[Byte], flags: Int, keepAlpha: Boolean): Mat =
     val image = Imgcodecs.imdecode(new MatOfByte(data*), flags)
@@ -44,7 +44,7 @@ object ImageUtil:
       catch case ex: IOException => throw ImageException(s"Cannot decode the image: ${ex.getMessage}")
     matFromImage(decoded.getOrElse(throw ImageException("Neither OpenCV nor ImageIO can decode the image")), keepAlpha)
 
-  /** An image ImageIO decoded, laid out as OpenCV decodes one: BGR, or BGRA when asked to keep an alpha channel it has */
+  /** Laid out as OpenCV decodes: BGR, or BGRA when asked to keep an alpha channel the image has */
   private def matFromImage(image: BufferedImage, keepAlpha: Boolean): Mat =
     val withAlpha = keepAlpha && image.getColorModel.hasAlpha
     val (imageType, matType) =
@@ -66,9 +66,9 @@ object ImageUtil:
     bgra
 
   /**
-   * An animated GIF's playing time, the sum of its frames' delays, from the header, without decoding a frame; `None` for a still
-   * one. A frame without a delay, or one of 10 ms or less, plays for 100 ms, as browsers show it. The reader's input is set with
-   * its metadata and able to seek back (`reader.setInput(input)`), for the frames to be counted and read.
+   * The sum of an animated GIF's frame delays, without decoding a frame; `None` for a still one. A frame of 10 ms or less, or
+   * with no delay, plays for 100 ms, as browsers show it. The reader's input must be set seekable and with metadata
+   * (`reader.setInput(input)`).
    */
   def gifPlayingTimeMs(reader: ImageReader): Option[Long] =
     val frames = reader.getNumImages(true)
@@ -90,10 +90,9 @@ object ImageUtil:
     val scaleY = targetHeight.toDouble / sourceHeight
     Math.min(scaleX, scaleY)
 
-  /** The EXIF orientation of an image's bytes; an image without the tag, or without EXIF at all, is upright (1) */
+  /** Upright (1) without the tag or without EXIF at all */
   def exifOrientation(data: Array[Byte]): Int = orientationOf(ImageMetadataReader.readMetadata(new ByteArrayInputStream(data)))
 
-  /** The EXIF orientation of an image file, read from its metadata alone, as [[exifOrientation]] reads one from its bytes */
   def exifOrientation(file: Path): Int = orientationOf(ImageMetadataReader.readMetadata(file.toFile))
 
   private def orientationOf(metadata: Metadata): Int =
@@ -102,8 +101,7 @@ object ImageUtil:
     catch case _: Exception => 1
 
   /**
-   * The Preview of an image's bytes: decoded with its alpha channel, turned upright by its EXIF orientation and fitted into the
-   * square box by the `Mat` overload.
+   * Decoded with its alpha channel and turned upright by its EXIF orientation.
    *
    * https://sirv.com/help/articles/rotate-photos-to-be-upright/
    */
@@ -112,10 +110,7 @@ object ImageUtil:
     try makeImageThumbnail(image, exifOrientation(data), previewBoxSize)
     finally image.release()
 
-  /**
-   * A JPEG's stored size, read from its header with no decode; None for an image that is no JPEG (by its start of image marker)
-   * or whose header cannot be read
-   */
+  /** Read from the header with no decode; None for a non-JPEG (by its start of image marker) or an unreadable header */
   def jpegSize(data: Array[Byte]): Option[(Int, Int)] =
     if data.length < 3 || (data(0) & 0xff) != 0xff || (data(1) & 0xff) != 0xd8 || (data(2) & 0xff) != 0xff then return None
     val input = ImageIO.createImageInputStream(new ByteArrayInputStream(data))
@@ -132,9 +127,8 @@ object ImageUtil:
     finally input.close()
 
   /**
-   * A JPEG's bytes decoded at a half, a quarter or an eighth of its size (`reduction` 2, 4 or 8) by the decoder itself, in 8-bit
-   * BGR, its EXIF orientation ignored, as [[decodeUnchanged]] decodes; each side is the stored one divided and rounded up. The
-   * caller releases it.
+   * A JPEG reduced by the decoder itself, in 8-bit BGR with its EXIF orientation ignored; each side is the stored one divided and
+   * rounded up. The caller releases it.
    */
   def decodeReduced(data: Array[Byte], reduction: Int): Mat =
     val flag = reduction match
@@ -149,18 +143,13 @@ object ImageUtil:
       image
     finally bytes.release()
 
-  /**
-   * An image's bytes decoded as stored, for [[orient]] to turn upright: its depth (8 or 16 bits) and its alpha channel kept, its
-   * EXIF orientation ignored. The caller releases it.
-   */
+  /** Depth and alpha kept, EXIF orientation ignored, for [[orient]] to turn upright. The caller releases it. */
   def decodeUnchanged(data: Array[Byte]): Mat =
     decode(data, Imgcodecs.IMREAD_UNCHANGED | Imgcodecs.IMREAD_IGNORE_ORIENTATION, keepAlpha = true)
 
   /**
-   * The Preview of a decoded image, which stays the caller's to release: scaled to fit the box with `INTER_AREA`, turned upright
-   * by its EXIF `orientation` (1 for an image that is upright already, such as a Video frame), centered in the square box on a
-   * transparent border and encoded by [[encodePreview]]. The box being square, the image is scaled before it is turned, when it
-   * is smallest.
+   * `image` stays the caller's to release; `orientation` is 1 for an upright one such as a Video frame. The box being square, the
+   * image is scaled before it is turned, while it is smallest.
    */
   def makeImageThumbnail(image: Mat, orientation: Int, previewBoxSize: Int): Array[Byte] =
     val scale = determineImageScale(image.width(), image.height(), previewBoxSize, previewBoxSize)
@@ -173,12 +162,7 @@ object ImageUtil:
     try encodePreview(box)
     finally box.release()
 
-  /**
-   * `image` turned upright for its EXIF `orientation`, as a new image, the input left to the caller: 2 is mirrored across the
-   * vertical axis, 3 turned around, 4 mirrored across the horizontal axis, 5 transposed, 6 turned a quarter clockwise, 7
-   * transposed across the other diagonal (transposed, then turned around), 8 turned a quarter counter-clockwise. 1, and a value
-   * the tag cannot hold, is a copy.
-   */
+  /** A new image, upright for the EXIF `orientation`; 1, or a value the tag cannot hold, gives a copy */
   def orient(image: Mat, orientation: Int): Mat =
     val upright = new Mat()
     orientation match
@@ -196,10 +180,7 @@ object ImageUtil:
       case _ => image.copyTo(upright)
     upright
 
-  /**
-   * `image` as a new image in 8-bit BGRA, what [[encodePreview]] takes: a BGR or a gray image gains an opaque alpha channel, and
-   * a 16-bit one keeps the high byte of each sample, since WebP holds 8-bit samples only.
-   */
+  /** A new 8-bit BGRA image; a 16-bit one keeps the high byte of each sample, since WebP holds 8-bit samples only */
   def toBgra(image: Mat): Mat =
     val bgra = new Mat()
     image.channels() match
@@ -210,10 +191,7 @@ object ImageUtil:
     if bgra.depth() == CvType.CV_16U then bgra.convertTo(bgra, CvType.CV_8U, 1.0 / 256)
     bgra
 
-  /**
-   * `image` centered in a square box of `boxSize` a side on a transparent border, a new image in 8-bit BGRA ([[toBgra]]). A
-   * portrait image is centered horizontally and a landscape one vertically, the odd pixel of the border after the image.
-   */
+  /** A new 8-bit BGRA image, centered on a transparent border, the odd border pixel after the image */
   private def letterbox(image: Mat, boxSize: Int): Mat =
     val bgra = toBgra(image)
     val left = (boxSize - bgra.width()) / 2
@@ -231,15 +209,11 @@ object ImageUtil:
     bgra.release()
     box
 
-  /**
-   * A Preview's bytes: `box`, an 8-bit BGRA image, as a lossy WebP at [[Const.AssetView.PREVIEW_WEBP_QUALITY]], its alpha plane
-   * kept exact.
-   */
   def encodePreview(box: Mat): Array[Byte] = encodeWebp(box, Const.AssetView.PREVIEW_WEBP_QUALITY)
 
   /**
-   * An 8-bit BGR or BGRA image as a lossy WebP at `quality` (0 to 100), which governs the color planes only: libwebp keeps the
-   * alpha plane exact, and drops it when every pixel is opaque
+   * Lossy; `quality` (0 to 100) governs the color planes only: libwebp keeps the alpha plane exact, and drops it when every pixel
+   * is opaque
    */
   def encodeWebp(image: Mat, quality: Int): Array[Byte] =
     val buffer = new MatOfByte()

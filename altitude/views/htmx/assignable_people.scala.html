@@ -4,15 +4,9 @@
 
 @(people: List[Person], suggested: List[Person] = Nil)
 
-@* The options of the Change combobox (GET /htmx/people/r/:repoId/assignable): the people a Face can be given to
-   (PersonService.getAssignable: live, not a bad match, named first and then by sort name, Hidden people among them),
-   one option each with the Person's ID and name, whether named (`data-person-named`, which tells the combobox whether a
-   pick merges into them or moves the Face alone), the Hidden mark, their cover and their name. Asked with the Face
-   (`faceId`), the Suggested group comes first: the people whose Faces are nearest the Face's own vector, closest first
-   (PersonService.suggestedPeople), each option marked `data-suggested` and left out of the list after the group, so a
-   Person is one option. The group is the ARIA listbox group pattern, its heading announced with its options. The
-   combobox parses the options (js/alpine/components/face-combobox.js), renders the group while nothing is typed, filters
-   the rest on the client and leaves out the Face's own Person itself. *@
+@* The options of a Face's Change combobox. `data-person-named` decides whether a pick merges into the Person or moves the
+   Face alone. Asked with a Face, the Suggested group (people with the nearest Faces, closest first) comes first and its
+   people are left out of the list after it, so a Person is one option. *@
 
 @option(person: Person, isSuggested: Boolean) = {
     <li role="option"

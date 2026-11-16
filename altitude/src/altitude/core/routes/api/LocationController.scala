@@ -14,11 +14,10 @@ import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.decorators.requirePermission
 
-/** Location JSON API: the list the Locations tab renders, and the membership changes made by drag/drop and the batch footer */
 class LocationController(using logger: Logger) extends BaseController:
   private val prefix = "api/location"
 
-  /** Categories and Locations in path order, with nullable pin and category fields and membership counts */
+  /** Categories and Locations in path order */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/list")
   def getLocationList(repoId: String)(using request: Request): Response[String] =
@@ -36,7 +35,7 @@ class LocationController(using logger: Logger) extends BaseController:
   def removeAssetsFromLocation(repoId: String)(using request: Request): Response[String] =
     membershipChange("removed", App.altitude.service.location.removeAssets)
 
-  /** Bad payloads and category targets are client errors; a Location outside this repository is not found. */
+  /** A category as the target is a client error, as a bad payload is */
   private def membershipChange(countKey: String, change: (String, Set[String]) => Int)(using request: Request): Response[String] =
     val jsonIn = unscrubbedJson.get // a wrong content type keeps its own validation error
     val (locationId, assetIds) = Try(membershipRequest(jsonIn)).toOption match

@@ -10,15 +10,12 @@ import altitude.core.models.Location
 import altitude.core.models.LocationKind
 
 /**
- * Categories and Locations, one table and one name pool per repository (see [[Location]]). Like albums, nothing here touches an
- * asset: membership rows are all that change. The reverse direction lives in `LibraryService.recycleAssets`, which drops a
- * recycled asset from every Location; purging deletes the asset row and the schema cascades the memberships. Every lookup is
- * scoped to the context repository, so a foreign ID is simply not found.
+ * Categories and Locations, one table and one name pool per repository. Nothing here touches an asset, only membership rows; a
+ * recycled asset leaves every Location (`LibraryService.recycleAssets`), and a purge's row delete cascades its memberships.
  */
 class LocationService(val app: Altitude) extends BaseService[Location]:
   override protected val dao: LocationDao = app.DAO.location
 
-  /** A Location or category name as stored, once it passes the name rule (`Validators.validName`) */
   private def validName(name: String): String =
     Validators.validName(name, Api.Field.Location.NAME, Api.Constraints.MAX_LOCATION_NAME_LENGTH)
 
@@ -46,10 +43,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       dao.getAll
     }
 
-  /**
-   * The Locations of the IDs, each with its category's name, in no order: an ID of a category, of another repository's row or of
-   * none has no entry
-   */
+  /** The Locations of the IDs with their category names, in no order; a category's or an unknown ID has no entry */
   def getLocationsByIds(ids: Set[String]): List[Location] =
     txManager.asReadOnly {
       val locations = dao.getByIds(ids).filter(_.kind == LocationKind.Location)
@@ -133,20 +127,17 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       dao.getAssetsInAnyLocation(assetIds)
     }
 
-  /**
-   * The Locations holding the asset, in path order with their category names, for the Detail panel; see
-   * `LocationDao.getLocationsOfAsset`
-   */
+  /** The Locations holding the asset, in path order with their category names */
   def getLocationsOfAsset(assetId: String): List[Location] =
     txManager.asReadOnly {
       dao.getLocationsOfAsset(assetId)
     }
 
-  /** The row must exist in this repository and be a category - the only thing a Location can be put under */
+  /** A category is the only thing a Location can be put under */
   private def requireCategory(id: String): Unit =
     if (getById(id): Location).kind != LocationKind.Category then throw IllegalOperationException(s"Not a location category: $id")
 
-  /** The row must exist in this repository and be a Location - categories hold no assets */
+  /** Categories hold no assets */
   private def requireLocation(id: String): Unit =
     if (getById(id): Location).kind != LocationKind.Location then
       throw IllegalOperationException(s"Not a location, cannot hold assets: $id")

@@ -1,11 +1,10 @@
-/* The Import page's own layout (pipeline.scala.html). The bundle applies on every page, so its rules are scoped to its
-   body's class, at zero specificity, and to the IDs only it renders */
+/* The bundle applies on every page, so these rules are scoped to the body's class, at zero specificity, and to IDs only
+   this page renders */
 
-/* Two columns, what delivers files (the upload sections and the Watch folders) and the wider Import history, five parts
-   to seven: each grows from a least width in that ratio, and they stack, the uploads first, once the page is narrower
-   than the two together. The page is as wide as the window at the most, and centered in it, also under a nav that is
-   wider than the window (the body's one column is then as wide as the nav), so the columns stack by the window's width;
-   the margin's 0px is a zero, which max() takes only with a unit */
+/* Two columns, the sources and the wider Import history, 5 : 7, each growing from a least width; they stack, sources
+   first, once the page is narrower than both. The page is at most the window's width and centered in it, even under a
+   nav wider than the window (which widens the body's column), so the columns stack by the window's width. max() takes
+   a zero only with a unit, hence 0px */
 :where(body.pipeline) main {
   display: flex;
   flex-wrap: wrap;
@@ -18,7 +17,6 @@
   padding: var(--space-8) var(--space-6);
 }
 
-/* The left column: the upload sections, then the Watch folders */
 #importSources {
   flex: 5 1 var(--import-uploads-min-width);
   display: grid;
@@ -32,7 +30,7 @@
   min-width: 0;
 }
 
-/* A section's heading, the upload sections' too */
+/* A section's heading, the upload sections' included */
 :where(body.pipeline) main h2 {
   margin: 0 0 var(--space-5);
   font-size: var(--font-size-medium);
@@ -43,8 +41,7 @@
   margin-bottom: var(--space-6);
 }
 
-/* What marks an outcome in the Import history, on a segment of an Import's bar, a count, a filter chip and a file's
-   outcome: its color, and the fill of a chip in it, a tint of the color */
+/* An outcome's color, and a tint of it as a chip's fill, for its bar segment, count, filter chip and file */
 #importHistory :is(.imported, .duplicate, .unsupported, .failed, .pending) {
   --outcome-fill: hsl(from var(--outcome-color) h s l / 0.16);
 }

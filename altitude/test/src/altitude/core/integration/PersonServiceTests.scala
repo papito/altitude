@@ -197,7 +197,6 @@ import altitude.core.util.Util
     val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
     testApp.service.library.addImportAsset(importAsset1)
 
-    // Add another face to the same person
     val importAsset2 = IntegrationTestUtil.getImportAsset("people/meme-ben3.png")
     val importedAsset2: Asset = testApp.service.library.addImportAsset(importAsset2)
 
@@ -307,11 +306,9 @@ import altitude.core.util.Util
         )
       )
 
-    // merged person should have the correct face number
     mergedBPersisted.numOfFaces should be(NEW_FACES_TOTAL)
     mergedBPersisted.numOfFaces should be(mergedSearchTotal)
 
-    // all face labels should be the same as the merged INTO person label
     val faces = testApp.service.person.getPersonFaces(mergedB.persistedId)
     faces.count(_.personId.get == mergedB.persistedId) should be(NEW_FACES_TOTAL)
   }
@@ -432,13 +429,8 @@ import altitude.core.util.Util
     val personB: Person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(personB, NUM_OF_FACES)
 
-    // *** Merge B -> A
-    //
     val mergedA: Person = testApp.service.person.merge(dest = personA, source = personB)
 
-    //
-    // *** Sanity checks for persisted instances of source and destination
-    //
     val aFacesInDb: List[Face] = testApp.service.person.getPersonFaces(mergedA.persistedId)
     aFacesInDb.size should be(NUM_OF_FACES * 2)
 
@@ -470,14 +462,9 @@ import altitude.core.util.Util
     val personB: Person = testApp.service.person.addPerson(Person(name = Some("B")))
     testContext.addTestFacesAndAssets(personB, NUM_OF_FACES)
 
-    // no faces, to keep it simple
     val personA: Person = testApp.service.person.addPerson(Person(name = Some("A")))
 
-    //
-    // *** C -> B
-    //
     val mergedB: Person = testApp.service.person.merge(dest = personB, source = personC)
-    // B is trained on C faces
     mergedB.numOfFaces should be(NUM_OF_FACES * 2)
     mergedB.isMatched should be(true)
 
@@ -493,13 +480,9 @@ import altitude.core.util.Util
     val persistedC: Person = testApp.service.person.getById(personC.persistedId)
     persistedC.numOfFaces should be(0)
 
-    //
-    // *** B -> A
-    //
     val persistedA: Person = testApp.service.person.getById(personA.persistedId)
     val mergedA: Person = testApp.service.person.merge(dest = persistedA, source = mergedB)
 
-    // A is trained on B faces (which now has B + C faces)
     val aFacesInDb: List[Face] = testApp.service.person.getPersonFaces(mergedA.persistedId)
     aFacesInDb.size should be(NUM_OF_FACES * 2)
 
@@ -535,7 +518,6 @@ import altitude.core.util.Util
     val updatedPersonA: Person = testApp.service.person.getById(personA.persistedId)
     updatedPersonA.name.get should be(mergedIntoName)
 
-    // at this point mergedFromName should be available for use
     val personC: Person = testApp.service.person.addPerson(Person(name = Some(mergedFromName)))
     personC.name.get should be(mergedFromName)
   }
@@ -1043,11 +1025,10 @@ import altitude.core.util.Util
     import engine.dialect.*
     val repositoryId = RequestContext.getRepository.persistedId
 
-    // The predicates of PersonDao.getAll, written as it writes them; no other index serves them
+    // Written as PersonDao.getAll writes them
     val plan =
       lookupPlanOf(sql"SELECT id FROM person WHERE repository_id = $repositoryId AND num_of_faces > 0 AND is_deleted = FALSE")
 
-    // person_03 serves it; over a handful of rows PostgreSQL may scan person_02 instead, also partial on the live people
     withClue(plan)("person_0[23]".r.findFirstIn(plan).isDefined shouldBe true)
   }
 
@@ -1068,7 +1049,6 @@ import altitude.core.util.Util
     val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
-    // two people  - one asset
     val faces = testApp.service.faceDetection.extractFaces(importAsset.bytes)
     faces.size should be(2)
 
@@ -1077,19 +1057,12 @@ import altitude.core.util.Util
     people.head.numOfFaces should be(1)
     people.last.numOfFaces should be(1)
 
-    // merge the two people
     val mergedPerson: Person = testApp.service.person.merge(dest = people.head, source = people.last)
 
-    /**
-     * After the merge, there should be still one asset and one person with one asset. This is technically not a real scenario -
-     * except for twins, one person cannot be in the image twice, but the use case is real. As same person gets merged into
-     * themselves across assets, the face count should not drift and reflect the actual search results
-     */
     val mergedIntoPerson = testApp.service.person.getById(mergedPerson.persistedId)
-    // yes, two faces in DB, but only one asset will be returned when you query for the person
+    // Two Faces stored, one asset counted
     mergedIntoPerson.numOfFaces should be(1)
 
-    // The asset's two Faces are one asset of the person: recycling takes one from the count, restoring gives one back
     testApp.service.library.recycleAssets(Set(importedAsset.persistedId))
     testApp.service.person.getById(mergedPerson.persistedId).numOfFaces should be(0)
 
@@ -1125,7 +1098,6 @@ import altitude.core.util.Util
 
     val mergedPerson: Person = testApp.service.person.getById(personA.persistedId)
 
-    // should inherit the known person name
     mergedPerson.name.get should be(mergedFromName)
     mergedPerson.isNamed shouldBe true
     mergedPerson.numOfFaces shouldBe 2
@@ -1486,7 +1458,7 @@ import altitude.core.util.Util
      * Assertions:
      *
      * With triaged items hidden, each Person's listed count equals `library.count` for the repository view of that Person (2 and
-     * 1). The listed Person's `numOfFaces` keeps the whole count (5), so the number never reaches what `isMatched` reads.
+     * 1). The listed Person's `numOfFaces` keeps the whole count (5), which is what `isMatched` reads.
      *
      * Edge cases:
      *
@@ -1558,7 +1530,7 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An unnamed Person on three assets, two of them triaged, so Matched on the whole count and 1 below the threshold without the
+     * An unnamed Person on three assets, two of them triaged, so Matched on the whole count and below the threshold without the
      * triaged ones. An unnamed Person on two assets, one of them triaged, so Unmatched. Two named People, Zoe and Adam, one with
      * a triaged asset, added in that order.
      *
@@ -1637,9 +1609,9 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A triaged asset with one Face, seeded into 5,000 copies of which one in ten stay triaged, each copy with a Face of the same
-     * Person, analyzed and rolled back once the plan is read, and the statement behind `getTriagedAssetCounts`. With only a
-     * handful of Face rows the planner would start from `face`.
+     * A triaged asset with one Face, seeded into 5,000 copies, one in ten still triaged, each with a Face of the same Person;
+     * analyzed, and rolled back once the plan of the `getTriagedAssetCounts` statement is read. With only a handful of Face rows
+     * the planner would start from `face`.
      *
      * Assertions:
      *
@@ -1655,8 +1627,8 @@ import altitude.core.util.Util
       seedCopies(template.persistedId, copies = 5000, folders = 1)
       // Every copy whose zero-padded number does not end in 0 is sorted, so the triage set is a tenth of the library
       update("UPDATE asset SET is_triaged = FALSE WHERE id <> ? AND substr(id, 36, 1) <> '0'", template.persistedId)
-      // A Face per copy, taken from the template's, none enrolled, which keeps them out of PostgreSQL's vector index; the copies
-      // alone, as the bundle's database holds every test's repositories
+      // A Face per copy of this repository only (the bundle's database holds every test's repositories), none enrolled, which
+      // keeps them out of PostgreSQL's vector index
       update(
         """INSERT INTO face (id, repository_id, asset_id, person_id, x1, y1, width, height, detection_score, features, checksum,
           |                  quality, is_enrolled)
@@ -1716,7 +1688,6 @@ import altitude.core.util.Util
 
     val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records
 
-    // recycle some assets
     val recycleCount = 2
     val recycledAssetIds = allAssets.take(recycleCount).map(_.persistedId).toSet
     testApp.service.library.recycleAssets(recycledAssetIds)
@@ -1724,8 +1695,6 @@ import altitude.core.util.Util
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets - recycleCount)
 
-    // The faces are still in DB, but they are not counted toward the person,
-    // as they are in the trash bin until being Purged.
     testApp.service.person.getPersonFaces(person.persistedId).length should be(totalAssets)
   }
 
@@ -1750,7 +1719,6 @@ import altitude.core.util.Util
 
     val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records
 
-    // recycle some assets
     val recycleCount = 2
     val recycledAssetIds = allAssets.take(recycleCount).map(_.persistedId).toSet
     testApp.service.library.recycleAssets(recycledAssetIds)
@@ -1758,10 +1726,8 @@ import altitude.core.util.Util
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets - recycleCount)
 
-    // restore the recycled assets
     testApp.service.library.restoreRecycledAssets(recycledAssetIds)
 
-    // face counts should be back to the original number
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets)
   }

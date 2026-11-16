@@ -1,6 +1,4 @@
-/**
- * Whether the browser has a font: the style guide's font tester says so about what is typed into it.
- */
+/** Whether the browser has a font, for the style guide's font tester */
 
 // Wide glyphs and digits, so two fonts seldom measure the same
 const FONT_PROBE_TEXT = "mmmmmmmmmmlliWWW0123456789"
@@ -21,10 +19,8 @@ export function isFontAvailable(family) {
 }
 
 /**
- * The typed value as a `font-family` value: as written when it parses (a family, a stack or a
- * generic keyword), else quoted as one family name (a name with a digit, such as "Neue Haas 55").
- * It is made parseable before it is measured because the canvas font setter ignores a value it
- * cannot parse and keeps the previous font.
+ * The typed value as written when it parses, else quoted as one family name ("Neue Haas 55"): the
+ * canvas font setter ignores a value it cannot parse and keeps the previous font.
  */
 export function asFontFamily(value) {
     return CSS.supports("font-family", value) ? value : JSON.stringify(value)

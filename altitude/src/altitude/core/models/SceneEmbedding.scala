@@ -6,20 +6,17 @@ import altitude.core.FieldConst
 import altitude.core.util.JsonCodec
 import altitude.core.util.ModelFile
 
-/** How `OnnxSceneEmbedder` fits an image, of any size and shape, to the square a Scene model takes */
+/** How `OnnxSceneEmbedder` fits an image of any shape to the square a Scene model takes */
 enum SceneFit:
-  /** The short side scaled to the square's side, then the center square: the ends of the long side are left out */
+  /** The short side scaled to the square, then the center cut out: the ends of the long side are lost */
   case CenterCrop
 
-  /** The whole image scaled to the square, its aspect not kept: nothing is left out, and a wide frame is narrowed */
+  /** The whole image scaled to the square, aspect not kept: nothing is lost, a wide frame is narrowed */
   case Squash
 
 /**
- * One of the vision models the import embeds every still image with (the glossary's Scene model). Each knows its name in the logs
- * (`name`), how its embedding is stored (`column`: its `asset` column, named in `FieldConst.Asset`, `dimensions`), its ONNX
- * export among the model files (`file`), the side of the square it takes (`inputSize`) and how an image is fitted to it (`fit`),
- * and the per-channel mean and std, in RGB order, its input is normalized with after a scale to 0..1: what the checkpoint was
- * trained with, so `OnnxSceneEmbedder` feeds it what it expects.
+ * A Scene model: a vision model the import embeds every still image with. `mean` and `std` are per channel in RGB order, applied
+ * after a scale to 0..1, and are what the checkpoint was trained with.
  */
 enum SceneModel(
     val name: String,
@@ -45,9 +42,8 @@ enum SceneModel(
     )
 
   /**
-   * The SigLIP 2 ViT-B/16 image tower at 256 pixels, `google/siglip2-base-patch16-256`: the vision tower's pooled output (its
-   * attention-pooling head) over the whole frame, squashed as the checkpoint's processor squashes it so that the edges of a wide
-   * frame stay in view, normalized to -1..1
+   * The SigLIP 2 ViT-B/16 image tower at 256 pixels, `google/siglip2-base-patch16-256`: the attention-pooled output over the
+   * whole frame, squashed as the checkpoint's processor does so a wide frame's edges stay in view, normalized to -1..1
    */
   case Siglip2
     extends SceneModel(
@@ -64,41 +60,32 @@ enum SceneModel(
 object SceneModel:
 
   /**
-   * What SigLIP 2's checkpoint learned beside its two towers: the scale `t = exp(logit_scale)` and the bias `b = logit_bias` of
-   * the probability that an image and a description match, `sigmoid(cosine * t + b)` over the cosine of the image's Scene
-   * embedding and the description's embedding (`DescribeEmbedder`). They are the checkpoint's, as the mean and std above are, and
-   * the export script of `altitude-models` (`export-models.py`) refuses to export a text tower whose checkpoint holds others. A
-   * probability `p` is the cosine `(ln(p / (1 - p)) - b) / t`: 0.5 is the cosine 0.1486, and a hundredth of cosine is a factor of
-   * about 3 in the odds.
+   * SigLIP 2's learned scale `t = exp(logit_scale)` and bias `b = logit_bias`: an image and a description match with probability
+   * `sigmoid(cosine * t + b)`. They are the checkpoint's, and `export-models.py` in `altitude-models` refuses a text tower whose
+   * checkpoint holds others. A probability of 0.5 is the cosine 0.1486, and a hundredth of cosine is a factor of about 3 in the
+   * odds.
    */
   val SIGLIP2_LOGIT_SCALE = 112.90117645263672
   val SIGLIP2_LOGIT_BIAS = -16.77180290222168
 
-  /**
-   * The cosine at which SigLIP 2 gives an image and a description the `probability` of matching, a number strictly between 0 and
-   * 1: the least cosine a Describe search shows an image at, for the least probability it is set to
-   */
+  /** The cosine at which SigLIP 2 gives an image and a description the `probability` of matching, `(ln(p / (1 - p)) - b) / t` */
   def siglip2Cosine(probability: Double): Double =
     require(probability > 0 && probability < 1, s"A probability is between 0 and 1, not $probability")
     (math.log(probability / (1 - probability)) - SIGLIP2_LOGIT_BIAS) / SIGLIP2_LOGIT_SCALE
 
 object SceneEmbedding:
-  // The wire form is the float array itself; no API answers it today, but an Asset carries it in JSON
+  // The wire form is the bare float array; no API returns it today, but an Asset carries it in JSON
   given JsonCodec.ReadWriter[SceneEmbedding] =
     JsonCodec.readwriter[Array[Float]].bimap(_.array, values => SceneEmbedding(IArray.unsafeFromArray(values)))
 
-  /** How many of the values `toString` shows */
   private val SHOWN_VALUES = 3
 
 /**
- * A vector a vision model computes over a whole still image, describing its content and layout (the glossary's Scene embedding):
- * L2-normalized, as `OnnxSceneEmbedder` makes it. Two embeddings of one model compare by [[similarity]], 1 for the same picture;
- * embeddings of different models never compare, and since the models' dimensions can be equal (both are 768 today) it is
- * [[SceneEmbeddings]] that keeps them apart, a field per model. The values are immutable, and two embeddings are equal when their
- * values are: a case class over an array would compare it by reference, so two reads of one row would differ.
+ * An L2-normalized vector a vision model computes over a whole still image. Embeddings of different models never compare, and
+ * since their dimensions can be equal (768 for both today), [[SceneEmbeddings]] keeps them apart, a field per model. Equality is
+ * by value: a case class over an array would compare it by reference, so two reads of one row would differ.
  *
- * A description's embedding by SigLIP 2's text tower (`DescribeEmbedder`) is one of these too: a vector in the space of that
- * model's Scene embeddings, which compares with an image's by the same [[similarity]].
+ * A description's embedding by SigLIP 2's text tower is one too, in the space of that model's image embeddings.
  */
 case class SceneEmbedding(values: IArray[Float]):
 
@@ -111,13 +98,12 @@ case class SceneEmbedding(values: IArray[Float]):
 
   override def hashCode: Int = Arrays.hashCode(array)
 
-  /** The dimensions and the first few values, never the whole vector */
   override def toString: String =
     s"SceneEmbedding(${values.length}: ${values.take(SceneEmbedding.SHOWN_VALUES).mkString(", ")}, ...)"
 
   /**
-   * The cosine similarity to another embedding of the same model: the dot product of two unit vectors, -1 to 1. Two lengths that
-   * differ are refused; two models of one length are the caller's to keep apart (`SceneEmbeddings.of`).
+   * Cosine similarity, the dot product of two unit vectors. Different lengths are refused; two models of one length are the
+   * caller's to keep apart.
    */
   def similarity(other: SceneEmbedding): Double =
     if values.length != other.values.length then
@@ -136,7 +122,6 @@ object SceneEmbeddings:
 /** A frame's Scene embeddings, one per Scene model, each absent where the model did not embed it (a Video, a failed pass) */
 case class SceneEmbeddings(dinov2: Option[SceneEmbedding] = None, siglip2: Option[SceneEmbedding] = None):
 
-  /** The embedding of one Scene model */
   def of(model: SceneModel): Option[SceneEmbedding] = model match
     case SceneModel.Dinov2 => dinov2
     case SceneModel.Siglip2 => siglip2

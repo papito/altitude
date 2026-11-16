@@ -27,9 +27,8 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * Metadata holding a single date source at a time, each spelling 2024-07-04 08:09:10 its own way: the EXIF digitized and file
-     * change dates, IPTC date and time pairs with +14:00 and -12:00 offsets, PNG tIME, a GPS date and time stamp, each of the
-     * four XMP keys and each of the three PNG text chunks.
+     * Metadata holding one date source at a time, each spelling 2024-07-04 08:09:10 its own way, some with offsets of +14:00 or
+     * -12:00.
      *
      * Assertions:
      *
@@ -71,20 +70,17 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * An EXIF original date with `Sub-Sec Time Original` spelled as cameras spell it: three digits, one digit, a leading zero,
-     * trailing padding, nine or more digits; the same for the digitized date and `Sub-Sec Time Digitized`; and an original date
-     * with a blank, non-numeric or missing subsecond.
+     * EXIF original and digitized dates with their subsecond tags spelled as cameras spell them, and an original date with a
+     * blank, non-numeric or missing subsecond.
      *
      * Assertions:
      *
-     * The digits are the fraction of the second ("250" is .25, "7" is .7, "05" is .05), truncated to the microsecond, and the
-     * calendar day and the whole second are what the date tag spells. Each date reads only its own subsecond tag: the original's
-     * does not refine the digitized date, and neither refines the file change date.
+     * The digits are the fraction of the second ("7" is .7, "05" is .05), truncated to the microsecond. Each date reads only its
+     * own subsecond tag, and none refines the file change date.
      *
      * Edge cases:
      *
-     * A subsecond that is blank, not digits, or absent leaves the whole second; a fraction in the date string itself is still
-     * dropped, so only the dedicated tag counts.
+     * A blank, non-numeric or absent subsecond leaves the whole second; a fraction in the date string itself is dropped.
      */
     val second = LocalDateTime.of(2024, 7, 4, 8, 9, 10)
     def originalWith(subsec: String): CaptureDateInputs =
@@ -120,13 +116,13 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * `xmp:CreateDate` spelled with a fraction of .25, with seven fractional digits and with none; and an EXIF original date
-     * spelled with a fraction of .999 and no subsecond tag.
+     * `xmp:CreateDate` with a fraction of .25, with seven fractional digits and with none, and an EXIF original date with a
+     * fraction of .999 and no subsecond tag.
      *
      * Assertions:
      *
-     * The XMP rung keeps the fraction it carries, truncated to the microsecond, and a whole second stays whole; the EXIF rung
-     * reads its fraction from the dedicated tag alone, so the one in the date string is dropped.
+     * The XMP rung keeps its fraction, truncated to the microsecond; the EXIF rung reads its fraction from the subsecond tag
+     * alone, so the one in the date string is dropped.
      */
     val second = LocalDateTime.of(2024, 7, 4, 8, 9, 10)
     def xmp(raw: String): CaptureDateInputs = inputs(("XMP", "xmp:CreateDate", raw))
@@ -144,20 +140,18 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * Video container metadata: the phone's local QuickTime creation date with a +02:00 offset, and the container's UTC creation
-     * time as metadata-extractor describes it in the JVM's zone, in the MP4 and QuickTime track and container directories, with
-     * numeric offsets and with zone names (EDT, JST, UTC).
+     * The phone's local QuickTime creation date with a +02:00 offset, and the container's UTC creation time in the MP4 and
+     * QuickTime directories, described with numeric offsets and with zone names.
      *
      * Assertions:
      *
-     * The local creation date resolves to its own wall clock, and every description of the container's instant to the same UTC
-     * wall clock. The phone's local date outranks the container's instant, which outranks GPS, and an EXIF original date outranks
-     * the phone's local date.
+     * The local date resolves to its own wall clock, and every description of the container's instant to the same UTC wall clock.
+     * An EXIF original date outranks the phone's local date, which outranks the container's instant, which outranks GPS.
      *
      * Edge cases:
      *
-     * The container epoch, 1904-01-01 00:00:00 UTC, is a sentinel that resolves to nothing, even described in another zone as the
-     * last evening of 1903.
+     * The container epoch, 1904-01-01 UTC, is a sentinel that resolves to nothing, even described in a zone where it falls in
+     * 1903.
      */
     val expected = LocalDateTime.of(2024, 7, 4, 8, 9, 10)
     val local = ("QuickTime Metadata", "Creation Date", "2024-07-04T08:09:10+0200")
@@ -179,7 +173,6 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
         }
     }
 
-    // The phone's local date outranks the container's UTC instant, which outranks GPS and the filename
     val container = ("MP4", "Creation Time", "Thu Jul 04 04:09:10 EDT 2024")
     CaptureDateResolver.resolve(inputs(local, container), ceiling).map(_.source) shouldBe Some(
       CaptureDateSource.QuickTimeCreationDate)
@@ -191,7 +184,6 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
       .map(_.source) shouldBe
       Some(CaptureDateSource.ExifOriginal)
 
-    // The container epoch is a sentinel, in whichever zone it is described
     CaptureDateResolver.resolve(inputs(("MP4", "Creation Time", "Fri Jan 01 00:00:00 UTC 1904")), ceiling) shouldBe None
     CaptureDateResolver.resolve(inputs(("MP4 Video", "Creation Time", "Thu Dec 31 19:00:00 -05:00 1903")), ceiling) shouldBe None
   }
@@ -206,13 +198,9 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
      *
      * Assertions:
      *
-     * The candidates come back in the resolver's priority order, one for every source but the filename, and dropping the sources
-     * one at a time from the top always lets the next one win. Implausible values stay among the candidates, while resolution
+     * The candidates come back in priority order, one for every source but the filename, and dropping the sources one at a time
+     * from the top lets the next one win. Implausible values, though ranked higher, stay among the candidates while resolution
      * skips them for the first plausible one.
-     *
-     * Edge cases:
-     *
-     * A sentinel and a future date, both ranked above the plausible date.
      */
     val fields = List(
       ("Exif SubIFD", "Date/Time Original", "2024:01:01 01:00:00"),
@@ -247,8 +235,7 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * One wall-clock time spelled the ways metadata spells it: EXIF colons, ISO dashes with a T or a space, offsets in either
-     * form or Z, nanoseconds, stray whitespace, and RFC 1123; plus spellings without seconds, and dates without a time.
+     * One wall-clock time spelled the ways metadata spells it, plus spellings without seconds and dates without a time.
      *
      * Assertions:
      *
@@ -275,8 +262,7 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * An all-zero EXIF date, February 30th, February 29th of a non-leap year, hour 25, an empty string and text that is not a
-     * date.
+     * An all-zero EXIF date, impossible dates and hours, an empty string and text that is not a date.
      *
      * Assertions:
      *
@@ -291,9 +277,8 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * EXIF original dates around the plausibility limits - 1899, the last second of 1825, the 1970, 1904 and 1980 sentinels, the
-     * 1970 and 1980 sentinels with a Sub-Sec Time Original beside them, two and three days past the ceiling, and one second into
-     * 1970 - and metadata with no date at all.
+     * EXIF original dates around the plausibility limits (the earliest year, the 1970, 1904 and 1980 sentinels, some with a
+     * subsecond, the future ceiling), and metadata with no date at all.
      *
      * Assertions:
      *
@@ -302,9 +287,8 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
      *
      * Edge cases:
      *
-     * The bounds: the last second before 1826 is rejected, two days past the ceiling is tolerated but three are not, and a
-     * sentinel is rejected only at its exact second, not a second later: an unset clock stays one whatever subsecond the camera
-     * adds to it.
+     * The last second before 1826 is rejected; two days past the ceiling is tolerated but three are not. A sentinel is rejected
+     * only at its exact second, whatever subsecond the camera adds to it.
      */
     CaptureDateResolver.resolve(original("1899:06:01 12:00:00"), ceiling) shouldBe
       Some(CaptureDate(LocalDateTime.of(1899, 6, 1, 12, 0), CaptureDateSource.ExifOriginal))
@@ -326,7 +310,7 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * Every capture-date source, and an unknown name ("future_source").
+     * Every capture-date source, and an unknown name.
      *
      * Assertions:
      *
@@ -350,14 +334,9 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * File names that spell 2024-07-04 08:09:10 in each shape, with no metadata: the compact camera form (IMG_, VID, MVIMG_,
-     * Screenshot with a space or an underscore and a dash, signal-, photo_, a bare compact timestamp, PXL_ with a dotted suffix
-     * and PXL_ with its milliseconds after the seconds, and the duplicate suffixes `~2` after the Pixel milliseconds and `(1)`
-     * after IMG_'s seconds), the dashed timestamp (bare, with dotted or dashed times, the macOS screenshot with ` at ` and with a
-     * one-digit 12-hour hour and AM after a plain space and after Ventura's narrow no-break space (U+202F), the Android
-     * screenshot, Telegram's photo_, WhatsApp desktop's and a plain Image prefix), the Apple export form with Photo, Image and
-     * Video, the month in either case and the narrow no-break space before AM, and Facebook's epoch name with thirteen and with
-     * ten digits.
+     * File names with no metadata spelling 2024-07-04 08:09:10 in every supported shape: compact camera timestamps under their
+     * prefixes and duplicate suffixes, dashed timestamps (screenshots and messenger exports, 12-hour clocks after a plain or a
+     * narrow no-break space), Apple export names, and Facebook's epoch names in milliseconds and in seconds.
      *
      * Assertions:
      *
@@ -416,8 +395,8 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * Apple export names on 2023-12-24 at 12 00 00 AM, 12 00 00 PM, 1 00 00 PM and the plan's 2 55 06 PM, a macOS screenshot at
-     * 12.00.00 AM and at 1.00.00 PM, and the same shapes with a 13-hour PM and a 0-hour AM.
+     * Apple export names on 2023-12-24 at 12 AM, 12 PM, 1 PM and 2:55:06 PM, macOS screenshots at 12 AM and 1 PM, and the same
+     * shapes with a 13-hour PM and a 0-hour AM.
      *
      * Assertions:
      *
@@ -450,8 +429,8 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * Facebook's epoch names for 2023-12-24 14:55:06 UTC, in milliseconds (thirteen digits) and in seconds (ten digits), resolved
-     * with the JVM's default zone set to UTC+14 and then to UTC-11.
+     * Facebook's epoch names for 2023-12-24 14:55:06 UTC, in milliseconds and in seconds, resolved with the JVM's zone at UTC+14
+     * and then at UTC-11.
      *
      * Assertions:
      *
@@ -476,11 +455,8 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * File names whose digits are not a capture time: a prefix outside the known set, a timestamp with no separator, a date
-     * alone, eight bare digits, seconds followed by two more digits, a Pixel name with two or four digits after the seconds,
-     * February 30th in the compact and in the Apple export form, the 1970 epoch in the compact form, as ten zero digits and as
-     * the bare `FB_IMG_0`, an epoch run of eleven digits, a date in 2099, and the names that spell a date and no time: WhatsApp
-     * mobile's `IMG-20240704-WA0001` and an Apple export without its clock.
+     * File names whose digits are not a capture time: unknown prefixes, missing separators, extra digits, impossible dates, the
+     * 1970 epoch, a future date, and names that spell a date with no time.
      *
      * Assertions:
      *

@@ -74,11 +74,9 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The state of the image is the original's, with exactly the state's fields: version 0, not rendered, revision 0, not edited,
-     * no edited size, the size of its upright original and the identity Edit with every key. A save of Exposure +0.4 built on
-     * version 0 answers the new state: version 1, edited, the image's size as its edited and its upright size, and the Edit as
-     * sent. Saving the identity built on version 1 answers version 2, not edited, and the status says version 2 and revision 0,
-     * not rendered (or rendered as the original, should the server's render have run by then).
+     * The unedited state has exactly the state's fields, at version 0 with the identity Edit and no edited size. A save of
+     * Exposure +0.4 on version 0 answers version 1, edited, with both sizes. Saving the identity on version 1 answers version 2,
+     * not edited, and the status says version 2, revision 0, rendered at 2 or not yet.
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -137,13 +135,13 @@ import altitude.core.models.Permissions
     /**
      * Setup:
      *
-     * A logged-in User holding every Permission, and an imported image stored 640 × 724 under EXIF orientation 6, so its upright
-     * original is 724 × 640.
+     * A logged-in User holding every Permission, and an imported image stored 640 × 724 under EXIF orientation 6, so upright it
+     * is 724 × 640.
      *
      * Assertions:
      *
-     * The state of the image never edited, and the state a save turning it a quarter answers, give the upright size 724 × 640;
-     * the save's edited size is the frame's, 640 × 724.
+     * The unedited state and the state after a quarter-turn save both give the upright size 724 × 640; the save's edited size is
+     * 640 × 724.
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -172,8 +170,7 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * A save built on version 0 is answered 409 with an error and the current state (version 1, its Edit). The Edit is still at
-     * version 1, with its Edit.
+     * A save built on version 0 answers 409 with an error and the current state, and the stored Edit stays at version 1.
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -203,9 +200,8 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * A save whose Edit has an unknown key, one with a value out of range, one with no `base`, one whose `base` is not a whole
-     * number, one with no `recipe` and one whose body is not JSON are each a 400 with an error, as is a save for the Video.
-     * Nothing is stored for either asset.
+     * A save with an unknown Edit key, a value out of range, no or a fractional `base`, no `recipe`, or a body that is not JSON
+     * is a 400 with an error, as is a save for the Video. Nothing is stored for either asset.
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -251,9 +247,9 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * Auto-straighten with the image's Edit answers `{angle}` of 2.7 ± 0.2, the clockwise Straighten that levels the lines; with
-     * the image turned a half turn, the lines rise the same way and the answer is the same. A request without a `recipe`, one
-     * whose `recipe` is no Edit, and one for the Video are 400s with an error.
+     * Auto-straighten answers an `angle` of 2.7 ± 0.2, the clockwise Straighten that levels the lines, and the same with the
+     * image turned a half turn, where the lines rise the same way. No `recipe`, a `recipe` that is no Edit, and the Video are
+     * 400s with an error.
      *
      * Edge cases:
      *
@@ -310,14 +306,13 @@ import altitude.core.models.Permissions
     /**
      * Setup:
      *
-     * A logged-in User holding every Permission and two imported images: one as imported, and one whose stored original is then
-     * overwritten with bytes no image reader takes. The server's auto-straighten slots are all taken for the first request, and
-     * given back before the second.
+     * A logged-in User holding every Permission and two imported images, the second's stored original overwritten with bytes no
+     * reader decodes. Every auto-straighten slot is taken for the first request and given back before the second.
      *
      * Assertions:
      *
-     * With every slot taken, auto-straighten of the first image is a 503 at once, whose error says it is busy, rather than a
-     * request waiting its turn. With the slots back, the image whose original no reader decodes is a 400 saying so, not a 500.
+     * With every slot taken, the first image answers a busy 503 at once instead of waiting. With the slots back, the undecodable
+     * original is a 400 saying so, not a 500.
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -346,13 +341,13 @@ import altitude.core.models.Permissions
     /**
      * Setup:
      *
-     * A Library with an imported image, a User logged in who holds every Permission there but Edit images, and a User who holds
-     * every Permission there and in a second Library, which holds an imported image saved once.
+     * A Library with an image, a logged-in User with every Permission there but Edit images, and a User with every Permission
+     * there and in a second Library holding an image saved once.
      *
      * Assertions:
      *
-     * The first User is answered 403 by every route of the Edit. The second, asking through the first Library for the second
-     * Library's image, is answered 404 by every route, as for an asset that does not exist, and the image's Edit is unchanged.
+     * Every Edit route answers the first User 403. Asked through the first Library for the second Library's image, every route
+     * answers the second User 404, as for an unknown asset, and the image's Edit is unchanged.
      */
     val repoId = loginAs(AccountType.User, Permissions(Permissions.all.mask & ~Permission.EditImages.mask))
     val library = testContext.repository

@@ -56,18 +56,15 @@ class ImportPipelineService(app: Altitude):
   private val errorLoggingSink = AssetErrorLoggingSink()
 
   /**
-   * One pipeline for both engines. A stage's work runs on the import dispatcher (`Altitude.importDispatcher`), whose
-   * `importParallelism` threads bound the work of every import at once; the stream's actor only routes, so the stages of every
-   * repository work on different assets at the same time. The stages that only read and decode the file (metadata, face
-   * detection, image measurement, the preview) work on up to `importParallelism` assets of a repository at once; every other
-   * stage, and every one that writes to the database, on one, and all of them hand the assets on in upload order, so faces are
-   * matched one asset at a time, in the order uploaded. Each stage's writes are a short transaction of its own, which SQLite's
-   * single write connection runs one after another, and each stage commits before the next one reads the asset. An asset that is
-   * a file of an Import carries its Import file to the end (`AssetWithData.origin`): the completion settles an imported one in
-   * its own transaction, and the last working stage a dropped one, after the discard.
+   * One pipeline for both engines. Stage work runs on the import dispatcher, whose `importParallelism` threads bound every import
+   * at once; the stream only routes. The stages that only read and decode the file (metadata, face detection, image measurement,
+   * the preview) take up to `importParallelism` assets of a repository at once, every other stage one, and all keep upload order,
+   * so faces are matched one asset at a time in upload order. Each stage commits its own short transaction before the next reads
+   * the asset. An Import's file rides along (`AssetWithData.origin`): the completion settles an imported one in its transaction,
+   * the last stage a dropped one after the discard.
    */
   private val combinedFlow: Flow[TDataAssetWithContext, TAssetOrInvalidWithContext, NotUsed] = Flow[TDataAssetWithContext]
-    // Each repo has its own substream. We group by repo id and run the pipeline for each repo in parallel
+    // One substream per repository, run in parallel
     .groupBy(Int.MaxValue, _._2.repository.id)
     .via(checkMediaTypeFlow)
     .via(checkDuplicateFlow)

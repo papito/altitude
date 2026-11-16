@@ -29,7 +29,7 @@ class PurgePipelineService(app: Altitude):
 
   private val combinedFlow: Flow[TAssetWithContext, TAssetWithContext, NotUsed] =
     Flow[TAssetWithContext]
-      // Each repo has its own substream. We group by repo id and run the pipeline for each repo in parallel
+      // One substream per repository, run in parallel
       .groupBy(Int.MaxValue, _._2.repository.id)
       .via(deletePersonFilesFlow)
       .via(deleteAssetFilesFlow)
@@ -53,9 +53,8 @@ class PurgePipelineService(app: Altitude):
       .runWith(outputSink)
 
   /**
-   * Queues the assets for purging one at a time, offering each once the queue has taken the one before, so a recycle bin of any
-   * size is queued under the queue's backpressure while the caller goes on. An asset the queue does not take stays marked for
-   * purging, for the startup job to queue again.
+   * Offers the assets one at a time, each once the queue took the one before, so a recycle bin of any size queues under
+   * backpressure while the caller goes on. An asset the queue refuses stays marked for purging, for the startup job to retry.
    */
   def enqueue(assets: Seq[TAssetWithContext]): Unit =
     given ExecutionContext = system.executionContext

@@ -51,28 +51,23 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * In the common repository: an asset in a folder, a triaged asset, and two assets recycled right after import, one from the
-     * folder and one from the root folder. The triaged asset is then moved into the folder, and last a second, empty repository
-     * becomes the current one.
+     * An asset in a folder, a triaged asset, and two assets recycled right after import, one from the folder and one from the
+     * root. The triaged asset is then moved into the folder, and last a second, empty repository becomes the current one.
      *
      * Assertions:
      *
-     * The sorted, triage, recycled and total counts follow each step, with the bytes of each at the count times the fixture's
-     * size, and the second repository's stats are all zero, since stats are kept per repository.
+     * The sorted, triage, recycled and total counts follow each step, with bytes at the count times the fixture's size. The
+     * second repository's stats are all zero, since stats are kept per repository.
      */
-    // create an asset in a folder
     val folder1: Folder = testApp.service.folder.add("folder1")
 
     testContext.persistAsset(folder = Some(folder1))
 
-    // create a triaged asset
     val triagedAsset: Asset = testContext.persistAsset(isTriaged = true)
     testApp.service.stats.getStats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 1
 
-    // create an asset and delete it
     val assetToDelete1: Asset = testContext.persistAsset(folder = Some(folder1))
     testApp.service.library.recycleAssets(Set(assetToDelete1.persistedId))
-    // ditto
     val assetToDelete2: Asset = testContext.persistAsset()
     testApp.service.library.recycleAssets(Set(assetToDelete2.persistedId))
 
@@ -101,7 +96,6 @@ import altitude.core.util.Query
     stats2.getStatValue(Stats.TOTAL_BYTES) shouldBe
       stats2.getStatValue(Stats.TOTAL_ASSETS) * TestContext.ASSET_SIZE
 
-    // SECOND REPO
     val repo2 = testContext.persistRepository()
     switchContextRepo(repo2)
 
@@ -127,8 +121,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Before the recycle the sorted and triage counts reflect the imports; after it nothing is left sorted and all four assets
-     * are counted as recycled, bytes included.
+     * After the recycle nothing is left sorted and all four assets are counted as recycled, bytes included.
      */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
@@ -248,11 +241,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Five assets imported through the import pipeline in one stream, all of them recycled, then the recycle bin purged.
+     * Five assets imported through the import pipeline in one stream, all recycled, then the recycle bin purged.
      *
      * Assertions:
      *
-     * All five imports succeed, and once the bin is purged, the recycled count and bytes are back to zero.
+     * All five imports succeed, and the purge takes the recycled count and bytes back to zero.
      */
     val batchSize = 5
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
@@ -269,7 +262,7 @@ import altitude.core.util.Query
     val allAssetIds = allAssets.map(_.persistedId).toSet
     testApp.service.library.recycleAssets(allAssetIds)
 
-    // the stats update operation is performed synchronously, so this is fine
+    // The purge moves the stats synchronously; only the row deletion is queued
     testApp.service.library.purgeRecycleBin()
 
     val stats = testApp.service.stats.getStats
@@ -277,7 +270,7 @@ import altitude.core.util.Query
     stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe 0
   }
 
-  /** Folder counts have been removed - this needs to be re-engineered. Left here for reference. */
+  /** Disabled: folders no longer keep asset counts. Kept for reference until they are re-engineered. */
   /*
   test("Test move recycled asset to new folder") {
     var folder1: Folder = testApp.service.folder.add("folder1")
@@ -353,13 +346,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Stat writes made outside any transaction: the triage count incremented by three and decremented by one, then a triaged,
-     * recycled asset that was never persisted counted, and its restore applied.
+     * Stat writes outside any transaction: the triage count incremented by three and decremented by one, then an unpersisted
+     * triaged, recycled asset counted and its restore applied.
      *
      * Assertions:
      *
-     * Each write takes effect and is visible to the next read. The asset is counted as recycled, and the restore moves it back to
-     * triage.
+     * Each write takes effect and is visible to the next read; the restore moves the asset from recycled back to triage.
      */
     testApp.service.stats.incrementStat(Stats.TRIAGE_ASSETS, 3)
     testApp.service.stats.decrementStat(Stats.TRIAGE_ASSETS)
@@ -417,8 +409,8 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * One recycled asset, purged twice in one transaction, so the purge queue cannot delete its row in between: the second purge
-     * finds the asset marked for purging.
+     * One recycled asset purged twice in one transaction, so the purge queue cannot delete its row in between and the second
+     * purge finds it marked for purging.
      *
      * Assertions:
      *
@@ -441,8 +433,8 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two recycled assets; the first is purged, then the trash is emptied, in one transaction, so the first is still marked for
-     * purging when the trash is emptied.
+     * Two recycled assets; in one transaction the first is purged, then the trash is emptied while the first is still marked for
+     * purging.
      *
      * Assertions:
      *
@@ -465,8 +457,7 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * One asset in a folder, recycled. Two threads restore it, the first holding its transaction open until the second waits for
-     * it.
+     * A recycled asset from a folder. Two threads restore it, the first holding its transaction open until the second waits.
      *
      * Assertions:
      *
@@ -496,8 +487,7 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two recycled assets. Two threads purge the first, the first thread holding its transaction open until the second waits for
-     * it.
+     * Two recycled assets. Two threads purge the first, one holding its transaction open until the other waits.
      *
      * Assertions:
      *
@@ -529,8 +519,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Reconciling reports all six stats with their old value, 999, and sets them to the assets that count: the purge-pending and
-     * the unfinished asset count nowhere, and an asset recycled from triage counts as recycled.
+     * Reconciling reports all six stats with their old value and sets them from the assets: the purge-pending and unfinished
+     * assets count nowhere, and an asset recycled from triage counts as recycled.
      */
     importedAsset(sizeBytes = 100)
     importedAsset(sizeBytes = 200)

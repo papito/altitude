@@ -1,5 +1,5 @@
-/* The style guide's own layout (dev only, StyleGuideController). The bundle applies on every page, so its rules on bare
-   elements are scoped to its body's class; :where() adds no specificity, so they win and lose exactly as they did inline */
+/* The dev-only style guide. The bundle applies on every page, so rules on bare elements are scoped to the body's class;
+   :where() adds no specificity */
 
 :where(body.style-guide) main {
   display: grid;
@@ -65,8 +65,8 @@
   grid-template-columns: 1fr;
 }
 
-/* A token card and the button that fills it. Their one column never grows past the card, so a sample wider
-   than the card (a 400px length bar) is clamped by its max-width instead */
+/* The one column never grows past the card, so a sample wider than the card (a 400px length bar) is clamped by its
+   max-width instead */
 .sg-token, .sg-token > button {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -103,7 +103,7 @@
   max-width: 100%;
 }
 
-/* Lengths separated by spaces (a padding) pad the sample's text instead of setting its width, so it hugs the text */
+/* Several lengths (a padding) pad the sample's text instead of setting its width, so it hugs the text */
 .sg-sample.length:not(:empty) {
   width: fit-content;
   height: auto;
@@ -115,12 +115,11 @@
   padding: 0 var(--panel-padding);
 }
 
-/* A line of text, as tall as the font stack, or the size, weight, tracking or leading drawn on it, makes it */
+/* As tall as the line of text drawn in it */
 .sg-sample.font, .sg-sample.typography {
   height: auto;
 }
 
-/* A section split into two columns of equal width */
 .sg-halves {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -179,7 +178,7 @@
   padding: var(--panel-padding);
 }
 
-/* The two divider specimens: the vertical one needs a height to run down, the horizontal one a width to run across */
+/* The vertical divider needs a height to run down, the horizontal one a width to run across */
 .sg-dividers {
   align-items: stretch;
   height: var(--space-9);
@@ -190,14 +189,14 @@
   align-self: center;
 }
 
-/* The Detail panel's specimen at a panel's width on the panel's surface; a cover stands in for a Face's crop */
+/* The Detail panel's specimen at a panel's width; a cover stands in for a Face's crop */
 .sg-detail-panel {
   width: var(--modal-content-width);
   padding: var(--panel-padding);
   background: var(--theme-neutral-2);
 }
 
-/* The specimen's legend sits in the padded specimen, not the panel's own footer row, so it bleeds to the specimen's edges */
+/* The legend sits in the padded specimen, not a panel's footer row, so it bleeds to the specimen's edges */
 .sg-detail-panel .sg-panel-keys {
   margin: 0 calc(-1 * var(--panel-padding)) calc(-1 * var(--panel-padding));
 }
@@ -210,7 +209,7 @@
   background: var(--theme-secondary);
 }
 
-/* The People tab's cell specimens: a stand-in for a cover face, the size and shape of the image a cell holds */
+/* A stand-in for a cover face in the People cell specimens */
 #people .sg-cover {
   display: block;
   width: var(--face-box);
@@ -228,7 +227,7 @@
   background: var(--theme-secondary);
 }
 
-/* The Face highlights' specimen: a stand-in for a photo, the layer's box, that the highlights are placed in */
+/* A stand-in for the photo the Face highlights are placed on */
 .sg-face-highlights {
   position: relative;
   width: var(--modal-content-width);
@@ -247,7 +246,7 @@
   row-gap: var(--control-vertical-space);
 }
 
-/* The Triage summary's specimen at about an explorer's width, in the text color it has there rather than a usage note's */
+/* At about an explorer's width, in the text color it has there rather than a usage note's */
 .sg-triage-summary {
   width: var(--modal-content-width);
 }
@@ -256,8 +255,7 @@
   color: var(--theme-neutral-4);
 }
 
-/* Quick view's specimen at the width the general modal takes for it; a stand-in for each Preview, the square the grid fits
-   one in */
+/* Quick view's specimen at its modal width, with square stand-ins for the Previews */
 .sg-quick-view {
   width: var(--quick-view-width);
   max-width: 100%;
@@ -294,7 +292,7 @@
   border: var(--border-hairline) var(--theme-neutral-3);
 }
 
-/* The account menu's icon in each account type's color, beside the type's name (Navigation & tabs) */
+/* The account menu's icon in each account type's color */
 .sg-account-types {
   display: flex;
   gap: var(--space-7);
@@ -305,12 +303,12 @@
   color: var(--account-type-color);
 }
 
-/* The Edit panel's sliders at the width of a column of a section docked top or bottom */
+/* The sliders at the width of a column of the Edit panel docked top or bottom */
 .sg-edit-sliders .edit-slider {
   width: var(--edit-column-width);
 }
 
-/* The Edit panel's specimen at a panel's width, in a box that is no grid, so the panel's own grid area names nothing here */
+/* At a panel's width, in a box that is no grid, so the panel's own grid area names nothing here */
 .sg-edit-panel {
   width: var(--modal-content-width);
 }

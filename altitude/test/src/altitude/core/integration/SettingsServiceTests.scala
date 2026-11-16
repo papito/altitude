@@ -20,8 +20,8 @@ import altitude.core.models.Settings
 import altitude.core.models.SettingType
 
 /**
- * The Settings: the seeds of the `setting` table, the one typed snapshot a save replaces, the validation that writes nothing when
- * any field fails, and the Restart settings whose saved value waits for the next start.
+ * The Settings: the seeded `setting` rows, the typed snapshot a save replaces, validation that writes nothing when any field
+ * fails, and the Restart settings whose saved value waits for the next start.
  */
 @DoNotDiscover class SettingsServiceTests(override val testApp: Altitude) extends IntegrationTestCore with TestFocus {
 
@@ -101,13 +101,12 @@ import altitude.core.models.SettingType
      * Assertions:
      *
      * It is a Live setting of the Operations section on both engines, labelled in minutes, with a default of 10. A whole number
-     * of minutes from 2 to 360, six hours, is valid, both bounds included. A saved value reaches its accessor at once, with no
-     * restart waiting.
+     * of minutes from 2 to 360 is valid, both bounds included. A saved value applies at once, with no restart waiting.
      *
      * Edge cases:
      *
-     * One minute, 361 minutes and a fraction of a minute are refused, each saying why. The help says what the minutes are, and
-     * that a file is read once it has been seen unchanged for at least 5 seconds, not that the interval is its rest.
+     * One minute, 361 minutes and a fraction are refused, each saying why. The help says a file is read once seen unchanged for
+     * at least 5 seconds, and does not call the interval its rest.
      */
     val name = Settings.WATCH_FOLDER_SCAN_INTERVAL
     val definition = Settings.byName(name)
@@ -143,8 +142,8 @@ import altitude.core.models.SettingType
      *
      * Assertions:
      *
-     * It is a Live setting of the Operations section on both engines. A whole number of days from 0 up is valid, 0 among them,
-     * which keeps the history forever. A saved value reaches its accessor at once, with no restart waiting.
+     * It is a Live setting of the Operations section on both engines. A whole number of days from 0 up is valid, 0 keeping the
+     * history forever. A saved value applies at once, with no restart waiting.
      *
      * Edge cases:
      *
@@ -362,21 +361,20 @@ import altitude.core.models.SettingType
     /**
      * Setup:
      *
-     * The registry's entries of the Describe match threshold, the Describe result limit and the Describe weaker matches ratio,
-     * and values validated and saved for them.
+     * The registry's entries of the Describe match threshold, result limit and weaker matches ratio, and values validated and
+     * saved for them.
      *
      * Assertions:
      *
-     * The three are Live settings of the Search section, which the screen shows after Triage, on both engines, with the labels
-     * and help of the screen and the defaults 0.00009, 1000 and 0.75. The threshold is a probability strictly between 0 and 1,
-     * the limit a whole number from 1 to 10,000, both bounds included, the upper one being the cap a first page's total counts to
-     * (`Const.Search.TOTAL_CAP`), and the ratio a decimal from 0 to 1. Saved values reach their accessors at once, with no
-     * restart waiting.
+     * The three are Live settings of the Search section, which follows Triage, on both engines, with their labels and help and
+     * the defaults 0.00009, 1000 and 0.75. The threshold is a probability strictly between 0 and 1, the limit a whole number from
+     * 1 to `Const.Search.TOTAL_CAP` (10,000), and the ratio a decimal from 0 to 1. Saved values apply at once, with no restart
+     * waiting.
      *
      * Edge cases:
      *
-     * 0 and 1 themselves are no probability, and a limit of 0, of 10,001 or with a fraction is refused, each saying why. 0 and 1
-     * are both a ratio, the one showing no weaker matches and the other every match but the best; under 0 or over 1 is refused.
+     * A threshold of 0 or 1, and a limit of 0, 10,001 or a fraction, are refused, each saying why. A ratio of 0 or 1 is valid;
+     * under 0 or over 1 is refused.
      */
     val threshold = Settings.SEARCH_DESCRIBE_MIN_PROBABILITY
     val limit = Settings.SEARCH_DESCRIBE_MAX_RESULTS
@@ -442,20 +440,18 @@ import altitude.core.models.SettingType
     /**
      * Setup:
      *
-     * The Describe match threshold, whose default of 0.00009 a JVM prints as 9.0E-5: its seeded row, and values validated and
-     * saved for it.
+     * The Describe match threshold, whose default of 0.00009 a JVM prints as 9.0E-5, and values validated and saved for it.
      *
      * Assertions:
      *
-     * The seeded value and default are the text 0.00009, which the snapshot reads as that number and hands back as that text. A
-     * smaller plain decimal is saved as typed and read back as typed after a reload.
+     * The seeded value and default are the text 0.00009, which the snapshot reads as that number. A smaller plain decimal is
+     * saved and, after a reload, read back as typed.
      *
      * Edge cases:
      *
-     * A number written with an exponent, in either case, a hexadecimal number and a number with a type suffix are each a number
-     * to a JVM and none as a Setting is written: each is refused with what to write in its place, a plain decimal with no
-     * exponent. The words for infinity and for no number, and a word that is neither, are refused as no number. No row ever holds
-     * any of them: nothing is written. A leading sign and a digit left out on one side of the point are still a plain decimal.
+     * An exponent in either case, a hexadecimal number and a type suffix, all numbers to a JVM, are refused with a request for a
+     * plain decimal. Infinity, NaN and other words are refused as no number. Nothing refused is written. A leading sign or a
+     * digit left out on one side of the point is still a plain decimal.
      */
     val threshold = Settings.SEARCH_DESCRIBE_MIN_PROBABILITY
     storedValues(threshold) shouldBe "0.00009"
@@ -489,12 +485,17 @@ import altitude.core.models.SettingType
   test("The vector index keeps at least four times the match count, a rule of PostgreSQL alone") {
 
     /**
-     * The search width is a PostgreSQL Setting: SQLite neither shows nor applies it, so a match count its stored seed would
-     * refuse saves there, while PostgreSQL holds the rule.
+     * Setup:
+     *
+     * A match count of 10 with a search width of 39 and of 40, and a match count of 30 against the seeded width of 100.
+     *
+     * Assertions:
+     *
+     * On PostgreSQL a width under four times the match count is refused on the width, and the width is an applicable Setting.
+     * SQLite neither shows nor applies the width, so the same values pass there and a match count of 30 saves.
      */
     val tooNarrow = Map(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH -> "39", Settings.FACE_RECOGNITION_MATCH_COUNT -> "10")
     val wide = Map(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH -> "40", Settings.FACE_RECOGNITION_MATCH_COUNT -> "10")
-    // Thirty candidates against the seed width of 100
     val manyCandidates = Map(Settings.FACE_RECOGNITION_MATCH_COUNT -> "30")
 
     testApp.dataSourceType match {
@@ -627,13 +628,12 @@ import altitude.core.models.SettingType
     /**
      * Setup:
      *
-     * The `people/meme-ben.jpg` portrait, which detection keeps one face of at the seeded detector confidence threshold, detected
-     * again after the threshold is saved as 0.999.
+     * The `people/meme-ben.jpg` portrait, in which detection finds one face at the seeded confidence threshold.
      *
      * Assertions:
      *
-     * The detection after the save finds no face, and the one after the seed is restored finds it again: the threshold is read
-     * per detection, not at startup.
+     * With the threshold saved as 0.999 detection finds no face, and with the seed restored it finds the face again: the
+     * threshold is read per detection, not at startup.
      */
     val bytes = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg").bytes
     testApp.service.faceDetection.extractFaces(bytes) should have size 1
@@ -654,7 +654,7 @@ import altitude.core.models.SettingType
      *
      * Assertions:
      *
-     * A search is refused while the geocoder is off; after the switch and the URL are saved, the next search reaches the stub and
+     * A search is refused while the geocoder is off. Once the switch and the URL are saved, the next search reaches the stub and
      * maps its place, with no restart.
      */
     val stub = NominatimStub()

@@ -3,12 +3,11 @@ import { Const } from "../constants.js"
 /**
  * LAZY IMAGES
  *
- * Every thumbnail carries its URL in `data-src`, the first page's included; the first page's also
- * has `src`, so it paints before any script runs. One IntersectionObserver, shared by every grid
- * the page displays, loads an image as it comes within a viewport and swaps the transparent
- * placeholder back in once it is more than a viewport away, so the thumbnails held are bounded by
- * the viewport, not by how far the session has scrolled. A released image that scrolls back in is
- * a browser cache hit: the content route sends `Cache-Control` for a year, `immutable`.
+ * Every thumbnail carries its URL in `data-src`; the first page's also has `src`, so it paints before
+ * any script runs. One shared IntersectionObserver loads an image within a viewport of view and swaps
+ * the placeholder back in once it is farther away, so the thumbnails held are bounded by the viewport,
+ * not by how far the session scrolled. A released image that scrolls back in is a cache hit: the
+ * content route sends `Cache-Control` for a year, `immutable`.
  */
 
 const placeholderImageData =
@@ -25,7 +24,7 @@ export function bindLazyImages({ assetsElement }) {
 
     const observer = getLazyImageObserver()
 
-    // Fires once per swap with the nodes htmx inserted - the next page of cells here
+    // Fires once per swap with the nodes htmx inserted: the next page of cells
     assetsElement.addEventListener("htmx:after:settle", (event) => {
         event.detail.newContent.forEach((cellEl) => {
             if (cellEl instanceof Element) {
@@ -83,11 +82,9 @@ function getLazyImageObserver() {
 }
 
 /**
- * The placeholder is a transparent 1x1 pixel, which would shrink the thumbnail box to nothing
- * once it replaces a loaded image. The box is what a box selection hit-tests against, and it
- * must stay where the image was so a rectangle drawn over scrolled-away cells still finds them.
- * The cell's row is fixed, so the grid layout is unchanged either way. An image that never
- * loaded has no size to keep.
+ * The 1x1 placeholder would shrink the thumbnail box to nothing, and box selection hit-tests that
+ * box, so it keeps the loaded image's size for a rectangle drawn over scrolled-away cells. The cell's
+ * row is fixed, so the layout does not change. An image that never loaded has no size to keep.
  */
 function keepRenderedSize(imgEl) {
     if (imgEl.naturalWidth > 1 && imgEl.offsetWidth > 0) {

@@ -1,10 +1,6 @@
-@* Curation's shell, loaded into the Curation host of includes/html_common on every open, so each open starts with every row of
-   the queue open and no undo entry: the header with the queue's count, the Sequence rail's switch, Undo and Exit; the main column holding the host each
-   Curation set's fragment (htmx/curation_set) is put in and the states with no set; and beside it, on the queue alone, the
-   Sequence rail, which lists the queue's rows (htmx/curation_queue) and so outlives each set's fragment and stays through the
-   states with no set. The `curation` Alpine component (js/alpine/components/curation.js) on its root holds the state, reads the
-   sets and the rows, and paints the rows; `tabindex` lets the root take focus, so the keys it binds never press a control by
-   accident. *@
+@* Curation's shell, loaded on every open, so each open starts with every row of the queue open and no undo entry. The
+   Sequence rail sits outside the set's host, so it outlives each set's fragment. `tabindex` lets the root take focus, so the
+   keys it binds never press a control by accident. *@
 @()
 
 @undoAndExit(first: Html) = {
@@ -23,7 +19,6 @@
   <header>
     <h2 id="curationTitle">Curation</h2>
     <span class="count" x-text="$store.sequencesToCurate.remaining"></span>
-    @* The Sequence rail's switch, on the queue alone; pressed while the rail shows *@
     <button type="button" class="action-button small" x-show="isQueue" :aria-pressed="showsSequenceRail" x-on:click="toggleSequenceRail()">Sequences <kbd>Q</kbd></button>
     <button type="button" class="action-button small" x-show="showsHeaderUndo" x-on:click="undo()">Undo <kbd>Z</kbd></button>
     <button type="button" class="action-button small" x-on:click="exit()">Exit <kbd>Esc</kbd></button>
@@ -32,8 +27,8 @@
   <div id="curationMain">
     <div id="curationSet" x-show="showsSet"></div>
 
-    @* Too few frames left: a Sequence opened alone answers with no content, so the words of a selection's fragment are here, for
-       both. With a Bundle's recycling behind it, Undo brings the set back *@
+    @* Too few frames left. A Sequence opened alone answers with no content, so the selection's wording is here for both; after
+       a Bundle's recycling, Undo brings the set back *@
     <div class="curation-no-set" x-show="showsTooFew" style="display: none">
       @htmx.html.curation_set(None)
       @undoAndExit(Html(""))
@@ -45,7 +40,7 @@
       @undoAndExit(Html(""))
     </div>
 
-    @* A read failed, whatever came before it: no set is on show to act on, and Try again runs that read again *@
+    @* A read failed; Try again runs that read again *@
     <div class="curation-no-set" x-show="showsUnread" style="display: none">
       <p>This set could not be read</p>
       @undoAndExit {
@@ -53,7 +48,6 @@
       }
     </div>
 
-    @* The queue walked to its end *@
     <div class="curation-no-set" x-show="showsEnd" style="display: none">
       <p x-show="isAllDone">All done</p>
       <p x-show="!isAllDone" x-text="$store.sequencesToCurate.remaining"></p>
@@ -64,8 +58,7 @@
     </div>
   </div>
 
-  @* The Sequence rail, on the queue alone and while the switch shows it: the queue's rows (htmx/curation_queue), which
-     `startQueue` reads into the host, with the position the walk stands at over them *@
+  @* `startQueue` reads the queue's rows (htmx/curation_queue) into the host *@
   <aside id="curationSequenceRail" x-show="isQueue && showsSequenceRail" style="display: none">
     <header>
       <h3>Sequences</h3>

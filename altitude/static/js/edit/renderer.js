@@ -1,40 +1,14 @@
 /**
- * The Edit's WebGL2 renderer: draws an Edit (`CONTEXT.md`) from the upright original into a canvas
- * with the math of the server's renderer (`util/EditRenderer.scala`, the spec in
- * `docs/image-edits.md`), so the Asset detail stage can show an Edit whose
- * render is pending, and the Edit panel every change at once.
+ * The Edit's WebGL2 renderer, with the math of the server's (`util/EditRenderer.scala`). Its passes:
+ * Develop (each output pixel warped and turned back into the upright original, sampled with edges
+ * repeated as the server's BORDER_REPLICATE, then the tone tables and saturation; a source outside
+ * the frame is transparent, a hard edge as the server's), Blur (Clarity's and Sharpen's separable
+ * blurs of L, skipped when both are 0), Finish (their deltas, the vignette, the grain and the clamp
+ * into an 8-bit texture) and Present (onto the canvas).
  *
- * The passes, each a full-canvas triangle over an output of `width` × `height` pixels:
- * 1. **Develop:** each output pixel's frame point (the crop's, pixel centers at +0.5) is warped back
- *    (`geometry.createWarp`'s inverse) and turned back into the upright original
- *    (`geometry.frameToUpright`), which is sampled from a mipmapped texture with its edges repeated
- *    (CLAMP_TO_EDGE, the server's BORDER_REPLICATE). Its channels go through the tables of steps 1 to
- *    6 (`tone.tableTexels`, the 4096 entries as a 64 × 64 RGBA32F texture, read by two texel fetches
- *    and a mix, so no float filtering is needed), then step 7. A pixel whose source lies outside the frame is
- *    transparent: a hard edge, as the server's.
- * 2. **Blur:** Clarity's and Sharpen's Gaussian blurs of the luminance L, separable, a horizontal and
- *    a vertical pass computing both at once, with OpenCV's kernels (`tone.gaussianHalfKernel`) and
- *    its default border (BORDER_REFLECT_101). Skipped when both are 0.
- * 3. **Finish:** Clarity's and Sharpen's deltas, the vignette and the grain on integer columns and
- *    rows from the top left, the clamp, into an 8-bit output texture. Drawing the whole frame (the
- *    Crop tool), the effects are sized from the crop in it and laid over it (`effectRegion`), so
- *    they do not jump on Done.
- * 4. **Present:** the output texture onto the canvas, its rows turned bottom up.
- *
- * The intermediate textures hold rows top down (row j at `gl_FragCoord.y` = j), so pixel (i, j) is
- * the spec's (i, j) everywhere but on the canvas, whose rows run bottom up. The canvas has straight
- * (not premultiplied) alpha, and keeps its drawing buffer, so the Clipping blink and a test can read
- * it at any time.
- *
- * The source is the upright original as the browser decodes it (`createImageBitmap` with
- * `imageOrientation: "from-image"` and `colorSpaceConversion: "none"`, uploaded with no color
- * conversion), fitted to the long edge its caller asks for, at most `MAX_TEXTURE_SIZE`; it is kept,
- * so a lost context is rebuilt on `webglcontextrestored` and the last render drawn again.
- *
- * `render` draws the Edit; `renderBefore` draws its geometry alone (the split view's Before), and
- * `render` with `split` draws Before left of that fraction of the width and After right of it.
- * `readHistogram` reads the last render, as drawn, at 256 px on its long edge: its crop alone when
- * the whole frame was drawn.
+ * Intermediate textures hold rows top down, so pixel (i, j) is the server's everywhere but on the
+ * canvas, whose rows run bottom up. The canvas keeps its drawing buffer so the Clipping blink and
+ * tests can read it; the source is kept so a restored context draws the last render again.
  */
 import {
     cropOf,
@@ -76,7 +50,7 @@ const vec3 LUMA = vec3(${LUMA.join(", ")});
 out vec4 outColor;
 `
 
-// Steps 1 to 7 on the warped and cropped frame; with uTone false, the geometry alone (Before)
+// The geometry, then the tone tables and saturation; with uTone false, the geometry alone (Before)
 const DEVELOP = `${HEADER}
 uniform sampler2D uSource;
 uniform sampler2D uTables;
@@ -174,7 +148,6 @@ void main() {
     outColor = vec4(sum, 0.0, 1.0);
 }`
 
-// Steps 8 to 11
 const FINISH = `${HEADER}
 uniform sampler2D uImage;
 uniform sampler2D uBlur;
@@ -245,10 +218,9 @@ void main() {
     outColor = texelFetch(uImage, ivec2(uOffset + (q + 0.5) * uScale), 0);
 }`
 
-// Whether the browser can run the renderer, once asked
 let supported = null
 
-/** Whether the browser can run the renderer: WebGL2. The probe's context is let go at once, and the answer kept. */
+/** Whether the browser has WebGL2; the probe's context is let go at once and the answer cached */
 export function isRendererSupported() {
     if (supported === null) {
         try {
@@ -284,13 +256,13 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
     let lost = false
     let destroyed = false
 
-    // The upright original as given (its caller's), and as fitted into the source texture: the
-    // original itself, or a smaller bitmap this renderer made and closes
+    // The upright original as given, and as fitted into the source texture: the original itself, or
+    // a smaller bitmap this renderer made and closes
     let original = null
     let fitted = null
     let fittedLongEdge = 0
-    // The last draw, drawn again on a restored context, and read by `readHistogram`, and whether it
-    // waits for a source to be drawn
+    // The last draw, redrawn on a restored context and read by `readHistogram`, and whether it waits
+    // for a source
     let last = null
     let undrawn = false
     // The largest texture side the context takes, kept while it is lost
@@ -411,10 +383,8 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
     }
 
     /**
-     * A render target of the kind (`color`: the developed colors, `blur` and `blurDown`: the two
-     * blurs across and down, `output`: the finished 8-bit image, `histogram`) and size, made once
-     * and remade when the size changes. A half-float target the context cannot draw into (an
-     * incomplete framebuffer) turns the renderer to 8-bit targets for good.
+     * A render target of the kind and size, made once and remade when the size changes. A half-float
+     * target the context cannot draw into turns the renderer to 8-bit targets for good.
      */
     function target(kind, width, height) {
         const known = resources.targets.get(kind)
@@ -495,10 +465,8 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
     }
 
     /**
-     * The upright original to draw from, fitted to `longEdge` on its long edge (its own size when
-     * that is larger, or none is given) and at most the largest texture: the long edge the stage's
-     * device pixels need at the crop. A later call with a long edge the fitted source already
-     * covers keeps it; the mipmaps serve any smaller render.
+     * The upright original to draw from, fitted to `longEdge` (at most its own size and the largest
+     * texture). A later call the fitted source already covers keeps it; the mipmaps serve smaller renders.
      */
     async function setSource(image, { longEdge = null } = {}) {
         const uprightLong = Math.max(image.width, image.height)
@@ -552,7 +520,7 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         }
     }
 
-    /** The upright original's size, W₀ × H₀, of the source last set */
+    /** The upright original's size of the source last set */
     function uprightSize() {
         return original
             ? { width: original.width, height: original.height }
@@ -570,10 +538,7 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         gl.bindTexture(gl.TEXTURE_2D, tex)
     }
 
-    /**
-     * Runs the develop program into the bound target: the Edit's geometry and, with `toned`, its
-     * steps 1 to 7; `flip` for the canvas, whose rows run bottom up
-     */
+    /** Runs the develop program into the bound target: the geometry and, with `toned`, the tone; `flip` for the canvas */
     function develop(recipe, { width, height, wholeFrame, toned, flip }) {
         const upright = uprightSize()
         const frame = frameSize(upright.width, upright.height, recipe)
@@ -666,10 +631,7 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         return [(clarity?.length ?? 0) - 1, (sharpen?.length ?? 0) - 1]
     }
 
-    /**
-     * Draws the Edit into the output texture: develop, the blurs when asked, finish, the effects sized from and laid over
-     * `effectRegion`
-     */
+    /** Draws the Edit into the output texture, the effects sized from and laid over `effectRegion` */
     function developed(recipe, { width, height, wholeFrame }) {
         const region = effectRegion(recipe, { width, height, wholeFrame })
         uploadTables(recipe)
@@ -739,10 +701,7 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         return output
     }
 
-    /**
-     * Copies `from`, or its `region` (`{ x, y, width, height }` in its texels), onto the bound target of `width` ×
-     * `height`, sampled at the nearest texel, rows turned for the canvas
-     */
+    /** Copies `from`, or its `region` in texels, onto the bound target at the nearest texel, rows turned for the canvas */
     function copy(from, { width, height, flip, region = null }) {
         const area = region ?? {
             x: 0,
@@ -818,10 +777,9 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
     }
 
     /**
-     * Draws the Edit into the canvas at `width` × `height`: the crop, or the whole warped frame
-     * with `wholeFrame` (the Crop tool); with `split` (0 to 1), Before left of that fraction of
-     * the width. Nothing is drawn before a source is set or while the context is lost; a restored
-     * context draws the last call again.
+     * Draws the Edit into the canvas: the crop, or the whole warped frame with `wholeFrame` (the Crop
+     * tool); with `split` (0 to 1), Before left of that fraction of the width. A call made before the
+     * source is set, or while the context is lost, is drawn once the source or the context is back.
      */
     function render(
         recipe,
@@ -837,7 +795,7 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         draw(last)
     }
 
-    /** Draws the Edit's geometry alone into the canvas (the split view's Before), as `render` takes its sizes */
+    /** Draws the Edit's geometry alone into the canvas (Before) */
     function renderBefore(recipe, { width, height, wholeFrame = false } = {}) {
         last = {
             recipe,
@@ -850,11 +808,10 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
     }
 
     /**
-     * The Histogram of the last render as drawn, at `HISTOGRAM_LONG_EDGE` px on its long edge, over
-     * the pixels the image covers: `{ luminance, red, green, blue }`, each 64 bins of 4 levels as
-     * bytes over the tallest bin of the four (the server's `Histogram.relativeBytes`, which
-     * Curation's paths read), the luminance the gray the measurement reads (Rec. 601); and
-     * `pixels`, how many were counted. Null before a render is drawn or while the context is lost.
+     * The Histogram of the last render as drawn, at `HISTOGRAM_LONG_EDGE` px, over the covered pixels:
+     * each channel's bins as bytes relative to the tallest bin of the four (the server's
+     * `Histogram.relativeBytes`), luminance as Rec. 601 gray, and `pixels` counted. Null before a
+     * render or while the context is lost.
      */
     function readHistogram() {
         if (
@@ -867,7 +824,7 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         ) {
             return null
         }
-        // The output texture holds the last render's After; a Before is drawn into it for the count
+        // The output texture holds the last After; a Before is drawn into it for the count
         const source = last.before
             ? beforeOutput()
             : resources.targets.get("output")
@@ -892,7 +849,6 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         return binned(pixels)
     }
 
-    /** The Before of the last call drawn into the output texture, for its histogram */
     function beforeOutput() {
         const output = target("output", last.width, last.height)
         gl.bindFramebuffer(gl.FRAMEBUFFER, output.fbo)
@@ -900,10 +856,7 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         return output
     }
 
-    /**
-     * Lets the source go (another asset is coming) and clears the canvas, so nothing of the last
-     * asset is shown again: nothing is drawn until the next `setSource`
-     */
+    /** Lets the source go and clears the canvas, so nothing of the last asset is shown again before the next `setSource` */
     function clearSource() {
         releaseFitted()
         fitted = null

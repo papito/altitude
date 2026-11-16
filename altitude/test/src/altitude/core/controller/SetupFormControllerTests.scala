@@ -10,10 +10,7 @@ import altitude.core.Const
 
 @DoNotDiscover class SetupFormControllerTests extends ControllerTestCore {
 
-  /**
-   * Runs `f` against the server's instance as a new installation. The server's instance keeps its own flag, put back afterwards
-   * for the next suites; the database is reset before each test.
-   */
+  /** Runs `f` with the server's instance as a new installation, putting its flag back afterwards for the next suites. */
   private def onNewInstallation[T](f: String => T): T = {
     val wasInitialized = App.altitude.isInitialized
     uninitializeInstance()
@@ -98,9 +95,8 @@ import altitude.core.Const
      *
      * Assertions:
      *
-     * Each refused username answers the setup form with the error under the Username field (required, or the rule) and creates
-     * nothing. The valid form creates the Admin under the username "Chief.Admin", trimmed, and the Admin logs in with it in lower
-     * case.
+     * Each refused username answers the setup form with its error under the Username field and creates nothing. The valid form
+     * creates the Admin under "Chief.Admin", trimmed, who then logs in with it in lower case.
      */
     onNewInstallation {
       host =>

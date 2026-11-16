@@ -10,7 +10,6 @@ import altitude.core.routes.decorators.requireAdmin
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.web.partial.SettingsFormController
 
-/** The Settings screen, an Admin's page; its form is `SettingsFormController`'s */
 class SettingsController(using logger: Logger) extends BaseController:
 
   @requireLogin()

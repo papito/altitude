@@ -1,5 +1,4 @@
-/* The person scope's results title (htmx/person.scala.html): a .results-title of includes/results_title.css with the cover
-   face (or the no-cover placeholder of core.css) before the text and the Hide / Show / Discard link after it */
+/* The person scope's results title: the cover face before the name, Hide / Show / Discard after it */
 #person .cover {
     flex: none;
     cursor: pointer;
@@ -20,8 +19,7 @@
     border-radius: 50%;
 }
 
-/* The name opens the inline editor (htmx/view_person_name); its pencil shows while the title is hovered or the name has
-   focus, in the editor among others */
+/* The name opens the inline editor; the pencil shows while the title is hovered or focus is in the name or the editor */
 #personName > span {
     cursor: pointer;
 }
@@ -43,7 +41,7 @@
     color: var(--theme-neutral-4);
 }
 
-/* The editor (htmx/edit_person_name) swaps in at the title's size, sized to the name, so the row keeps its height */
+/* The editor swaps in at the title's size, sized to the name, so the row keeps its height */
 #personName form {
     display: inline;
 }
@@ -53,10 +51,9 @@
     field-sizing: content;
 }
 
-/* A name that cannot be saved: the error row under the field (views/AGENTS.md **Forms**), its message and, for a name another
-   person holds, the offer to merge. The title stays on one line; this row wraps instead. The icon and the × keep to the field's
-   line, and #personName stops clipping while the row shows, so the button's focus ring is whole; left to overflow it would hold
-   its content's width, hence min-width and the field's cap. */
+/* A name that cannot be saved shows an error row under the field (for a name another person holds, the offer to merge).
+   The row wraps so the title stays on one line. #personName stops clipping while it shows, so the button's focus ring is
+   whole; overflowing, it would hold its content's width, hence min-width and the field's cap. */
 .title:has(#personName div.error) {
     align-items: baseline;
 }

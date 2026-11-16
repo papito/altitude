@@ -22,7 +22,7 @@ import altitude.core.util.NetPool
   /** Bounds every wait for something that must happen, so a broken pool fails a test instead of hanging the bundle */
   private val deadline = 30.seconds
 
-  /** How long a blocked borrower is watched: a correct pool passes at any length, a longer watch only catches more broken ones */
+  /** How long a blocked borrower is watched; a correct pool passes at any length */
   private val blockedWindow = 200.millis
 
   private class Element {
@@ -86,13 +86,13 @@ import altitude.core.util.NetPool
     /**
      * Setup:
      *
-     * A pool of two over a counting factory. Two borrowers hold an element at once, give them back, then twenty borrows follow
+     * A pool of two over a counting factory. Two borrowers hold an element at once and give them back, then twenty borrows follow
      * one after another.
      *
      * Assertions:
      *
-     * The factory is not called by building the pool. Two holders get two distinct elements. The later borrows make nothing and
-     * all return what `use` returned.
+     * Building the pool makes nothing. The two holders get distinct elements. The later borrows make nothing and return what
+     * `use` returned.
      */
     val factory = new CountingFactory
     val pool = new NetPool[Element](2, factory)
@@ -116,8 +116,8 @@ import altitude.core.util.NetPool
      *
      * Assertions:
      *
-     * Borrows one after another keep getting the one element made so far. With two made, one held and one returned, the next
-     * borrower gets the returned one and the factory is not called.
+     * Borrows one after another reuse the one element made so far. With one of two held and the other returned, the next borrower
+     * gets the returned one and nothing is made.
      */
     val factory = new CountingFactory
     val pool = new NetPool[Element](3, factory)
@@ -149,8 +149,8 @@ import altitude.core.util.NetPool
      *
      * Assertions:
      *
-     * The exception reaches the caller unchanged. The next borrow, bounded so that a lost permit fails rather than hangs, gets
-     * the same element, and the factory has been called once.
+     * The exception reaches the caller unchanged. The next borrow, bounded so a lost permit fails rather than hangs, gets the
+     * same element, and only one was ever made.
      */
     val factory = new CountingFactory
     val pool = new NetPool[Element](1, factory)
@@ -179,8 +179,8 @@ import altitude.core.util.NetPool
      *
      * Assertions:
      *
-     * The third does not enter `use` while both are out. When one comes back it gets that one, and nothing new is made. The other
-     * holder is still holding at that point.
+     * The third does not enter `use` while both are out. When one comes back, while the other is still held, it gets that one and
+     * nothing new is made.
      */
     val factory = new CountingFactory
     val pool = new NetPool[Element](2, factory)
@@ -209,8 +209,8 @@ import altitude.core.util.NetPool
      *
      * Assertions:
      *
-     * The factory's exception reaches the caller and `use` does not run. The next borrow, bounded so that a lost permit fails
-     * rather than hangs, makes an element.
+     * The factory's exception reaches the caller and `use` does not run. The next borrow, bounded so a lost permit fails rather
+     * than hangs, makes an element.
      */
     val attempts = new AtomicInteger(0)
     val pool = new NetPool[Element](
@@ -233,8 +233,8 @@ import altitude.core.util.NetPool
      *
      * Assertions:
      *
-     * The interrupted borrower gets an InterruptedException. The element is still out, so the next borrower still waits: a permit
-     * released by the interrupted one would let it through to make a second element. It proceeds on the real return.
+     * The interrupted borrower gets an InterruptedException. The next borrower still waits, since a permit released by the
+     * interrupted one would let it make a second element, and proceeds on the real return.
      */
     val factory = new CountingFactory
     val pool = new NetPool[Element](1, factory)
@@ -267,12 +267,12 @@ import altitude.core.util.NetPool
      *
      * Assertions:
      *
-     * No `use` ever finds its element in use by another. The factory is called at most twice, and every thread finishes.
+     * No `use` ever finds its element in use by another, at most two elements are made, and every thread finishes.
      *
      * Edge cases:
      *
-     * Elements returning while others look for a free one, the window in which a queue read empty could lead to a third element
-     * if the permit were released before the element went back.
+     * Elements return while others look for a free one: a permit released before its element went back would let a borrower find
+     * the queue empty and make a third.
      */
     val factory = new CountingFactory
     val pool = new NetPool[Element](2, factory)
@@ -302,9 +302,13 @@ import altitude.core.util.NetPool
   test("A size under one is refused") {
 
     /**
+     * Setup:
+     *
+     * Pools of size zero and minus one.
+     *
      * Assertions:
      *
-     * Zero and a negative size throw when the pool is built: such a pool could only ever block.
+     * Each throws when built, since such a pool could only ever block.
      */
     Seq(0, -1).foreach {
       size =>

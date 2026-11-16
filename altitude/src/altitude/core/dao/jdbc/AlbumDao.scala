@@ -16,7 +16,7 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
   final override type Row[T[_]] = AlbumRow[T]
   final override protected def table: Table[Row] = AlbumRow
 
-  // `numOfAssets` is counted by `getAll`'s hand-written query; the typed paths never select it, as before
+  // `numOfAssets` is counted only by `getAll`'s hand-written query
   override protected def toModel(row: AlbumRow[Sc]): Album =
     Album(
       id = Option(row.id),
@@ -59,8 +59,8 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
 
   override def addAssets(albumId: String, assetIds: Set[String]): Int =
-    // Rows are selected from the asset table so that unknown, foreign, and recycled ids are dropped, and assets already in
-    // the album are skipped rather than tripping the unique index
+    // Selected from the asset table to drop unknown, foreign and recycled IDs, and to skip members rather than trip the unique
+    // index
     val sql = s"""
       INSERT INTO $membershipTable (${FieldConst.REPO_ID}, ${FieldConst.Album.ALBUM_ID}, ${FieldConst.Album.ASSET_ID})
       SELECT asset.${FieldConst.REPO_ID}, ?, asset.${FieldConst.ID}

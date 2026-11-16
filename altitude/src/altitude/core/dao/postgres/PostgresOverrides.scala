@@ -19,10 +19,7 @@ import altitude.core.models.SceneEmbedding
 
 object PostgresOverrides:
 
-  /**
-   * Floats (a Face's `Array`, a Scene embedding's `IArray`) as a pgvector literal, e.g. "[0.1,0.2,...]", which pgvector accepts
-   * when cast with `?::vector` or `?::halfvec`; also what a `vector` column reads back as, through `getVectorField`
-   */
+  /** Floats as a pgvector literal ("[0.1,0.2,...]"), bound with `?::vector` or `?::halfvec`; also how a `vector` column reads back */
   def vectorLiteral(values: Iterable[Float]): String = values.mkString("[", ",", "]")
 
   /**
@@ -63,7 +60,7 @@ trait PostgresOverrides:
 
   override protected val vectorPlaceholder: String = "?::vector"
 
-  // The literal is bound as text and cast by the placeholder, as `FaceDao.add` binds a Face's features
+  // Bound as text and cast by the placeholder
   override protected def vectorBind(embedding: Option[SceneEmbedding]): Any =
     embedding.map(e => PostgresOverrides.vectorLiteral(e.values)).orNull
 
@@ -84,7 +81,7 @@ trait PostgresOverrides:
 
   override protected def rowProcessor: RowProcessor = PostgresOverrides.javaTimeRowProcessor
 
-  // A wall-clock `timestamp` is returned as-is; an instant (`timestamptz`) is shown in the JVM zone, as before
+  // A wall-clock `timestamp` is returned as-is; an instant (`timestamptz`) is shown in the JVM zone
   override protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime] =
     if value.isEmpty || value.get == null then return None
 

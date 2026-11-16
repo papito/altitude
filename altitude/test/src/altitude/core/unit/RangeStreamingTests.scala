@@ -61,17 +61,17 @@ import altitude.core.routes.RangeStreaming.FileWindow
     /**
      * Setup:
      *
-     * A 100,000-byte temporary file of counting bytes, written to clients that take the first 50,000 bytes and then refuse every
-     * write, once with a ClosedChannelException and once with a "Broken pipe" IOException.
+     * A 100,000-byte file written to clients that take the first 50,000 bytes and then refuse every write, with a
+     * ClosedChannelException or a "Broken pipe" IOException.
      *
      * Assertions:
      *
-     * Either way the window ends quietly, without an exception, and the client holds an unbroken start of the file no longer than
-     * it took: a player drops the connection whenever it has what it wants, the metadata of a Video or the asset the user left.
+     * Either way the window ends without an exception, and the client holds an unbroken start of the file: a player drops the
+     * connection whenever it has what it wants.
      *
      * Edge cases:
      *
-     * A client that refuses the very first write, before any byte reaches it.
+     * A client that refuses the very first write.
      */
     val bytes = Array.tabulate[Byte](100000)(_.toByte)
 
@@ -96,15 +96,11 @@ import altitude.core.routes.RangeStreaming.FileWindow
     /**
      * Setup:
      *
-     * A path to a file that does not exist, in a temporary directory removed afterwards, and a 10-byte temporary file.
+     * A path to a missing file, and a 20-byte window over a 10-byte file.
      *
      * Assertions:
      *
-     * A failure to read the file still throws, unlike a client going away.
-     *
-     * Edge cases:
-     *
-     * A missing file, and a 20-byte window over the 10-byte file, which runs out of bytes to transfer.
+     * Each failure to read throws, unlike a client going away.
      */
     val dir = Files.createTempDirectory("range-streaming")
     try
@@ -127,16 +123,15 @@ import altitude.core.routes.RangeStreaming.FileWindow
      *
      * Assertions:
      *
-     * The ASCII form keeps printable ASCII and replaces every other character, the double quote and the backslash with an
-     * underscore, one per character. The UTF-8 form keeps the RFC 5987 attr-chars and percent-encodes every other byte in upper
-     * case, so neither form can end the header or the parameter early.
+     * The ASCII form keeps printable ASCII but the double quote and backslash, replacing each other character with one
+     * underscore. The UTF-8 form keeps the RFC 5987 attr-chars and percent-encodes every other byte in upper case, so neither
+     * form can end the header or the parameter early.
      *
      * Edge cases:
      *
-     * Every attr-char punctuation mark; characters outside the attr-chars that encodeURIComponent or URLEncoder leave alone (`*`,
-     * `'`, parentheses) or turn into a plus (a space), and `%`; a CR LF that would start a new header, a tab and a DEL; a
-     * character outside the Basic Multilingual Plane, which is two UTF-16 chars and four UTF-8 bytes; and a lone surrogate, which
-     * is one replaced character in the ASCII form and the `?` that UTF-8 encoding substitutes for it in the other.
+     * Characters `encodeURIComponent` or `URLEncoder` would leave alone (`*`, `'`, parentheses) or turn into a plus (a space) are
+     * encoded; a CR LF, a tab and a DEL cannot start a new header; a character outside the BMP is one underscore and four bytes;
+     * a lone surrogate is one underscore and the `?` UTF-8 encoding substitutes for it.
      */
     def disposition(ascii: String, encoded: String) = s"""inline; filename="$ascii"; filename*=UTF-8''$encoded"""
 
@@ -157,11 +152,11 @@ import altitude.core.routes.RangeStreaming.FileWindow
     /**
      * Setup:
      *
-     * A path to a file that does not exist, in a temporary directory removed afterwards.
+     * A path to a missing file.
      *
      * Assertions:
      *
-     * Responding with it throws NotFoundException, which a route answers as a 404, rather than the file system's own exception.
+     * Responding with it throws NotFoundException, answered as a 404, rather than the file system's own exception.
      */
     val dir = Files.createTempDirectory("range-streaming")
     try a[NotFoundException] should be thrownBy RangeStreaming.respond(dir.resolve("missing.bin"), MIME, "missing.bin", None)

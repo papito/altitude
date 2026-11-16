@@ -51,7 +51,6 @@ import altitude.core.util.Query
     val totalAssets = 5
     val assets = List.fill(totalAssets)(testContext.persistAsset())
 
-    // recycle some assets
     val recycleCount = 3
     val recycledAssets = assets.take(recycleCount).map {
       asset =>
@@ -65,7 +64,6 @@ import altitude.core.util.Query
     val pipelineResFuture: Future[Seq[TAssetWithContext]] = testApp.service.purgePipeline.run(source, VoidAssetSink())
     Await.result(pipelineResFuture, Duration.Inf)
 
-    // the purged assets should be gone
     for (asset <- recycledAssets) {
       intercept[NotFoundException] {
         testApp.service.asset.getById(asset.persistedId)
@@ -85,7 +83,7 @@ import altitude.core.util.Query
      * Setup:
      *
      * Three people with a face each in three shared assets (nine faces), plus a decoy person with faces in three more assets.
-     * Only the first three assets run through the purge pipeline.
+     * Only the three shared assets run through the purge pipeline.
      *
      * Assertions:
      *
@@ -95,17 +93,13 @@ import altitude.core.util.Query
     val assetsPerPerson = 3
     val totalPeople = 3
     val people = List.fill(totalPeople)(testApp.service.person.addPerson(Person()))
-    // 1 face for each person in an asset, so total will be totalAssets * totalPeople
     testContext.addTestFacesAndAssets(people, assetCount = assetsPerPerson)
 
     val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records
 
-    // add a decoy person/face to make sure we don't delete the wrong ones
     val extraPerson = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(extraPerson, assetCount = assetsPerPerson)
 
-    // Create a map of personId to face object, for easier lookup
-    // These are only the people in the deleted assets
     val personIdToFaceMap: Map[String, List[Face]] =
       people.map(person => person.persistedId -> testApp.service.person.getPersonFaces(person.persistedId)).toMap
 
@@ -118,7 +112,6 @@ import altitude.core.util.Query
     for (person <- people) {
       val personFaces = personIdToFaceMap(person.persistedId)
 
-      // Check that all faces for the asset are gone in DB and file store.
       for (face <- personFaces) {
         intercept[NotFoundException] {
           testApp.service.person.getFaceById(face.persistedId)
@@ -383,8 +376,8 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Twice as many recycled assets as the purge queue buffers (`parallelism` times two), persisted and completed without files,
-     * and the recycle bin emptied.
+     * Twice as many recycled assets as the purge queue buffers (it buffers `parallelism` times two), persisted and completed
+     * without files, and the recycle bin emptied.
      *
      * Assertions:
      *

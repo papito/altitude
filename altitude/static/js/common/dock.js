@@ -1,49 +1,27 @@
 /**
- * A docked panel: where it sits against what it is docked to (its Dock side: left, right, top or
- * bottom), how much of the width or the height it takes (its share), the divider that drags and
- * steps that share, the Dock side menu that picks the side, and the state remembered per browser.
- * Three docks are made from it, the explorer's against the results (`common/explorer-dock.js`),
- * the Detail panel's against Asset detail's media (`search-results/detail-panel.js`) and the Edit
- * panel's, which has no Dock side of its own and sits opposite the Detail panel
- * (`edit/edit-panel.js`); each gives the factory what differs:
+ * A docked panel: its Dock side, its share of the width or height, the divider that drags and steps
+ * that share, the Dock side menu, and the state remembered per browser. The explorer, the Detail
+ * panel and the Edit panel (which sits opposite the Detail panel) are made from it. Options:
  *
- * - `storage`: `{ key, field }`, the localStorage key holding `{ side?, widthShare, heightShare }`,
- *   the object itself or, with `field`, that field of it, the rest of the object being someone
- *   else's and left as it is (read and written through `common/stored-state.js`). `side` is absent
- *   until a pick.
- * - `pickAttribute`: the data attribute of a pick, `data-app-dock-side`: a click on an element
- *   carrying it, anywhere on the page, docks the panel on the side it names. The options of a
- *   compact choice menu (`common/context-menu-markup.js`) carry it, and the factory keeps that
- *   menu true to the side: the current option is checked and the trigger shows its glyph and
- *   names the side.
- * - `followSide`: `() => string`, in place of `pickAttribute` for a dock with no Dock side of its
- *   own: the side it sits on, read whenever it is laid out, which its owner does again (`layOut`)
- *   when the side it follows changes. Nothing is picked, so nothing of a side is remembered.
- * - `layout`: `{ sideAttribute, shareProperty }`, written on the container: the side as an
- *   attribute and the share as a percentage custom property, which the stylesheet lays the grid
- *   out from.
- * - `container`: `() => Element | null`, the element laid out, or null while it is not on the page.
- * - `sizeEl`: `() => Element | null`, the element whose size along the axis the shares are
- *   percentages of.
- * - `divider`: `() => Element | null`, the separator.
- * - `defaults`: `{ side: () => string, widthShare, heightShare }`, the side until a pick and the
- *   share of each axis until a drag; the width share serves left and right, the height share top
- *   and bottom, so a switch within an axis keeps the size.
- * - `minimums`: `(vertical) => { panel, content }` in px, the least the panel and what it is
- *   docked to may be squeezed to along the axis, as they stand in the current viewport.
- * - `redockOnOrientationChange`: whether a change of the viewport's orientation lays the default
- *   side out again while nothing is picked, for a default that follows it.
- * - `orientsDivider`: whether the divider's orientation class (`vertical` for a left or right dock,
- *   `horizontal` for top or bottom) is written on each side change; the explorer's divider is laid
- *   out by `html[data-dock-side]` instead, before any script runs.
- * - `onSideChange`: `(side) => void`, after every side change, by a pick or by the viewport.
+ * - `storage`: `{ key, field? }`, the localStorage key of `{ side?, widthShare, heightShare }`, or
+ *   of an object whose `field` holds it, the rest left alone. `side` is absent until a pick.
+ * - `pickAttribute`: a click anywhere on an element carrying it docks the panel on the side it
+ *   names; the factory keeps the compact Dock side menu's checked option and trigger in step.
+ * - `followSide`: in place of `pickAttribute`, for a dock with no side of its own; no side is
+ *   remembered, and the owner calls `layOut` when the followed side changes.
+ * - `layout`: `{ sideAttribute, shareProperty }`, written on the container for the stylesheet.
+ * - `container`, `sizeEl`, `divider`: element getters; the shares are percentages of `sizeEl`.
+ * - `defaults`: `{ side, widthShare, heightShare }`; the width share serves left and right, the
+ *   height share top and bottom, so a switch within an axis keeps the size.
+ * - `minimums`: `(vertical) => { panel, content }` in px, as they stand in the current viewport.
+ * - `redockOnOrientationChange`: a rotation lays the default side out again while nothing is picked.
+ * - `orientsDivider`: writes the divider's orientation class on each side change; the explorer's is
+ *   laid out by `html[data-dock-side]` instead, before any script runs.
+ * - `onSideChange`: after every side change, by a pick or by the viewport.
  *
- * The divider (a `role="separator"`) is dragged with the pointer and moved with the arrow keys
- * along its axis, 1 % a step (Shift, 5 %), Home and End take it to the bounds, and a double-click
- * or Enter returns the axis to its default share. The share the panel is laid out with is bounded
- * by the minimums as they stand in the current viewport, on every write and on `resize`; the
- * remembered share is the user's own, bounded when the user sets it, never by a visit in a
- * smaller window.
+ * The divider drags, steps 1 % per arrow key (Shift, 5 %), goes to the bounds with Home and End, and
+ * resets with Enter or a double-click. The laid-out share is bounded by the minimums on every write
+ * and on `resize`; the remembered one only when the user sets it, never by a visit in a smaller window.
  */
 import { Const } from "../constants.js"
 import { readStoredObject, writeStoredFields } from "./stored-state.js"
@@ -51,8 +29,7 @@ import { readStoredObject, writeStoredFields } from "./stored-state.js"
 const KEY_STEP = 1
 const KEY_STEP_LARGE = 5
 
-// The keys that move the divider along each side's axis: the one toward the panel's edge, which
-// shrinks it, then the one away from it, which grows it
+// Per side: the key toward the panel's edge, which shrinks it, then the one that grows it
 const AXIS_KEYS = {
     [Const.dockSides.left]: ["ArrowLeft", "ArrowRight"],
     [Const.dockSides.right]: ["ArrowRight", "ArrowLeft"],
@@ -79,16 +56,14 @@ export function createDock({
     orientsDivider = false,
     onSideChange = () => {},
 }) {
-    // The remembered state; `side` is null until a pick
+    // `side` is null until a pick
     const state = { side: null, widthShare: null, heightShare: null }
 
-    // Whether the dock drives a panel: `start` was called
     let active = false
 
-    // The dividers bound so far: a divider that comes with each fragment is bound once per fragment
+    // A divider that comes with each fragment is bound once per fragment
     const boundDividers = new WeakSet()
 
-    /** Reads the remembered state and binds the page-wide controls: the picks, the orientation, the window's size */
     function start() {
         Object.assign(state, rememberedState())
         active = true
@@ -105,8 +80,7 @@ export function createDock({
                 })
         }
 
-        // The bounds are percentages of the size element, so a resized window moves them: the
-        // laid-out share is bounded again, the remembered one left alone
+        // A resize moves the bounds: the laid-out share is bounded again, the remembered one left alone
         window.addEventListener("resize", () => applyShare())
 
         if (pickAttribute) {
@@ -119,12 +93,10 @@ export function createDock({
         }
     }
 
-    /** Lays the container out with the effective side and its axis's share, and shows the side on the menu */
     function layOut() {
         applyEffectiveSide()
     }
 
-    /** Docks the panel on `side` from now on: remembered, laid out and announced; the side already picked is nothing */
     function setSide(newSide) {
         if (
             followSide ||
@@ -140,7 +112,7 @@ export function createDock({
         onSideChange(side())
     }
 
-    /** The side the panel sits on, picked or by default, as the container is laid out */
+    /** The effective side, as the container is laid out */
     function side() {
         return (
             container()?.getAttribute(layout.sideAttribute) ?? defaults.side()
@@ -151,14 +123,13 @@ export function createDock({
         return active
     }
 
-    /** The panel's share, in percent, of the width (a left or right dock) or of the height (top or bottom), as remembered */
+    /** The current axis's remembered share, in percent */
     function share() {
         const vertical = isVerticalAxis(side())
         const remembered = vertical ? state.heightShare : state.widthShare
         return remembered ?? defaultShare(vertical)
     }
 
-    /** Gives the panel `percent` of its axis, within the bounds, and remembers it, as a drag would */
     function setShare(percent) {
         if (!active) {
             return
@@ -174,7 +145,7 @@ export function createDock({
         return vertical ? defaults.heightShare : defaults.widthShare
     }
 
-    /** Keeps `value` as the current axis's share, in memory only */
+    /** In memory only */
     function storeShare(value) {
         if (isVerticalAxis(side())) {
             state.heightShare = value
@@ -183,7 +154,6 @@ export function createDock({
         }
     }
 
-    /** Writes the picked side, else the default, on the container with that axis's share, orients the divider and shows it on the menu */
     function applyEffectiveSide() {
         const el = container()
         if (!el) {
@@ -206,11 +176,7 @@ export function createDock({
         }
     }
 
-    /**
-     * The Dock side menu follows the effective side: the option of `effective` is the checked one
-     * and the compact trigger shows its glyph and names it, "Dock side: Left". The options are found
-     * wherever they stand, in the host before the control is built or in its panel after.
-     */
+    /** The options are found wherever they stand: in the host before the menu is built, or its panel after */
     function syncDockControl(effective) {
         let checkedEl = null
         document.querySelectorAll(`[${pickAttribute}]`).forEach((optionEl) => {
@@ -234,10 +200,7 @@ export function createDock({
         triggerEl.title = label
     }
 
-    /**
-     * Lays the container out with the current axis's share, within `bounds` (the current ones when
-     * not given), and writes it on the separator; the remembered share is not touched
-     */
+    /** The remembered share is not touched */
     function applyShare(bounds = shareBounds()) {
         const el = container()
         if (!el) {
@@ -250,9 +213,8 @@ export function createDock({
     }
 
     /**
-     * The share's bounds on the current axis: the panel's minimum, and all but the content's
-     * minimum and the divider, as percentages of the size element along the axis. Reading the
-     * minimums forces a layout, so a drag takes the bounds once, when it starts.
+     * In percent of the size element: from the panel's minimum to all but the content's minimum and
+     * the divider. Reading the minimums forces a layout, so a drag takes the bounds once, as it starts.
      */
     function shareBounds() {
         const vertical = isVerticalAxis(side())
@@ -287,20 +249,13 @@ export function createDock({
         return Math.round(bounded * 10) / 10
     }
 
-    /**
-     * Binds the divider: a pointer drag sets the share from the pointer's position in the size
-     * element, measured from the edge the panel sits on, within the bounds taken as the drag
-     * starts; the arrow keys along the axis move the divider the way they point, Home and End take
-     * it to the bounds; Enter and a double-click reset the axis's default. The separator's state
-     * follows. A divider already bound is left alone.
-     */
     function bindDivider(dividerEl) {
         if (!dividerEl || boundDividers.has(dividerEl)) {
             return
         }
         boundDividers.add(dividerEl)
 
-        // The bounds of the drag in progress, null between drags
+        // Null between drags
         let dragBounds = null
 
         dividerEl.addEventListener("pointerdown", (event) => {
@@ -310,9 +265,8 @@ export function createDock({
             dragBounds = shareBounds()
             dividerEl.setPointerCapture(event.pointerId)
             dividerEl.dataset.dragging = ""
-            // The pointer down focuses the separator by itself (it is in the tab order), so the
-            // arrow keys work right after the drag; a focus the script gave would draw the focus
-            // ring, which a pointer's focus does not
+            // No `focus()`: the pointer down focuses the separator by itself, so the arrow keys work
+            // after the drag, and a scripted focus would draw the focus ring
         })
 
         dividerEl.addEventListener("pointermove", (event) => {
@@ -364,7 +318,7 @@ export function createDock({
         })
     }
 
-    /** The share the pointer at `event` asks for: its distance from the panel's edge of the size element, in percent */
+    /** The pointer's distance from the panel's edge of the size element, in percent */
     function shareAtPointer(event) {
         const rect = sizeEl().getBoundingClientRect()
 
@@ -384,14 +338,13 @@ export function createDock({
         setShare(defaultShare(isVerticalAxis(side())))
     }
 
-    /** The separator's orientation and value, for assistive technology: `laidOut` is the share laid out, within `bounds` */
     function writeDividerState({ min, max }, laidOut) {
         const dividerEl = divider()
         if (!dividerEl || !active) {
             return
         }
 
-        // A separator's orientation is the divider's own: a left or right dock's runs top to bottom
+        // The divider's own orientation: a left or right dock's runs top to bottom
         dividerEl.setAttribute(
             "aria-orientation",
             isVerticalAxis(side()) ? "horizontal" : "vertical",
@@ -401,7 +354,7 @@ export function createDock({
         dividerEl.setAttribute("aria-valuenow", String(Math.round(laidOut)))
     }
 
-    /** The remembered dock state, or nothing where it is missing or unreadable; a share counts only as a finite number */
+    /** Keeps only a known side and finite shares */
     function rememberedState() {
         const stored = readStoredObject(storage.key)
         const saved = storage.field ? stored[storage.field] : stored
@@ -422,7 +375,6 @@ export function createDock({
         return read
     }
 
-    /** Writes the dock state under the key, in its field when it has one, leaving the rest of the stored object as it is */
     function remember() {
         const saved = {
             widthShare: state.widthShare ?? defaults.widthShare,

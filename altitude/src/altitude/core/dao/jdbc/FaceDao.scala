@@ -17,7 +17,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
   final override type Row[T[_]] = FaceRow[T]
   final override protected def table: Table[Row] = FaceRow
 
-  // The feature vector is never carried back out of the database, so the row class does not even select it
+  // The row class leaves out the feature vector, which only `getFeatures` reads
   override protected def toModel(row: FaceRow[Sc]): Face =
     Face(
       id = Option(row.id),
@@ -60,9 +60,8 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
     coverCandidates(personId, excludedAssetIds, limit = 1).headOption
 
   /**
-   * The person's Faces a cover can be: on none of `excludedAssetIds` and on no asset marked for purging, by detection score, best
-   * first, then by ID, no more than `limit`. They come from `face_02`, which leads with the person and orders them by detection
-   * score, so the read stops at the limit, each Face's asset probed by its key.
+   * The person's Faces a cover can be, on no excluded or purged asset, best detection score first. `face_02` leads with the
+   * person and orders by detection score, so the read stops at the limit.
    */
   private def coverCandidates(personId: String, excludedAssetIds: Set[String], limit: Int): List[Face] =
     val sql = s"""
@@ -98,7 +97,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       .take(1)
     Db.read(dialect)(_.run(one)).nonEmpty
 
-  // The one read of the vector column, through the engine's `getVectorField`: pgvector's literal, or the BLOB `vector_as_f32` wrote
+  // The only read of the vector column
   override def getFeatures(faceId: String): Option[Array[Float]] =
     val sql = s"SELECT ${FieldConst.Face.FEATURES} FROM face WHERE ${FieldConst.ID} = ? AND ${FieldConst.REPO_ID} = ?"
 
@@ -132,7 +131,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
 
     visibleFaces(inIdSet, idSet(assetIds))
 
-  /** The Faces of the people on show, of the assets `assetTest` picks with its one bind value */
+  /** The Faces of people not hidden or bad matches, on the assets `assetTest` picks with its one bind value */
   private def visibleFaces(assetTest: String, assetValue: Any): List[Face] =
     val sql = s"""
         SELECT face.*

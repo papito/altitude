@@ -12,13 +12,10 @@ object ImportSource:
     values.find(_.dbValue == value).getOrElse(throw IllegalArgumentException(s"Unknown Import source: $value"))
 
 /**
- * The stored record of one delivery of files to a Library: an upload from a browser, or one scan of a Watch folder that found
- * files. `name` is the uploaded folder's or the Watch folder's name, none for an upload of files; `accountId` the account that
- * delivered it, none once that account is deleted; `destFolderId` the folder its files are sorted into, none for Triage. The five
- * counters are its Import files by outcome. It is in progress until it is closed (`closedAt`), which it is once it is marked
- * complete (`isComplete`: no more files will be added) and none of its files is pending. `expectedFiles` is how many files it was
- * opened to hold, what an upload is about to send or a scan to offer, none when it was not told: it counts only while the Import
- * still takes files.
+ * One delivery of files to a Library: a browser upload, or one scan of a Watch folder that found files. `name` is the uploaded
+ * folder's or Watch folder's name, none for an upload of files; `destFolderId` is none for Triage. It is in progress until
+ * closed, which happens once it is marked complete (no more files will be added) and none of its files is pending.
+ * `expectedFiles` is how many files it was opened to hold, if told, and counts only while it still takes files.
  */
 case class Import(
     id: Option[String] = None,
@@ -41,7 +38,6 @@ case class Import(
 
   def isInProgress: Boolean = closedAt.isEmpty
 
-  /** How many of its files have the outcome */
   def count(outcome: ImportOutcome): Int = outcome match
     case ImportOutcome.Pending => pending
     case ImportOutcome.Imported => imported
@@ -49,15 +45,10 @@ case class Import(
     case ImportOutcome.Unsupported => unsupported
     case ImportOutcome.Failed => failed
 
-  /** Its files in all, whatever became of them */
   def total: Int = ImportOutcome.values.map(count).sum
 
-  /**
-   * The files it is to hold in all, as far as it knows: while it still takes files, the number it was opened to expect, or the
-   * files it has when it has more of them or was told no number; once it is marked complete, the files it has, whatever it
-   * expected, since no more will come
-   */
+  /** The files it is to hold in all, as far as it knows: once marked complete, just the files it has */
   def expectedTotal: Int = if isComplete then total else expectedFiles.fold(total)(_.max(total))
 
-  /** The files yet to settle: its pending ones and, while it still takes files, the ones it expects and has not been given */
+  /** Its pending files plus, while it still takes files, the ones it expects and has not been given */
   def remaining: Int = pending + expectedTotal - total

@@ -27,17 +27,13 @@ import altitude.core.models.Settings
 import altitude.core.models.WatchFolder
 import altitude.core.models.WatchFolderSpec
 
-/**
- * The Watch folders of the Import page: the cards an Import holder reads and an Admin acts on, the Watch folder dialog and its
- * refusals, the notice of what is deleted, the cards' actions, and the folder delete confirmation's warning. Every directory a
- * test watches is a fresh one under the suite's own temporary directory.
- */
+/** The Watch folder routes of the Import page, and the folder delete confirmation's warning of the Watch folders it affects */
 @DoNotDiscover class WatchFolderControllerTests extends ControllerTestCore {
 
   private val F = Api.Field.WatchFolder
   private def watchFolders = testApp.service.watchFolder
 
-  // The suite's own temporary directory, which holds every directory a test watches and goes with the suite
+  // Holds every directory a test watches, and is deleted with the suite
   private var tempRoot: Path = scala.compiletime.uninitialized
 
   override def beforeAll(): Unit = {
@@ -102,7 +98,7 @@ import altitude.core.models.WatchFolderSpec
   private def cardOf(html: String, watchFolder: WatchFolder): String =
     html.split(s"""data-watch-folder-id="${watchFolder.persistedId}"""")(1).split("</article>")(0)
 
-  /** A User of the Library holding `permissions` there, logged in to the server at `host`: their cookies */
+  /** The cookies of a new User holding `permissions` in `repository`, logged in at `host` */
   private def userCookies(host: String, repository: Repository, permissions: Permissions): Map[String, HttpCookie] = {
     val user = testContext.persistUser()
     testContext.grant(user, repository, permissions)
@@ -123,16 +119,14 @@ import altitude.core.models.WatchFolderSpec
      *
      * Assertions:
      *
-     * The Admin's page has the Watch folders section with "Add Watch folder", and a card per Watch folder with its name, its
-     * path, where its files go ("Triage", or "Scans"), its status chip (Watching, Paused), no file imported, and its actions:
-     * "Scan now", which is disabled on the paused card, and a menu of Pause (Resume on the paused card), Retry failed, Edit and
-     * Remove. "Scanner" says it deletes imported files and, being paused, that it was not scanned yet. The cards' route answers
-     * the same cards.
+     * The Admin's page and the cards route show a card per Watch folder with its name, path, destination, status and import
+     * count, and its actions: Scan now, disabled while paused, and a menu offering Resume instead of Pause on the paused card.
+     * "Scanner" says it deletes imported files and, being paused, that it was not scanned yet.
      *
      * Edge cases:
      *
-     * The Import holder's page and cards route show both cards, with their statuses, and no action: no "Add Watch folder", no
-     * "Scan now", no menu. The account without Import is refused the cards route with a 403.
+     * The Import holder sees both cards with their statuses and no action. The account without Import is refused the cards route
+     * with a 403.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val repository = testContext.repository
@@ -205,8 +199,8 @@ import altitude.core.models.WatchFolderSpec
      *
      * Assertions:
      *
-     * The User is refused, with a 403, the Add and Edit dialogs, the add, the edit, the notice of what is deleted, Pause, Resume,
-     * Scan now, Retry failed, the Remove dialog and the removal. The Watch folder is as it was, and the Library has no other.
+     * The User is refused every dialog, write and the deletion notice with a 403. The Watch folder is unchanged, and no other is
+     * added.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val repository = testContext.repository
@@ -249,15 +243,11 @@ import altitude.core.models.WatchFolderSpec
      *
      * Assertions:
      *
-     * The Add dialog is a form titled "Add Watch folder" with the three fieldsets, both switches off and "Save" as its submit;
-     * under the path it says how often the folder is scanned, the scan interval as it is set, in minutes and hours: "every 10
-     * min" by default, "every 1 h 30 min" at 90 minutes and "every 2 h" at 120. An add with a relative path comes back as the
-     * form, retargeted at itself, with the name and the path as submitted and the path's error under its field, and adds nothing;
-     * so does an add that keeps the folder structure with no folder chosen, with that error. An add with the directory, the
-     * structure kept under "Scans" and the deletion on answers that the Watch folder was added, and it is stored so, owned by the
-     * Admin. Its Edit dialog is titled by its name and opens over what is stored: the switches on, "Scans" as the chosen
-     * destination, the notice of what is deleted and "Save and delete imported files". An edit that renames it and turns both
-     * switches off is stored, with no destination.
+     * The Add dialog opens with both switches off and states the scan interval as set, in minutes and hours. An add with a
+     * relative path, or keeping the folder structure with no folder chosen, comes back as the form with the error under its field
+     * and the values kept, and adds nothing. A valid add, kept under "Scans" with deletion on, is stored so and owned by the
+     * Admin. Its Edit dialog opens over what is stored, with the deletion notice and the deleting save label. An edit that
+     * renames it and turns both switches off is stored with no destination.
      *
      * Edge cases:
      *
@@ -277,7 +267,6 @@ import altitude.core.models.WatchFolderSpec
         dialog should include("""data-app-keeps-structure="false"""")
         dialog should include("""data-app-deletes-imported="false"""")
         (dialog should include).regex("""x-text="saveLabel">Save</button>""")
-        // The scan interval as it is set, in minutes and hours
         dialog should include("Scanned with its subfolders every 10 min, and at startup")
         App.altitude.settings.save(Map(Settings.WATCH_FOLDER_SCAN_INTERVAL -> "90"))
         get(at("dialogs/add")).text() should include("Scanned with its subfolders every 1 h 30 min, and at startup")
@@ -352,13 +341,12 @@ import altitude.core.models.WatchFolderSpec
      *
      * Assertions:
      *
-     * The notice for the first directory says that 2 files are in the folder now, and what is deleted. The notice for the Watch
-     * folder's own directory, asked for its edit, says that 1 file is.
+     * The notice for the first directory counts 2 files, skipping the hidden and the empty one, and says what is deleted. The
+     * Watch folder's own directory, asked for its edit, counts 1.
      *
      * Edge cases:
      *
-     * For a path that cannot be a Watch folder's as it stands (one that does not exist, and the Watch folder's directory asked
-     * for another one), the notice names no number.
+     * A path that cannot be a Watch folder's as it stands, one that does not exist or another Watch folder's, gets no count.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val dir = directory()
@@ -399,11 +387,9 @@ import altitude.core.models.WatchFolderSpec
      *
      * Assertions:
      *
-     * Pause answers 204 and the Watch folder is paused; "Scan now" is then a 409 that says it is paused. Resume answers 204 and
-     * it is watching again. "Scan now" answers 204 at once, and the scan it started remembers the file; a second one, once the
-     * file has rested, reads it, and it becomes an asset of the Library. Retry failed answers 204. The Remove dialog is titled by
-     * the Watch folder's name and says that its files and what it imported stay; the removal answers that it was removed, the
-     * cards say the Library has no Watch folder, and the image is still in the directory.
+     * Pause pauses it, and Scan now is then a 409 saying so; Resume resumes it. Scan now answers at once, and its scan remembers
+     * the file; a second scan, once the file has rested, imports it. Retry failed answers 204. The Remove dialog says its files
+     * stay; the removal leaves no Watch folder and the image in its directory.
      *
      * Edge cases:
      *
@@ -464,10 +450,9 @@ import altitude.core.models.WatchFolderSpec
      *
      * Assertions:
      *
-     * Through the first Library, the Edit dialog, the edit, Pause, Resume, Scan now, Retry failed, the Remove dialog and the
-     * removal of the second Library's Watch folder are each a 404, as they are for an ID that names nothing, and no answer names
-     * it. An add whose destination is the second Library's folder is a 404 too. The second Library's rows are as they were, and
-     * the first has no Watch folder.
+     * Through the first Library, every dialog and action on the second Library's Watch folder is a 404, as for an unknown ID, and
+     * no answer names it. So is an add into the second Library's folder. The second Library's rows are unchanged, and the first
+     * has no Watch folder.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val mine = testContext.repository
@@ -520,9 +505,9 @@ import altitude.core.models.WatchFolderSpec
      *
      * Assertions:
      *
-     * The Delete confirmation of "Archive" warns that the two Watch folders sort their files into it, naming both, and that they
-     * pause until the folder is restored or they are given another destination. The one of "Archive/2026" names the one that
-     * sorts into it alone.
+     * The Delete confirmation of "Archive" names both Watch folders that sort into it or below, and says they pause until the
+     * folder is restored or they get another destination. That of "Archive/2026" names only the one sorting into it, in the
+     * singular.
      *
      * Edge cases:
      *
@@ -556,7 +541,7 @@ import altitude.core.models.WatchFolderSpec
         val ofYear = confirmation(year)
         (ofYear should include).regex("""The Watch folder <strong>Scanner</strong> sorts its files into this folder. It pauses""")
         (ofYear should not).include("Phone sync")
-        // One wording or the other, and nothing of the template's own between them
+        // One wording or the other, with no template text such as an `else` leaking between them
         for (text <- List(ofArchive, ofYear)) (text should not).include("else")
         (ofYear should not).include("They pause")
 

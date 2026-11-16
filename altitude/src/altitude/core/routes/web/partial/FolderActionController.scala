@@ -28,7 +28,6 @@ class FolderActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.add_folder_dialog(parentId = parentId)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-  /** An unknown folder, or another repository's, is a 404 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-folder")
@@ -44,10 +43,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
         ))
     }
 
-  /**
-   * The Delete confirmation, which warns of the Watch folders that sort their files into the folder or a folder below it. An
-   * unknown folder, or another repository's, is a 404
-   */
+  /** The Delete confirmation warns of the Watch folders that sort files into the folder or below it */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-folder")
@@ -68,10 +64,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.folders()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-  /**
-   * Adds a folder under `parentId`. A parent that is no folder of the repository, unknown or another repository's, answers the
-   * dialog's form again with the error, as a name refused does, and adds nothing.
-   */
+  /** A parent that is no folder of the repository is a form error, as a refused name is, not a 404 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.post(f"/$prefix/r/:repoId/add")
@@ -110,7 +103,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
     try App.altitude.service.folder.add(folderName, parentId = Some(parentId))
     catch
-      // The name rule the stored name is held to, once normalized (`Validators.validName`)
+      // The name rule applied to the normalized name (`Validators.validName`)
       case ex: ValidationException => return responseWithValidationErrors(ex.errors.toMap, parentId = parentId)
       case ex: DuplicateException =>
         val message = ex.message.getOrElse("Folder name already exists at this level")
@@ -119,10 +112,9 @@ class FolderActionController(using logger: Logger) extends BaseController:
         logger.debug(s"Not adding folder [$folderName]: parent [$parentId] is no folder of the repository")
         return responseWithValidationErrors(Map(Api.Field.Folder.PARENT_ID -> C.Msg.Err.PARENT_FOLDER_NOT_FOUND), parentId)
 
-    // The client reloads the folder tree off the "folderAdded" event - no markup needed here
     cask.Response("", 200, Seq(("Content-Type", "text/html")))
 
-  /** An unknown folder, or another repository's, is a 404, and the root folder a 409 */
+  /** The root folder is a 409 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/rename")
@@ -166,24 +158,21 @@ class FolderActionController(using logger: Logger) extends BaseController:
         App.altitude.service.folder.rename(folderId = folderId, newName = newName)
         cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
       catch
-        // The name rule the stored name is held to, once normalized (`Validators.validName`)
+        // The name rule applied to the normalized name (`Validators.validName`)
         case ex: ValidationException => responseWithValidationErrors(ex.errors.toMap, folderId = folderId)
         case ex: DuplicateException =>
           val message = ex.message.getOrElse("Folder name already exists at this level")
           responseWithValidationErrors(Map(Api.Field.Folder.NAME -> message), folderId = folderId)
     }
 
-  /**
-   * Moves a folder under another. A folder that is not the repository's, unknown or another repository's, is a 404, and so is the
-   * root folder of another repository; a destination that is not the repository's is a 400, as it does not exist.
-   */
+  /** A destination that is not the repository's is a 400, not a 404 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/move")
   def htmxMoveFolder(repoId: String, movedFolderId: String, newParentId: String)(using request: Request): Response[String] =
     logger.trace(s"Moving folder $movedFolderId to $newParentId")
 
-    // short-circuit if this is a noop
+    // A folder cannot be moved under itself
     if movedFolderId == newParentId then return cask.Response("", 400, Seq(("Content-Type", "text/html")))
 
     answering {
@@ -195,7 +184,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
           cask.Response(ex.message.getOrElse("Folder name already exists at this level"), 409, Seq(("Content-Type", "text/html")))
     }
 
-  /** An unknown folder, or another repository's, is a 404, and the root folder a 409 */
+  /** The root folder is a 409 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.delete(f"/$prefix/r/:repoId/")

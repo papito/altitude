@@ -12,12 +12,12 @@ import altitude.core.models.Import
 import altitude.core.models.ImportSource
 
 /**
- * An Import's status as the Import history and the status feed render it (includes/import_status, includes/import_title): the
- * bar's segments, the count chips and the title, for an Import that knows how many files to expect
+ * An Import's status as `includes/import_status` and `includes/import_title` render it: the bar's segments, the count chips and
+ * the title, for an Import that knows how many files to expect
  */
 @DoNotDiscover class ImportStatusTests extends funsuite.AnyFunSuite with TestFocus {
 
-  /** An upload's Import of files, with no name, in progress and still taking files */
+  /** An upload's Import, in progress and still taking files */
   private def upload(expected: Option[Int], imported: Int = 0, duplicate: Int = 0, failed: Int = 0, pending: Int = 0): Import =
     Import(
       id = Some("import"),
@@ -58,18 +58,16 @@ import altitude.core.models.ImportSource
     /**
      * Setup:
      *
-     * An upload of files in progress that expects 24 files and has been given 6 of them: 3 imported, 1 already in the Library and
-     * 2 pending.
+     * An upload in progress that expects 24 files and has 6: 3 imported, 1 duplicate and 2 pending.
      *
      * Assertions:
      *
-     * Its bar has a segment of 3 imported, one of 1 duplicate, and the rest of the 24, 20 files, as the unfilled remainder. Its
-     * chips say 3 imported, 1 already in the Library and 20 remaining. It is titled "24 files", the number it expects. The
-     * message the status feed pushes says the same: 20 remaining, under the title "24 files".
+     * The bar and the chips show 3 imported, 1 duplicate and the other 20 of the 24 as remaining, and the title counts the 24
+     * expected. The status feed's message says the same.
      *
      * Edge cases:
      *
-     * The same Import with no expected number goes by the files it has: 2 remaining, a remainder of 2, titled "6 files".
+     * With no expected number it goes by the files it has: 2 remaining, titled "6 files".
      */
     val expecting = upload(expected = Some(24), imported = 3, duplicate = 1, pending = 2)
 
@@ -96,16 +94,15 @@ import altitude.core.models.ImportSource
     /**
      * Setup:
      *
-     * An upload of files in progress that expected 4 files and has been given 8: 5 imported and 3 pending.
+     * An upload in progress that expected 4 files and has 8: 5 imported and 3 pending.
      *
      * Assertions:
      *
-     * Its bar has a segment of 5 imported and a remainder of 3, its chips say 5 imported and 3 remaining, and it is titled "8
-     * files".
+     * The bar and the chips show 5 imported and 3 remaining, and it is titled "8 files".
      *
      * Edge cases:
      *
-     * With every file it has settled and nothing more expected, nothing remains: no remainder in the bar and no chip for it.
+     * With every file settled, nothing remains: no remainder in the bar and no chip for it.
      */
     val more = upload(expected = Some(4), imported = 5, pending = 3)
 
@@ -123,18 +120,17 @@ import altitude.core.models.ImportSource
     /**
      * Setup:
      *
-     * An upload of files that expected 24 files and was closed with 6: 5 imported and 1 failed. And the same upload as it was
-     * cancelled, marked complete with 2 of its files still pending, before it closed.
+     * An upload that expected 24 files and was closed with 6: 5 imported and 1 failed. And the same upload just cancelled, marked
+     * complete with 2 files still pending, before it closed.
      *
      * Assertions:
      *
-     * The closed Import's bar has a segment of 5 imported and one of 1 failed and no remainder, its chips say 5 imported and 1
-     * failed, nothing remaining, and it is titled "6 files": the 18 files that never came are nowhere.
+     * The closed Import shows 5 imported and 1 failed with nothing remaining, titled "6 files": the 18 that never came are
+     * nowhere.
      *
      * Edge cases:
      *
-     * The cancelled one, still in progress while its last files settle, counts those 2 alone as remaining and is titled by the 8
-     * files it has: no file is to come any more.
+     * The cancelled one counts only its 2 pending files as remaining and is titled by the 8 it has.
      */
     val closed =
       upload(expected = Some(24), imported = 5, failed = 1).copy(isComplete = true, closedAt = Some(LocalDateTime.now()))

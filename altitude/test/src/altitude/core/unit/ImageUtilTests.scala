@@ -25,15 +25,13 @@ import altitude.core.util.ImageUtil
     /**
      * Setup:
      *
-     * A two-row, three-column image of six grey levels, 1 to 3 on the top row and 4 to 6 on the bottom, taken as the stored
-     * pixels of an image under each EXIF orientation 1 to 8, and under a value the tag cannot hold.
+     * A two-row, three-column image of grey levels 1 to 6, taken as the stored pixels under each EXIF orientation 1 to 8 and
+     * under a value the tag cannot hold.
      *
      * Assertions:
      *
-     * Each orientation puts the pixels where the upright image has them: 1 leaves them, 2 mirrors each row, 3 turns the image
-     * around, 4 mirrors each column, 5 transposes, 6 turns the image a quarter clockwise, 7 transposes across the other diagonal,
-     * 8 turns it a quarter counter-clockwise, so from 5 on the image is three rows of two. A value outside the tag's range leaves
-     * the image as it is. Every result is a new image, and the stored one is unchanged.
+     * Each orientation puts the pixels where the upright image has them, 5 to 8 giving three rows of two. A value outside the
+     * tag's range leaves the image as it is. Each result is a new image, and the stored one is unchanged.
      */
     val stored = new Mat(2, 3, CvType.CV_8UC1)
     stored.put(0, 0, Array[Byte](1, 2, 3, 4, 5, 6))

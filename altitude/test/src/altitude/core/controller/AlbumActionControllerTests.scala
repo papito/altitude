@@ -29,8 +29,8 @@ import altitude.core.models.Album
      *
      * Assertions:
      *
-     * The Albums tab renders the hosts the client fills in - the list, the add controls and the empty state - and the add, rename
-     * and delete dialogs render, the rename and delete ones naming the album.
+     * The Albums tab renders the hosts the client fills in (the list, the add controls, the empty state), and the add, rename and
+     * delete dialogs render, the last two naming the album.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -76,16 +76,16 @@ import altitude.core.models.Album
     /**
      * Setup:
      *
-     * A logged-in user's repository with no albums, and album names posted to the add endpoint as JSON.
+     * A logged-in user's repository with no albums.
      *
      * Assertions:
      *
      * A valid name creates the album, trimmed, with an empty response. A blank or duplicate name creates nothing and answers with
-     * the add dialog's form carrying the error, retargeted to replace the submitted form in place.
+     * the add form carrying the error, in place of the submitted one.
      *
      * Edge cases:
      *
-     * Surrounding whitespace is trimmed, and a name that differs from an existing one only by case is a duplicate.
+     * A name that differs from an existing one only by case is a duplicate.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -129,8 +129,8 @@ import altitude.core.models.Album
      *
      * Assertions:
      *
-     * A rename persists the new name, a blank name answers with the rename dialog's form carrying the error in place of the
-     * submitted one, and a delete removes the album.
+     * A rename persists the new name, a blank name answers with the rename form carrying the error, and a delete removes the
+     * album.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -176,13 +176,13 @@ import altitude.core.models.Album
     /**
      * Setup:
      *
-     * A logged-in user's repository with one album, "before", and a name of 250 U+FB2C posted to the add endpoint and put to the
-     * rename endpoint: 250 characters as typed, which the form's length check passes, and 750 in NFC.
+     * A logged-in user's repository with one album, "before". A name of 250 U+FB2C is added and renamed to: 250 characters as
+     * typed, which passes the form's length check, and 750 in NFC.
      *
      * Assertions:
      *
-     * Each response is its dialog's form carrying the too-long error, retargeted to replace the submitted form in place, and the
-     * repository keeps "before" alone.
+     * Each answer is its dialog's form carrying the too-long error, in place of the submitted one, and "before" is the only
+     * album.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -229,9 +229,8 @@ import altitude.core.models.Album
      *
      * Assertions:
      *
-     * The dialog lists every album by name, with the bare name in `data-name`, followed by the "New album…" option. While there
-     * are albums, an album is selected and the new album's name field is hidden; with none, "New album…" is the only option and
-     * the name field shows and takes the focus.
+     * The dialog lists every album, its name in `data-name`, then the new album option. With albums, the album select takes the
+     * focus and the new name field is hidden; with none, the new name field shows and takes the focus.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -270,19 +269,19 @@ import altitude.core.models.Album
     /**
      * Setup:
      *
-     * A logged-in user's repository with the album "Holiday" and two imported assets, and a second repository holding the album
-     * "Elsewhere". The selection is posted as the dialog posts it: a comma-separated `assetIds` field.
+     * A logged-in user's repository with the album "Holiday" and two imported assets, and a second repository with the album
+     * "Elsewhere". The selection is a comma-separated `assetIds` field, as the dialog posts it.
      *
      * Assertions:
      *
-     * Adding to an album writes the memberships and reports in the success detail how many assets the server added, the album's
-     * ID and name, and that no album was created. A name with no album ID creates that album, trimmed, holding the selection, and
-     * says it was created. Every refused submission answers with the dialog's form carrying the error and changes nothing.
+     * Adding to an album writes the memberships, and the success detail reports the count added, the album's ID and name, and
+     * that no album was created. A name with no album ID creates that album, trimmed, with the selection. A refused submission
+     * answers with the form carrying the error and changes nothing.
      *
      * Edge cases:
      *
-     * A repeated add reports 0; a new name taken by an album in another case; neither an album nor a name; a malformed album or
-     * asset ID; an empty selection; the other repository's album.
+     * A repeated add reports 0. Refused: a new name taken in another case, neither an album nor a name, a malformed album or
+     * asset ID, an empty selection, the other repository's album.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -353,8 +352,7 @@ import altitude.core.models.Album
     /**
      * Setup:
      *
-     * A repository, and a client that accepts JSON and has not logged in, so the routes answer 401 instead of redirecting to the
-     * login page.
+     * A repository, and a client that accepts JSON and has not logged in, so it gets a 401 instead of a login redirect.
      *
      * Assertions:
      *
@@ -382,9 +380,8 @@ import altitude.core.models.Album
      *
      * Assertions:
      *
-     * Asked through the first repository, the rename and delete dialogs, the rename and the delete answer 404 for an album ID
-     * that does not exist and for "Eve's album", and no answer carries its name. The album, its name and its membership stay as
-     * they were: no row of either repository changes.
+     * Through the first repository, the rename and delete dialogs and actions answer 404 for an unknown album ID and for "Eve's
+     * album", and no answer carries its name. No row of either repository changes.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId

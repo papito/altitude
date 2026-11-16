@@ -123,7 +123,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
       deleteFile(path, assetId)
       deleteFile(temporaryPathOf(path), assetId)
 
-  /** The temporary file an edited image is staged in before its move to `destination` ([[stageEditedImage]]): hidden, beside it */
+  /** The hidden file beside `destination` that an edited image is staged in */
   private def temporaryPathOf(destination: Path): Path = destination.resolveSibling(s".${destination.getFileName}.tmp")
 
   private def deleteFile(file: Path, assetId: String): Unit =
@@ -200,7 +200,6 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
         case ex: IOException =>
           logger.error(s"Error deleting file for asset id [$id]: $ex")
 
-    // Its edited images, and what a write of one cut off left
     deleteEditedImages(id)
 
   override def purgeFaceById(id: String): Unit =

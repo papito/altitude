@@ -1,11 +1,9 @@
 @import altitude.core.util.Util
 
-@* The header that opens a Describe search's weaker matches in the grid, before the first of them (`WeakerMatches`), on the one
-   page that holds it: "Weaker matches" with their count across every page. It is a group header (`.result-group`), so it sticks
-   as one, and the page window treats it as one; its count is in `.count`, as text and as the number the client counts down
-   (js/search-results/date-groups.js), which finds it by `weaker-matches`. It has no checkbox: the weaker matches are no group to
-   select. On the ungrouped grid the weaker matches are every cell after it; on a grouped grid they are the groups after it,
-   each under its own header. *@
+@* The header before a Describe search's first weaker match, on the one page that holds it, with their count across
+   every page. It is a group header (`.result-group`), so it sticks and the page window treats it as one; the client
+   counts `.count`'s number down. It has no checkbox: the weaker matches are no group to select. On a grouped grid they
+   are the groups after it, each under its own header. *@
 @(count: Int)
 
 <div class="result-group weaker-matches">

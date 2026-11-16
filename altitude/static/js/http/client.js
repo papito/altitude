@@ -1,14 +1,13 @@
 import { goToLogin, isUnauthorized } from "../common/session.js"
 
-// window.axios is provided by /static/js/lib/axios.min.js loaded as a plain script
+// window.axios comes from lib/axios.min.js, loaded as a plain script
 export const http = window.axios.create({
     headers: {
         "Content-Type": "application/json",
     },
 })
 
-// A request refused for want of a login sends the window to the login (`common/session.js`); the
-// caller still sees the failure, which the page leaving makes moot
+// A 401 sends the window to the login; the caller still sees the failure, made moot by the page leaving
 http.interceptors.response.use(
     (response) => response,
     (error) => {
@@ -27,10 +26,7 @@ export function allowHttpStatuses(...statuses) {
         defaultValidateStatus(status) || statuses.includes(status)
 }
 
-/**
- * What a failed request says: the reason a JSON refusal gives (`{"error": ...}`, the shape of every
- * JSON route's refusal, a 403 for a Permission not held among them), else its status
- */
+/** The reason of a JSON refusal (`{"error": ...}`, every JSON route's shape), else the status */
 export function getHttpErrorMessage(error) {
     const status = error?.response?.status
     const statusText = error?.response?.statusText

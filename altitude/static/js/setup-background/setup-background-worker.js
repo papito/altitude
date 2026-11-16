@@ -1,39 +1,31 @@
 /**
- * The setup page's background scene, drawn by this module Worker on the OffscreenCanvas the page side,
- * setup-background.js, hands it: a top-down view of a jet over clouds and farmland that scroll down the screen, the
- * view flying up. The page posts the palette, the size, the tab's visibility and the reduced-motion preference (the
- * protocol is under **Setup background** in views/AGENTS.md); everything else, the ground's blocks of fields with their
- * roads and vehicles, the clouds, the jet, the clock and the frame loop, is here. All sizes are CSS px: the context is scaled by the pixel ratio, capped at 2,
- * so a 3× phone does not triple the fill rate. The scene is random (Math.random, through `between`) and never repeats:
- * what scrolls off the bottom is dropped, and new ground and clouds are generated above the top edge. The fields'
- * textures are setup-background-textures.js's, one per cell at random.
+ * The setup page's background scene, drawn by this module Worker on the transferred canvas: a top-down view of a jet over
+ * clouds and farmland that scroll down the screen. Sizes are CSS px; the context is scaled by the pixel ratio, capped at 2,
+ * so a 3× phone does not triple the fill rate. The scene is random and never repeats: what scrolls off the bottom is
+ * dropped, and new ground and clouds are generated above the top edge.
  */
 import { buildFieldTextures } from "./setup-background-textures.js"
 
 const TAU = 2 * Math.PI
 
-// The pixel ratio the bitmap is scaled by at most
 const MAX_DPR = 2
-// The longest step a frame advances the scene by, in ms: a resumed tab or a stalled frame moves it one short step
+// In ms: a resumed tab or a stalled frame moves the scene one short step
 const MAX_STEP = 100
 
-// The ground: its speed in px/s, the ranges of a band's height and a field's width, the line of field-edge color
-// between cells and between bands (and along each side of a road, its verges), and a road's width
+// The ground's speed in px/s. EDGE is the line of field-edge color between cells and bands and along each side of a road
 const GROUND_SPEED = 50
 const BAND_HEIGHT = { min: 60, max: 220 }
 const CELL_WIDTH = { min: 60, max: 320 }
 const EDGE = 3
 const ROAD = 10
 
-// The roads: a block of ground, from one road across to the next, is this many bands tall, and the roads down a block
-// stand this many fields apart (a span between two is the sum of that many field widths, and each band cuts it into
-// as many cells)
+// A block of ground, from one road across to the next, is BLOCK_BANDS bands tall; the roads down it stand SPAN_FIELDS
+// fields apart
 const BLOCK_BANDS = { min: 2, max: 5 }
 const SPAN_FIELDS = { min: 2, max: 5 }
 
-// The vehicles: their size along and across the road, their speed over the ground in px/s, how many a block's road
-// across starts with, the chance that a road down a block starts with one, and the chance that one turns at a junction
-// it passes. A vehicle's road is ACROSS, the block's road across, or the index of a road down the block
+// Speeds in px/s over the ground. VEHICLE_CHANCE is that of a road down starting with a vehicle, TURN_CHANCE that of
+// turning at a junction passed. A vehicle's road is ACROSS, the block's road across, or the index of a road down it
 const VEHICLE = { length: 5, width: 3 }
 const VEHICLE_SPEED = { min: 15, max: 35 }
 const VEHICLES_ACROSS = { min: 0, max: 2 }
@@ -41,10 +33,9 @@ const VEHICLE_CHANCE = 0.5
 const TURN_CHANCE = 0.35
 const ACROSS = -1
 
-// The clouds: their speed (1.6 × the ground's, so they read as nearer), how many are on screen, the circles of one and
-// the ellipse their centres fall in (its half-axes), the scales a cloud is drawn at (one picked per cloud, applied to
-// the radii and the ellipse), the gradient's alpha at a circle's centre, how far above the top edge a new cloud's top
-// may spawn, and the shadow's offset and alpha
+// The clouds move at 1.6 × the ground's speed, so they read as nearer. CLOUD_SPREAD is the half-axes of the ellipse a
+// cloud's circle centres fall in; each cloud is drawn at one of CLOUD_SCALES. A new cloud's top spawns up to CLOUD_GAP
+// above the top edge
 const CLOUD_SPEED = 80
 const CLOUD_COUNT = { min: 4, max: 8 }
 const CLOUD_CIRCLES = { min: 4, max: 8 }
@@ -55,27 +46,22 @@ const CLOUD_ALPHA = 0.6
 const CLOUD_GAP = 400
 const CLOUD_SHADOW = { x: -40, y: 40, alpha: 0.28 }
 
-// The jet: its length in px and the x of its anchor as a fraction of the width, on a wide viewport and on one narrower
-// than the threshold, where it is smaller. It rises out of the bottom edge, the nearest thing in the scene: the edge
-// cuts it TAIL_CUT of its length behind its centre (nose at -0.5, tail at 0.5), so the nose, the wings and the engines
-// show and the tailplane and the fin stay below it. It holds still: the scenery moves under it. Then the outline's
-// width in px
+// The jet's length in px and its anchor's x as a fraction of the width, smaller under NARROW_VIEWPORT. It holds still,
+// the scenery moving under it. The bottom edge cuts it TAIL_CUT of its length behind its centre, so the nose, the wings
+// and the engines show and the tailplane and the fin stay below
 const JET_WIDE = { length: 420, x: 0.18 }
 const JET_NARROW = { length: 270, x: 0.14 }
 const NARROW_VIEWPORT = 600
 const TAIL_CUT = 0.28
 const OUTLINE = 1
 
-// The lights, in seconds: the navigation lights are on for `on` of every `period`; the strobe flashes twice every
-// `period`, each flash `flash` long, the second starting `gap` after the first. A lamp's radius is a fraction of the
-// jet's length and its glow reaches HALO times that; the lamp itself stays on the wingtip between blinks, dimmed
-// halfway to the outline ink, so the tips keep their shape
+// In seconds: the navigation lights are on for `on` of every `period`; the strobe flashes twice every `period`, the
+// second `gap` after the first. LIGHT_RADIUS is a fraction of the jet's length; the glow reaches HALO times it
 const NAV_LIGHT = { period: 1, on: 0.5 }
 const STROBE = { period: 1.2, flash: 0.06, gap: 0.12 }
 const LIGHT_RADIUS = 0.014
 const HALO = 3
 
-// The canvas, its context and CSS size, and the preferences, as `init` and the messages after it set them
 let canvas = null
 let ctx = null
 let width = 0
@@ -83,18 +69,16 @@ let height = 0
 let dpr = 1
 let reduced = false
 let hidden = false
-// The palette as the page resolved it, and the CSS color strings built from it once
 let palette = null
 let colors = null
 
-// The clock: the pending frame's handle (0 when none), the previous frame's timestamp (null once the clock is reset, so
-// the next frame measures no gap) and the scene's running time in seconds, which the lights read
+// `frame` is the pending frame's handle (0 when none); `last` is null after a clock reset, so the next frame measures no
+// gap; `t` is the scene's time in seconds, which the lights read
 let frame = 0
 let last = null
 let t = 0
 
-// The scene: the ground's blocks, topmost first, each with its bands, its roads and its vehicles; the clouds; the jet
-// with its paths, its length and its anchor; the fields' textures, built once the context exists
+// The ground's blocks, topmost first
 let blocks = []
 let clouds = []
 let jet = null
@@ -110,32 +94,28 @@ function integer(min, max) {
     return Math.floor(between(min, max + 1))
 }
 
-/** Whether a chance of `probability` comes off */
 function chance(probability) {
     return between(0, 1) < probability
 }
 
-/** The CSS color of the palette's `[r, g, b]` channels at `alpha`, in the comma form every browser parses */
+/** In the comma form every browser parses */
 function rgba([r, g, b], alpha) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
-/** The channels halfway between two of the palette's colors: a lamp that is not lit, its color toward the ink */
+/** The channels halfway between two colors: an unlit lamp, its color toward the ink */
 function halfway(a, b) {
     return a.map((channel, i) => Math.round((channel + b[i]) / 2))
 }
 
-/** The shadow ink at `alpha`: what darkens a field's texture or a part of the jet */
 function dark(alpha) {
     return rgba(palette.cloudShadow, alpha)
 }
 
-/** The cloud white at `alpha`: what lightens them */
 function light(alpha) {
     return rgba(palette.cloud, alpha)
 }
 
-/** Runs `paint` with the origin moved to (x, y), the context restored after */
 function placed(x, y, paint) {
     ctx.save()
     ctx.translate(x, y)
@@ -143,10 +123,7 @@ function placed(x, y, paint) {
     ctx.restore()
 }
 
-/**
- * Sizes the bitmap to the CSS size at the pixel ratio, capped, and scales the context to match, so the scene draws in
- * CSS px. Sizing the bitmap clears it and resets the context's state, so the scale and the joins are set after.
- */
+/** Sizing the bitmap clears it and resets the context's state, so the scale and the joins are set after */
 function sizeBitmap() {
     const scale = Math.min(dpr, MAX_DPR)
     canvas.width = Math.round(width * scale)
@@ -156,7 +133,7 @@ function sizeBitmap() {
     ctx.lineJoin = "round"
 }
 
-/** The index of a field color other than `previous` (null for a band's first cell): a pick among the other five */
+/** The index of a field color other than `previous` (null for a band's first cell) */
 function pickField(previous) {
     const count = colors.fields.length
     if (previous === null) {
@@ -168,10 +145,8 @@ function pickField(previous) {
 }
 
 /**
- * A band's cells: every span between a block's roads cut into 2–5 cells, as many as the field widths let it (no
- * narrower than the min, and no more than the max would need), each the min plus a random share of what the span has
- * over that, with a field color unlike its left neighbour's, a texture at random and a seed for what the texture
- * varies by cell. A cell's width includes the edge to its right, so a span's last cell ends an edge short of the road.
+ * Every span between a block's roads cut into 2–5 cells within CELL_WIDTH, each the min plus a random share of the slack.
+ * A cell's width includes the edge to its right, so a span's last cell ends an edge short of the road.
  */
 function cutCells(spans) {
     const cells = []
@@ -207,11 +182,9 @@ function cutCells(spans) {
 }
 
 /**
- * A block of ground: the road across its top, and under it 2–5 bands of cells cut between the roads down the block,
- * which stand 2–5 fields apart and run from the road across to the block's bottom, where the next block's road across
- * is. The spans between the roads are cut for the current width: the first starts up to a field's width left of the
- * edge, so a road can fall anywhere across the viewport, the edge included, and the last runs past the right edge,
- * where no road is kept. Its bands and its vehicles are placed from its top, which the caller sets.
+ * A block of ground: the road across its top, then bands of cells cut between the roads down it, for the current width.
+ * The first span starts up to a field's width left of the edge, so a road can fall anywhere across the viewport; the last
+ * runs past the right edge, where no road is kept. The caller sets its top.
  */
 function makeBlock() {
     const roads = []
@@ -254,15 +227,13 @@ function makeBlock() {
     return block
 }
 
-/** A block's bottom edge, where the block below's road across runs */
 function bottomOf(block) {
     return block.top + block.height
 }
 
 /**
- * Drops the blocks whose top has passed the bottom edge and keeps the ground covered: blocks are added above the
- * topmost until it covers the top edge (from the bottom edge up when the ground is empty: at init, and after the
- * width grows), and below the lowest when a viewport grown taller has uncovered ground under it.
+ * Drops the blocks past the bottom edge and keeps the ground covered: above the topmost (from the bottom edge up when the
+ * ground is empty, at init and after the width grows), and below the lowest when a taller viewport uncovers ground.
  */
 function recycleBlocks() {
     while (blocks.length > 0 && blocks[blocks.length - 1].top >= height) {
@@ -281,10 +252,7 @@ function recycleBlocks() {
     }
 }
 
-/**
- * The field-edge color under everything, then every block in its frame, the origin at its top: its cells, its roads
- * over them and its vehicles over those
- */
+/** The field-edge color under everything, then each block in its own frame */
 function drawGround() {
     ctx.fillStyle = colors.fieldEdge
     ctx.fillRect(0, 0, width, height)
@@ -298,9 +266,8 @@ function drawGround() {
 }
 
 /**
- * A block's cells, each leaving the edge to its right and below it: its color, then its texture painted over it from
- * its corner. A band wholly past the top or the bottom edge is skipped, and so is a cell wholly past a side: a block
- * may stand mostly above the viewport, and its last span runs past the right edge.
+ * Each cell leaves the edge to its right and below it. Bands and cells wholly outside the viewport are skipped: a block
+ * may stand mostly above it, and its last span runs past the right edge.
  */
 function drawCells(block) {
     for (const band of block.bands) {
@@ -330,10 +297,7 @@ function drawCells(block) {
     }
 }
 
-/**
- * A block's roads: the one across its top, the width of the viewport, and the ones down it, from that road to the
- * block's bottom, so each meets the next block's road across
- */
+/** The road across the top, and the roads down to the block's bottom, where each meets the next block's road across */
 function drawRoads(block) {
     ctx.fillStyle = colors.road
     ctx.fillRect(0, 0, width, ROAD)
@@ -342,10 +306,7 @@ function drawRoads(block) {
     }
 }
 
-/**
- * A vehicle on `road` of a block (ACROSS, or the index of a road down it), `at` along it (an x on the road across, an
- * offset from the block's top on a road down), heading either way at a speed of its own over the ground, light or dark
- */
+/** `at` is an x on the road across, or an offset from the block's top on a road down */
 function makeVehicle(road, at) {
     return {
         road,
@@ -356,7 +317,7 @@ function makeVehicle(road, at) {
     }
 }
 
-/** Where a vehicle is in its block's frame, keeping to the right of its road: [x, y] */
+/** Where a vehicle is in its block's frame, keeping to the right of its road */
 function vehiclePlace(block, { road, at, dir }) {
     if (road === ACROSS) {
         // Eastbound on the south side, westbound on the north
@@ -366,7 +327,6 @@ function vehiclePlace(block, { road, at, dir }) {
     return [block.roads[road] + ROAD * (dir === 1 ? 0.25 : 0.75), at]
 }
 
-/** A block's vehicles: each a rectangle the long way along its road, centred where it is */
 function drawVehicles(block) {
     for (const vehicle of block.vehicles) {
         const [x, y] = vehiclePlace(block, vehicle)
@@ -384,14 +344,12 @@ function passes(from, to, centre) {
     return from < centre ? to >= centre : from > centre && to <= centre
 }
 
-/** Turns a vehicle onto the road across at `x`, either way at random */
 function turnAcross(vehicle, x) {
     vehicle.road = ACROSS
     vehicle.at = x
     vehicle.dir = chance(0.5) ? 1 : -1
 }
 
-/** Turns a vehicle down `road`, `at` along it, heading `dir` */
 function turnDown(vehicle, road, at, dir) {
     vehicle.road = road
     vehicle.at = at
@@ -399,10 +357,8 @@ function turnDown(vehicle, road, at, dir) {
 }
 
 /**
- * A vehicle on a road down block `i` after its step: the block it is in, which is the block below once it has turned
- * at the junction at the bottom, or null when it has left the scene, there being no block below, since that junction
- * is then past the bottom edge. At the junction at either end it turns onto the road across there, this block's at
- * the top, the block below's at the bottom.
+ * After a step down block `i`, the block the vehicle is in: at either end it turns onto the road across there, the block
+ * below's at the bottom. Null when it has left the scene (no block below: that junction is past the bottom edge).
  */
 function driveDown(i, vehicle) {
     const block = blocks[i]
@@ -422,10 +378,8 @@ function driveDown(i, vehicle) {
 }
 
 /**
- * A vehicle on block `i`'s road across after its step from `from`: the block it is in, which is the block above once
- * it has turned up one of that block's roads. At a junction it passes it turns, by TURN_CHANCE, down this block's road
- * or up the block above's, which ends at this road; past either side of the viewport it comes round the other, the
- * road running on past both.
+ * After a step across block `i`, the block the vehicle is in: at a junction passed it turns, by TURN_CHANCE, down this
+ * block's road or up the block above's; past either side of the viewport it comes round the other.
  */
 function driveAcross(i, vehicle, from) {
     const block = blocks[i]
@@ -450,10 +404,7 @@ function driveAcross(i, vehicle, from) {
     return block
 }
 
-/**
- * Moves every vehicle on by `dt` seconds along its road, and moves the ones that turned into another block to that
- * block's list once every block has been stepped, so none is stepped twice in a frame
- */
+/** A vehicle that turned into another block joins its list once every block has been stepped, so none steps twice */
 function advanceVehicles(dt) {
     const arrivals = []
     blocks.forEach((block, i) => {
@@ -475,7 +426,7 @@ function advanceVehicles(dt) {
     }
 }
 
-/** A circle's gradient, at the origin: the cloud color, fading from CLOUD_ALPHA at the centre to nothing at the rim */
+/** Fading from CLOUD_ALPHA at the centre to nothing at the rim */
 function cloudGradient(radius) {
     const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius)
     gradient.addColorStop(0, colors.cloudCore)
@@ -484,10 +435,8 @@ function cloudGradient(radius) {
 }
 
 /**
- * A cloud centred at (x, y), at one of the scales: circles whose centres fall within the ellipse, each with its
- * gradient built here, so no frame builds one; `outline` holds the circles as one path, for the shadow; `up` is the
- * reach from the centre to the top edge, which tells when the cloud has left the viewport and how far above it a new
- * one spawns.
+ * Each circle's gradient is built here, so no frame builds one. `outline` is the circles as one path, for the shadow;
+ * `up` is the reach from the centre to the cloud's top.
  */
 function makeCloud(x, y) {
     const circles = []
@@ -511,14 +460,14 @@ function makeCloud(x, y) {
     return { x, y, circles, outline, up }
 }
 
-/** A cloud above the top edge at a random x, its top edge a random gap of up to CLOUD_GAP above the viewport */
+/** A cloud whose top is up to CLOUD_GAP above the viewport */
 function spawnCloud() {
     const cloud = makeCloud(between(0, width), 0)
     cloud.y = -between(0, CLOUD_GAP) - cloud.up
     return cloud
 }
 
-/** Replaces each cloud whose top edge has passed the bottom edge with one spawned above the top */
+/** Replaces each cloud whose top has passed the bottom edge */
 function recycleClouds() {
     for (let i = 0; i < clouds.length; i++) {
         if (clouds[i].y - clouds[i].up >= height) {
@@ -527,7 +476,6 @@ function recycleClouds() {
     }
 }
 
-/** Every cloud's circles, each its gradient's square moved to its place */
 function drawClouds() {
     for (const cloud of clouds) {
         for (const { dx, dy, radius, gradient } of cloud.circles) {
@@ -539,7 +487,6 @@ function drawClouds() {
     }
 }
 
-/** The clouds' shadows on the ground: each cloud's outline in the translucent shadow ink, offset down-left */
 function drawCloudShadows() {
     ctx.fillStyle = colors.cloudShadow
     for (const cloud of clouds) {
@@ -549,7 +496,6 @@ function drawCloudShadows() {
     }
 }
 
-/** A closed polygon through `points` as a Path2D */
 function polygon(points) {
     const path = new Path2D()
     const [[x0, y0], ...rest] = points
@@ -561,14 +507,13 @@ function polygon(points) {
     return path
 }
 
-/** `points` of the right side and their mirror on the left as one path of two polygons */
+/** The right side's `points` and their mirror on the left, as one path */
 function mirrored(points) {
     const path = polygon(points)
     path.addPath(polygon(points.map(([x, y]) => [-x, y])))
     return path
 }
 
-/** A rectangle with corners rounded by `r`, added to `path` */
 function roundedRect(path, x, y, w, h, r) {
     path.moveTo(x + r, y)
     path.arcTo(x + w, y, x + w, y + h, r)
@@ -578,10 +523,7 @@ function roundedRect(path, x, y, w, h, r) {
     path.closePath()
 }
 
-/**
- * The shading that makes a tube from x0 to x1 read as round: dark along both sides, a light along the crown, at
- * `strength` of alpha. Built in the jet's units, like its paths, and painted under the same scale.
- */
+/** Shading that makes a tube from x0 to x1 read as round: dark along both sides, light along the crown */
 function tubeShade(x0, x1, strength) {
     const gradient = ctx.createLinearGradient(x0, 0, x1, 0)
     gradient.addColorStop(0, dark(strength))
@@ -592,7 +534,7 @@ function tubeShade(x0, x1, strength) {
     return gradient
 }
 
-/** A light's halo, at the origin: the solid dot out to its radius, then a glow fading to nothing at HALO times it */
+/** The solid dot out to the lamp's radius, then a glow fading to nothing at HALO times it */
 function haloGradient(color) {
     const reach = LIGHT_RADIUS * HALO
     const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, reach)
@@ -604,16 +546,12 @@ function haloGradient(color) {
 }
 
 /**
- * The jet's paths and shading, nose up, in units of its length: centreline x = 0, nose at y = -0.5, tail at y = 0.5.
- * They are drawn under a scale of the length, so one builder serves both sizes and everything is built once. The
- * proportions are a twin-engine wide-body's seen from above: a tube a tenth of the length wide with an ogive nose and
- * a tapered tail, wings spanning the length tip to tip and swept 32°, their trailing edge kinked inboard, two pods
- * ahead of the leading edge on pylons, a tailplane and a fin. The markings (slats, flaps, fairings, pylons, the pods'
- * intake lip, mouth and exhaust, the cockpit glazing, the windows and the doors) sit on the parts.
+ * The jet's paths and shading in units of its length (nose at y = -0.5, tail at 0.5), drawn under a scale of the length,
+ * so they are built once for both sizes. A twin-engine wide-body from above: a tube a tenth of the length wide, wings
+ * spanning the length and swept 32°, their trailing edge kinked inboard.
  */
 function buildJet() {
-    // The wing, right side: the leading edge runs from the root to the tip, the trailing edge from the root to a
-    // kink and on to the tip, as functions of x
+    // The right wing's edges as functions of x
     const ROOT = 0.05
     const TIP = 0.5
     const KINK = 0.18
@@ -669,9 +607,8 @@ function buildJet() {
         }
     }
 
-    // The pods, their fronts well ahead of the leading edge, each shaded as a tube; the pylons from inside a pod's
-    // tail back over the wing, widening as they go; the intake lip, the mouth behind it and the exhaust as bands
-    // across every pod
+    // The pods well ahead of the leading edge, each shaded as a tube; the pylons from inside a pod's tail back over the
+    // wing; the intake lip, the mouth and the exhaust as bands across every pod
     const POD = { x: 0.115, y: -0.175, w: 0.08, h: 0.095, r: 0.022 }
     const pods = [-1, 1].map((side) => {
         const x = side === 1 ? POD.x : -POD.x - POD.w
@@ -700,8 +637,7 @@ function buildJet() {
         )
     }
 
-    // The fuselage: an ogive nose, a tube, a tail cone; the cockpit glazing across the nose; a door and a line of
-    // windows along each side, the windows giving way at the doors
+    // The fuselage, the cockpit glazing, and along each side the doors and a line of windows that gives way at them
     const fuselage = new Path2D()
     fuselage.moveTo(0, -0.5)
     fuselage.bezierCurveTo(0.035, -0.5, 0.05, -0.46, 0.05, -0.4)
@@ -736,7 +672,7 @@ function buildJet() {
         }
     }
 
-    // The tailplane, and the fin seen from above: a thin strip on the centreline near the tail
+    // The fin seen from above is a thin strip on the centreline
     const tailplane = mirrored([
         [0.03, 0.34],
         [0.17, 0.44],
@@ -776,10 +712,6 @@ function buildJet() {
     }
 }
 
-/**
- * Sizes and anchors the jet for the viewport: smaller on a narrow one, and anchored so the bottom edge cuts it
- * TAIL_CUT of its length behind its centre, whatever the height
- */
 function placeJet() {
     const size = width < NARROW_VIEWPORT ? JET_NARROW : JET_WIDE
     jet.length = size.length
@@ -787,7 +719,7 @@ function placeJet() {
     jet.y = height - TAIL_CUT * size.length
 }
 
-/** Runs `paint` in the jet's frame: its anchor offset by (dx, dy) px, scaled to its length */
+/** Runs `paint` in the jet's frame, (dx, dy) px from its anchor and scaled to its length */
 function inJetFrame(dx, dy, paint) {
     placed(jet.x + dx, jet.y + dy, () => {
         ctx.scale(jet.length, jet.length)
@@ -795,7 +727,6 @@ function inJetFrame(dx, dy, paint) {
     })
 }
 
-/** A part of the jet's skin: its color, its `shade` over it when it has one, and the soft outline */
 function skin(path, shade = null) {
     ctx.fillStyle = colors.jet
     ctx.fill(path)
@@ -806,13 +737,11 @@ function skin(path, shade = null) {
     ctx.stroke(path)
 }
 
-/** A marking on the skin: `path` filled with `color`, no outline */
 function marking(path, color) {
     ctx.fillStyle = color
     ctx.fill(path)
 }
 
-/** A line on the skin: `path` stroked in `color`, the outline's width */
 function line(path, color) {
     ctx.save()
     ctx.strokeStyle = color
@@ -820,11 +749,7 @@ function line(path, color) {
     ctx.restore()
 }
 
-/**
- * The jet's skin, part over part so each covers what is under it: the wings with their slats, flaps, spar line and
- * fairings, the pylons, the pods with their bands kept inside their rounded corners, the tailplane, the fuselage
- * over all of them with its glazing, windows and doors, the fin, then the lights
- */
+/** Part over part, so each covers what is under it; the pods' bands are clipped to their rounded corners */
 function drawJet() {
     inJetFrame(0, 0, () => {
         // The frame is scaled to the length, so the outline is divided by it to stay about a pixel
@@ -856,7 +781,6 @@ function drawJet() {
     })
 }
 
-/** Which lights are lit at the scene's time */
 function litLights() {
     const nav = t % NAV_LIGHT.period < NAV_LIGHT.on
     const phase = t % STROBE.period
@@ -864,11 +788,7 @@ function litLights() {
     return { nav, strobe: flash(0) || flash(STROBE.gap) }
 }
 
-/**
- * The wingtip lamps, in the jet's frame: each tip carries its lamp at all times, a dimmed dot of the navigation
- * light's color with the skin's outline, so the tips keep their shape between blinks; a lit lamp glows over it, red
- * to port and green to starboard, and the strobe's white over both
- */
+/** Each tip keeps a dimmed lamp between blinks, so the tips keep their shape; a lit lamp glows over it */
 function drawLights() {
     const { nav, strobe } = litLights()
     drawLamp(jet.left, colors.lampLeft)
@@ -883,7 +803,6 @@ function drawLights() {
     }
 }
 
-/** A lamp's housing at `[x, y]` of the jet's frame: a dot of `color`, outlined as the skin is */
 function drawLamp([x, y], color) {
     ctx.fillStyle = color
     ctx.beginPath()
@@ -892,7 +811,6 @@ function drawLamp([x, y], color) {
     ctx.stroke()
 }
 
-/** A lit lamp's glow at `[x, y]` of the jet's frame: its halo's square moved there */
 function drawGlow([x, y], halo) {
     const reach = LIGHT_RADIUS * HALO
     placed(x, y, () => {
@@ -901,7 +819,7 @@ function drawGlow([x, y], halo) {
     })
 }
 
-/** The scene from scratch for the current size: the ground, the clouds spread over the viewport, the jet */
+/** The scene from scratch for the current size, the clouds spread over the viewport */
 function generateScene() {
     blocks = []
     recycleBlocks()
@@ -914,7 +832,6 @@ function generateScene() {
     placeJet()
 }
 
-/** Moves the scene on by `dt` seconds, replaces what has scrolled off the bottom and drives the vehicles */
 function advance(dt) {
     t += dt
     for (const block of blocks) {
@@ -928,7 +845,6 @@ function advance(dt) {
     advanceVehicles(dt)
 }
 
-/** One frame, in the order the layers stack: field edges, cells, roads, vehicles, cloud shadows, clouds, jet, lights */
 function draw() {
     drawGround()
     drawCloudShadows()
@@ -936,15 +852,14 @@ function draw() {
     drawJet()
 }
 
-/** Whether the scene moves: a reduced-motion user gets a still, a hidden tab gets no frames */
+/** A reduced-motion user gets a still, a hidden tab no frames */
 function animating() {
     return !reduced && !hidden
 }
 
 /**
- * A frame: the scene advances by the time since the last one, clamped, or by nothing right after a clock reset, is
- * drawn, and the next frame is requested. The callback only runs while the loop is on (a stop cancels the pending
- * frame, and no message runs while a frame does), so it always continues the loop.
+ * Runs only while the loop is on (a stop cancels the pending frame, and no message runs while a frame does), so it
+ * always continues the loop.
  */
 function onFrame(timestamp) {
     const dt = last === null ? 0 : Math.min(timestamp - last, MAX_STEP)
@@ -954,7 +869,7 @@ function onFrame(timestamp) {
     frame = requestAnimationFrame(onFrame)
 }
 
-/** Starts the loop with a fresh clock, so its first frame measures no gap, unless a frame is already pending */
+/** A fresh clock, so the first frame measures no gap; nothing when a frame is already pending */
 function startLoop() {
     if (frame !== 0) {
         return
@@ -963,7 +878,7 @@ function startLoop() {
     frame = requestAnimationFrame(onFrame)
 }
 
-/** Cancels the pending frame, if any; the frame drawn last stays as the still */
+/** The frame drawn last stays as the still */
 function stopLoop() {
     if (frame !== 0) {
         cancelAnimationFrame(frame)
@@ -971,7 +886,6 @@ function stopLoop() {
     }
 }
 
-/** Runs the loop while the scene animates and stops it otherwise */
 function syncLoop() {
     if (animating()) {
         startLoop()
@@ -981,9 +895,8 @@ function syncLoop() {
 }
 
 /**
- * Takes the canvas and the palette, builds the scene and draws its first frame at once, without waiting for a frame
- * callback: the page fades the canvas in on `ready`, and a hidden document gets no frame callbacks. The loop then
- * runs unless motion is reduced or the tab is hidden.
+ * Draws the first frame at once rather than in a frame callback: the page fades the canvas in on `ready`, and a hidden
+ * document gets no frame callbacks.
  */
 function onInit(message) {
     canvas = message.canvas
@@ -998,7 +911,6 @@ function onInit(message) {
     colors = {
         fieldEdge: rgba(palette.fieldEdge, 1),
         road: rgba(palette.road, 1),
-        // The vehicles: light ones in the cloud white, dark ones in the shadow ink, each a little translucent
         vehicleLight: light(0.9),
         vehicleDark: dark(0.7),
         fields: palette.fields.map((field) => rgba(field, 1)),
@@ -1009,8 +921,6 @@ function onInit(message) {
         jetOutline: rgba(palette.jetOutline, 1),
         lampLeft: rgba(halfway(palette.lightLeft, palette.jetOutline), 1),
         lampRight: rgba(halfway(palette.lightRight, palette.jetOutline), 1),
-        // The jet's markings: its outline softened, the glazing and the doors in the outline ink, the rest in the
-        // shadow and cloud inks over the skin
         jetOutlineSoft: rgba(palette.jetOutline, 0.6),
         glass: rgba(palette.jetOutline, 0.85),
         doors: rgba(palette.jetOutline, 0.5),
@@ -1031,12 +941,9 @@ function onInit(message) {
 }
 
 /**
- * A new size or pixel ratio. The observer's first notification repeats init's size: a no-op. A new ratio alone
- * resizes the bitmap; a new size also refits the scene: the ground is regenerated when the width grows, as its roads
- * and cells are cut for the width, and kept otherwise, with blocks dropped or added as the height asks; a cloud now past an edge
- * scrolls off and is replaced as usual; the jet is anchored again. A frame is drawn at once in every case: sizing the
- * bitmap clears it, and the blank bitmap would reach the page at the end of this task, a flash before the next frame
- * fills it, while a still (reduced or hidden) would otherwise stay blank or stretched.
+ * The observer's first notification repeats init's size: a no-op. The ground is regenerated when the width grows, as its
+ * roads and cells are cut for the width. A frame is drawn at once: sizing the bitmap clears it, which would flash blank
+ * before the next frame, or stay blank in a still.
  */
 function onResize(message) {
     const sameSize = message.width === width && message.height === height
@@ -1059,19 +966,17 @@ function onResize(message) {
     draw()
 }
 
-/** The tab hidden or shown: hidden, it gets no frames; shown, the loop resumes with a fresh clock, so nothing jumps */
+/** Shown again, the loop resumes with a fresh clock, so nothing jumps */
 function onVisible(message) {
     hidden = message.hidden
     syncLoop()
 }
 
-/** Reduced motion switched on or off: on, the frame drawn last stays as the still; off, the loop resumes */
 function onMotion(message) {
     reduced = message.reduced
     syncLoop()
 }
 
-// Every message is dispatched on its `type`
 const handlers = {
     init: onInit,
     resize: onResize,

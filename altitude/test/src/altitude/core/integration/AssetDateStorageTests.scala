@@ -53,8 +53,8 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
     /**
      * Setup:
      *
-     * With the JVM in America/New_York (the default zone on the development machine), an asset with a capture time of 2026:03:08
-     * 02:30:00, which does not exist there: the clocks skip from 02:00 to 03:00 that night.
+     * With the JVM in America/New_York, an asset with a capture time of 2026:03:08 02:30:00, which does not exist there: the
+     * clocks skip from 02:00 to 03:00 that night.
      *
      * Assertions:
      *
@@ -146,7 +146,6 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
     reread.head.longitude shouldBe Some(151.2152)
     reread.last.latitude shouldBe None
     reread.last.longitude shouldBe None
-    // The hand-written SQL paths build the model from a row map and must read the same columns
     val locked =
       testApp.txManager.withTransaction(testApp.DAO.asset.getAssetsToRecycle(ids.toSet)).sortBy(a => ids.indexOf(a.persistedId))
     locked.map(_.latitude) shouldBe List(Some(-33.857), None)
@@ -255,9 +254,8 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
      *
      * Assertions:
      *
-     * The import time read back through the model has no finer fraction than a microsecond on either engine (PostgreSQL keeps
-     * microseconds, and SQLite's text is written to the same precision, so the two engines store one value for one reading), and
-     * on SQLite the stored text spells at most six fractional digits.
+     * The import time read back has no fraction finer than a microsecond on either engine, so both store one value for one
+     * reading, and SQLite's stored text has at most six fractional digits.
      */
     val asset = addAssetWithCaptureTime(None)
     asset.createdAt.get.getNano % 1000 shouldBe 0

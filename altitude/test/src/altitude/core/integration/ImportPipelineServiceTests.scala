@@ -105,8 +105,8 @@ import altitude.core.util.Query
       testApp.service.staging.stage("not an image".getBytes))
 
   /**
-   * A queue of the test's own over a flow that fails its stream on the element "bad" (its stage stops on a failure, rather than
-   * resuming as the queue's stages do) and records every other element it passes
+   * A queue over a flow that fails its stream on the element "bad" (its stage stops, where the import's stages resume) and
+   * records every other element
    */
   private def failingQueue(restartOnFailure: Boolean, passed: ConcurrentLinkedQueue[String]): QueuedPipeline[String] =
     val flow = Flow[String]
@@ -168,11 +168,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Five assets over staged random images, streamed through the import pipeline into the void sink.
+     * Five staged random images run through the import pipeline into the void sink.
      *
      * Assertions:
      *
-     * The pipeline runs to completion and the sink hands back no results.
+     * The run completes with no results.
      */
     val batchSize = 5
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
@@ -191,11 +191,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Ten assets over staged random images, streamed through the import pipeline into a sink that collects every result.
+     * Ten staged random images run through the import pipeline.
      *
      * Assertions:
      *
-     * Every asset comes out of the pipeline imported, and each is marked as pipeline-processed in the repository.
+     * Every one comes out imported and pipeline-processed.
      */
     val batchSize = 10
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
@@ -223,17 +223,15 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Six assets over staged random images offered to the long-running import queue all at once, every offer made before any is
-     * awaited.
+     * Six staged random images offered to the import queue, every offer made before any is awaited.
      *
      * Assertions:
      *
-     * All six end up pipeline-processed in the repository, polled for up to a minute.
+     * All six end up pipeline-processed.
      */
     val batchSize = 6
     val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
 
-    // Every offer is made before any is awaited
     val offers =
       (1 to batchSize).map(_ => testApp.service.importPipeline.addToQueue((testContext.makeAssetWithData(), pipelineContext)))
     Await.result(Future.sequence(offers)(implicitly, scala.concurrent.ExecutionContext.global), 30.seconds)
@@ -248,12 +246,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An import queue of the test's own (a new `ImportPipelineService`), six assets over staged random images offered to it,
-     * every offer accepted, then the queue shut down.
+     * A new `ImportPipelineService` with six staged random images accepted into its queue, then shut down.
      *
      * Assertions:
      *
-     * By the time shutdown returns, without any further waiting, all six are pipeline-processed.
+     * By the time shutdown returns, all six are pipeline-processed.
      */
     val batchSize = 6
     val pipeline = ImportPipelineService(testApp)
@@ -271,7 +268,7 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An import queue of the test's own, shut down, then an asset over a staged random image offered to it.
+     * A new import queue, shut down, then offered a staged random image.
      *
      * Assertions:
      *
@@ -292,9 +289,8 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A queue of the test's own, restart on, over a flow that fails its stream on one element. That element offered, then a good
-     * one, offered again until it comes out of the flow (an offer made during the restart's backoff is refused, and one the
-     * failing stream took is lost).
+     * A queue with restart on, offered an element that fails its stream, then a good one, offered again until it comes out (an
+     * offer during the restart's backoff is refused, and one the failing stream took is lost).
      *
      * Assertions:
      *
@@ -316,8 +312,7 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A queue of the test's own, restart off, over a flow that fails its stream on one element. That element offered, then a good
-     * one, offered again until an offer is refused (one the failing stream took is lost).
+     * A queue with restart off, offered an element that fails its stream, then a good one, offered again until refused.
      *
      * Assertions:
      *
@@ -339,13 +334,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A queue of the test's own, restart on and a 30-second drain limit, over a flow that fails its stream on one element. That
-     * element offered, then good ones until one is refused, which means the stream is waiting out its backoff; then the queue
-     * shut down.
+     * A queue with restart on and a 30-second drain limit, offered an element that fails its stream, then good ones until one is
+     * refused, so the stream is waiting out its backoff; then shut down.
      *
      * Assertions:
      *
-     * Shutdown returns well within the drain limit, rather than waiting for a restarted stream to drain.
+     * Shutdown returns well within the drain limit.
      */
     val pipeline = failingQueue(restartOnFailure = true, ConcurrentLinkedQueue[String]())
 
@@ -364,18 +358,17 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A queue of the test's own with a buffer of two, over a flow that holds every element until the test opens a gate. A hundred
-     * elements offered at once, far more than the buffer and the stream's stages hold, every offer made before the gate opens.
+     * A queue with a buffer of two over a flow that holds every element until a gate opens. A hundred elements offered before the
+     * gate opens, far more than the queue holds.
      *
      * Assertions:
      *
-     * While the gate is shut no offer has failed, and the offers the queue has no room for are still waiting. Once it opens,
-     * every offer succeeds and every element comes out of the flow, in the order offered.
+     * While the gate is shut no offer has failed and some are still waiting. Once it opens, every offer succeeds and every
+     * element comes out in the order offered.
      *
      * Edge cases:
      *
-     * The queue shut down afterwards refuses the next offer with `QueueRefusedException`: waiting a turn does not hide a queue
-     * that takes nothing more.
+     * Once shut down, the queue refuses the next offer with `QueueRefusedException` rather than leaving it waiting.
      */
     val gate = Promise[Unit]()
     val passed = ConcurrentLinkedQueue[String]()
@@ -418,8 +411,8 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A stage built with `PipelineUtils.stage` whose work records the thread it runs on and the repository in the request
-     * context, run over one asset of a second repository while the test's context is its own repository.
+     * A `PipelineUtils.stage` recording its thread and context repository, run over an asset of a second repository while the
+     * test's context is the first.
      *
      * Assertions:
      *
@@ -451,12 +444,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Bytes no image reader takes, staged under a JPEG asset, followed by an asset over a staged random image, in one stream.
+     * Bytes no image reader takes, staged as a JPEG, followed by a staged random image, in one stream.
      *
      * Assertions:
      *
-     * The first comes out dropped with `ImageException` from the metadata stage and its staged file is deleted; the photo behind
-     * it is imported.
+     * The first is dropped with `ImageException` and its staged file deleted; the photo behind it is imported.
      */
     val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val undecodable = notAnImage()
@@ -482,13 +474,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Bytes no image reader takes, staged under a JPEG asset, offered to the long-running import queue, then an asset over a
-     * staged random image.
+     * Bytes no image reader takes, staged as a JPEG, offered to the import queue, then a staged random image.
      *
      * Assertions:
      *
-     * The photo ends up pipeline-processed, polled for up to a minute, so the queue outlived the undecodable image, whose staged
-     * file is deleted.
+     * The queue outlives the undecodable image, whose staged file is deleted, and imports the photo.
      */
     val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val undecodable = notAnImage()
@@ -507,13 +497,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A second repository whose `files` directory is a plain file, so storing any of its assets fails. An asset over a staged
-     * random image for it, followed in the same stream by one for the test's own repository.
+     * A second repository whose file store is broken, and one stream with an image for it and one for the test's own repository.
      *
      * Assertions:
      *
-     * The first comes out dropped with `StorageException` from the file store stage and its staged file is deleted; the second is
-     * imported.
+     * The first is dropped with `StorageException` and its staged file deleted; the second is imported.
      */
     val repository = testContext.repository
     val brokenRepository = testContext.persistRepository()
@@ -547,17 +535,15 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Ten assets over staged random images, the first one sent twice in a row, for eleven elements.
+     * Ten staged random images, the first sent twice in a row.
      *
      * Assertions:
      *
-     * The pipeline completes with a result for every element: ten imports, each pipeline-processed in the repository, and the
-     * repeated element rejected as a duplicate.
+     * The run completes with ten imports and the repeated element rejected as a duplicate.
      */
     val batchSize = 10
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
 
-    // now it's 11, but the second one is a duplicate
     val dataAssetsWithDuplicate = dataAssets.head +: dataAssets
 
     val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
@@ -581,7 +567,6 @@ import altitude.core.util.Query
     }
     invalidAssetsCount shouldBe 1
 
-    // the second element is a duplicate
     pipelineRes(1) match {
       case (Right(invalid), _) => invalid.cause.get shouldBe a[DuplicateException]
       case _ => fail("Expected the second element to be rejected as a duplicate")
@@ -593,11 +578,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * One asset over a staged random image, labelled with a made-up media type ("bad/type").
+     * A staged random image labelled with a made-up media type.
      *
      * Assertions:
      *
-     * The pipeline completes with the asset rejected as an unsupported media type, and its staged file deleted.
+     * The run completes with the asset rejected as an unsupported media type and its staged file deleted.
      */
     val badMediaType = AssetType("bad", "type", "mime")
     val assetWithBadMediaType = testContext.makeAsset().copy(assetType = badMediaType)
@@ -617,7 +602,6 @@ import altitude.core.util.Query
       case _ => fail("Expected the first element to be rejected as an unsupported media type")
     }
 
-    // A dropped asset leaves no staged file behind
     Files.exists(assetWithData.path) shouldBe false
   }
 
@@ -626,13 +610,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A clip whose media data is zeroed (TestVideos.undecodable), so it probes as a two-second video but no frame of it decodes,
-     * followed by an asset over a staged random image.
+     * A clip that probes as a two-second video but whose frames do not decode, followed by a staged random image.
      *
      * Assertions:
      *
-     * The pipeline completes with the clip dropped with `VideoException` from the preview stage; its staged file, its row and its
-     * stored file are deleted, and it has no preview. The photo behind it is imported.
+     * The clip is dropped with `VideoException`, leaving no staged file, row, stored file or preview. The photo is imported.
      */
     val clip =
       testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.undecodable.toFile))
@@ -647,7 +629,6 @@ import altitude.core.util.Query
     val pipelineRes = Await.result(pipelineResFuture, Duration.Inf)
     pipelineRes should have size 2
 
-    // The Preview has no frame to take, which drops the clip rather than failing the pipeline
     val droppedClip = pipelineRes.head match {
       case (Right(invalid), _) =>
         invalid.cause.get shouldBe a[VideoException]
@@ -672,12 +653,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A JPEG geotagged at 33.857 N, 151.2152 E (images/exif/gps-north-east.jpg), imported through the pipeline.
+     * A JPEG geotagged at 33.857 N, 151.2152 E, imported.
      *
      * Assertions:
      *
-     * The asset stores the coordinates as decimal degrees, and its extracted metadata keeps the raw GPS directory, ref tags
-     * included.
+     * The asset stores the coordinates as decimal degrees, and its extracted metadata keeps the raw GPS directory.
      */
     val dataAsset =
       testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.getImportAsset("images/exif/gps-north-east.jpg"))
@@ -701,13 +681,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * The repository's `files` directory replaced by a plain file, then `people/affleck.jpg` imported, so the import stores the
-     * face it recognizes, which starts a Person, before the file store stage fails.
+     * A broken file store, then a portrait imported, whose Face starts a Person before the file store stage fails.
      *
      * Assertions:
      *
-     * The asset is dropped with `StorageException`. Afterwards the repository has no asset, face, person or Search document row
-     * and no face file, and the staged file is gone.
+     * The asset is dropped with `StorageException`, leaving no asset, face, person or search document row, no face file and no
+     * staged file.
      */
     breakFileStore(testContext.repository)
     val photo = staged("people/affleck.jpg")
@@ -727,14 +706,13 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * `people/meme-ben2.png` imported, which starts a Person with one Face, and the Person hidden (hidden people stay matchable).
-     * Then the repository's `files` directory replaced by a plain file, and `people/meme-ben3.png`, the same person, imported, so
-     * the import adds a second Face to the Person before the file store stage fails.
+     * An import that starts a Person, who is then hidden (hidden people stay matchable). Then a broken file store and a second
+     * photo of the same person, which adds a Face before the file store stage fails.
      *
      * Assertions:
      *
-     * The second import is dropped with `StorageException`. The Person stays with one Face, the first import's, which is still
-     * its cover, and that Face's files are the only face files left.
+     * The second import is dropped with `StorageException`. The Person keeps one Face, still their cover, whose files are the
+     * only face files left.
      */
     val first = imported(runPipeline(staged("people/meme-ben2.png")))
     val (face, person) = testApp.service.person.getAssetFacesWithPeople(first.persistedId).head
@@ -756,12 +734,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * One random image staged twice from the same bytes, so both copies have its checksum. The first copy imported while the
-     * repository's `files` directory is a plain file; the directory put back; the second copy imported.
+     * One image staged twice from the same bytes: the first copy imported while the file store is broken, the second after it is
+     * restored.
      *
      * Assertions:
      *
-     * The first copy is dropped with `StorageException`; the second is imported rather than rejected as a duplicate of it.
+     * The first copy is dropped with `StorageException`; the second is imported, not rejected as a duplicate.
      */
     val bytes = IntegrationTestUtil.generateRandomImagBytesBgr(dimensions = 150)
     val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
@@ -781,13 +759,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * `people/affleck.jpg` imported, which stores its file, its preview and a Face of a new Person; then the same file imported
-     * again.
+     * A portrait imported, with its file, preview and a Face of a new Person; then the same file imported again.
      *
      * Assertions:
      *
-     * The second import is dropped with `DuplicateException`. The first asset keeps its row, its file, its preview, its Face and
-     * the Face's files, and its Person keeps one Face.
+     * The second import is dropped with `DuplicateException`, and the first asset keeps everything, its Person one Face.
      */
     val original = imported(runPipeline(staged("people/affleck.jpg")))
     val (face, person) = testApp.service.person.getAssetFacesWithPeople(original.persistedId).head
@@ -808,13 +784,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two more distinct photos of the same face than the import dispatcher has threads (`people/affleck.jpg` scaled down, each on
-     * a canvas one pixel wider than the last), imported in one stream, so their faces are detected at once.
+     * Two more distinct photos of one face than the import dispatcher has threads, imported in one stream, so their faces are
+     * detected at once.
      *
      * Assertions:
      *
-     * Every photo is imported, and the repository has one Person, with a Face from each: the faces were matched one at a time, in
-     * upload order, the first starting the Person and every other joining it.
+     * Every photo is imported and the repository has one Person with a Face from each: the faces were matched one at a time.
      */
     val count = testApp.importParallelism + 2
     val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
@@ -841,11 +816,11 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A JPEG and a PNG (`images/1.jpg`, `images/3.png`) imported.
+     * A JPEG and a PNG imported.
      *
      * Assertions:
      *
-     * Each is stored with the width and height of the image as `ImageIO` decodes it.
+     * Each is stored with the width and height `ImageIO` decodes.
      */
     List("images/1.jpg", "images/3.png").foreach {
       relPath =>
@@ -866,7 +841,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * It is dropped with `ImageException`, the cause the user is shown as "Cannot decode image".
+     * It is dropped with `ImageException`.
      */
     val corrupt = pngWithUndecodableData(IntegrationTestUtil.generateRandomImagBytesBgr(dimensions = 150))
     val upload = testApp.service.library.stagedFileToAsset("corrupt.png", testApp.service.staging.stage(corrupt))
@@ -892,12 +867,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A 64-pixel still GIF (`images/2.gif`), a format the bundled OpenCV has no codec for, imported.
+     * A 64-pixel still GIF, a format the bundled OpenCV has no codec for, imported.
      *
      * Assertions:
      *
-     * It is imported at 64 by 64 with no duration, and its preview decodes as an image filling the square preview box; being
-     * square, nothing of it is transparent, so the WebP carries no alpha plane: three channels.
+     * It is imported at 64 by 64 with no duration, and its preview fills the square box with three channels: a square image
+     * leaves nothing transparent, so the WebP has no alpha plane.
      */
     val asset = testApp.service.asset.getById(imported(runPipeline(staged("images/2.gif"))).persistedId)
     (asset.width, asset.height) shouldBe (64, 64)
@@ -913,15 +888,14 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A frame of `people/affleck.jpg` saved as a still GIF and imported, which starts a Person. Then an animated GIF of three
-     * frames of the same face, shown for 0, 20 and 30 hundredths of a second, imported.
+     * A portrait saved as a still GIF and imported, which starts a Person. Then an animated GIF of three frames of the same face,
+     * delayed 0, 20 and 30 hundredths of a second, imported.
      *
      * Assertions:
      *
-     * The still GIF has a Face, so the frames hold a face that is found and recognized, and, decoded through the ImageIO
-     * fallback, it is measured: it has an Image quality and a perceptual hash. The animated GIF is imported with a duration of
-     * 600 ms (a frame without a delay plays for 100 ms, as browsers show it) and a preview, and has no Face: its frames are not
-     * searched, and the Person keeps one Face. Nor is it measured: no Image quality, no hash.
+     * The still GIF has a Face, an Image quality and a perceptual hash. The animated GIF has a duration of 600 ms (a frame
+     * without a delay plays for 100 ms, as browsers show it) and a preview, but no Face, Image quality or hash; the Person keeps
+     * one Face.
      */
     val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     def gif(name: String, frames: Seq[BufferedImage], delaysCs: Seq[Int]): (AssetWithData, PipelineContext) =
@@ -955,8 +929,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Its preview, which fills the 200-pixel box, is opaque red on the left, within the lossy encoding's tolerance, and
-     * transparent on the right, exactly.
+     * Its 200-pixel preview is opaque red on the left, within lossy tolerance, and exactly transparent on the right.
      */
     val palette = new IndexColorModel(8, 2, Array[Byte](0xff.toByte, 0), Array[Byte](0, 0), Array[Byte](0, 0), 1)
     val image = new BufferedImage(100, 100, BufferedImage.TYPE_BYTE_INDEXED, palette)
@@ -977,7 +950,7 @@ import altitude.core.util.Query
     preview.get(100, 150)(3) shouldBe 0.0
   }
 
-  /** The element as a file of the Import: a pending Import file by its file name, which the element carries as its origin */
+  /** The element as a pending file of the Import, which it carries as its origin */
   private def asFileOf(anImport: Import, dataAsset: AssetWithData): (AssetWithData, ImportFile) =
     val file = testApp.service.imports.addFile(anImport.persistedId, dataAsset.asset.fileName, dataAsset.asset.sizeBytes)
     (dataAsset.copy(origin = Some(ImportOrigin(file.persistedId))), file)
@@ -995,16 +968,14 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An asset already in the Library, in Triage. An upload's Import of four files, marked complete as its last file is sent, run
-     * through the import pipeline in one stream, each carrying its Import file as its origin: a new image, a second copy of the
-     * asset already there, a file of a made-up media type, and bytes no image reader takes under a JPEG name.
+     * An asset in Triage. An upload's Import, closed as its last file is sent, of four files run through the import pipeline: a
+     * new image, a copy of the asset in Triage, a made-up media type, and undecodable bytes under a JPEG name.
      *
      * Assertions:
      *
-     * The pipeline imports the first and drops the other three, and each Import file is settled accordingly: the first imported,
-     * pointing at the asset it became, which is complete in the Library; the second a duplicate, pointing at the asset already
-     * there; the third unsupported and the fourth failed, each with its reason. The Import counts one file of each outcome and
-     * none pending, and is closed. The Library holds two completed assets: the one it had and the one imported.
+     * The first is imported and the rest dropped, and each Import file is settled to match: imported and pointing at its asset, a
+     * duplicate pointing at the asset in Triage, unsupported, failed, each with its reason. The Import counts one of each
+     * outcome, none pending, and is closed. The Library holds two completed assets.
      */
     val existing = testContext.persistAsset(isTriaged = true)
     val context = PipelineContext(testContext.repository, Some(testContext.user))
@@ -1047,14 +1018,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Three assets already in the Library: one in Triage, one in the folder 2024 under the folder Travel, and one in the root
-     * folder. An Import of a second copy of each, run through the import pipeline.
+     * Assets in Triage, in Travel/2024 and in the root folder, and an Import of a copy of each.
      *
      * Assertions:
      *
-     * Every copy is dropped as a duplicate, and its Import file is a duplicate pointing at the asset already there, with where
-     * that asset is as its reason: "Triage", the folder path "Travel/2024", and "Top level" for the root folder. The Import
-     * counts three duplicates.
+     * Each copy's Import file is a duplicate pointing at the original, with where it is as the reason: "Triage", "Travel/2024"
+     * and "Top level". The Import counts three duplicates.
      */
     val travel = testApp.service.folder.add("Travel")
     val year = testApp.service.folder.add("2024", travel.id)
@@ -1082,12 +1051,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A repository whose file store cannot store a file, and an Import of one image run through the import pipeline there.
+     * A broken file store, and an Import of one image.
      *
      * Assertions:
      *
-     * The file is dropped at the file store with a storage error, its Import file is failed with that as its reason and points at
-     * no asset, and the Import counts it failed. Nothing of the asset is left in the repository.
+     * The file is dropped with a storage error, its Import file is failed with that reason and no asset, the Import counts it
+     * failed, and nothing of the asset is left.
      */
     val repository = testContext.repository
     val opened = testApp.service.imports.open(ImportSource.Upload)
@@ -1114,8 +1083,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The completion, which settles the Import file in the transaction that completes the asset, fails as a whole: the file is
-     * dropped with the Import file not found, and no asset, complete or not, is left in the repository.
+     * The completion, which settles the Import file in the asset's completing transaction, fails as a whole: the file is dropped
+     * as not found and no asset is left.
      */
     val orphan = testContext.makeAssetWithData().copy(origin = Some(ImportOrigin("no-such-import-file")))
 
@@ -1125,10 +1094,7 @@ import altitude.core.util.Query
     rowCount("asset") shouldBe 0
   }
 
-  /**
-   * A staged random image as an upload stages it (triaged, in no folder), a file of the Import under `relPath`: its origin
-   * carries the folder names of the path
-   */
+  /** A staged random image as an upload stages it, a file of the Import at `relPath`, its origin carrying the path's folders */
   private def asFileAt(anImport: Import, relPath: String, checksum: Option[String] = None): (AssetWithData, ImportFile) = {
     val names = relPath.split("/").toList
     val asset = testContext.makeAsset(filename = names.last, isTriaged = true)
@@ -1155,23 +1121,19 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A folder Clients holding the live folder Ceremony, with an asset in it, and the folder Party, recycled by a delete. An
-     * upload's Import with Clients as its destination, of seven files run through the import pipeline, each carrying the folders
-     * of its path: an image at the top, one in Ceremony, one in Party, one in Portraits/Group, a second copy of the image in
-     * Ceremony under Copies, a second copy of the asset already in Ceremony under Old, and a file of a made-up media type under
-     * Docs.
+     * Clients holding Ceremony, with an asset in it, and Party, deleted. An Import into Clients of seven files: images at the
+     * top, in Ceremony, in Party and in Portraits/Group; under Copies a copy of the Ceremony image, under Old a copy of the asset
+     * in Ceremony, and under Docs a made-up media type.
      *
      * Assertions:
      *
-     * The four images are imported, sorted (not triaged, in no Sequence) and each in the folder its path names under Clients: the
-     * top one in Clients itself, one in the Ceremony that was there, one in Party, restored, and one in Portraits/Group, both
-     * created. The Library counts them as sorted and none in Triage.
+     * The four images are imported sorted (not triaged, in no Sequence), each in its path's folder under Clients: Ceremony
+     * reused, Party restored, Portraits/Group created. The Library counts them sorted.
      *
      * Edge cases:
      *
-     * The two copies are duplicates and the made-up type unsupported, and no folder is created for any of them: Copies, Old and
-     * Docs do not exist. Each duplicate names where the asset it matches is: the copy of this Import's own first file the folder
-     * that file landed in, the copy of the asset already there its folder.
+     * The copies are duplicates and the made-up type unsupported, and none of their folders is created. Each duplicate names
+     * where its original is, this Import's own file included.
      */
     val folders = testApp.service.folder
     val clients = folders.add("Clients")
@@ -1223,10 +1185,7 @@ import altitude.core.util.Query
     closed.closedAt should not be empty
   }
 
-  /**
-   * Burst frame `n` staged as an upload stages it, with the camera's model and clock seeded as `BurstFrames.importFrame` seeds
-   * them
-   */
+  /** Burst frame `n` staged as an upload stages it, its camera model and time seeded as `BurstFrames.importFrame` seeds them */
   private def stagedFrame(n: Int): AssetWithData = {
     val staged = testApp.service.library.stagedFileToAsset(s"burst-$n.jpg", testApp.service.staging.stage(BurstFrames.frame(n)))
     val metadata = ExtractedMetadata()
@@ -1240,19 +1199,16 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A folder Sorted. An upload's Import with Sorted as its destination, of two frames of one burst under their bare names, run
-     * through the import pipeline; then an Import with no destination of the next two frames of the same burst.
+     * An Import into the folder Sorted of two frames of one burst; then an Import with no destination of the next two frames.
      *
      * Assertions:
      *
-     * The first two frames are imported into Sorted itself, not triaged and in no Sequence, and the Library counts two sorted
-     * assets with their bytes and none in Triage. No folder is created.
+     * The first two land in Sorted itself, not triaged and in no Sequence, and count as sorted. No folder is created.
      *
      * Edge cases:
      *
-     * The next two frames, uploaded to Triage, are triaged, in no folder, and share a Sequence, which the first two, being
-     * sorted, do not join: the frames are a burst, and it is the destination that kept the first two out of a Sequence. The
-     * Library then counts two sorted and two in Triage.
+     * The next two, uploaded to Triage, share a Sequence that the first two do not join: it is the destination that kept them
+     * out. The Library then counts two sorted and two in Triage.
      */
     val sorted = testApp.service.folder.add("Sorted")
     val context = PipelineContext(testContext.repository, Some(testContext.user))
@@ -1287,18 +1243,17 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An upload's Import with the folder Clients as its destination. Its first file, in the folder Ceremony of the tree, is run
-     * through the import pipeline; then Clients is deleted, which recycles it with what it holds; then its second file, in the
-     * folder Party, is run through.
+     * An Import into Clients: its first file, under Ceremony, is imported; then Clients is deleted; then its second file, under
+     * Party, is run.
      *
      * Assertions:
      *
-     * The first file is imported into Clients/Ceremony. The second is dropped at its completion, and its Import file is failed,
-     * saying that the destination folder is in the Trash, pointing at no asset. The Import counts one imported and one failed.
+     * The first file lands in Clients/Ceremony. The second is dropped and its Import file failed with no asset, saying the
+     * destination is in the Trash. The Import counts one imported and one failed.
      *
      * Edge cases:
      *
-     * Nothing of the second file is left: no asset, and no folder Party; Clients stays recycled.
+     * Nothing of the second file is left, no folder Party either, and Clients stays recycled.
      */
     val folders = testApp.service.folder
     val clients = folders.add("Clients")
@@ -1332,14 +1287,12 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An upload's Import with the folder Clients as its destination, of one image whose path is a folder Good and, under it, a
-     * folder whose name is longer than a folder's name may be, run through the import pipeline.
+     * An Import into Clients of one image under Good and, below it, a folder name too long.
      *
      * Assertions:
      *
-     * The file is dropped at its completion and its Import file is failed, saying that a folder of the path cannot be created,
-     * with the folder rule's own reason. No asset is left, and neither folder of the path exists, not even Good, whose name is
-     * fine: the completion's transaction creates the folders and the asset together or not at all.
+     * The file is dropped and its Import file failed with the folder rule's reason. No asset is left and no folder of the path
+     * exists, not even Good: the completion creates the folders and the asset together or not at all.
      */
     val clients = testApp.service.folder.add("Clients")
     val opened = testApp.service.imports.open(ImportSource.Upload, destFolderId = clients.id)
@@ -1362,15 +1315,13 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An upload's Import whose destination is the repository's root folder, of one image under a folder named as the root itself
-     * is. No folder of that name is under the root to reuse (the root is its own parent, and is never its own child), and none
-     * can be added there: the root holds the name among the folders whose parent it is.
+     * An Import into the root folder of one image under a folder named as the root is. The root, its own parent, holds that name
+     * among its children but is never its own child, so there is no folder to reuse and none can be added.
      *
      * Assertions:
      *
-     * The file is dropped at its completion with the folder as the cause, and its Import file is failed, saying that a folder of
-     * the path cannot be created because its name is taken. It is not settled as a duplicate, which only a file whose content the
-     * Library already has is: the Import counts one failed and no duplicate. No asset is left.
+     * The file is dropped and its Import file failed, saying the folder's name is taken. It is not a duplicate, which only a file
+     * whose content the Library already has is. No asset is left.
      */
     val opened =
       testApp.service.imports.open(ImportSource.Upload, destFolderId = Some(testContext.repository.rootFolderId))
@@ -1394,18 +1345,19 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two folders, Clients and Archive, each the destination of an upload's Import with one file, at the path Wedding, whose
-     * asset its import has persisted and not completed. The completion of the file into Clients runs in a transaction held open
-     * until a delete of Clients waits for it: for the folder tree's advisory lock on PostgreSQL, for the write connection on
-     * SQLite. Then the other way round: a delete of Archive is held open until the completion of the file into it waits.
+     * Clients and Archive, each the destination of an Import with one unfinished file under Wedding. A completion into Clients is
+     * held open until a delete of Clients waits on the folder tree's lock; then a delete of Archive is held open until a
+     * completion into it waits.
      *
      * Assertions:
      *
-     * The delete of Clients, which went second, saw what the completion committed: Clients and the folder Wedding the completion
-     * created under it are in the Trash, and so is the asset, in Wedding. The completion into Archive, which went second, found
-     * its destination in the Trash and failed saying so: its asset is still unfinished and in no folder, and no folder was
-     * created under Archive. Without the turn-taking, on PostgreSQL neither waits for the other, which read before the other
-     * committed, and the asset and Wedding are left live under a folder in the Trash.
+     * The delete of Clients saw what the completion committed: Clients, the new Wedding and the asset are in the Trash. The
+     * completion into Archive found its destination in the Trash and failed: its asset is unfinished and in no folder, and no
+     * folder was created under Archive.
+     *
+     * Edge cases:
+     *
+     * Without the turn-taking, on PostgreSQL the asset and Wedding would be left live under a folder in the Trash.
      */
     val folders = testApp.service.folder
     val library = testApp.service.library
@@ -1422,7 +1374,7 @@ import altitude.core.util.Query
       first = library.completeImport(sorted, Some(sortedOrigin)): Unit,
       second = library.deleteFolderById(clients.persistedId))
 
-    // Every folder under the folder, those in the Trash too
+    // Those in the Trash too
     def under(parent: Folder): List[Folder] = folders.getAll.filter(_.parentId == parent.persistedId)
 
     val wedding = under(clients).loneElement
@@ -1449,16 +1401,13 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * An upload's Import with the folder Clients as its destination, of two files with the same content run through the import
-     * pipeline one after the other: the first under a folder whose name is longer than a folder's name may be, the second under
-     * the folder Good.
+     * An Import into Clients of two files with the same content, one after the other: the first under a folder name too long, the
+     * second under Good.
      *
      * Assertions:
      *
-     * The first fails at its completion, a folder of its path cannot be created, and the second is dropped as a duplicate of it.
-     * Neither is imported, so the second's Import file is failed, saying that the copy it matched is not in the Library, and
-     * points at no asset: nothing in the record says the content is in the Library. The Import counts two failed files and no
-     * duplicate, no asset is left, and no folder of either path exists.
+     * The first fails on its folder, and the second is dropped as its duplicate, but its Import file is failed with no asset,
+     * saying its copy is not in the Library. The Import counts two failed and no duplicate, and no asset or folder is left.
      */
     val clients = testApp.service.folder.add("Clients")
     val opened = testApp.service.imports.open(ImportSource.Upload, destFolderId = clients.id)

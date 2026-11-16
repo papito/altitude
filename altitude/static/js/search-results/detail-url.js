@@ -1,23 +1,12 @@
 /**
- * The address bar of Asset detail: while it is open the URL names the asset shown and whether its
- * Detail panel is open (`/r/:repoId/asset/:assetId`, with `?panel=open` while it is), so the URL
- * can be reloaded, bookmarked or sent. It carries no search: opened from its URL, Asset detail shows
- * over the default results with no previous or next, as a map pin's does.
+ * Asset detail's URL (`/r/:repoId/asset/:assetId`, `?panel=open` while the Detail panel is open), so
+ * it can be reloaded, bookmarked or sent. It carries no search.
  *
- * Opening from the results adds one history entry; stepping and the panel's toggle replace it, so
- * Back closes Asset detail whatever was walked through, and closing any other way goes back over
- * that entry. A replacement waits until the asset has stayed for `URL_DEBOUNCE_MS`, so walking
- * through assets with a held arrow key costs no history calls, which browsers limit. A page that was
- * loaded on an asset's URL added no entry: closing replaces the URL with the results', and Back
- * leaves the page as it would any other.
- *
- * While the URL names an asset, the search URL the server pushes back (`HX-Replace-Url`) is held
- * here, not applied, and becomes the URL on closing: the first search of a page loaded on an
- * asset's URL would otherwise rewrite it at once.
- *
- * htmx would answer a traversal within the page by fetching the URL into the body. Nothing here
- * pushes history through htmx, so a traversal within the page is always this module's, and htmx's
- * restore is cancelled.
+ * Opening from the results pushes one history entry; stepping and the toggle replace it after
+ * `URL_DEBOUNCE_MS`, since browsers limit history calls. While the URL names an asset, the search URL
+ * the server sends (`HX-Replace-Url`) is held and applied on closing, or the first search of a page
+ * loaded on an asset's URL would overwrite it. htmx's history restore is always cancelled: nothing
+ * pushes history through htmx, so every traversal within the page is this module's.
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import {
@@ -43,17 +32,16 @@ function isAssetDetailActive() {
 }
 
 export function createDetailUrl({ context }) {
-    // Whether the URL names the asset shown, from the first asset shown (or a page loaded on an
-    // asset's URL) until Asset detail closes
+    // Whether the URL names the asset shown, until Asset detail closes
     let following = false
-    // Whether this page added the history entry the URL is on, so that the results are behind it
+    // Whether this page added the history entry the URL is on, so the results are behind it
     let ownsEntry = false
     // The results' URL, as the server last pushed it while the URL named an asset
     let heldSearchUrl = null
     let wasActive = false
     // The replacement waiting for the asset to stay; never outlives the entry it was meant for
     let replaceTimer = null
-    // The URL of the asset shown, as the entry this page added names it
+    // The URL of the asset shown
     let shownUrl = null
 
     function start() {
@@ -82,7 +70,7 @@ export function createDetailUrl({ context }) {
         window.addEventListener("popstate", handleTraversal)
     }
 
-    /** Asset detail on the asset the browser's URL names, if it names one */
+    /** Opens Asset detail on the asset the browser's URL names, if any */
     function openAssetInLocation() {
         const asset = assetInLocation()
         if (!asset) {
@@ -96,10 +84,7 @@ export function createDetailUrl({ context }) {
         )
     }
 
-    /**
-     * Whether the Detail panel is open according to the URL when it names an asset, or null when
-     * it does not and the panel goes by what this browser remembers
-     */
+    /** Whether the URL says the Detail panel is open, or null when it names no asset */
     function panelOpenInLocation() {
         if (!assetInLocation()) {
             return null
@@ -158,12 +143,9 @@ export function createDetailUrl({ context }) {
     }
 
     /**
-     * Back or Forward within this page. Forward onto an asset's entry opens it again, with no
-     * previous or next since the cell it was opened from is not known. Back onto the results closes
-     * Asset detail, unless this page was loaded on the asset's URL, a reload of an entry an earlier
-     * page added: the results behind it are then another search than the one on screen, so
-     * they are loaded for real. A close the Edit panel holds for its warning of changes not saved,
-     * answered by staying, puts the asset's entry back and follows it again.
+     * Back or Forward within this page. Forward onto an asset's entry reopens it, with no previous or
+     * next. Back onto the results closes Asset detail, unless this page was loaded on the asset's
+     * URL: the results behind that entry are another search, so they load for real.
      */
     function handleTraversal() {
         clearTimeout(replaceTimer)
@@ -187,7 +169,7 @@ export function createDetailUrl({ context }) {
             }
 
             closeModal()
-            // The Edit panel may hold the close for its warning: Asset detail staying, the asset's entry comes back
+            // The Edit panel may hold the close to warn of unsaved changes; staying puts the entry back
             takeHeldClose()?.then((closed) => {
                 if (!closed && isAssetDetailActive() && shownUrl) {
                     following = true

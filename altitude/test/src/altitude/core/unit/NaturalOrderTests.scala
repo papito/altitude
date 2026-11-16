@@ -20,8 +20,8 @@ import altitude.core.util.NaturalOrder
      *
      * Assertions:
      *
-     * They sort as read: case is ignored, "Client 2" comes before "client 10" and "Client 100", "Trip 9 day 10" before "trip 10
-     * day 2", a name that starts with a digit before one that starts with a letter, and a name before its own longer form.
+     * They sort as read: case is ignored, numbers compare by value wherever they stand, a leading digit comes before a letter,
+     * and a name comes before its own longer form.
      */
     val expected = List(
       "2020 Archive",
@@ -49,8 +49,8 @@ import altitude.core.util.NaturalOrder
      *
      * Assertions:
      *
-     * The longer numbers compare by value. Equal numbers put the one with fewer leading zeros first, and names equal but for case
-     * keep a fixed order, so no two different names compare as equal.
+     * Long numbers compare by value. Of equal numbers, fewer leading zeros come first, and names equal but for case keep a fixed
+     * order, so no two different names compare equal.
      */
     NaturalOrder.compare("Roll 99999999999999999999", "Roll 100000000000000000000") shouldBe -1
     NaturalOrder.compare("Roll 100000000000000000000", "Roll 99999999999999999999") shouldBe 1
@@ -69,13 +69,12 @@ import altitude.core.util.NaturalOrder
     /**
      * Setup:
      *
-     * Names starting with accented and unaccented letters in mixed case, and names that differ only in an accent or in case,
-     * shuffled.
+     * Names with accented and unaccented letters in mixed case, some differing only in an accent or in case, shuffled.
      *
      * Assertions:
      *
-     * An accented letter sorts with its base letter, not after "Z": "Émile" comes before "Zoo" and "Öland" before "Oz", and of
-     * names that differ only in an accent, the unaccented one comes first, whatever the case.
+     * An accented letter sorts with its base letter, not after "Z", and of names that differ only in an accent the unaccented one
+     * comes first, whatever the case.
      */
     val expected = List(
       "Eclair",
@@ -100,8 +99,8 @@ import altitude.core.util.NaturalOrder
      *
      * Assertions:
      *
-     * For every pair, the comparison is antisymmetric and zero only for equal names, and for every triple it is transitive, so a
-     * sort of any list of names cannot fail or depend on the input order.
+     * Every pair compares antisymmetrically and is zero only for equal names, and every triple is transitive, so a sort cannot
+     * fail or depend on the input order.
      */
     val names = List(
       "9",

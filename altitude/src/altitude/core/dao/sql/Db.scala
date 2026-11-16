@@ -10,16 +10,13 @@ import altitude.core.QueryTimeoutException
 import altitude.core.RequestContext
 
 /**
- * The ScalaSql entry point for the DAO layer.
- *
- * ScalaSql runs on the connection the request is already holding: [[TransactionManager]] opens it, `RequestContext.conn` carries
- * it, and this object never opens, commits or closes one. A `DbApi` is a cheap wrapper, so it is built per call rather than
- * cached, and it is deliberately never closed - closing it would close the transaction's connection.
+ * The DAO layer's ScalaSql entry point. It runs on the request's connection and never opens, commits or closes one. A `DbApi` is
+ * a cheap wrapper built per call and never closed: closing it would close the transaction's connection.
  */
 object Db:
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  /** Central SQL logging for every statement ScalaSql runs, replacing the per-call `logger.trace(sql)` of the raw paths */
+  /** Logs every statement ScalaSql runs */
   val config: scalasql.Config = new scalasql.Config:
     override def logSql(sql: String, file: String, line: Int): Unit =
       logger.trace(s"SQL: $sql ($file:$line)")
@@ -27,10 +24,7 @@ object Db:
   /** The SQLSTATE of a statement PostgreSQL cancelled, as it does one that runs past its `statement_timeout` */
   private val QUERY_CANCELED = "57014"
 
-  /**
-   * Exactly one read query, counted as the raw paths count theirs. A statement the engine cancelled at its time limit for reads
-   * is a [[QueryTimeoutException]].
-   */
+  /** One read query, counted as the raw paths count theirs; a statement cancelled at its time limit is a [[QueryTimeoutException]] */
   def read[R](dialect: Dialect)(f: scalasql.DbApi => R): R =
     RequestContext.readQueryCount.value = RequestContext.readQueryCount.value + 1
     try f(api(dialect))
@@ -39,7 +33,7 @@ object Db:
         logger.warn(s"A read statement ran past its time limit: ${ex.getMessage}")
         throw QueryTimeoutException(ex.getMessage)
 
-  /** Exactly one write query, counted as the raw paths count theirs */
+  /** One write query, counted as the raw paths count theirs */
   def write[R](dialect: Dialect)(f: scalasql.DbApi => R): R =
     RequestContext.writeQueryCount.value = RequestContext.writeQueryCount.value + 1
     f(api(dialect))

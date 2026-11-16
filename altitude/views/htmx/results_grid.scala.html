@@ -1,10 +1,9 @@
 @import altitude.core.util.SearchResult
 @import altitude.core.FieldConst
 
-@* The ungrouped grid: the page's cells, the last of which carries the cursor of the next page when there is one. On the one page
-   of a Describe search that holds its first weaker match (`results.weaker`), their header opens them before that match's cell
-   (includes/weaker_matches_header): a group header, so it sticks over them, the page window keeps it while its page is folded,
-   and its count follows the cells that leave the grid. *@
+@* The ungrouped grid. On the page of a Describe search that holds its first weaker match, the weaker-matches header opens
+   them before that match's cell; it is a group header, so it sticks over them, the page window keeps it while its page is
+   folded, and its count follows the cells that leave the grid. *@
 @(isContinuousScroll: Boolean = false, results: SearchResult)
 
 @for(idx <- results.records.indices) {

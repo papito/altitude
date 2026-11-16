@@ -34,14 +34,7 @@ object Environment:
 
   def isDev: Boolean = CURRENT == Name.DEV
 
-  /**
-   * The one rule for a development-only key: it is on only when it is `true` and the environment is dev. Set anywhere else, it is
-   * off, with a WARN.
-   */
-  /**
-   * A development-only text setting, `devSwitch`'s rule for one that is no flag: its value only when the environment is dev; set
-   * anywhere else, it is ignored (empty), with a WARN. Read once, at startup.
-   */
+  /** A development-only text key: its value only in dev; set anywhere else, it is ignored (empty), with a WARN */
   def devSetting(config: Config, key: String, environment: String = CURRENT): String =
     val value = config.getString(key)
     if value.isEmpty then ""
@@ -50,6 +43,7 @@ object Environment:
       ""
     else value
 
+  /** A development-only flag: on only when it is `true` in dev; set anywhere else, it is off, with a WARN */
   def devSwitch(config: Config, key: String, environment: String = CURRENT): Boolean =
     if !config.getBoolean(key) then false
     else if environment != Name.DEV then
@@ -57,11 +51,7 @@ object Environment:
       false
     else true
 
-  /**
-   * Lazily created temp directory `resolveResourcePath` extracts the SQLite vector extension's native library to
-   * (`TransactionManager`), since SQLite loads an extension from a filesystem path. Only used when running from a JAR (prod),
-   * where classpath resources are not directly on the filesystem.
-   */
+  /** Where `resolveResourcePath` extracts resources when running from a JAR */
   private lazy val tempResourceDir: Path =
     val dir = Files.createTempDirectory("altitude-resources")
     logger.debug(s"Created temp resource directory: $dir")
@@ -69,14 +59,8 @@ object Environment:
     dir
 
   /**
-   * Resolve a classpath resource to a filesystem path: the SQLite vector extension's native library (`TransactionManager`), which
-   * SQLite loads by its path. If the resource lives directly on the filesystem (dev/test), we return its path. If it's inside a
-   * JAR (prod), we extract it to a temp directory first.
-   *
-   * @param classpathPath
-   *   the classpath resource path, e.g. "/sqlite-vector/linux-x86/vector.so"
-   * @return
-   *   an absolute filesystem path to the resource file
+   * A classpath resource as an absolute filesystem path, extracted to a temp directory when inside a JAR: SQLite loads its vector
+   * extension only from a path.
    */
   def resolveResourcePath(classpathPath: String): String =
     val resourceUrl = getClass.getResource(classpathPath)
@@ -84,11 +68,9 @@ object Environment:
 
     resourceUrl.getProtocol match {
       case "file" =>
-        // Resource is directly on the filesystem (dev/test or exploded classpath)
         new File(resourceUrl.toURI).getAbsolutePath
 
       case "jar" =>
-        // Resource is inside a JAR — extract to a temp directory
         val destFile = tempResourceDir.resolve(classpathPath.stripPrefix("/")).toFile
 
         if !destFile.exists() then

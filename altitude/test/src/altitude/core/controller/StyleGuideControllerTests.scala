@@ -47,9 +47,9 @@ object DevApp extends cask.Main:
      *
      * Assertions:
      *
-     * The page, the scan JSON, the sample dialog, the New library sample and their submissions each answer 404, and neither the
-     * main page's nav nor a nav reload carries the Style Guide button. The main page loads neither the panel's adapter nor the
-     * vendored tokentweak package nor its boot script, and holds no pre-paint script reading the tweaks.
+     * The page, the scan JSON, both sample dialogs and their submissions answer 404, and neither the main page's nav nor a nav
+     * reload carries the Style Guide button. The main page loads no part of the design tweaks panel and no script reading the
+     * tweaks.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -97,10 +97,9 @@ object DevApp extends cask.Main:
      *
      * Assertions:
      *
-     * The route answers 200 as JSON in the scan's shape, the design tweaks panel's sources: `version` 1 (the sources schema the
-     * tokentweak package reads), the root tokens, each with a name, a value and a location, the color literals and the length
-     * literals, each with a property, a value and locations, and the icons. The tests run in a sandbox whose working directory
-     * holds no sources, so the scan is empty there; `StyleGuideScanTests` scans the real tree.
+     * The route answers 200 with the scan as JSON: `version` 1 (the sources schema tokentweak reads), the root tokens, the color
+     * and length literals with their locations, and the icon and token reference counts. The test sandbox's working directory
+     * holds no sources, so the scan is empty here; `StyleGuideScanTests` scans the real tree.
      */
     testContext.persistRepository()
     login()
@@ -141,8 +140,8 @@ object DevApp extends cask.Main:
      *
      * Assertions:
      *
-     * The page answers 200, holds the scan JSON element and an element for each section, and loads the two libraries the app
-     * start and the sample dialog need. Its Library menu specimen offers New library, which opens the New library sample.
+     * The page answers 200 with the scan JSON, every section and the two libraries the app start and the sample dialog need. Its
+     * Library menu specimen opens the New library sample.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -167,13 +166,12 @@ object DevApp extends cask.Main:
     /**
      * Setup:
      *
-     * A logged-in user's repository, the app with the style guide's routes registered, and names posted to the sample endpoint as
-     * JSON.
+     * A logged-in user's repository, the app with the style guide's routes registered, and names posted to the sample endpoint.
      *
      * Assertions:
      *
-     * The dialog fragment renders its form. A name answers an empty 200. A blank name answers the form carrying the error,
-     * retargeted to replace the submitted form in place.
+     * The dialog renders its form. A name answers an empty 200; a blank name answers the form with the error, retargeted to
+     * replace the submitted one.
      *
      * Edge cases:
      *
@@ -215,15 +213,13 @@ object DevApp extends cask.Main:
     /**
      * Setup:
      *
-     * A logged-in user's Library, the app with the style guide's routes registered, and names posted to the New library sample's
-     * endpoint as JSON.
+     * A logged-in user's Library, the app with the style guide's routes registered, and names posted to the New library sample.
      *
      * Assertions:
      *
-     * The sample renders the New library dialog with "client smith" typed and the error a taken name gets, its form posting to
-     * the sample's endpoint rather than the create route. A blank name and a one-character name answer the dialog with the
-     * Library name rule's errors under the field, retargeted to replace the submitted form in place, and a valid name answers an
-     * empty 200.
+     * The sample renders the New library dialog with "client smith" typed and the taken-name error, posting to the sample's
+     * endpoint rather than the create route. A blank and a one-character name answer the dialog with the Library name rule's
+     * error under the field, retargeted to replace the submitted form; a valid name answers an empty 200.
      *
      * Edge cases:
      *
@@ -282,7 +278,7 @@ object DevApp extends cask.Main:
      *
      * Assertions:
      *
-     * The page is titled "Style Guide · Smith & Sons · Altitude", the name HTML-escaped and between U+2068 and U+2069.
+     * The title is "Style Guide · Smith & Sons · Altitude", the name HTML-escaped and isolated between U+2068 and U+2069.
      */
     val user = testContext.persistUser()
     val repoId = addLibrary("Smith & Sons", user).persistedId
@@ -306,7 +302,7 @@ object DevApp extends cask.Main:
      *
      * Assertions:
      *
-     * A's style guide page answers and records A when B is recorded before the load, and a reload of it writes nothing.
+     * With B recorded, A's style guide page records A, and a reload writes nothing.
      */
     val user = testContext.persistUser()
     val a = addLibrary("Library A", user)

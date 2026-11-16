@@ -1,7 +1,5 @@
-/* The account info dialog (htmx/account_info_dialog), a popover dialog right-aligned below the nav's account trigger, a band
-   of the account type's color across its top. Its lists share one label column (subgrid), so the values line up from the
-   email address to the session's expiry, and each section opens under a hairline; the account's actions close it at the
-   right */
+/* The account info popover, right-aligned below the nav's account trigger and banded in the account type's color. Its lists
+   share one label column (subgrid), so the values line up across sections */
 #popoverDialog:has(#accountInfo) {
   position-area: bottom span-left;
   border-top: var(--border-band) var(--account-type-color);
@@ -32,7 +30,7 @@
   gap: var(--space-6);
 }
 
-/* The glyph's own size, as large as an account card's avatar */
+/* As large as an account card's avatar */
 #accountInfo .avatar {
   font-size: 2.5em;
   color: var(--account-type-color);
@@ -54,7 +52,7 @@
   border-top: var(--border-hairline) var(--popover-border-color);
 }
 
-/* A section's name, in the small caps of a dialog's labels */
+/* In the small caps of a dialog's labels */
 #accountInfo h3 {
   grid-column: 1 / -1;
   margin: 0;
@@ -74,7 +72,6 @@
   min-width: 0;
 }
 
-/* The account type, a chip in its color, and its description under it */
 #accountInfo .account-type {
   padding: var(--chip-padding);
   border: var(--border-hairline) hsl(from var(--account-type-color) h s l / 0.55);
@@ -95,7 +92,7 @@
   color: var(--theme-neutral-3);
 }
 
-/* The Permissions held in the Library of the page, chips as the Add User form's checked ones */
+/* The Permissions held in the page's Library, as the Add User form's checked chips */
 #accountInfo .permission-chips {
   display: flex;
   flex-wrap: wrap;

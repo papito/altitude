@@ -1,5 +1,5 @@
-/* Two columns of switches: the grid metadata on the left, the scope on the right behind a hairline. A flex row, so the
-   scope column hidden outside the repository view leaves no track and no gap behind */
+/* A flex row rather than a grid, so the scope column, hidden outside the repository view, leaves no track or gap
+   behind */
 #viewSettingsForm {
   display: flex;
   column-gap: var(--space-5);

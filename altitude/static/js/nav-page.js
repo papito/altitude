@@ -14,36 +14,18 @@ import { bindSearchPanel } from "./search-results/search-panel.js"
 import { registerHtmlCommonBindings } from "./stores/html-common.js"
 
 /**
- * Starts a page that carries the nav and `html_common` outside the main app: Import
- * (`upload-form-page.js`), Settings (`settings-page.js`) and Users (`users-page.js`). What such a
- * page shares is the nav's menus and the dialogs they open: the Library menu's New library, and the
- * account info dialog, whose Change password's outcome `listeners/account.js` confirms; and the nav's
- * advanced search panel, which opens Browse with its search from here:
- *
- * - Alpine, with what `html_common` binds (`registerHtmlCommonBindings`: the modal hosts, the
- *   snackbar's stacks, `x-trap`), the `contextMenu` component of the menu's control, the
- *   `localTime` component of the account info dialog's times, and the components of the advanced
- *   search panel's form (`searchPanel`, `filterCombobox`, `dateRange`), whose host is bound here
- *   (`bindSearchPanel`);
- * - the one rule for every htmx request (`listeners/htmx-requests.js`: a failure to the snackbar,
- *   a validation replacement swapped in, a declared success event dispatched) and the dialog
- *   wiring (`listeners/dialogs.js`: the open requests, the operations dialogs submit, the popover
- *   dialog host's dismissals);
- * - the hydration of what a swap inserts, which on these pages is a dialog (`modal` fragments)
- *   or a choice menu host: the nav's, built here with the page. A nav reload carries the host
- *   empty and keeps the built one, `hx-preserve` (`includes/library_menu`); the Import page's
- *   polling reload skips a tick while the menu or the dialog is open, since without
- *   `Element.moveBefore` htmx's move would close it.
- *
- * Returns the minimal app handed to those listeners, for a page's own listeners to dispatch with.
+ * Starts a page that carries the nav and `html_common` outside the main app (Import, Settings, Users):
+ * Alpine with the nav's menus, the account dialog and the advanced search panel, the shared htmx and
+ * dialog listeners, and hydration of what a swap inserts (dialogs and the nav's choice menu host, which
+ * a nav reload keeps, `hx-preserve`). Returns the minimal app the listeners dispatch with.
  */
 export function startNavPage() {
     registerHtmlCommonBindings()
-    // Referenced as `x-data="contextMenu"` by the control `common/context-menu-markup.js` builds
+    // For the menu control `common/context-menu-markup.js` builds
     Alpine.data("contextMenu", contextMenu)
-    // Referenced as `x-data="localTime"` by the account info dialog the nav's account trigger opens
+    // For the account info dialog's times
     Alpine.data("localTime", localTime)
-    // Referenced by the advanced search panel's form (htmx/search_panel.scala.html), which the nav's panel loads
+    // For the advanced search panel's form
     Alpine.data("searchPanel", searchPanel)
     Alpine.data("filterCombobox", filterCombobox)
     Alpine.data("dateRange", dateRange)

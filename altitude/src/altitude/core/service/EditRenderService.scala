@@ -40,32 +40,27 @@ object EditRenderService:
   /** How long after the last save of an Edit its render is offered to the queue */
   val DEBOUNCE: FiniteDuration = C.Edit.RENDER_DEBOUNCE_MS.millis
 
-  /**
-   * How many times a render that fails is queued again, each after twice the delay of the try before (from twice the debounce);
-   * after the last, the Edit is left for the next startup
-   */
+  /** Retries of a failed render, the delay doubling from twice the debounce; after the last, the next startup tries again */
   val MAX_RETRIES = 5
 
-  /** What a render of an Edit came to */
   enum Outcome:
-    /** The Edit's edited images are stored under the revision */
+    /** The edited images are stored under revision `rev` */
     case Rendered(editVersion: Int, rev: Int)
 
-    /** The Edit is the identity: the asset shows its original again, and has no edited images */
+    /** The Edit is the identity: the asset shows its original again and has no edited images */
     case Original(editVersion: Int)
 
     /** The Edit was saved again while the render ran: nothing is stored, and the asset is queued again */
     case Discarded
 
-    /** The Edit is rendered at its edit version already: nothing to do */
     case UpToDate
 
-    /** The asset or its Edit is gone (purged, or being purged): nothing to do */
+    /** The asset or its Edit is gone (purged, or being purged) */
     case Gone
 
     /**
-     * The Edit cannot be rendered: its original is missing or cannot be decoded. It is recorded rendered with no edited images,
-     * so the asset shows its original and the next startup does not try it again; a later save is rendered anew.
+     * The original is missing or cannot be decoded. The Edit is recorded rendered with no edited images, so the asset shows its
+     * original and the next startup does not retry it; a later save is rendered anew.
      */
     case Unrenderable(editVersion: Int)
 
@@ -81,15 +76,11 @@ object EditRenderService:
     case Failed(why: String)
 
 /**
- * Renders an asset's Edit into the edited Preview and the Display image (`CONTEXT.md`), on the `edit-render` queue.
- * `AssetEditService` calls [[enqueue]] once a save has committed, in the request's context; the queue takes the asset 1.5 s after
- * the last such call ([[C.Edit.RENDER_DEBOUNCE_MS]]), so a run of saves is rendered once, at the edit version it ends on. A
- * render reads the Edit, renders and stages its images outside any transaction, and publishes them only if the Edit is still at
- * the edit version it read ([[render]]); otherwise it queues the asset again. One render of an asset runs at a time, and a render
- * that fails is queued again after a growing delay, [[EditRenderService.MAX_RETRIES]] times. The asset has one edited image of
- * each kind, replaced by each render under a revision (`asset.edit_rev`) that is never used twice for the asset, so a content URL
- * naming the revision a page knows is new for each render. What was pending when the server stopped is queued again at startup
- * ([[requeuePendingRenders]]).
+ * Renders an asset's Edit into its edited Preview and Display image on the `edit-render` queue. [[enqueue]] is debounced, so a
+ * run of saves is rendered once, at the edit version it ends on. A render works outside any transaction and publishes only if the
+ * Edit is still at the edit version it read; otherwise the asset is queued again. One render of an asset runs at a time. Each
+ * render replaces the asset's edited images under a revision (`asset.edit_rev`) never reused for the asset, so a content URL
+ * naming it is new for each render. What was pending at shutdown is queued again at startup ([[requeuePendingRenders]]).
  */
 class EditRenderService(app: Altitude):
   import EditRenderService.Made
@@ -102,14 +93,14 @@ class EditRenderService(app: Altitude):
 
   private given system: ActorSystem[AltitudeActorSystem.Command] = app.actorSystem
 
-  /** An asset's render scheduled by [[enqueue]], to be offered once its delay is over unless a later call replaced it */
+  /** A render scheduled by [[enqueue]], offered once its delay is over unless a later call replaced it */
   final private class Scheduled(val context: PipelineContext):
     @volatile var timer: Option[Cancellable] = None
 
   /** The delay of [[enqueue]]; a test that renders an Edit itself lengthens it, so the queue never races it */
   @volatile var debounce: FiniteDuration = EditRenderService.DEBOUNCE
 
-  /** Runs before each of the queue's renders, with the asset's ID; a test throws there, as a render failing in any way may */
+  /** Test hook run before each queued render, with the asset's ID; a test throws there to make the render fail */
   @volatile private[core] var beforeQueuedRender: String => Unit = _ => ()
 
   // Set by shutdown, after which no render is queued: the next startup queues what is left
@@ -124,7 +115,7 @@ class EditRenderService(app: Altitude):
   // The assets being rendered by the queue: one render of an asset at a time, as its images are staged under one name each
   private val rendering = ConcurrentHashMap.newKeySet[String]()
 
-  // By asset: how many renders in a row have failed, for the delay before the next try
+  // By asset: how many renders in a row have failed, which sets the retry delay
   private val failures = ConcurrentHashMap[String, Int]()
 
   private val queue = QueuedPipeline[(String, PipelineContext)](
@@ -137,17 +128,13 @@ class EditRenderService(app: Altitude):
         rendering
     },
     describe = (assetId, _) => s"the Edit of asset [$assetId]",
-    // What the queue holds is dropped at shutdown and found again at the next start, so it holds no more than are rendered at once
+    // What the queue holds is dropped at shutdown and found again at startup, so it need hold no more than render at once
     bufferSize = app.editRenderParallelism,
     shutdownTimeout = () => app.settings.current.pipelineShutdownTimeout.seconds,
     restartOnFailure = app.isPipelineRestartEnabled
   )
 
-  /**
-   * Queues the asset's Edit, in the context repository, to be rendered `delay` from now ([[C.Edit.RENDER_DEBOUNCE_MS]] unless a
-   * failed render's retry sets a longer one), which puts off a render already waiting for the asset: each call starts the delay
-   * again
-   */
+  /** Queues the asset's Edit, in the context repository, to render after `delay`; each call restarts a waiting render's delay */
   def enqueue(assetId: String, delay: FiniteDuration = debounce): Unit =
     if stopping then
       logger.debug(s"Render of the Edit of asset [$assetId] not queued: the server is stopping")
@@ -177,8 +164,8 @@ class EditRenderService(app: Altitude):
       }
 
   /**
-   * Queues, in every repository, the Edits whose edit version is not rendered: the server stopped before their render, or it
-   * failed. They are offered at once, one after another under the queue's backpressure, with no account: no request queued them.
+   * Queues, in every repository, the Edits whose edit version is not rendered (the server stopped first, or the render failed),
+   * one after another under the queue's backpressure, with no account since no request queued them
    */
   def requeuePendingRenders(): Unit =
     given ExecutionContext = system.executionContext
@@ -191,10 +178,7 @@ class EditRenderService(app: Altitude):
           Source(pending).mapAsync(1)(offer(_, context)).run(): Unit
     }
 
-  /**
-   * Takes no more renders, drops the queued ones and waits, up to the shutdown timeout, for those under way: an edit version left
-   * unrendered is queued again at the next start ([[requeuePendingRenders]])
-   */
+  /** Takes no more renders, drops the queued ones and waits up to the shutdown timeout for those under way */
   def shutdown(): Unit =
     stopping = true
     scheduled.values.forEach(_.timer.foreach(_.cancel()))
@@ -205,11 +189,10 @@ class EditRenderService(app: Altitude):
     catch case _: TimeoutException => logger.warn(s"Renders of Edits still under way after $timeout are left as they are")
 
   /**
-   * The queue's render of the asset on the render dispatcher, a future that completes whatever the render throws. `Future.apply`
-   * would rethrow a fatal error (an `OutOfMemoryError` reading a huge original) on the dispatcher's thread and leave its future
-   * pending, losing the queue's slot for good, and Pekko's handler of an uncaught fatal error stops the JVM; so the render runs
-   * in a `try` that takes any `Throwable`, logs it and completes the future: the element is done, its render failed, and its edit
-   * version is left unrendered for the next startup ([[renderOrLog]] has tried again what is not fatal).
+   * Runs the render on the render dispatcher, returning a future that completes whatever it throws. Under `Future.apply` a fatal
+   * error (an `OutOfMemoryError` decoding a huge original) would leave the future pending, losing the queue's slot for good, and
+   * Pekko's handler of an uncaught fatal error would stop the JVM. So any `Throwable` is logged and the edit version left for the
+   * next startup; [[renderOrLog]] has already retried what is not fatal.
    */
   private def renderedOnDispatcher(assetId: String, context: PipelineContext): Future[Unit] =
     val rendered = Promise[Unit]()
@@ -227,10 +210,9 @@ class EditRenderService(app: Altitude):
     rendered.future
 
   /**
-   * The queue's render of the asset, unless one is under way, after which this one is queued again. A render that throws (its
-   * images not staged, published or committed) is queued again after twice the delay of the try before, up to
-   * [[EditRenderService.MAX_RETRIES]] times, so images published by a failed commit are not served under the old revision for
-   * long; after that it is left for the next startup.
+   * Renders the asset, or queues it again when a render of it is under way. A render that throws is retried with a doubling delay
+   * up to [[EditRenderService.MAX_RETRIES]] times, so images published before a failed commit are not served under the old
+   * revision for long.
    */
   private def renderOrLog(assetId: String): Unit =
     if !rendering.add(assetId) then
@@ -256,21 +238,16 @@ class EditRenderService(app: Altitude):
     finally rendering.remove(assetId): Unit
 
   /**
-   * Renders the asset's Edit, in the context repository, in three steps: the Edit and its edit version are read in a read
-   * transaction; the edited images are rendered and staged (written beside the images and flushed to the disk) outside any
-   * transaction; then, with the asset and its Edit locked, they are published, each by a rename over the asset's, only if the
-   * Edit is still at the edit version read, under the next revision (`last_rev + 1`), which the asset's `edit_rev` then names.
-   * The identity, or an Edit that cannot be rendered, sets `edit_rev` to 0, and once that has committed, the asset's edited
-   * images are deleted. Either way the edit version is then rendered. An Edit saved again meanwhile throws the result away,
-   * staged images included, and queues the asset again.
+   * Renders the asset's Edit in three steps: reads the Edit in a read transaction; renders and stages the edited images (written
+   * beside the asset's and flushed) outside any transaction; then publishes them ([[store]]) if the Edit is still at the edit
+   * version read. An Edit saved again meanwhile discards the result, staged images included, and queues the asset again.
    *
-   * `beforeWrite` runs between the render and the write, and `beforeDelete` between the commit and the delete of the edited
-   * images, for a test to save the Edit there.
+   * `beforeWrite` (between the render and the write) and `beforeDelete` (between the commit and the delete of the edited images)
+   * let a test save the Edit there.
    */
   def render(assetId: String, beforeWrite: () => Unit = () => (), beforeDelete: () => Unit = () => ()): Outcome =
     val started = System.nanoTime()
-    // The asset's Edit (None once the asset is gone, which takes its Edit with it), and its edit version and Edit unless it is
-    // rendered already
+    // None once the asset is gone (its Edit goes with it); Some(None) when the Edit is rendered at its edit version already
     val read = txManager.asReadOnly {
       dao
         .get(assetId)
@@ -303,7 +280,7 @@ class EditRenderService(app: Altitude):
               case _ => ()
             beforeWrite()
             store(assetId, editVersion, made, beforeDelete)
-          // What was staged and not published goes: published, the files are no longer there
+          // Drops what was staged and not published; published files are no longer staged
           finally if made.isInstanceOf[Made.Images] then app.service.fileStore.discardStagedEditedImages(assetId)
         val ms = (System.nanoTime() - started) / 1000000
         outcome match
@@ -324,7 +301,7 @@ class EditRenderService(app: Altitude):
           case other => logger.debug(s"Edit of asset [$assetId]: $other")
         outcome
 
-  /** The edited Preview and the Display image of the Edit, as WebP bytes, in that order */
+  /** The edited Preview and the Display image of the Edit, as WebP bytes */
   private def editedImagesOf(original: java.nio.file.Path, recipe: EditRecipe): (Array[Byte], Array[Byte]) =
     val image: Mat = EditRenderer.render(original, recipe, Some(C.Edit.DISPLAY_LONG_EDGE))
     try
@@ -334,11 +311,10 @@ class EditRenderService(app: Altitude):
     finally image.release()
 
   /**
-   * The write of a render, under the locks of the asset and of its Edit (in that order, the order a purge's delete takes them),
-   * if the Edit is still at `editVersion`: the staged edited images published over the asset's under the revision after every one
-   * it has used, which the asset's `edit_rev` then names, so the files are in place before the commit that names it; none for the
-   * identity or an Edit that cannot be rendered, with `edit_rev` 0, whose edited images are deleted once that has committed
-   * ([[deleteUnshownImages]]). The edit version is then the rendered one.
+   * Writes a render if the Edit is still at `editVersion`, under the locks of the asset and its Edit (in that order, as a purge's
+   * delete takes them). Staged images are published by rename under a revision after every one the asset has used, before the
+   * commit that names it in `edit_rev`, so the files are in place first. The identity or an unrenderable Edit sets `edit_rev` to
+   * 0, and the edited images are deleted after the commit ([[deleteUnshownImages]]).
    */
   private def store(assetId: String, editVersion: Int, made: Made, beforeDelete: () => Unit): Outcome =
     txManager.withTransaction {
@@ -367,9 +343,8 @@ class EditRenderService(app: Altitude):
     }
 
   /**
-   * Deletes the asset's edited images while it shows its original (`edit_rev` 0), under the asset's lock: a render that stored
-   * new images after the commit that set it to 0 has set it again, and its images stay. Nothing for an asset being purged, whose
-   * purge deletes them.
+   * Deletes the asset's edited images if, under its lock, it still shows its original (`edit_rev` 0): a render committed since
+   * keeps its images. An asset being purged is skipped; the purge deletes them.
    */
   private def deleteUnshownImages(assetId: String): Unit =
     txManager.withTransaction {

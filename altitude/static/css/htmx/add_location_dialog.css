@@ -3,7 +3,6 @@
   --modal-content-width: 45rem;
 }
 
-/* One field per row; the map, its readout and the place search take rows of their own */
 #addLocation, #addLocation .location-editor-fields {
   display: grid;
   row-gap: var(--control-vertical-space);

@@ -2,11 +2,9 @@
 
 @(option: NamedPath)
 
-@* An option of the advanced search panel's Folder or Locations combobox (htmx/search_options_folders,
-   htmx/search_options_locations): a folder or a Location by its path. The option carries what its chip needs once it is
-   chosen, its ID and its label, the path as one line; the names above its own are in `.ancestors`, so the stylesheet
-   can set them back. It has no element ID of its own: the combobox whose listbox takes it gives it one, since one page
-   can hold several comboboxes offering the same folder. *@
+@* An option of the Folder or Locations combobox: a folder or a Location by its path, carrying the ID and label its chip
+   needs. The names above its own are in `.ancestors`, so the stylesheet can set them back. It has no element ID: the
+   combobox whose listbox takes it gives it one, since one page can hold several comboboxes offering the same folder. *@
 <li role="option"
     data-option-id="@{option.id}"
     data-option-label="@{option.label}">

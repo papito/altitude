@@ -16,17 +16,13 @@ import { bindAssetSelection } from "../search-results/selection.js"
 import { ensureViewSettingsControl } from "../search-results/view-settings-control.js"
 
 /**
- * The search results fragment (`data-app-fragment="search-results"`, `includes/search_results.scala.html`):
- * the results title, the controls and the first page of the grid, re-swapped into `#content` on every
- * search. Each behaviour of the grid is its own module under `js/search-results/`, as are the sticky
- * offsets of the title, the toolbar and the group headers, and the chips and Edit of a filtered
- * search's title; this only runs them in order.
+ * The search results fragment, re-swapped into `#content` on every search. Each grid behaviour is its
+ * own module under `js/search-results/`; this runs them in order. In map layout the fragment holds the
+ * map shell instead of `#assets`.
  *
- * In map layout the fragment holds the map shell instead of `#assets` (hydrated next, as the
- * `map-view` fragment), and the same fragment is what the crowded-pin panel loads into
- * `#mapPanelContent` (js/map/map-panel.js): that one is the panel's grid, so it leaves the
- * displayed map, its total and the viewed scope alone, reports its count to the panel's heading,
- * scrolls in the panel, and gets no box selection (the gesture is bound to the `#content` pane).
+ * The crowded-pin map panel loads the same fragment into `#mapPanelContent`: there it leaves the
+ * displayed map, its total and the viewed scope alone, reports its count to the panel, scrolls in the
+ * panel, and gets no box selection (the gesture is bound to the `#content` pane).
  */
 export function hydrateSearchResultsFragment({ fragmentEl }) {
     const contentElement = document.getElementById("content")
@@ -73,11 +69,9 @@ export function hydrateSearchResultsFragment({ fragmentEl }) {
 }
 
 /**
- * The folder tree highlights the folder scope of the results now displayed, the album list the
- * album, and the Location list the Location. The fragment carries the scope the server resolved,
- * which is what is on screen - not what the search store now asks for, so a superseded or failed
- * navigation never moves the highlight. Triage and trash results have no folder, album or Location
- * scope, whatever is still in the search parameters.
+ * Highlights the displayed results' scope in the folder tree, album list and Location list. The
+ * fragment carries the scope the server resolved, not what the search store now asks for, so a
+ * superseded or failed navigation never moves the highlight. Triage and trash results have no scope.
  */
 function syncViewedScope(fragmentEl) {
     const {

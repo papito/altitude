@@ -1,8 +1,8 @@
 package altitude.core.models
 
 /**
- * What the scope dialog of a click in the Triage explorer describes (htmx/triage_scope_dialog), with the Browse count it states:
- * the assets Browse shows by default for it, none triaged or recycled
+ * What the scope dialog of a click in the Triage explorer describes, with the count of assets Browse shows by default for it
+ * (none triaged or recycled)
  */
 enum TriageScope:
   // Any folder but the root, with the assets of its subfolders in its count

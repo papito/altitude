@@ -1,9 +1,6 @@
 package altitude.test
 
-/**
- * A model of a test instance that is off until a suite turns it on (`IntegrationTestCore`): off, the instance runs no pass of it
- * and answers with nothing in its place
- */
+/** A test instance's model, off until a suite turns it on (`IntegrationTestCore`); off, it runs no pass and answers nothing */
 trait ModelSwitch {
 
   /** Whether the real model answers */

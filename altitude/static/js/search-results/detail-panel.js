@@ -1,70 +1,11 @@
 /**
- * The Detail panel of Asset detail (`views/htmx/view_image_detail_modal.scala.html`): the docked
- * panel holding the asset's People and its Details, which the server renders as
- * `htmx/detail_panel` and this module loads into `#detailPanelContent`; and the Face highlights
- * drawn from its People rows (`face-highlights.js`).
+ * The Detail panel of Asset detail (the asset's People and Details, `htmx/detail_panel`) and the Face
+ * highlights drawn from its People rows. The fragment loads only while the panel is open or the
+ * highlights are on, and an answer that arrives after a step or a close is dropped.
  *
- * The panel is open or closed (`m`, the toolbar's toggle), docked left, right, top or bottom of
- * the media (the Dock side menu in its header, `common/dock.js`: right until a pick, 30 % of the
- * width or 35 % of the height until a drag, never following the viewport's orientation). The Face
- * highlights are on or off (`p`, the toolbar's other toggle). All of it is remembered per browser
- * under `Const.localStore.assetDetailView` as `{ panelOpen, highlightsOn, dock: { side?, widthShare,
- * heightShare } }`, the dock's part written by the dock itself. By default the panel is closed and
- * the highlights are off. The address bar follows the panel and the asset (`detail-url.js`), and
- * when an open starts on an asset's URL, that URL says whether the panel is open, for that open
- * alone: only a toggle is remembered.
- *
- * The fragment loads when the panel is open or the highlights are on: on open, on each step, and
- * when either is switched on with the asset's details not loaded yet. The coordinator
- * (`detail-navigator.js`) names the asset shown through `showAsset` with its request's `isCurrent`,
- * so a response that arrives after a step or a close is dropped, as a superseded media load is; a
- * step names it twice, first with `load: false` as it starts, which only empties what the last
- * asset left, and again once the asset's metadata is in, which loads the fragment, so a failed
- * asset fetch costs no request here. The
- * Details' dimensions row reads the shown element's size, which the coordinator hands over once the
- * media is shown: a browser turns an image upright by its EXIF orientation, while the stored size is
- * the header's. The Face highlights are placed in that size too, from each row's `data-face-box`.
- * While the stage shows an Edit (`edit/edit-stage.js`), the row adds the edited size and the
- * highlights are mapped through the Edit's geometry, a Face the crop leaves out not drawn.
- *
- * The selection is one Face at most, the state the corrections act on, held here and never
- * remembered: a click on a People row's button or on a Face highlight selects that Face, a click on
- * the selected one clears it, and a step, `p` and each open clear it. A click on a Face highlight
- * also opens the panel when it is closed, as `m` would, and brings the row into view. With the
- * highlights on every Face shows, the selected one emphasised; off, the selected one alone. On a
- * Video a row's click seeks to the Face's Frame time and pauses, and a Face shows only while the
- * player is paused within `FRAME_TIME_TOLERANCE_MS` of its Frame time, so the layer is drawn again
- * on `pause`, `play` and `seeked`, and holds nothing during playback.
- *
- * The corrections, Change and Remove under the selected row, are `face-corrections.js`'s (the two
- * clicks, the requests) and the combobox's (`alpine/components/face-combobox.js`); this module takes
- * their outcome: the People section a correction answers with replaces the one shown, the selection
- * clears, the Face highlights are drawn again from the new rows, the result is a success snackbar
- * (with the line about a Person the correction deleted) and `peopleChanged` reloads the People tab.
- * A stale section (a 404 or 409) is reloaded with the server's message shown. When the viewed Person
- * (the one Person the search names, `searchParams.viewedPersonId()`; a search of several people has
- * none, and its grid waits for the next search) has no Face left on the asset, Asset detail stays on it and the grid
- * waits: on stepping away, once the step has picked its target, or on closing, the asset's cells
- * leave the grid and the results title is read again, as its Hide and Discard links depend on the
- * count, or, when the viewed Person was deleted, the results go back to the whole repository.
- *
- * A Change on a Face of a Person with no name can name or merge that Person as a whole. When the
- * viewed Person is the one named, the results title is read again at once and shows the name; when
- * a filtered search's title has a chip of the Person named, the search runs again on closing, which
- * renders the chip with the name. When the viewed Person is the one merged, every cell of the grid
- * is the destination's now, so the cells stay, the destination stands in for the viewed Person in
- * later corrections, and on closing (not on a step) the results become the destination's
- * (`runSearch` with their `personId`). When the viewed Person is the destination, the same search
- * on closing reads their results again, so the grid gains the merged Person's assets, and the total
- * and the title's count-dependent links follow. Naming or merging another Person changes nothing in
- * the grid.
- *
- * The side and share are written on the fragment (`data-detail-dock-side`, `--detail-panel-share`)
- * and whether the panel is open as `data-app-detail-panel-open`; `view_image_detail_modal.css`
- * lays the grid out from them. The picks are `[data-app-detail-dock-side]`, the panel's own, since
- * the explorer's dock listens for its picks on the same body. The Edit panel (`edit/edit-panel.js`)
- * docks opposite and hears of every side change and every open or close (`onLayoutChange`); each
- * panel's bounds leave room for the other while it is open.
+ * A correction that leaves the viewed Person with no Face on the asset keeps the asset shown; its
+ * cells leave the grid on stepping away or closing. A merge involving the viewed Person, or naming a
+ * Person the results title shows as a chip, runs the search again on closing, not on a step.
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
@@ -98,28 +39,27 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
     // The remembered settings but the dock's, which the dock keeps
     const state = rememberedState()
 
-    // The asset Asset detail shows or loads, with whether its request is still the current one
+    // The asset shown or loading, with its request's `isCurrent`
     let subject = null
-    // The shown media's upright size, once the media is shown, the Edit the stage shows of it, if any,
-    // and whether the Face highlights may be drawn on it (not on the Crop tool's whole frame)
+    // The shown media's upright size, the Edit the stage shows of it, if any, and whether the Face
+    // highlights may be drawn on it (not on the Crop tool's whole frame)
     let shownSize = null
     let shownEdit = null
     let highlightsShown = true
     // The asset whose fragment is in the panel, or on its way there
     let loadedAssetId = null
-    // The selected Face, or null; the one state the corrections act on, never remembered
+    // The one state the corrections act on, never remembered
     let selectedFaceId = null
-    // An asset the viewed Person has no Face left on after a correction: its cells leave the grid
-    // on stepping away or closing, with whether the Person was deleted
+    // An asset the viewed Person has no Face left on: its cells leave the grid on stepping away or
+    // closing
     let leaving = null
-    // The Person the viewed Person was merged into from the panel, or the viewed Person when another
-    // was merged into them: the results are searched for them on closing
+    // The merge destination of the viewed Person, or the viewed Person when another was merged into
+    // them: their results are searched on closing
     let mergedInto = null
-    // A Person with a chip in a filtered search's results title was named from the panel: the chip
-    // shows the name the search found, so the results are searched again on closing
+    // A Person shown as a chip in the results title was named here, so the search runs again on
+    // closing to show the name
     let hasStaleChip = false
-    // Whoever lays itself out by the panel's side or by whether it is open: the Edit panel, docked
-    // opposite (`edit/edit-panel.js`)
+    // Told when the panel's side changes or it opens or closes (the Edit panel, docked opposite)
     const layoutListeners = new Set()
 
     const highlights = createFaceHighlights()
@@ -163,7 +103,6 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         return document.getElementById(CONTENT_ID)
     }
 
-    /** The shown Video's element, or null while an image is shown or nothing is */
     function shownVideoEl() {
         const videoEl = document.querySelector(`#${STAGE_ID} video`)
         return videoEl && !videoEl.closest("media-controller").hidden
@@ -171,18 +110,14 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
             : null
     }
 
-    /**
-     * Binds the page-wide controls once: the dock's, the toolbar's toggles, the People rows and the
-     * Face highlights
-     */
+    /** Binds the page-wide controls once */
     function start() {
         dock.start()
         corrections.bind()
 
-        // Closing Asset detail is when an asset the viewed Person left leaves the grid, and when the
-        // results of a viewed Person merged away become the destination's. The flush runs in a
+        // Closing Asset detail flushes what the corrections left pending. The flush runs in a
         // microtask, outside the effect's tracking, so the effect follows the active host alone and
-        // not the stores the removal and the search write
+        // not the stores the flush writes
         Alpine.effect(() => {
             if (getActiveModalHost() !== ModalHost.assetDetail) {
                 queueMicrotask(() => flushLeaving({ closing: true }))
@@ -222,10 +157,8 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
     }
 
     /**
-     * A new Asset detail fragment arrived: its Dock side menu is built so the dock finds its
-     * trigger, the panel is open as the URL says when it names an asset and as remembered when it
-     * does not, the panel is laid out and its divider bound, and its player's state changes redraw
-     * the Face highlights. Nothing of the previous fragment is loaded in it.
+     * A new Asset detail fragment arrived. Its choice menus are built first so the dock finds its
+     * trigger; the panel opens as the URL says, else as remembered.
      */
     function attach(fragmentEl) {
         ensureChoiceMenus(fragmentEl)
@@ -243,12 +176,10 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
     }
 
     /**
-     * Asset detail shows, or starts loading, `assetId`; `isCurrent` tells whether that request is
-     * still the latest for the active open. The selection goes, the Face highlights are emptied
-     * at once, the panel empties when the asset is another, so the last asset's details are never
-     * read as this one's, and the fragment loads if it is wanted, unless `load` is false: the
-     * coordinator's first call of a step, before the asset's own fetch has succeeded. The URL
-     * moves to the asset at that same point, so it never names one that could not be read.
+     * Asset detail shows, or starts loading, `assetId`. The panel empties when the asset is another,
+     * so the last asset's details are never read as this one's. With `load` false (a step's first
+     * call, before the asset's fetch has succeeded) nothing loads and the URL stays, so it never
+     * names an asset that could not be read.
      */
     function showAsset({ assetId, isCurrent, load = true }) {
         // The step has picked its target by now, so the cells of the asset it left may go
@@ -276,11 +207,9 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
     }
 
     /**
-     * The shown media's size, which the Details' dimensions and the Face highlights read: the
-     * upright original's for a still image (the Edit's stage, `edit/edit-stage.js`), with `edit`, the
-     * Edit the stage shows in its place (`{ recipe, width, height }`, the edited size), or null when
-     * it shows the original or an Edit that changes no pixel; `highlights` false while the stage
-     * draws the whole frame (the Crop tool), where no Face highlight is drawn
+     * The shown media's upright size, which the dimensions row and the Face highlights read. `edit`
+     * is the Edit the stage shows in its place (`{ recipe, width, height }`), or null when it changes
+     * no pixel; `highlights` is false while the stage draws the whole frame (the Crop tool).
      */
     function setShownSize({ width, height, edit = null, highlights = true }) {
         shownSize = { width, height }
@@ -290,7 +219,6 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         drawHighlights()
     }
 
-    /** Opens or closes the panel, remembers it, puts it in the URL, and loads the shown asset's details when opening on them unread */
     function toggle() {
         state.panelOpen = !state.panelOpen
         remember({ panelOpen: state.panelOpen })
@@ -310,7 +238,6 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         announceLayout()
     }
 
-    /** Shows or hides the Face highlights (`p`), remembers it, clears the selection, and loads the rows when they are not in yet */
     function toggleHighlights() {
         state.highlightsOn = !state.highlightsOn
         selectedFaceId = null
@@ -322,10 +249,7 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         drawHighlights()
     }
 
-    /**
-     * Selects `faceId`, or clears the selection when it is the selected one. On a Video the player
-     * seeks to the Face's Frame time and pauses, so its highlight shows.
-     */
+    /** Selects `faceId`, or clears it; on a Video the player seeks to its Frame time and pauses */
     function selectFace(faceId) {
         selectedFaceId = selectedFaceId === faceId ? null : faceId
         corrections.selectionChanged()
@@ -341,7 +265,7 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         drawHighlights()
     }
 
-    /** A Face highlight's click: selects as a row does, opens the panel if it is closed and brings the row into view */
+    /** Selects as a row does, then opens the panel and brings the row into view */
     function selectFromHighlight(faceId) {
         selectFace(faceId)
 
@@ -355,7 +279,7 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         rowOf(faceId)?.scrollIntoView({ block: "nearest" })
     }
 
-    /** Whether the fragment is needed: while the panel is open or the Face highlights are on, which read its rows */
+    /** The Face highlights read the fragment's rows, so they need it too */
     function wantsFragment() {
         return state.panelOpen || state.highlightsOn
     }
@@ -402,21 +326,14 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         }
     }
 
-    /** The People section in the panel, or null */
     function sectionEl() {
         return contentEl()?.querySelector(`#${PEOPLE_ID}`) ?? null
     }
 
     /**
-     * A correction answered: the new People section takes the shown one's place, the selection
-     * clears and the Face highlights follow the new rows, the result is reported, the People tab
-     * reloads, and the asset is noted as leaving the grid when the viewed Person has no Face left
-     * on it. A viewed Person named (`namedPersonId`, from the request) has the results title read
-     * again at once; a merge of the viewed Person (`mergedPersonId`), or into them (`mergedIntoId`),
-     * notes the destination, whose results are searched on closing, at once if Asset detail closed
-     * while the request was out: the grid becomes the destination's, or gains what the merged
-     * Person had. An answer for an asset no longer shown changes nothing in the panel but is still
-     * reported, and still names or merges the viewed Person.
+     * A correction answered. A rename or merge of the viewed Person is noted even when the asset is
+     * no longer shown, and searched at once if Asset detail closed while the request was out; the
+     * panel itself changes only while the asset is still shown.
      */
     function afterEdit({
         sectionEl: newSectionEl,
@@ -480,7 +397,7 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
             ?.focus({ preventScroll: true })
     }
 
-    /** A correction found the section stale: the server's message is shown and the panel loads the asset's details again */
+    /** A correction found the section stale: shows the server's message and loads the section again */
     function reloadSection(message) {
         showErrorSnackBar(message)
         selectedFaceId = null
@@ -489,7 +406,7 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         loadIfWanted()
     }
 
-    /** The combobox's X: the row's original state, with nothing selected, and focus back on the row */
+    /** The combobox was cancelled: deselects the row and returns focus to it */
     function cancelChange(faceId) {
         if (selectedFaceId === faceId) {
             selectFace(faceId)
@@ -500,10 +417,8 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
     }
 
     /**
-     * Whether the asset still belongs in the grid, the viewed Person's results: when they have no
-     * Face left on it, or were deleted by the correction, its cells leave on stepping away or
-     * closing; a later correction that gives them a Face back keeps it, unless they were deleted.
-     * Once the viewed Person is merged away, their destination is the one whose Faces count.
+     * Marks the asset leaving when the viewed Person (or their merge destination) has no Face left on
+     * it or was deleted. A later correction that gives a Face back keeps it, unless they were deleted.
      */
     function noteViewedPerson(newSectionEl, deletedPersonId) {
         const personId =
@@ -526,14 +441,10 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
     }
 
     /**
-     * The asset the viewed Person left leaves the grid, and the walk goes on from the cells around
-     * it; the results title is read again, as its Hide and Discard links depend on the count, or
-     * the results go back to the whole repository when the Person was deleted. A detail opened from
-     * a map pin has no cell, so only the title. On `closing`, the results of a viewed Person merged
-     * away become the destination's, and those of a viewed destination are read again; until then
-     * the title, the merged Person's or the destination's before the merge, is left for that search
-     * to replace. On `closing` too, a filtered search whose title has a chip of a Person named from
-     * the panel is searched again, which renders the chip with the name.
+     * Removes the cells of the asset the viewed Person left and reads the results title again, since
+     * its links depend on the count; a deleted Person sends the results back to the whole repository.
+     * Only on `closing` does a pending merge or stale chip run the search again; until then a pending
+     * merge leaves the title for that search to replace.
      */
     function flushLeaving({ closing = false } = {}) {
         const left = leaving
@@ -549,8 +460,8 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
             assetActions.removeAssetsFromGrid([left.assetId])
         }
 
-        // The search goes on without the viewed Person, or with their destination in their place, and
-        // keeps every other filter of a filtered search
+        // The search drops the viewed Person, or puts their destination in their place, and keeps
+        // every other filter
         const searchParams = Alpine.store(Const.state.searchParams)
         if (left?.deleted) {
             mergedInto = null
@@ -574,7 +485,7 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         }
     }
 
-    /** The fragment's open state, which the stylesheet lays the grid out from, and the toggles' pressed state */
+    /** The stylesheet lays the grid out from the fragment's open attribute */
     function applyOpenState() {
         viewEl()?.toggleAttribute(
             Const.attributes.detailPanelOpen,
@@ -597,10 +508,7 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         }
     }
 
-    /**
-     * The Details' dimensions row shows the shown media's upright size, the header's until the media
-     * is shown, and the edited size after it while the stage shows an Edit
-     */
+    /** The server's header size stays until the media is shown; then the upright shown size, plus the edited one */
     function writeDimensions() {
         const dimensionsEl = contentEl()?.querySelector(
             `[${Const.attributes.detailDimensions}]`,
@@ -613,7 +521,6 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         }
     }
 
-    /** The People rows in the panel, in the server's order */
     function rowEls() {
         return [
             ...(contentEl()?.querySelectorAll(
@@ -628,7 +535,6 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         )
     }
 
-    /** What the rows say of each Face: its Person's name, whether Hidden, its box in the shown pixels and its Frame time */
     function faces() {
         return rowEls().map((rowEl) => {
             const [x, y, width, height] = rowEl.dataset.faceBox
@@ -645,7 +551,6 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         })
     }
 
-    /** The rows' selection buttons read the selection */
     function paintRows() {
         rowEls().forEach((rowEl) =>
             rowEl
@@ -660,10 +565,7 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         )
     }
 
-    /**
-     * Whether `face` is on the shown media now: always on an image, and on a Video only while the
-     * player is paused within the tolerance of its Frame time, never during playback.
-     */
+    /** On a Video, a Face is on the frame only while the player is paused within the tolerance of its Frame time */
     function isOnShownFrame(face, videoEl) {
         if (!videoEl) {
             return true
@@ -676,11 +578,6 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         )
     }
 
-    /**
-     * Draws the Face highlights the setting, the selection and a Video's time call for, once the
-     * media is shown: each box as fractions of the shown media, through the Edit's geometry while the
-     * stage shows an Edit, where a Face whose center the crop leaves out is not drawn
-     */
     function drawHighlights() {
         if (!shownSize || !highlightsShown) {
             highlights.clear()
@@ -721,8 +618,8 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
     }
 
     /**
-     * The least the panel and the stage may be squeezed to along the axis, in px: the `core.css` tokens, registered as
-     * lengths; the Edit panel, docked opposite, and its divider take what they take besides
+     * The least the panel and the stage may be squeezed to along the axis, in px, from the `core.css`
+     * tokens; the stage's share also holds the Edit panel and its divider, docked opposite
      */
     function panelMinimums(vertical) {
         const styles = getComputedStyle(viewEl() ?? document.documentElement)
@@ -749,7 +646,6 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         }
     }
 
-    /** The remembered settings, or the defaults where they are missing or unreadable: a closed panel, highlights off */
     function rememberedState() {
         const saved = readStoredObject(Const.localStore.assetDetailView)
 
@@ -759,10 +655,7 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         }
     }
 
-    /**
-     * Writes the changed setting under the key, leaving the rest as it is: the dock's part, which
-     * the dock writes, and a remembered panel state that an asset's URL is overriding
-     */
+    /** Writes only the changed fields, keeping the dock's part and a panel state an asset's URL is overriding */
     function remember(fields) {
         writeStoredFields(Const.localStore.assetDetailView, fields)
     }
@@ -774,13 +667,11 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         setShownSize,
         toggle,
         toggleHighlights,
-        /** The side the panel sits on, picked or by default, as the fragment is laid out */
         dockSide: () => dock.side(),
-        /** Whether the panel is open */
         isOpen: () => state.panelOpen,
         /** Calls `listener` after the panel's side changes and after it opens or closes */
         onLayoutChange: (listener) => layoutListeners.add(listener),
-        /** Lays the panel out again within the bounds the fragment leaves it now (the Edit panel opened or closed) */
+        /** Lays the panel out again within its current bounds, as when the Edit panel opens or closes */
         layOut: () => dock.layOut(),
     }
 }

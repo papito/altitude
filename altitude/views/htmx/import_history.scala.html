@@ -7,34 +7,21 @@
 
 @(history: ImportHistory, shown: Int)
 
-@* The Import history of the Import page (pipeline.scala.html, and GET /htmx/import/r/:repoId/history, a holder of Import's):
-   a vertical timeline, one node per Import, the Imports in progress pinned under "In progress" above "Earlier", the newest
-   first in each. It shows the Library's first `shown` Imports and offers the earlier ones a step at a time, up to the most
-   it shows (Const.ImportHistory); a Library with no Import says so.
-
-   An entry is the Import's kind as an icon (a folder upload, an upload of files, a Watch folder's scan), its title
-   (includes/import_title), who or what delivered it, when (a `<time>` the page shows in the viewer's zone, `localTime`),
-   where it went and, when a restart failed files of it, that it was interrupted; then its status (includes/import_status),
-   which the status feed replaces as the Import changes; then its Import files, a `<details>` whose list
-   (htmx/import_files) the page loads when it is opened.
-
-   The page reads the history again, by the root's `data-app-view-url`, when an Import opens or closes and when the feed
-   reconnects (js/import-status.js). Each `<details>` is `hx-preserve`, so an Import expanded on the page stays as it is
-   across that: open, with its filter and the files it shows. *@
+@* The Import history: the Imports in progress pinned above the earlier ones, the newest first in each. The page reads it
+   again by `data-app-view-url` when an Import opens or closes and when the status feed reconnects; each `<details>` is
+   `hx-preserve`, so an expanded Import keeps its filter and files across that. *@
 
 @repoId = @{ RequestContext.getRepository.persistedId }
 @route = @{ s"/htmx/import/r/$repoId" }
 @sizes = @{ Const.ImportHistory }
 @count(n: Int) = @{ f"$n%,d" }
 
-@* What kind of delivery the Import is: the icon, and its name for a screen reader *@
 @kind(listed: ImportEntry) = {@((listed.anImport.source, listed.anImport.name)) match {
     case (ImportSource.WatchFolder, _) => {<i class="fas fa-eye" aria-hidden="true"></i><span class="visually-hidden">Watch folder scan</span>}
     case (ImportSource.Upload, Some(_)) => {<i class="fas fa-folder" aria-hidden="true"></i><span class="visually-hidden">Folder upload</span>}
     case (ImportSource.Upload, None) => {<i class="fas fa-file" aria-hidden="true"></i><span class="visually-hidden">File upload</span>}
 }}
 
-@* Who or what delivered the Import: a Watch folder, or the account, which may be deleted since *@
 @deliveredBy(listed: ImportEntry) = {@if(listed.anImport.source == ImportSource.WatchFolder) {Watch folder} else {@listed.deliveredBy.getOrElse("Deleted account")}}
 
 @entry(listed: ImportEntry) = {

@@ -186,12 +186,11 @@ import altitude.core.service.UserService.TokenCheck
      * Assertions:
      *
      * The earlier token is refused, renewable as it is, and a token from a new login checks as current. The refusal leaves the
-     * session cookie alone: the browser may hold the token the change minted by now (a request in flight while the account
-     * changed its own password), which a cleared cookie would log out.
+     * session cookie alone, since by then the browser may hold the token the password change minted.
      *
      * Edge cases:
      *
-     * The deactivated User's revoked token is refused clearing the cookie, as a token of an account that can do nothing is.
+     * The deactivated User's revoked token is refused and clears the cookie.
      */
     val user = testContext.persistUser()
     val token = tokenOf(user)
@@ -348,8 +347,8 @@ import altitude.core.service.UserService.TokenCheck
      *
      * Assertions:
      *
-     * The rebuilt token is refused: it is minted at the version read with the standing, never at one read after it, so a
-     * revocation that lands between the two cannot pass for one the token postdates.
+     * The rebuilt token is refused: it carries the version of the snapshot its standing was read from, never a later one, so a
+     * revocation that lands in between cannot pass for one the token postdates.
      */
     val user = testContext.persistUser()
     val token = tokenOf(user)

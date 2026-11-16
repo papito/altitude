@@ -19,11 +19,11 @@ import altitude.core.routes.BaseController
     /**
      * Setup:
      *
-     * A dialog success response whose detail is a JSON object with a name in German and Japanese ("Zürich 東京").
+     * A dialog success response whose detail holds a name outside Latin-1.
      *
      * Assertions:
      *
-     * The success detail header is pure ASCII, and parsing it as JSON gives back the original name unchanged.
+     * The success detail header is pure ASCII, and parsing it as JSON gives back the name unchanged.
      */
     val header = controller
       .dialogSuccessResponse(ujson.Obj("name" -> "Zürich 東京"))
@@ -44,8 +44,7 @@ import altitude.core.routes.BaseController
      *
      * Assertions:
      *
-     * Each is a 400 in the `{"error": ...}` shape, `application/json`, carrying the message, or the field errors joined, as the
-     * plain-text answer of `answering` carries them.
+     * Each is a JSON 400 `{"error": ...}` carrying the message, or the field errors joined, as the plain-text `answering` does.
      */
     val withMessage = controller.answeringJson(throw ValidationException("Not a UUID"))
     withMessage.statusCode shouldBe 400

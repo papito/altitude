@@ -17,7 +17,7 @@ export function registerFolderListeners(app) {
             return
         }
 
-        // Capture the folder name before the DOM is rebuilt
+        // Capture the names before the tree is rebuilt
         const movedFolderNameEl = document.getElementById(
             `folderName-${movedFolderId}`,
         )
@@ -72,7 +72,7 @@ export function registerFolderListeners(app) {
             const nameEl = document.getElementById(`folderName-${id}`)
             const name = nameEl?.innerText ?? id
 
-            // Deleting a folder also recycles assets in its entire subtree.
+            // The subtree's assets were recycled, so the nav's counts change
             app.reloadNav()
             await reloadFolderTree(app.context.getRepoId())
             showSuccessSnackBar(`Folder "${name}" deleted`)

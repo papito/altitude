@@ -26,10 +26,8 @@ import altitude.core.models.Asset
 
     withServer(App) {
       host =>
-        // Create a folder to move assets to
         val targetFolder = testApp.service.folder.add("target-folder")
 
-        // Create test assets
         val asset1 = testContext.persistAsset()
         val asset2 = testContext.persistAsset()
 
@@ -49,7 +47,6 @@ import altitude.core.models.Asset
 
         response.statusCode.shouldBe(200)
 
-        // Verify assets were moved to the target folder
         val movedAsset1: Asset = testApp.service.asset.getById(asset1.persistedId)
         val movedAsset2: Asset = testApp.service.asset.getById(asset2.persistedId)
 
@@ -77,7 +74,6 @@ import altitude.core.models.Asset
 
     withServer(App) {
       host =>
-        // Create test assets
         val asset1 = testContext.persistAsset()
         val asset2 = testContext.persistAsset()
 
@@ -96,7 +92,6 @@ import altitude.core.models.Asset
 
         response.statusCode.shouldBe(200)
 
-        // Verify assets were recycled
         val recycledAsset1: Asset = testApp.service.asset.getById(asset1.persistedId)
         val recycledAsset2: Asset = testApp.service.asset.getById(asset2.persistedId)
 
@@ -122,14 +117,12 @@ import altitude.core.models.Asset
 
     withServer(App) {
       host =>
-        // Create and recycle an asset
         val asset = testContext.persistAsset()
         testApp.service.library.recycleAssets(Set(asset.persistedId))
 
         val recycledAsset: Asset = testApp.service.asset.getById(asset.persistedId)
         recycledAsset.isRecycled.shouldBe(true)
 
-        // Now move it to a folder (which should restore it)
         val targetFolder = testApp.service.folder.add("restore-folder")
 
         val payload = ujson.Obj(
@@ -146,7 +139,6 @@ import altitude.core.models.Asset
 
         response.statusCode.shouldBe(200)
 
-        // Verify asset was restored and moved
         val restoredAsset: Asset = testApp.service.asset.getById(asset.persistedId)
         restoredAsset.folderId.shouldBe(targetFolder.persistedId)
         restoredAsset.isRecycled.shouldBe(false)
@@ -163,12 +155,12 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * The restore endpoint answers with the IDs it restored and, apart from them, the IDs it left in the trash because their
-     * content is live again.
+     * The restore endpoint answers the IDs it restored, and apart from them the IDs it left in the trash because their content is
+     * live again.
      *
      * Edge cases:
      *
-     * The second copy of a file, imported after the first was recycled, keeps the first from being restored.
+     * A copy of a file imported after the first was recycled keeps the first from being restored.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -210,8 +202,7 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * Recycling that asset through the second user's repository is a JSON 404, as for any foreign entity, and the asset stays
-     * live.
+     * Recycling that asset through the second user's repository is a JSON 404, and the asset stays live.
      */
     testContext.persistRepository()
     login()
@@ -250,8 +241,8 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * Through the first repository, moving the asset into "Eve's folder", or into a folder ID that does not exist, answers a JSON
-     * 404 that does not carry the folder's name. The asset stays in its root folder: no row of either repository changes.
+     * Through the first repository, moving the asset into "Eve's folder" or an unknown folder ID answers a JSON 404 without the
+     * folder's name. No row of either repository changes.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -295,9 +286,8 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * Through the first repository, restoring the user's asset together with the other repository's, or with an asset ID that
-     * does not exist, answers a JSON 404 that does not carry the other asset's file name. Both assets stay in the trash: no row
-     * of either repository changes.
+     * Through the first repository, restoring the user's asset together with the other repository's, or with an unknown asset ID,
+     * answers a JSON 404 without the other asset's file name. No row of either repository changes.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId

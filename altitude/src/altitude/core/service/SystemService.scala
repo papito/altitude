@@ -31,11 +31,9 @@ class SystemService(val app: Altitude):
     }
 
   /**
-   * The key of signed content URLs ([[ContentSigner]]), created and stored on the first call against a database without one.
-   *
-   * Two instances starting against one database may both find none: each stores its own only while none is stored, then reads the
-   * stored one back, so both end up with the key that was stored first. On PostgreSQL the second update waits for the first
-   * transaction's row lock and then matches no row; on SQLite write transactions run one at a time.
+   * The key of signed content URLs ([[ContentSigner]]), created on the first call against a database without one. Two instances
+   * racing on one database each store theirs only while none is stored and then read it back, so both get the first one stored:
+   * on PostgreSQL the second update waits on the row lock and then matches nothing; SQLite runs writers one at a time.
    */
   def loadOrCreateSigningKey(): Array[Byte] =
     txManager.withTransaction {

@@ -14,7 +14,6 @@ import altitude.core.routes.decorators.requirePermission
 class AssetController(using logger: Logger) extends BaseController:
   private val prefix = "api/asset"
 
-  /** A destination that is no folder of the repository, unknown or another repository's, is a JSON 404 that moves nothing */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/move")
@@ -42,7 +41,6 @@ class AssetController(using logger: Logger) extends BaseController:
       jsonResponse(ujson.Obj())
     }
 
-  /** An ID that is no asset of the repository, unknown or another repository's, is a JSON 404 that restores nothing */
   @requireLogin()
   @requirePermission(Permission.Recycle, Permission.CurateOwn, Permission.CurateAll)
   @cask.put(f"/$prefix/r/:repoId/restore")

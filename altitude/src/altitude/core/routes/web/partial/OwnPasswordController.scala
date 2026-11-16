@@ -17,9 +17,8 @@ import altitude.core.routes.web.SessionController
 object OwnPasswordController:
 
   /**
-   * The session cookie of a new token for the account, minted from the database once its password has changed, which refused
-   * every token minted before (`AccountVersions.revoke`): the session that made the change carries on. None when the account is
-   * gone or deactivated meanwhile.
+   * A fresh session cookie after a password change, which revoked every earlier token (`AccountVersions.revoke`), so the session
+   * that made the change carries on. Empty when the account is gone or deactivated meanwhile.
    */
   def renewedSession(accountId: String): Seq[Cookie] =
     App.altitude.service.user
@@ -27,10 +26,7 @@ object OwnPasswordController:
       .map(claims => SessionController.authCookie(App.altitude.service.paseto.createToken(claims), claims.expiresAt))
       .toSeq
 
-/**
- * Every account's change of its own password, from the account info dialog the nav opens: the current password and the new one
- * twice. The routes name no Library, since a password is the account's, so any account logged in reaches them.
- */
+/** Changing one's own password. The routes name no Library, since a password is the account's. */
 class OwnPasswordController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/account"
 
@@ -39,11 +35,7 @@ class OwnPasswordController(using logger: Logger) extends BaseController:
   def showDialog()(using request: Request): Response[String] =
     htmlResponse(htmx.html.own_password_dialog())
 
-  /**
-   * Changes the account's password: a wrong current password, a new one outside the password rule, or a repeat that differs,
-   * comes back as the dialog with the error under its field. Every other session of the account is refused from then on; this one
-   * is given a new token.
-   */
+  /** Every other session of the account is refused from then on; this one is given a new token */
   @requireLogin()
   @cask.put(f"/$prefix/password")
   def htmxChange()(using request: Request): Response[String] =

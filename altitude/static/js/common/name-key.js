@@ -1,7 +1,6 @@
 /**
- * A name as the server compares names: trimmed, then the server's fold (`NameKey.of`), so "WEISS"
- * is "Weiß" and "σοφοσ" is "σοφος". The case mappings take no locale, as the server's take
- * `Locale.ROOT`; the server stays the authority. Two names are one name when their keys are equal.
+ * A name trimmed, then folded as the server's `NameKey.of` folds it ("WEISS" is "Weiß"). The case
+ * mappings take no locale, matching the server's `Locale.ROOT`; the server stays the authority.
  */
 export function nameKey(text) {
     return text
@@ -14,11 +13,9 @@ export function nameKey(text) {
 }
 
 /**
- * A name's form for finding a query within it: its name key with every final sigma (ς) read as a
- * plain one (σ). The key's last lower step gives a sigma at the end of a word the final form, so a
- * query that stops in mid-word on a sigma ("σοφοσ") ends in ς while the name it is part of
- * ("Σοφοσάκης") has σ there; reading ς as σ on both sides makes the query a part of the name again.
- * Only for the substring test: equality is the name key's.
+ * The name key with every final sigma (ς) read as σ, for substring tests only. Lowercasing gives a
+ * word-final sigma the final form, so a query that stops mid-word on a sigma ("σοφοσ") ends in ς
+ * while the name containing it ("Σοφοσάκης") has σ there.
  */
 export function partialMatchKey(text) {
     return nameKey(text).replaceAll("ς", "σ")

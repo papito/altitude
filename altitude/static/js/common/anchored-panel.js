@@ -1,10 +1,8 @@
 /**
- * Places a viewport-positioned panel below its anchor, left-aligned unless `center` is set.
- * Flip above when needed; if neither side fits, use the roomier side with internal scrolling.
- * When shifted, flipped or shrunk, the panel keeps `--viewport-gap` (core.css), read from its
- * own computed style, from each viewport edge. core.css registers it as a length, so the
- * computed value is in px even though the token is written in rem.
- * Callers provide the positioning/overflow CSS and ensure the panel's ancestors are displayed.
+ * Places a viewport-positioned panel below its anchor, flipped above when needed; when neither side
+ * fits, on the roomier side, scrolling. It keeps `--viewport-gap` from each viewport edge, registered
+ * as a length so its computed value is in px. Callers provide the positioning and overflow CSS and
+ * ensure the panel's ancestors are displayed.
  */
 export function placeAnchoredPanel(panel, anchor, { center = false } = {}) {
     const gap = parseFloat(
@@ -14,8 +12,8 @@ export function placeAnchoredPanel(panel, anchor, { center = false } = {}) {
     const viewportWidth = document.documentElement.clientWidth
     const viewportHeight = document.documentElement.clientHeight
 
-    // Native popovers are hidden before opening. Measure with their open display and without
-    // an earlier height constraint, then restore display so the browser still owns visibility.
+    // A native popover is hidden before opening: measure it displayed and without an earlier height
+    // cap, then restore display so the browser still owns visibility
     const display = panel.style.display
     panel.style.display = "grid"
     panel.style.maxHeight = ""
@@ -40,7 +38,7 @@ export function placeAnchoredPanel(panel, anchor, { center = false } = {}) {
         top = gap
     }
 
-    // A scrollbar introduced by the height cap can change the panel's width.
+    // A scrollbar the height cap introduced can change the width
     const { width } = panel.getBoundingClientRect()
     const alignedLeft = center
         ? trigger.left + (trigger.width - width) / 2

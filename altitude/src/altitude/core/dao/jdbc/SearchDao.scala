@@ -42,10 +42,7 @@ import altitude.core.util.SortValue
 import altitude.core.util.WeakerMatches
 
 object SearchDao:
-  /**
-   * The field types a metadata filter can match: the ones with a value column in `metadata_parameter` that the insert writes. A
-   * value of any other type is searchable through the Search document only.
-   */
+  /** The field types with a value column in `metadata_parameter`; other types are searchable through the Search document only */
   private val FACETED_FIELD_TYPES: Set[FieldType] = Set(FieldType.KEYWORD, FieldType.NUMBER, FieldType.BOOL)
 
   private val VALUE_INSERT_SQL: String = s"""
@@ -59,8 +56,8 @@ object SearchDao:
             """
 
   /**
-   * Both engines take the same upsert: an asset has one document, keyed by the table's unique index. An unchanged body is not
-   * rewritten, which on SQLite also spares the full-text entry its update trigger.
+   * One document per asset, by the table's unique index. An unchanged body is not rewritten, which on SQLite also spares the
+   * full-text entry its update trigger.
    */
   private val DOCUMENT_UPSERT_SQL: String = s"""
             INSERT INTO search_document (${FieldConst.REPO_ID}, ${FieldConst.SearchToken.ASSET_ID}, body)
@@ -73,18 +70,13 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
   protected def searchDialect: SearchDialect
 
   /**
-   * How the matches of the resolved `query` are ranked: exactly, each matching asset's embedding compared with the description's,
-   * which is the one way every engine has. An engine with a vector index chooses here between that and its index.
+   * Ranks exactly, comparing each match's embedding with the description's, which every engine can; an engine with a vector index
+   * chooses here between that and its index
    */
   override def rankingFor(query: SearchQuery, ranking: DescribeRanking): DescribeRanking =
     ranking.copy(throughIndex = false)
 
-  /**
-   * One statement for both engines (`SearchQueries.described`) around the engine's ranked rows, which are the query's matches, so
-   * the page is read as every other search's is: a Search text that the probe found no asset can match is answered with nothing,
-   * and the rows come back as the asset, its distance, the line of the weaker matches with their count and, on a page that counts
-   * it, the total.
-   */
+  /** One statement for both engines (`SearchQueries.described`) around the engine's ranked rows, paged as every other search */
   override def describe(query: SearchQuery, ranking: DescribeRanking): SearchPage =
     import dialect.*
 
@@ -102,7 +94,6 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         (asset, distance, _, _) =>
           SearchRow(toModel(asset), day = None, sortValue = SortValue.Real(distance), secondSortValue = SortValue.Null)
       },
-      // A page that counts the total carries it on every row; an empty one has no rows because nothing was ranked
       total = Option.when(isTotalCounted)(candidates.headOption.flatMap(_._2).getOrElse(0)),
       hasMore = candidates.length > query.rpp,
       weaker = rows.headOption.flatMap {
@@ -113,18 +104,16 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     page
 
   /**
-   * Where the weaker matches begin on a page of a Describe search whose rows stand at `distances`, nearest first: at its first
-   * row with a cosine under `weakerUnder`, the line, when the row before that one is not under it, which is the page's own or,
-   * for the page's first row, the one the cursor continues from. So one page of a search names them and a page that begins among
-   * them does not. A line that is not positive is none (`SearchQueries.IS_WEAKER`): under a ratio of 0, and where the nearest row
-   * has no positive cosine to take a fraction of.
+   * Where the weaker matches begin on a Describe page (`distances` nearest first): at the first row with a cosine under
+   * `weakerUnder` whose previous row (on the page, or the cursor's) is not under it, so only the page that crosses the line names
+   * it. A non-positive line, from a ratio of 0 or a nearest row with no positive cosine, is none (`SearchQueries.IS_WEAKER`).
    */
   private def weakerMatches(
       distances: List[Double],
       cursor: Option[SearchCursor],
       weakerUnder: Double,
       count: Int): Option[WeakerMatches] =
-    // As the statement compares a row with the line, so that a row is on one side of it here and in the count
+    // Compares as the statement does, so a row is on the same side of the line here and in the count
     def isWeaker(distance: Double): Boolean = weakerUnder > 0 && 1 - distance < weakerUnder
     val index = distances.indexWhere(isWeaker)
     val followsNearer = index > 0 || cursor.map(_.sortValue).exists {
@@ -141,9 +130,8 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     if matchesNothing(query) then return SearchPage(Nil, Option.when(isTotalCounted)(0), hasMore = false)
 
     val statement = SearchQueries.flat(searchDialect, query, RequestContext.getRepository.persistedId)
-    // Each row is the asset, its day and two sort keys, then the count of the candidates, which are one row past the page
+    // The last column counts the candidates, which run one row past the page
     val page = readPage[(AssetRow[Sc], Option[LocalDate], SortValue, SortValue, Int)](statement, isTotalCounted)
-    // A page that counts the total carries it on every row; an empty one has no rows because nothing matches
     val total = Option.when(isTotalCounted)(page.headOption.flatMap(_._2).getOrElse(0))
     val hasMore = page.headOption.exists(_._1._5 > query.rpp)
     logPage(page.length, total, hasMore)
@@ -191,8 +179,6 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     val isTotalCounted = query.isTotalCounted
     if matchesNothing(query) then return GroupedSearchPage(Nil, Option.when(isTotalCounted)(0), hasMore = false)
 
-    // Each statement selects the asset columns, then what names the row's group, its two sort keys, the group's count and
-    // the candidate count; the shape of the group columns is the grouping's
     val page: IndexedSeq[(GroupedSearchRow, Int, Option[Int])] = grouping.by match
       case GroupBy.DateTaken =>
         val statement = SearchQueries.grouped(searchDialect, query, repositoryId)
@@ -219,7 +205,6 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
               (GroupedSearchRow(toModel(asset), group, sortValue, secondSortValue, groupTotal), candidates, total)
           }
 
-    // A page that counts the total carries it on every row; an empty one has no rows because nothing matches
     val total = Option.when(isTotalCounted)(page.headOption.flatMap(_._3).getOrElse(0))
     val hasMore = page.headOption.exists(_._2 > query.rpp)
     logPage(page.length, total, hasMore)
@@ -306,26 +291,23 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     logger.trace(s"Probed the Search text, hits by group: $hitsByGroup")
     hits
 
-  /**
-   * Whether the Search text's probe found that no asset can match it, a positive group having no hit at all: such a search is
-   * answered with nothing, without reading the library
-   */
+  /** The Search text's probe left a positive group with no hit, so no asset can match and the library is not read */
   private def matchesNothing(query: SearchQuery): Boolean = query.resolvedText.exists(_.candidates.exists(_.isEmpty))
 
   private def logPage(numOfRows: Int, total: Option[Int], hasMore: Boolean): Unit =
     logger.trace(s"Retrieved [$numOfRows] records, total ${total.getOrElse("not counted")}, more: $hasMore")
 
-  /** Runs a page's statement: the rows of a page that counts the total end with it, which no other page selects */
+  /**
+   * Runs a page's statement. A page that counts the total carries it at the end of every row (no other page selects it); an empty
+   * page has no rows to carry it because nothing matched.
+   */
   private def readPage[Row](statement: SqlStr, isTotalCounted: Boolean)(using
       Queryable.Row[?, Row],
       Queryable.Row[?, (Row, Int)]): IndexedSeq[(Row, Option[Int])] =
     if isTotalCounted then Db.read(dialect)(_.runSql[(Row, Int)](statement)).map((row, total) => (row, Some(total)))
     else Db.read(dialect)(_.runSql[Row](statement)).map(row => (row, None))
 
-  /**
-   * Writes the asset's Search document, new or not: the words of its file name, then those of every user metadata value, each in
-   * every one of its readings ([[SearchWords.variants]])
-   */
+  /** The words of the file name and every user metadata value, each in all its readings ([[SearchWords.variants]]) */
   protected def writeDocument(asset: Asset): Unit =
     val metadataValues = asset.userMetadata.data.values.flatten.map(_.value)
     val body = (asset.fileName +: metadataValues.toSeq).flatMap(SearchWords.variants).flatten.mkString(" ")
@@ -392,10 +374,9 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         // keyword, under its name key, which a keyword filter is folded to as well (`SearchQueries.valueMatch`)
         if field.fieldType == FieldType.KEYWORD then preparedStatement.setString(4, NameKey.of(valueStr))
         else preparedStatement.setNull(4, Types.VARCHAR)
-        // number
         if field.fieldType == FieldType.NUMBER then preparedStatement.setDouble(5, valueStr.toDouble)
         else preparedStatement.setNull(5, Types.DOUBLE)
-        // boolean, as the value stands for it in any form the field accepts ("1", "TRUE")
+        // boolean, from any form the field accepts ("1", "TRUE")
         if field.fieldType == FieldType.BOOL then preparedStatement.setBoolean(6, UserMetadataValue.asBoolean(valueStr).get)
         else preparedStatement.setNull(6, Types.BOOLEAN)
         BaseDao.incrWriteQueryCount()

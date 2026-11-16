@@ -1,11 +1,8 @@
 /**
- * After an Edit is saved, the server renders it in the background (the `edit-render` queue, 1.5 s
- * after the last save) and replaces the edited Preview and the Display image under a new revision.
- * This module waits for that render (`waitForRender`: `GET /api/edit/r/:repo/asset/:id/status`
- * every second, for up to a minute, until the edit version rendered is the one saved) and then points
- * the asset's cells in the grid at the new Preview (`swapGridPreviews`), which the Edit panel runs
- * for each edit version its session (`edit-session.js`) adopts unrendered, and swaps at once for one
- * adopted rendered. The status route is the holder of Edit images'.
+ * After a save the server renders the Edit in the background (debounced 1.5 s after the last save)
+ * and stores the edited Preview and Display image under a new revision. This module waits for that
+ * render and then points the asset's grid cells at the new Preview. The status route needs the Edit
+ * images Permission.
  */
 import { cellsOf } from "../search-results/cells.js"
 import { previewUrl, repointImage } from "../common/content-urls.js"
@@ -13,16 +10,15 @@ import { getHttpErrorMessage, http } from "../http/client.js"
 
 export const POLL_INTERVAL_MS = 1000
 export const POLL_TIMEOUT_MS = 60000
-// How many reads of the status in a row may fail (a network blip, a restart) before the wait gives up
+// Status reads in a row that may fail (a network blip, a restart) before the wait gives up
 export const MAX_FAILED_READS = 3
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * Resolves to the render status (`{ editVersion, renderedVersion, rev }`) once the edit version
- * rendered is `editVersion`, or to null when a minute passes first, `isCancelled()` turns true (a later save, which
- * waits for its own render), the Edit has been saved again, or `MAX_FAILED_READS` reads in a row
- * fail (each logged). Polls every second, the first time at once.
+ * Resolves to the render status once `editVersion` is rendered, or to null on the timeout, on
+ * `isCancelled()`, when the Edit was saved again, or after `MAX_FAILED_READS` failed reads in a row.
+ * The first poll is immediate.
  */
 export async function waitForRender({
     repoId,
@@ -56,7 +52,7 @@ export async function waitForRender({
             return null
         }
         if (status) {
-            // A later edit version than the one waited for is another save's to wait for
+            // A later edit version is another save's to wait for
             if (status.editVersion !== editVersion) {
                 return null
             }
@@ -75,10 +71,7 @@ export async function waitForRender({
     return null
 }
 
-/**
- * Points every cell of `assetId` in the grid at its Preview of revision `rev` (`repointImage`: its
- * `data-src`, and its `src` while it shows its image). Answers how many cells changed.
- */
+/** Points every grid cell of `assetId` at its Preview of revision `rev`; answers how many cells changed */
 export function swapGridPreviews({ repoId, assetId, rev }) {
     const url = previewUrl(repoId, assetId, rev)
     return cellsOf(assetId)
@@ -86,11 +79,7 @@ export function swapGridPreviews({ repoId, assetId, rev }) {
         .filter((imgEl) => imgEl && repointImage(imgEl, url)).length
 }
 
-/**
- * Waits for the render of `editVersion` and swaps the grid's Previews to it: the panel's call for an
- * edit version its session adopted unrendered. Resolves to the status, or null when the render was not seen (see
- * `waitForRender`).
- */
+/** Waits for the render of `editVersion` and swaps the grid's Previews to it; resolves as `waitForRender` does */
 export async function refreshAfterRender({
     repoId,
     assetId,

@@ -23,7 +23,7 @@ object EditController:
 
   private def orNull(value: Option[Int]): ujson.Value = value.fold(ujson.Null: ujson.Value)(ujson.Num(_))
 
-  /** Where the render of an Edit stands: its edit version, the edit version whose edited images are stored, and their revision */
+  /** Where the render stands: `renderedVersion` is the edit version whose edited images are stored, `rev` their revision */
   def statusJson(state: EditState): ujson.Obj =
     ujson.Obj(
       fields.EDIT_VERSION -> state.editVersion,
@@ -31,9 +31,8 @@ object EditController:
       fields.REV -> state.rev)
 
   /**
-   * An Edit as a client sees it, which the asset detail's `edit` carries too: the render status, whether it is edited, its edited
-   * size, the size of the upright original its geometry is in, which the client cannot tell from the stored size (a browser turns
-   * the original by its EXIF orientation), and the Edit
+   * The upright size is that of the original the geometry is in, which the client cannot tell from the stored size: a browser
+   * turns the original by its EXIF orientation
    */
   def stateJson(state: EditState): ujson.Obj =
     val json = statusJson(state)
@@ -45,12 +44,6 @@ object EditController:
     json(fields.RECIPE) = state.recipe.toJson
     json
 
-/**
- * The Edit's JSON API (`AssetEditService`): an asset's Edit, a save, the render status and auto-straighten, all the holder of
- * Edit images'. An unknown asset, or another Library's, is a 404; a refused Edit or body, and an asset that cannot be edited (no
- * still image, or in the trash), a 400; a save built on a version the Edit has moved on from a 409 carrying the current state,
- * which the client adopts.
- */
 class EditController(using logger: Logger) extends BaseController:
   private val prefix = "api/edit"
   private val fields = Api.Field.Edit
@@ -63,8 +56,8 @@ class EditController(using logger: Logger) extends BaseController:
     answeringJson(jsonResponse(EditController.stateJson(App.altitude.service.assetEdit.get(assetId))))
 
   /**
-   * Saves the body's `recipe` as the asset's Edit, built on the version `base` the client saw, and answers the new state, or a
-   * 409 with the current one when the Edit has moved on since
+   * `base` is the version the client saw; when the Edit has moved on since, a 409 carries the current state, which the client
+   * adopts
    */
   @requireLogin()
   @requirePermission(Permission.EditImages)
@@ -84,7 +77,7 @@ class EditController(using logger: Logger) extends BaseController:
             409)
     }
 
-  /** The version, the version whose edited images are stored and their revision, which the client polls until it is rendered */
+  /** The client polls this until the Edit is rendered */
   @requireLogin()
   @requirePermission(Permission.EditImages)
   @cask.get(f"/$prefix/r/:repoId/asset/:assetId/status")
@@ -92,10 +85,8 @@ class EditController(using logger: Logger) extends BaseController:
     answeringJson(jsonResponse(EditController.statusJson(App.altitude.service.assetEdit.status(assetId))))
 
   /**
-   * The Straighten that levels the lines of the asset's original as the Edit in `recipe` (its JSON) turns and mirrors it, which
-   * the Straighten's Auto button sets: `{angle}`, null when no lines agree on one, so the client keeps its Straighten. Nothing is
-   * stored. An original no image reader decodes is a 400, and a request while every auto-straighten slot is taken a 503 saying
-   * so, which the client shows.
+   * The Straighten that levels the original's lines as `recipe` turns and mirrors it, null when no lines agree on one. Nothing is
+   * stored.
    */
   @requireLogin()
   @requirePermission(Permission.EditImages)
@@ -112,7 +103,6 @@ class EditController(using logger: Logger) extends BaseController:
       catch case ex: BusyException => jsonError(ex.getMessage, 503)
     }
 
-  /** A field of the body that must be a whole number from 0: the version a save was built on */
   private def wholeNumber(body: ujson.Obj, field: String): Int =
     body.obj
       .get(field)

@@ -1,8 +1,5 @@
-/* The Edit panel (includes/edit_panel), in Asset detail's grid opposite the Detail panel (htmx/view_image_detail_modal.css
-   places it): its header, the body that scrolls (the Histogram, the tabs and the shown section), the save status with
-   Revert to original, and the keys. Docked top or bottom (`data-edit-dock-side` on the fragment) the status row joins the
-   header, the Histogram sits at the left of the tabs, the section flows into columns that scroll sideways, and the keys
-   are left out. The sliders are core.css's `.edit-slider`. After it, the warning of changes not saved */
+/* The header, the scrolling body (the Histogram, the tabs and the shown section), the save status and the keys. Docked
+   top or bottom, the panel rearranges into columns (the rules at the end) */
 #editPanel {
     grid-area: edit;
     min-width: 0;
@@ -54,8 +51,8 @@
     }
 }
 
-/* The warning of changes not saved: a native modal dialog over Asset detail, on the popover dialog's frosted surface and
-   padding, with its title as a dialog's and its buttons at the end, under the general modal's scrim */
+/* The warning of changes not saved: a native modal dialog on the popover dialog's surface, under the general modal's
+   scrim */
 #editLeaveDialog {
     box-sizing: border-box;
     width: calc(var(--popover-form-width) + 2 * var(--modal-content-padding));
@@ -169,7 +166,7 @@
     letter-spacing: var(--letter-spacing-wide);
 }
 
-/* A section's or the curve's reset: a link in the primary text color */
+/* A section's or the curve's reset reads as a link */
 #editPanel .edit-reset {
     padding: 0;
     border: none;
@@ -188,8 +185,7 @@
     gap: var(--space-2);
 }
 
-/* The panel's small buttons (Crop, Level, Auto-level, Revert to original) at the panel's size, larger than a small action
-   button elsewhere */
+/* The panel's small buttons are larger than a small action button elsewhere */
 #editPanel .action-button.small {
     font-size: var(--font-size-base);
 }
@@ -227,9 +223,8 @@
     cursor: pointer;
 }
 
-/* The curve editor: a square canvas over the field's sunken fill, drawn in the colors read from its style (the curve and
-   its points `color`, the grid `border-color`, the luminance Histogram behind `outline-color`); no outline or border is
-   painted */
+/* The script draws the curve in the colors read from here: `color` the curve and its points, `border-color` the grid,
+   `outline-color` the Histogram behind; no outline or border paints */
 #editPanel .edit-curve {
     justify-self: center;
     width: 100%;
@@ -273,8 +268,8 @@
     }
 }
 
-/* While changes are held: a notice, its info icon in the info color beside its words, as the Triage summary's. It and the
-   status swap by `hidden` rather than `x-show`, whose hide waits for a frame, which the redraw after Cancel holds up */
+/* The notice of held changes. It and the status swap by `hidden` rather than `x-show`, whose hide waits for a frame that
+   the redraw after Cancel holds up */
 #editPanel .edit-held {
     display: flex;
     align-items: baseline;
@@ -310,8 +305,8 @@
     display: none;
 }
 
-/* The Histogram at the left, the tabs and the section beside it; the section's controls flow into columns as tall as
-   the panel, which scroll sideways */
+/* The Histogram at the left, the tabs and the section beside it; the section flows into columns as tall as the panel,
+   which scroll sideways */
 #imageDetailView:is([data-edit-dock-side="top"], [data-edit-dock-side="bottom"]) #editPanel .edit-body {
     grid-template-columns: var(--edit-column-width) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);

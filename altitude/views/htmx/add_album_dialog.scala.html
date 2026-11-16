@@ -3,7 +3,7 @@
 
 @(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
-@* Return submits. Validation responses replace the form in the modal, keeping its values and errors. *@
+@* A validation response replaces this form, keeping its values and errors. *@
 <form action="#"
       id="addAlbum"
       data-app-fragment="modal"

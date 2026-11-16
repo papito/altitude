@@ -17,19 +17,16 @@ import altitude.core.models.ImageQuality
 import altitude.core.models.Settings
 
 /**
- * The rule that sorts the frames of a Curation set into Bundles, notices and Contenders. Pure over the models, so it is tested on
- * its own, and it runs when a set is read: nothing it decides is stored, so a changed threshold applies from the next read.
+ * Sorts the frames of a Curation set into Bundles, notices and Contenders. Pure, and run when a set is read: nothing is stored,
+ * so a changed threshold applies from the next read.
  *
- * The relative tests compare only what is comparable. Sharpness and exposure across different scenes mostly reflect content, so
- * the whole-frame and luminance comparisons run only among frames of one Sequence, while the same-Person tests run anywhere in
- * the set. Face sharpness and Face quality are never compared across Persons. It never reads the Image quality's score.
+ * Relative tests compare only what is comparable: sharpness and exposure across scenes mostly reflect content, so whole-frame and
+ * luminance comparisons stay within one Sequence, while same-Person tests run across the set. Faces are never compared across
+ * Persons, and the Image quality's score is never read.
  */
 object CurationRule:
 
-  /**
-   * One Person's Faces compare on sharpness only when their box areas are within this factor, as it falls as a face fills the
-   * frame
-   */
+  /** One Person's Faces compare on sharpness only within this factor of box area: sharpness falls as a face fills the frame */
   private val SIMILAR_SIZE_FACTOR = 2L
 
   def assess(frames: List[CurationFrame], settings: Settings): CurationSet =
@@ -73,9 +70,8 @@ object CurationRule:
     )
 
   /**
-   * Capture order, a frame with no capture time last, the import time breaking a tie and then the ID, so the order does not
-   * depend on how the frames were read, and the frames of an undated Sequence, which tie on no capture time, show as they were
-   * uploaded rather than by their random IDs. `AssetDao.sequenceFramesStatement` sorts the same way, since it cuts a window.
+   * Capture order, undated frames last, then import time and ID, so the order is stable and an undated Sequence shows as uploaded
+   * rather than by random IDs. `AssetDao.sequenceFramesStatement` must sort the same way, since it cuts a window.
    */
   private val captureOrder: Ordering[CurationFrame] =
     given Ordering[LocalDateTime] = Ordering.fromLessThan(_.isBefore(_))
@@ -83,8 +79,8 @@ object CurationRule:
       frame => (frame.asset.originalCreatedAt.isEmpty, frame.asset.originalCreatedAt, frame.asset.createdAt, frame.asset.id))
 
   /**
-   * A Face at least the gap under the same Person's best, or, in a Sequence, a Person in at least half of its frames with no Face
-   * here. The best is taken from the other frames, as a Person twice in this one (twins) is nothing a Pick can tell apart.
+   * A Face at least the gap under the same Person's best, or, in a Sequence, a Person in at least half of its frames missing
+   * here. The best comes from the other frames only: a Person twice in this one (twins) is nothing a Pick can tell apart.
    */
   private def poorFaces(
       frame: CurationFrame,
@@ -109,9 +105,8 @@ object CurationRule:
     belowBest ++ missing
 
   /**
-   * A Person shared with another frame at a similar size, under the ratio of that Person's best at that size. A frame with no
-   * such Person is compared on the whole frame against the sharpest of its Sequence, and a frame in no Sequence is not compared
-   * at all.
+   * A Person under the ratio of their sharpest similar-size Face in another frame. A frame with no such Person is compared whole
+   * against the sharpest of its Sequence, and not at all outside one.
    */
   private def blurry(
       frame: CurationFrame,
@@ -159,10 +154,7 @@ object CurationRule:
   private def exposureReadings(frame: CurationFrame)(tests: ImageQuality => List[Option[Exposure]]): List[Exposure] =
     frame.asset.imageQuality.toList.flatMap(tests(_).flatten)
 
-  /**
-   * How much farther from the target the frame's luminance is than that of the frame of its Sequence nearest the target, past the
-   * gap
-   */
+  /** The frame's luminance when it is at least the gap farther from the target than its Sequence's nearest frame */
   private def luminanceGap(frame: CurationFrame, sequenceMates: List[CurationFrame], settings: Settings): Option[LuminanceGap] =
     for
       quality <- frame.asset.imageQuality
@@ -173,9 +165,8 @@ object CurationRule:
   private def distanceFromTarget(luminance: Double): Double = Math.abs(luminance - ImageMeasurement.TARGET_LUMINANCE)
 
   /**
-   * The notice of one absolute problem, when it holds for every frame (an unmeasured frame has no readings, so it stops the
-   * notice). A test every frame is past is the one to name, or else each test some frame is past, every frame being past one of
-   * them.
+   * The notice of one absolute problem, when every frame has it (an unmeasured frame has no readings, so it stops the notice). It
+   * names the tests every frame fails, or else every test some frame fails.
    */
   private def noticeOf(kind: BundleKind, readingsPerFrame: List[List[Exposure]]): Option[CurationNotice] =
     Option.when(readingsPerFrame.nonEmpty && readingsPerFrame.forall(_.nonEmpty)) {
@@ -185,10 +176,7 @@ object CurationRule:
       CurationNotice(kind, named.values.map(mildest).toList.sortBy(_.measure.ordinal))
     }
 
-  /**
-   * The reading a notice can say of all its frames: a luminance under its limit is mildest at its highest, the others at their
-   * lowest
-   */
+  /** The reading true of all a notice's frames: a dark luminance is mildest at its highest, the others at their lowest */
   private def mildest(readings: List[Exposure]): Exposure =
     if readings.head.measure == ExposureMeasure.DarkLuminance then readings.maxBy(_.value) else readings.minBy(_.value)
 

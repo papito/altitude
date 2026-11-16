@@ -32,25 +32,20 @@ object UserService:
     case Current(claims: TokenClaims)
     // Minted before a change to the account: its claims rebuilt from the database, and the token that replaces it
     case Renewed(claims: TokenClaims, token: String)
-    // Not a token the server minted, expired, revoked, stale where it cannot be replaced, or of an account deactivated or deleted.
-    // `clearsCookie` when the token will never be good again (it does not decrypt or has expired, or its account is gone or
-    // deactivated), so the answer clears the session cookie; a token refused only for being revoked or stale leaves it, since the
+    // Not minted here, expired, revoked, stale where it cannot be replaced, or of a deactivated or deleted account.
+    // `clearsCookie` when the token will never be good again; one refused only as revoked or stale leaves the cookie, as the
     // browser may hold a newer token by now (a request in flight while its account changed its own password)
     case Refused(clearsCookie: Boolean)
 
-  /**
-   * An account as an Admin's edit form opens it: the account, its grants, and `state`, the fingerprint of the two
-   * ([[editState]]), which the form carries back to [[UserService.update]]
-   */
+  /** An account as an Admin's edit form opens it, with its grants and their fingerprint, which the form carries back on save */
   final case class EditForm(account: User, grants: Map[String, Permissions], state: String)
 
-  /** When an account was added and when it last logged in (any session of it), as instants: what its info dialog shows */
+  /** When an account was added and when it last logged in (any session of it) */
   final case class AccountTimes(createdAt: Option[Instant], lastLoginAt: Option[Instant])
 
   /**
-   * The fingerprint of what an Admin's edit shows of an account: its name, username, email address, type, Create Libraries flag
-   * and new-Library grant, and its grants. Any change to them, another Admin's edit or a grant a new Library gave, changes it; a
-   * write that touches none of them (a login, the last active Library) does not.
+   * The fingerprint of what an Admin's edit shows of an account and its grants: another Admin's edit or a new Library's grant
+   * changes it; a write touching none of it (a login, the last active Library) does not
    */
   def editState(account: User, grants: Map[String, Permissions]): String =
     val fields = List(
@@ -73,8 +68,7 @@ object UserService:
   // typed into the login field by mistake
   private val MAX_AUDITED_LOGIN_LENGTH = 64
 
-  // How long a dev login that failed is not tried again, so a page of thumbnails does not cost a bcrypt check and an audit event
-  // each
+  // How long a failed dev login is not retried, so a page of thumbnails does not cost a bcrypt check and an audit event each
   private val DEV_LOGIN_RETRY_AFTER = Duration.ofSeconds(30)
 
   /** When a token minted at `now` expires: 7 days later, to the second, as the token keeps it */
@@ -82,8 +76,8 @@ object UserService:
     now.plus(Duration.ofDays(Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS)).truncatedTo(ChronoUnit.SECONDS)
 
   /**
-   * The dev user's login and password (`dev.user`, a username or an email address, and `dev.password`), development-only settings
-   * (`Environment.devSetting`): None outside the dev environment, where they are ignored with a WARN, and when either is empty
+   * The dev user's login (a username or an email address) and password, dev-only settings: None outside the dev environment,
+   * where they are ignored with a WARN, and when either is empty
    */
   def devCredentials(config: Config, environment: String = Environment.CURRENT): Option[(String, String)] =
     val login = Environment.devSetting(config, Const.Conf.DEV_USER, environment)
@@ -102,16 +96,13 @@ class UserService(val app: Altitude) extends BaseService[User]:
     RequestContext.account.value = Some(user)
 
   /**
-   * Logs an account in by its username or its email address, either in any case or Unicode form: the login is folded with
-   * `NameKey.of` and compared to `email_key` when the folded login holds an "@" (a username never does), to `username_key`
-   * otherwise. The account, a session token of its claims and when the token expires, with the account made the request's; None
-   * for a login that names no account, a wrong password or a deactivated account alike, so none of them can be told from the
-   * others. A login with a control character names no account (no username or address holds one, and PostgreSQL refuses a NUL in
-   * a text parameter), so it is not looked up.
+   * Logs an account in by username or email address in any case or Unicode form: the folded login is compared to `email_key` when
+   * it holds an "@" (no username does), else to `username_key`. Returns the account, a session token and its expiry; None alike
+   * for an unknown login, a wrong password or a deactivated account, so they cannot be told apart. A login with a control
+   * character is not looked up, as none holds one and PostgreSQL refuses a NUL in a text parameter.
    *
-   * The lookup and the password check only read, so on SQLite the slow check holds no write connection, which import writes queue
-   * for. The last login time and the audit event (success, or failure with the account named if any and the login as typed, made
-   * printable and cut short; both with `clientIp`) are written after it in a short transaction of their own.
+   * The lookup and the slow password check only read, so on SQLite they hold no write connection, which imports queue for. The
+   * last login time and the audit event are written after, in a short transaction of their own.
    */
   def loginAndSetUser(login: String, password: String, clientIp: Option[String] = None): Option[(User, String, Instant)] =
     val key = NameKey.of(login)
@@ -137,15 +128,14 @@ class UserService(val app: Altitude) extends BaseService[User]:
       case None => failed()
       case Some((account, checkedHash)) =>
         val id = account.persistedId
-        // The version is the account's, so it is read once the lookup has named the account, and before the transaction that
-        // reads the account again: a password change committed before this read is seen there, and a revocation after it leaves
-        // the token below the revoked-below version
+        // Read before the transaction that reads the account again: a password change committed before this read is seen there,
+        // and a revocation after it leaves the token below the revoked version
         val version = versions.current(id)
         val expiresAt = UserService.tokenExpiry()
 
         val claims = txManager.withTransaction {
-          // The account locked, so a write of it in flight is waited for and read. A password changed since the check, or an
-          // account deactivated or deleted since, fails the login as any refusal does.
+          // Locked, so a write of the account in flight is waited for. A password changed since the check, or an account
+          // deactivated or deleted since, fails the login as any refusal does.
           val claims = dao
             .lockWithPasswordHash(id)
             .filter((_, hash) => hash == checkedHash)
@@ -163,17 +153,12 @@ class UserService(val app: Altitude) extends BaseService[User]:
             Some((account, app.service.paseto.createToken(claims), claims.expiresAt))
 
   /**
-   * What a login token is worth on a request, the account made the request's unless it is refused. A token minted at the
-   * account's current version (`AccountVersions`) holds as it is, read with no database query. A token minted before a change to
-   * the account is rebuilt from the database, with its expiry, when `renewable` (a cookie, which the answer replaces) and the
-   * account is still active; a stale token that cannot be replaced (a Bearer header), one of an account deactivated or deleted
-   * since, and one minted before its account's tokens were revoked, are refused. The token is judged and rebuilt against one
-   * snapshot of the account's versions, so a revocation that lands meanwhile leaves the rebuilt token below it.
-   *
-   * A refusal clears the session cookie only for a token that will never be good again: one that does not decrypt or has expired,
-   * or whose account is gone or deactivated. A revoked cookie token's account is read to tell (the one read of a revocation,
-   * which a deactivation is too); a token refused only for being revoked (a password change, whose new token the browser may hold
-   * by now) or stale where it cannot be replaced leaves the cookie as it is.
+   * What a login token is worth on a request; unless refused, its account is made the request's. A token at the account's current
+   * version (`AccountVersions`) holds with no database query. A stale one is rebuilt from the database, keeping its expiry, when
+   * `renewable` (a cookie, which the answer replaces) and the account is still active; otherwise it is refused, as is one minted
+   * before a revocation. Judging and rebuilding use one snapshot of the versions, so a revocation landing meanwhile leaves the
+   * rebuilt token below it. A revoked cookie token's account is read to tell whether the cookie should go, as a deactivation
+   * revokes too.
    */
   def checkToken(token: String, renewable: Boolean): UserService.TokenCheck =
     app.service.paseto.readToken(token) match
@@ -209,9 +194,8 @@ class UserService(val app: Altitude) extends BaseService[User]:
     }
 
   /**
-   * The claims of a stale token rebuilt from the database, with its expiry, at the current version of `at`, the snapshot its
-   * standing was read from (read before the account is), and the token that carries them; None when the account is deactivated or
-   * gone
+   * A stale token's claims rebuilt from the database at the current version of `at`, the snapshot its standing was read from,
+   * with the token carrying them; None when the account is deactivated or gone
    */
   private[core] def renew(claims: TokenClaims, at: AccountVersions.Snapshot): Option[(TokenClaims, String)] =
     txManager
@@ -243,8 +227,8 @@ class UserService(val app: Altitude) extends BaseService[User]:
     }
 
   /**
-   * Ends a session: the SessionController clears its cookie. Nothing is kept server-side, so a copy of the token stays valid
-   * until it expires or its account's tokens are revoked (`AccountVersions.revoke`).
+   * Nothing is kept server-side: ending a session only clears its cookie, so a copy of the token stays valid until it expires or
+   * its account's tokens are revoked
    */
   def logout(token: String): Unit =
     logger.debug("Logging out user (stateless - clearing client cookie only)")
@@ -252,10 +236,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
   override def add(objIn: User): User =
     throw NotImplementedError("Use the alternate add() method with password")
 
-  /**
-   * Adds an account that keeps to the rules of its username, name and email address (`User.valid`, whose `ValidationException`
-   * this passes on), its name stored normalized
-   */
+  /** Adds an account held to `User.valid`, its name stored normalized */
   def add(objIn: User, password: String): User =
     val account = User.valid(objIn)
 
@@ -268,20 +249,15 @@ class UserService(val app: Altitude) extends BaseService[User]:
     }
 
   /*
-   * Account management (the Users page). Each write runs in one transaction, records its audit event in it, and makes the
-   * account's tokens stale once it commits (`AccountVersions.bump`; a password `revoke`s them), so its sessions see the change at
-   * their next request. The acting account is read from the database in the write's transaction, never taken from the token.
+   * Account management. Each write runs in one transaction with its audit event and makes the account's tokens stale once it
+   * commits (a password change revokes them), so its sessions see the change at their next request. The acting account is read
+   * in the write's transaction, never taken from the token.
    */
 
   /**
-   * Adds an account for `creatorId`, which is recorded as its creator: the account's username, name and email address keep to
-   * their rules (`User.valid`), its password to `Api.Constraints.MIN_`/`MAX_PASSWORD_LENGTH`, and a User or a Guest is given at
-   * least one Library and at most `MAX_GRANTS_PER_ACCOUNT` (`grants`, Library ID to Permissions), each failing rule a
-   * `ValidationException` naming its field, as is an email address or username another account holds. The account is held to its
-   * type ([[shapedByType]]). A creator who is no Admin creates a User only where it holds Create Users and a Guest only where it
-   * holds Create Guests, with no Permission it does not hold there, and never an Admin, the Create Libraries flag or the
-   * new-Library grant (its switch or its Permissions): anything above that ceiling is a `ForbiddenException`, whatever was asked.
-   * A creator deactivated since its login creates nothing (`ForbiddenException`).
+   * Adds an account recorded as `creatorId`'s, held to the account rules ([[valid]]) and its type; a taken email address or
+   * username is a `ValidationException` on that field. A creator who is no Admin is held to its ceiling ([[withinCeiling]]), and
+   * one deactivated since its login creates nothing; both are a `ForbiddenException`.
    */
   def create(
       creatorId: String,
@@ -311,16 +287,11 @@ class UserService(val app: Altitude) extends BaseService[User]:
     }
 
   /**
-   * An Admin's change to an account: its name, username, email address, type, grants, Create Libraries flag and new-Library
-   * grant, held to the rules of [[create]] (the password aside, which [[setPassword]] changes) and to the account's type
-   * ([[shapedByType]]): a change to Admin takes the grants away, a change to Guest keeps the Libraries and clears every
-   * Permission. An Admin may not take the Admin type from its own account (a `ValidationException` on the type). The active
-   * Admins' rows are locked first (`lockActiveAdmins`) and the actor must be one of them, so two demotions at once take turns and
-   * the second, by an Admin the first demoted, is refused: one active Admin is always left. A change of the name, username or
-   * email address rewrites the importer record of every asset the account imported, in every Library
-   * (`AssetDao.rewriteImporterRecords`). `openedState` is the state the Admin's form was opened over ([[openForEdit]],
-   * `UserService.editState`): a save over an account changed since (by another Admin, or granted a new Library) is a
-   * `ValidationException` (`ACCOUNT_CHANGED`) that writes nothing, compared under the account's row lock. The account as stored.
+   * An Admin's change to an account, held to the rules of [[create]] (the password aside) and to its type: a change to Admin
+   * drops the grants, a change to Guest keeps the Libraries with no Permission. An Admin may not take the Admin type from itself.
+   * The active Admins are locked first and the actor must be one of them, so two demotions take turns and one active Admin is
+   * always left. A changed name, username or email rewrites the importer record of every asset the account imported. A save over
+   * an account changed since `openedState` ([[UserService.editState]]) writes nothing. Returns the account as stored.
    */
   def update(
       actorId: String,
@@ -385,7 +356,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
       dao.getById(stored.persistedId)
     }
 
-  /** When the account was added and when it last logged in, as stored ([[UserService.AccountTimes]]) */
+  /** When the account was added and when it last logged in, as stored */
   def accountTimes(accountId: String): UserService.AccountTimes =
     txManager.asReadOnly {
       val account = dao.getById(accountId)
@@ -405,13 +376,12 @@ class UserService(val app: Altitude) extends BaseService[User]:
     grantDao.getByAccount(accountId).map(grant => grant.repositoryId -> grant.permissions).toMap
 
   /**
-   * An Admin deactivates an account: it can do nothing until it is reactivated, and every token of it is refused for good
-   * (`AccountVersions.revoke`), so once reactivated it logs in again. Refused as [[delete]] is.
+   * An Admin deactivates an account: its tokens are refused for good, so once reactivated it logs in again. Refused as [[delete]]
+   * is.
    */
   def deactivate(actorId: String, accountId: String, clientIp: Option[String] = None): Unit =
     changeActive(actorId, accountId, active = false, clientIp)
 
-  /** An Admin reactivates an account */
   def reactivate(actorId: String, accountId: String, clientIp: Option[String] = None): Unit =
     changeActive(actorId, accountId, active = true, clientIp)
 
@@ -437,11 +407,9 @@ class UserService(val app: Altitude) extends BaseService[User]:
     }
 
   /**
-   * An Admin deletes an account, for good, in one transaction: every asset it owns, in every Library, becomes the Admin's
-   * (`AssetDao.reassignOwner`), and the row is deleted, which takes its grants (`ON DELETE CASCADE`) and clears the creator of
-   * the accounts it created (`ON DELETE SET NULL`). The importer records of its assets are left as they are. An Admin may not
-   * delete its own account (`IllegalOperationException`); the active Admins' rows are locked first and the actor must be one of
-   * them, so one active Admin is always left. How many assets moved.
+   * An Admin deletes an account for good: every asset it owns, in every Library, becomes the Admin's, and the row's delete takes
+   * its grants and clears the creator of the accounts it created. Importer records stay as they are. Refused for the actor's own
+   * account ([[refuseRemoval]]). Returns how many assets moved.
    */
   def delete(actorId: String, accountId: String, clientIp: Option[String] = None): Int =
     txManager.withTransaction {
@@ -464,9 +432,8 @@ class UserService(val app: Altitude) extends BaseService[User]:
     }
 
   /**
-   * The account an imported file is inserted for, as stored now, its row share-locked until the insert's transaction ends
-   * (`UserDao.lockAsImporter`), so a delete or an update of the account waits for the insert and then sees its asset; an account
-   * gone or deactivated by then is an `ImporterUnavailableException` saying which
+   * The account an imported file is inserted for, share-locked until the insert's transaction ends, so a delete or update of the
+   * account waits and then sees the asset; an account gone or deactivated is an `ImporterUnavailableException` saying which
    */
   def lockImporter(accountId: String): User =
     txManager.withTransaction {
@@ -476,34 +443,29 @@ class UserService(val app: Altitude) extends BaseService[User]:
         case Some(account) => account
     }
 
-  /** How many assets the account owns, in every Library: what deleting it moves to the Admin (`AssetDao.countOwnedBy`) */
+  /** How many assets the account owns, in every Library: what deleting it moves to the Admin */
   def countOwnedAssets(accountId: String): Int =
     txManager.asReadOnly {
       app.DAO.asset.countOwnedBy(accountId)
     }
 
-  /**
-   * An Admin sets an account's password, to the password rule: every session of the account is refused from then on
-   * (`AccountVersions.revoke`), the Admin's own included when it sets its own
-   */
+  /** An Admin sets an account's password: every session of the account is refused from then on, the Admin's own included */
   def setPassword(actorId: String, accountId: String, password: String, clientIp: Option[String] = None): Unit =
     validPassword(FieldConst.User.PASSWORD, password).foreach(e => throw e)
     val passwordHash = Util.hashPassword(password)
 
     txManager.withTransaction {
-      // The active Admins' rows locked first, in ID order, as every Admin's write locks them, so two Admins setting each other's
-      // passwords take turns
+      // The active Admins first, in ID order, as every Admin's write locks them, so two Admins setting each other's passwords
+      // take turns
       val actor = activeAdmin(actorId, dao.lockActiveAdmins())
       val target = dao.lockById(accountId)
       writePassword(actor, target, passwordHash, clientIp)
     }
 
   /**
-   * An account changes its own password, giving its current one: a wrong one is a `ValidationException` on `currentField`, logged
-   * at WARN and recorded as a failed change with the client IP, and a new one outside the password rule one on `newField`. The
-   * current one is checked in a read-only transaction, as a login's is, and the write refuses it too when the password changed
-   * meanwhile. Every session of the account is refused from then on, the one that made the change included, which mints itself a
-   * new token.
+   * An account changes its own password, giving its current one; a wrong one is logged at WARN and audited. The current one is
+   * checked in a read-only transaction, as a login's is, and the write refuses it too if the password changed meanwhile. Every
+   * session of the account is refused from then on, the one making the change included.
    */
   def changeOwnPassword(
       accountId: String,
@@ -542,9 +504,9 @@ class UserService(val app: Altitude) extends BaseService[User]:
     txManager.afterCommit(versions.revoke(target.persistedId))
 
   /**
-   * The accounts `viewer` sees on the Users page, by name (natural order), each with its grants: every account and grant for an
-   * Admin; for anyone else, the accounts it created that are no Admins (an Admin may have promoted one since), with their grants
-   * in the Libraries it holds a grant in itself alone
+   * The accounts `viewer` sees, in natural name order, with their grants: all of them for an Admin; for anyone else, the
+   * non-Admin accounts it created (an Admin may have promoted one since), with only their grants in Libraries the viewer holds a
+   * grant in
    */
   def accountsVisibleTo(viewer: User): List[(User, List[RepositoryGrant])] =
     txManager.asReadOnly {
@@ -560,11 +522,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
       accounts.sortBy(_.name)(using NaturalOrder).map(account => account -> grants.getOrElse(account.persistedId, Nil))
     }
 
-  /**
-   * The account and its grants held to its type and to the account rules: its name normalized, or a `ValidationException` with
-   * the error of every failing field (the username, name and email address, `User.valid`; the password when one is given; the
-   * grants: a User or a Guest is given at least one Library and at most `MAX_GRANTS_PER_ACCOUNT`)
-   */
+  /** The account and grants held to its type and the account rules, or a `ValidationException` with each failing field's error */
   private def valid(model: User, grants: Map[String, Permissions], password: Option[String]): (User, Map[String, Permissions]) =
     val (account, shapedGrants, errors) = checked(model, grants, password)
     errors.headOption.foreach {
@@ -576,9 +534,8 @@ class UserService(val app: Altitude) extends BaseService[User]:
     (account, shapedGrants)
 
   /**
-   * The errors of the account rules for an account and its grants, by field (as [[create]] refuses them), none when it keeps to
-   * them: what a form shows beside an error of its own, such as a type left unchosen. It reads no database, so a taken address or
-   * username is not among them.
+   * The account-rule errors by field, as [[create]] refuses them, for a form to show beside its own. It reads no database, so a
+   * taken address or username is not among them.
    */
   def fieldErrors(model: User, grants: Map[String, Permissions], password: Option[String]): Map[String, String] =
     checked(model, grants, password)._3.toMap
@@ -605,9 +562,9 @@ class UserService(val app: Altitude) extends BaseService[User]:
     (account, shapedGrants, errors)
 
   /**
-   * The account and its grants as its type allows them: an Admin holds every Permission by type, so it keeps no grant, no Create
-   * Libraries flag and no new-Library grant; a Guest holds no Permission, so it keeps its Libraries with none, no Create
-   * Libraries flag, and a new-Library grant of access alone. With the new-Library switch off, the grant holds no Permission.
+   * The account and grants as its type allows: an Admin holds every Permission by type, so keeps no grant, Create Libraries flag
+   * or new-Library grant; a Guest holds no Permission, so keeps its Libraries with none, no Create Libraries flag, and a
+   * new-Library grant of access alone
    */
   private def shapedByType(model: User, grants: Map[String, Permissions]): (User, Map[String, Permissions]) =
     // The new-Library grant's Permissions mean nothing with its switch off
@@ -634,11 +591,10 @@ class UserService(val app: Altitude) extends BaseService[User]:
     ex
 
   /**
-   * What a creator who is no Admin may give (its ceiling): a User where it holds Create Users, a Guest where it holds Create
-   * Guests, with no Permission it does not hold there, and neither an Admin, the Create Libraries flag nor the new-Library grant.
-   * Its grants are read in the write's transaction, so a Permission taken from it since its login is not passed on. A Library it
-   * holds no grant in is refused as one above its ceiling, whether or not it exists. `account` is what was asked, before the
-   * account is held to its type, so a new-Library Permission asked with the switch off is refused, not dropped.
+   * What a creator who is no Admin may give: a User where it holds Create Users, a Guest where it holds Create Guests, no
+   * Permission it does not hold there, and never an Admin, the Create Libraries flag or the new-Library grant. Its grants are
+   * read in the write's transaction, so a Permission taken since its login is not passed on. `account` is as asked, before
+   * [[shapedByType]], so a new-Library Permission asked with the switch off is refused, not dropped.
    */
   private def withinCeiling(creator: User, account: User, grants: Map[String, Permissions]): Unit =
     def refuse(why: String): Nothing =
@@ -663,8 +619,8 @@ class UserService(val app: Altitude) extends BaseService[User]:
     admins.find(_.id.contains(actorId)).getOrElse(throw ForbiddenException(Const.Msg.Err.FORBIDDEN_ADMIN))
 
   /**
-   * Deactivating or deleting `target`: never the actor's own account. This is what keeps an active Admin: the actor is one of the
-   * active Admins, read under their rows' lock ([[activeAdmin]]), and never the one it removes, so one is always left.
+   * Never the actor's own account. This keeps an active Admin: the actor is one of the active Admins, read under their rows' lock
+   * ([[activeAdmin]]), and never the one it removes, so one is always left.
    */
   private def refuseRemoval(actor: User, target: User): Unit =
     if target.id == actor.id then throw IllegalOperationException(Const.Msg.Err.OWN_ACCOUNT)
@@ -692,11 +648,9 @@ class UserService(val app: Altitude) extends BaseService[User]:
   private def permissionsJson(permissions: Permissions): ujson.Arr = ujson.Arr.from(permissions.toList.map(_.toString))
 
   /**
-   * Records `repoId` as the user's last active Library, the one login and `/` open next
-   * (`RepositoryService.landingRepositoryOf`). Whether it wrote. Every page load of a Library calls it, so it reads the recorded
-   * Library first, in a read-only transaction, and opens a write transaction only when that differs: a load of the Library
-   * recorded already takes no write lock (on SQLite, the one write connection). The write is still the conditional UPDATE, so of
-   * two loads racing, the second writes nothing.
+   * Records `repoId` as the user's last active Library; returns whether it wrote. Every page load of a Library calls it, so it
+   * reads first and writes only when the Library differs, sparing SQLite's one write connection. The write is still a conditional
+   * UPDATE, so of two racing loads the second writes nothing.
    */
   def rememberLastActiveRepository(user: User, repoId: String): Boolean =
     val recorded = txManager.asReadOnly {
@@ -719,14 +673,13 @@ class UserService(val app: Altitude) extends BaseService[User]:
   // When a dev login last failed, with the credentials it is for, so it is not tried again on every request
   private val failedDevLogin = AtomicReference[Option[((String, String), Instant)]](None)
 
-  /** The dev user's claims (`devUser`), when the dev credentials are set and the environment is dev */
+  /** The dev user's claims, when the dev credentials are set and the environment is dev */
   def getDevUser: Option[TokenClaims] = devCredentials.flatMap(devUser)
 
   /**
-   * The claims of the account `credentials` log in, its account made the request's, or None when they do not log in. The password
-   * is checked until it first succeeds; after that the claims are built from the database on every request (`claimsOf`), so a
-   * change to the account is seen at once, and an account that is gone or deactivated is logged in again. A login that fails is
-   * not tried again for `DEV_LOGIN_RETRY_AFTER`, so it costs one bcrypt check and one audit event, not one per request.
+   * The claims of the account `credentials` log in, made the request's, or None. The password is checked until it first succeeds;
+   * after that the claims are rebuilt from the database each request, so account changes show at once, and an account gone or
+   * deactivated is logged in again.
    */
   private[core] def devUser(credentials: (String, String)): Option[TokenClaims] =
     val now = Instant.now

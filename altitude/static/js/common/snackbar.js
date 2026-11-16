@@ -1,31 +1,15 @@
 /**
- * The snackbar: short plain-text messages for the outcome of an action. Producers call
- * `showSuccessSnackBar`, `showWarningSnackBar` or `showErrorSnackBar`; the messages live in the
- * Alpine `snackbar` store (registered with everything else `html_common` binds by
- * `registerHtmlCommonBindings` in `stores/html-common.js`), which
- * `views/includes/html_common.scala.html` renders as two stacks:
+ * The snackbar: short plain-text outcome messages in two stacks. Errors (top center) stay until
+ * dismissed; successes and warnings (bottom left) dismiss themselves after 3 s and 6 s, with timers
+ * that pause while the pointer or focus is in the stack or the document is hidden.
  *
- * - errors at top center, which stay until dismissed,
- * - successes and warnings ("notices") at bottom left, which dismiss themselves after 3 s and 6 s.
- *   Their timers pause while the pointer is over the stack or focus is inside it, and while the
- *   document is hidden, and resume with the time they had left.
+ * Each stack holds three messages; a fourth dismisses the oldest. A message equal to one in its
+ * stack is not added: that one counts it (`×n`) and restarts its timer. Stacks are
+ * `popover="manual"` so they paint in the top layer, above the modal hosts and the map.
  *
- * Each stack holds three messages: a fourth dismisses the oldest. A message whose type and text
- * equal one already in its stack is not added; that message counts it (`×n`) and restarts its
- * timer. A dismissed message leaves no trace, so the same message arriving later is shown again.
- * Each stack is a `popover="manual"` element, shown while it has a message (`syncStack`), so it
- * paints in the top layer, above the modal hosts and the map. A keyboard user reaches a message's
- * dismiss button by Tab; dismissing the focused one moves focus to its neighbour in the stack.
- *
- * Screen readers hear a message through visually hidden live regions
- * (`data-app-snackbar-announcer`), not through the stacks; `announcePolitely` lends the polite
- * one to a message that is no snackbar (the tooltip's, `common/tooltip.js`). Each place holds two sibling regions,
- * a polite `role="status"` one for notices and an assertive `role="alert"` one for errors.
- * `x-trap.inert` hides everything outside an active modal host from assistive technology, so
- * while the general modal or asset detail is active the message is written into that host's
- * regions, and otherwise into the top-level ones (the popover dialog has no trap).
- *
- * On a page without the store, a message is logged and dropped.
+ * Screen readers hear messages through hidden live regions, not the stacks. `x-trap.inert` hides
+ * everything outside an active trapped host, so while one is active the message goes into that
+ * host's regions. On a page without the store, a message is logged and dropped.
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
@@ -49,10 +33,9 @@ const MAX_PER_STACK = 3
 
 const NOTICES_STACK_ID = "snackbarNotices"
 
-// A message's dismiss button, in a message that is not leaving (`.snackbar.leaving`)
 const STAYING_DISMISS_SELECTOR = ".snackbar:not(.leaving) .snackbar-dismiss"
 
-// Each region's value is its politeness: "polite" (notices) or "assertive" (errors)
+// Its value is the politeness: "polite" (notices) or "assertive" (errors)
 const ANNOUNCER_ATTRIBUTE = "data-app-snackbar-announcer"
 
 // How long an announced message stays in its live region; removals are not announced
@@ -60,13 +43,11 @@ const ANNOUNCED_MS = 5000
 
 let lastId = 0
 
-// The running or held timer of each notice, by message id: `remaining` ms are left as of
-// `startedAt`, `handle` is null while the timer is held, and `onExpire` dismisses the message.
-// Kept outside the reactive store.
+// Each notice's timer by message id, outside the reactive store: `remaining` ms as of `startedAt`,
+// `handle` null while held
 const timers = new Map()
 
-// Why the notices' timers are held: "pointer" and "focus", the notices stack's events. A hidden
-// document holds them too, read when it changes.
+// Why the notices' timers are held: "pointer" or "focus" (a hidden document holds them too)
 const holds = new Set()
 
 document.addEventListener("visibilitychange", syncTimers)
@@ -84,10 +65,6 @@ export function createSnackbarStore() {
             return this.items.filter((item) => !isError(item.type))
         },
 
-        /**
-         * Shows `message` of `type` (`success`, `warning` or `error`) in its stack, or counts it
-         * on the equal message already there, then announces it.
-         */
         add(type, message) {
             console.debug(`Snackbar ${type}: ${message}`)
 
@@ -126,10 +103,8 @@ export function createSnackbarStore() {
         },
 
         /**
-         * Marks the message as leaving, so it fades out, and removes it once the fade has run,
-         * or at once under reduced motion. `button` is the message's dismiss button when it was
-         * clicked: if it has focus, focus moves to the next message's button in the stack, or the
-         * previous one's when it was the last, so a keyboard user stays in the stack.
+         * Fades the message out, then removes it. `button` is the clicked dismiss button: if it has
+         * focus, focus moves to a neighbour so a keyboard user stays in the stack.
          */
         dismiss(id, button = null) {
             const item = this.items.find((other) => other.id === id)
@@ -153,13 +128,12 @@ export function createSnackbarStore() {
             if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
                 remove()
             } else {
-                // A timer, not `transitionend`: a hidden tab may run no transition, and a message
-                // must never stay behind as leaving
+                // Not `transitionend`: a hidden tab may run no transition, and a message must never
+                // stay behind as leaving
                 setTimeout(remove, exitDuration())
             }
         },
 
-        // Hold the notices' timers while `reason` lasts: the pointer over the stack, or focus in it
         pause(reason) {
             holds.add(reason)
             syncTimers()
@@ -170,14 +144,14 @@ export function createSnackbarStore() {
             syncTimers()
         },
 
-        // The notices stack's `focusout`: focus moving between its own messages keeps the hold
+        // Focus moving between the stack's own messages keeps the hold
         onStackFocusOut(event) {
             if (!event.currentTarget.contains(event.relatedTarget)) {
                 this.resume("focus")
             }
         },
 
-        // The bindings of a message in `html_common`, which keeps its expressions to single calls
+        // Template bindings, so its expressions stay single calls
         classesOf(item) {
             return { [item.type]: true, leaving: item.leaving }
         },
@@ -194,10 +168,7 @@ export function createSnackbarStore() {
             return `×${item.count}`
         },
 
-        /**
-         * A stack's `x-effect`: shows the stack's popover while it has a message, a leaving one
-         * included, and hides it when the last one is gone.
-         */
+        // A stack's `x-effect`: a leaving message keeps the stack shown
         syncStack(el, messages) {
             const isOpen = el.matches(":popover-open")
 
@@ -211,11 +182,9 @@ export function createSnackbarStore() {
 }
 
 /**
- * Shows the open stacks again, which moves them to the top of the top layer: a stack open before
- * an element went fullscreen would otherwise sit under it, with the messages that join it unseen
- * (Asset detail's `f`, `search-results/detail-fullscreen.js`). A hidden popover leaves the top
- * layer only at the next rendering update, and one shown again before then keeps its place, so
- * the show waits a frame past the hide.
+ * Shows the open stacks again, moving them to the top of the top layer, above an element that went
+ * fullscreen after them. A hidden popover leaves the top layer only at the next rendering update,
+ * and one shown again before then keeps its place, so the show waits a frame past the hide.
  */
 export function raiseSnackbarStacks() {
     const stackEls = [
@@ -238,10 +207,7 @@ function isError(type) {
     return type === "error"
 }
 
-/**
- * Starts the message's full lifetime over, calling `onExpire` when it runs out. An error has no
- * timer. While the timers are held, the new one waits for them to resume.
- */
+/** Starts the full lifetime over; while timers are held, the new one waits for them to resume */
 function startTimer(item, onExpire) {
     const lifetime = lifetimes[item.type]
     if (!lifetime) {
@@ -266,10 +232,7 @@ function clearTimer(id) {
     }
 }
 
-/**
- * Runs every timer when nothing holds them (the stack is neither hovered nor focused, and the
- * document is visible), and otherwise holds each with the time it has left.
- */
+/** Runs every timer when nothing holds them, and otherwise holds each with the time it has left */
 function syncTimers() {
     const run = holds.size === 0 && !document.hidden
     const now = performance.now()
@@ -293,10 +256,8 @@ function syncTimers() {
 }
 
 /**
- * Releases the holds the notices stack can no longer report the end of, after a message has left
- * the DOM: with no notice left the stack is hidden, so no `pointerleave` says the pointer is gone,
- * and removing the focused element fires no `focusout` in Firefox, so focus outside the stack ends
- * the focus hold.
+ * Releases holds whose end the stack can no longer report: a hidden stack fires no `pointerleave`,
+ * and removing the focused element fires no `focusout` in Firefox.
  */
 function releaseStaleHolds(noticeCount) {
     if (!noticeCount) {
@@ -311,8 +272,7 @@ function releaseStaleHolds(noticeCount) {
     syncTimers()
 }
 
-// Moves focus from a dismissed message's button to the next staying message's in its stack, or to
-// the previous one's when there is no next; with no other message, focus stays where it is
+// The next staying message's button, else the previous one's; with neither, focus stays put
 function focusNeighbourOf(button) {
     const stack = button.closest(".snackbar-stack")
     const buttons = [...stack.querySelectorAll(STAYING_DISMISS_SELECTOR)]
@@ -322,7 +282,7 @@ function focusNeighbourOf(button) {
     neighbour?.focus()
 }
 
-// The fade of a dismissed message, `--snackbar-exit-duration` of core.css, written in ms
+// `--snackbar-exit-duration`, which is written in ms
 function exitDuration() {
     const value = getComputedStyle(document.documentElement).getPropertyValue(
         "--snackbar-exit-duration",
@@ -331,11 +291,8 @@ function exitDuration() {
 }
 
 /**
- * Adds the message to the live region screen readers can hear now (see the module comment), the
- * assertive one for an error and the polite one for a notice, and takes it out again once it has
- * been read. Messages are added rather than replacing one another, so a burst (an error and a
- * success in the same moment) is announced in full. A repeat carries its count, so its text
- * differs and is announced again.
+ * Messages are appended rather than replacing one another, so a burst is announced in full. A
+ * repeat carries its count, so its text differs and is announced again.
  */
 function announce(type, message, count) {
     const region = findAnnouncer(isError(type) ? "assertive" : "polite")
@@ -349,8 +306,7 @@ function announce(type, message, count) {
     setTimeout(() => paragraph.remove(), ANNOUNCED_MS)
 }
 
-// The region of `politeness` inside the active trapped host, or else the top-level one, outside
-// every host
+// Inside the active trapped host, else the top-level one
 function findAnnouncer(politeness) {
     const selector = `[${ANNOUNCER_ATTRIBUTE}="${politeness}"]`
     const trapContainer = getActiveTrapContainer()
@@ -375,7 +331,7 @@ function _showSnackbar({ type = "success", message }) {
     store.add(type, message)
 }
 
-/** Announces a message of the page's own (a tooltip's hint) through the polite live region */
+/** For a message that is no snackbar, such as a tooltip's hint */
 export function announcePolitely(message) {
     announce("success", message, 1)
 }

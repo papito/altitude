@@ -4,15 +4,10 @@ import { Const } from "../constants.js"
 /**
  * METADATA VISIBILITY
  *
- * Which metadata fields show under every cell is the `gridMetadataFields` set in the context
- * (persisted in localStorage; changed by the view settings dialog). The grid reflects it with one
- * `show-<field>` class per field on `#assets`, and the CSS in `static/css/includes/search_results.css`
- * does the rest: `#assets.show-fileName .metadata .fileName { display: block }`. So there is no
- * per-cell work, nothing to re-apply when a page is appended, and a change repaints every cell,
- * loaded or not yet loaded, through the stylesheet.
- *
- * One reactive effect per displayed grid keeps the classes in step with the set; the previous
- * grid's effect is released when the grid is replaced.
+ * The metadata fields shown under the cells (the `gridMetadataFields` context set) are one
+ * `show-<field>` class per field on `#assets`, and the stylesheet does the rest, so there is no
+ * per-cell work and nothing to re-apply when a page is appended. One reactive effect per displayed
+ * grid keeps the classes in step; the previous grid's is released.
  */
 
 const CLASS_PREFIX = "show-"

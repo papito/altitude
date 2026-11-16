@@ -16,8 +16,8 @@ import altitude.core.App
      *
      * Assertions:
      *
-     * The Location list API answers flat camelCase JSON rows in path order, all with the same fields: a categorized Location
-     * carries its category's ID and name, its pin and its asset count, a category has no pin, and a top-level Location has no
+     * The Location list API answers flat camelCase JSON rows in path order, all with the same fields. A categorized Location
+     * carries its category's ID and name, its pin and its asset count; a category has no pin; a top-level Location has no
      * category.
      *
      * Edge cases:

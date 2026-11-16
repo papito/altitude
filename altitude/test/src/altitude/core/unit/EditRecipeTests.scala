@@ -39,14 +39,14 @@ import altitude.core.models.EditRecipe
     /**
      * Setup:
      *
-     * The identity Edit's JSON, and one with a value off its step for every kind of number: Straighten, Exposure, an integer
+     * The identity Edit's JSON, and one with a value off its step for each kind of number: Straighten, Exposure, an integer
      * slider, the crop and a curve point.
      *
      * Assertions:
      *
-     * The identity parses to the default Edit, and its JSON is the input, every key present. The other parses with each number
-     * rounded to its step: Straighten to 0.1, Exposure to 0.05, a slider to a whole number, the crop to 4 decimals and a curve
-     * point to 3; its JSON carries the rounded values, and parses back to the same Edit.
+     * The identity parses to the default Edit and writes back as the input. The other has each number rounded to its step
+     * (Straighten 0.1, Exposure 0.05, a slider 1, the crop 4 decimals, a curve point 3), writes the rounded values, and parses
+     * back to the same Edit.
      */
     EditRecipe.parse(identityJson) shouldBe EditRecipe.Identity
     EditRecipe.Identity.toJson shouldBe identityJson
@@ -79,14 +79,12 @@ import altitude.core.models.EditRecipe
      *
      * Assertions:
      *
-     * Each is refused with a `ValidationException` saying why: no key may be left out (defaults are not filled in), no key may be
-     * added (`perspectiveV` and `perspectiveH` among them), the version must be 1, and each value must have its type: a number
-     * for a slider, a boolean for a flip, one of the aspects for `aspect`, a boolean or null for `portrait`, an object or null
-     * for `crop`, an array for `curve`.
+     * Each is refused with a `ValidationException` naming the key: no key may be missing (no defaults are filled in) or added
+     * (`perspectiveV` and `perspectiveH` included), the version must be 1, and each value must have its type and shape.
      *
      * Edge cases:
      *
-     * A body that is no JSON object at all, and text that is not JSON, are refused the same way.
+     * A JSON value that is not an object, and text that is not JSON, are refused too.
      */
     val missing = identityJson
     missing.value.remove("exposure")
@@ -119,13 +117,13 @@ import altitude.core.models.EditRecipe
      *
      * Assertions:
      *
-     * Each is refused: Straighten past ±45, Exposure past ±5, a slider past ±100, Sharpen below 0 or past 150, Grain past 100, a
-     * crop that reaches past the frame's edge or is narrower or shorter than 0.01, a curve of one point or of 17, a curve whose x
-     * does not increase, and a curve point outside [0, 1].
+     * Each is refused: Straighten past ±45, Exposure past ±5, a slider past ±100, Sharpen outside [0, 150], Grain past 100, a
+     * crop past the frame's edge or under 0.01 across, a curve of 1 or 17 points, a curve whose x does not increase, and a curve
+     * point outside [0, 1].
      *
      * Edge cases:
      *
-     * The bounds themselves are accepted: Straighten 45, Sharpen 150, a crop of 0.01 at the frame's edge, and 16 curve points.
+     * The bounds are accepted: Straighten 45, Sharpen 150, a 0.01 crop at the frame's edge, and 16 curve points.
      */
     refused(jsonWith("straighten" -> 45.2))
     refused(jsonWith("exposure" -> -5.1))
@@ -156,13 +154,13 @@ import altitude.core.models.EditRecipe
     /**
      * Setup:
      *
-     * The default Edit; the default with only the Crop tool's settings changed (the aspect, its orientation, keeping the crop
-     * inside and whether the crop was fitted); and the default with one thing changed each that moves a pixel.
+     * The default Edit; the default with only the Crop tool's settings changed (aspect, orientation, keep inside, fitted); and
+     * the default with one pixel-moving change each.
      *
      * Assertions:
      *
-     * The first two are the identity. Each of the others is not: a quarter turn, a flip, Straighten, a crop, a slider, a curve
-     * that is not the diagonal, and an Effects slider.
+     * The first two are the identity and none of the others is: a quarter turn, a flip, Straighten, a crop, a slider, a curve off
+     * the diagonal, and an Effects slider.
      */
     EditRecipe.Identity.isIdentity shouldBe true
     EditRecipe.Identity
@@ -189,9 +187,8 @@ import altitude.core.models.EditRecipe
      *
      * Assertions:
      *
-     * With no crop the size is the original's, or swapped for a quarter turn (90 or 270, not 180). A crop is a fraction of the
-     * turned frame, rounded to whole pixels: half the width and a third of the height of the turned 3000 × 4000 frame is 1500 ×
-     * 1333.
+     * With no crop the size is the original's, swapped for 90 or 270 but not 180. A crop is a fraction of the turned frame in
+     * whole pixels: half the width and a third of the height of the turned 3000 × 4000 frame is 1500 × 1333.
      *
      * Edge cases:
      *
@@ -213,14 +210,14 @@ import altitude.core.models.EditRecipe
     /**
      * Setup:
      *
-     * A crop of a 4000-pixel-tall frame from its first row to its last edge (y = 1/4000, h = 3999/4000), whose top and height
-     * each round up to 4 decimals; and a crop whose left rounds up.
+     * A crop of a 4000-pixel-tall frame from one row down to the bottom edge (y = 1/4000, h = 3999/4000), whose top and height
+     * each round up at 4 decimals; and a crop whose left rounds up.
      *
      * Assertions:
      *
-     * Each is accepted. The left and top edges are rounded to 4 decimals, and so are the right and bottom edges (x + w, y + h);
-     * the width and height are what lies between them: the first crop's top is 0.0003 and its bottom stays at the frame's edge,
-     * so its height is 0.9997. The second's left is 0.1235 and its right 0.6235, so its width is 0.5.
+     * Each is accepted. All four edges are rounded to 4 decimals and the size is what lies between them: the first crop's top is
+     * 0.0003 and its bottom stays at the frame's edge (height 0.9997); the second's left is 0.1235 and its right 0.6235 (width
+     * 0.5).
      */
     val edgeTouching =
       EditRecipe.parse(jsonWith("crop" -> ujson.Obj("x" -> 0, "y" -> 1.0 / 4000, "w" -> 1, "h" -> 3999.0 / 4000)))
@@ -239,8 +236,7 @@ import altitude.core.models.EditRecipe
      *
      * Assertions:
      *
-     * The first is refused, saying the points must be at least 0.001 apart in x, rather than rounded onto one x; the second is
-     * accepted with both points.
+     * The first is refused with a message naming 0.001, rather than rounded onto one x; the second keeps both points.
      */
     val close = jsonWith("curve" -> ujson.Arr(ujson.Arr(0, 0), ujson.Arr(0.5, 0.4), ujson.Arr(0.5004, 0.6), ujson.Arr(1, 1)))
     refused(close).message should include("0.001")
@@ -254,13 +250,13 @@ import altitude.core.models.EditRecipe
     /**
      * Setup:
      *
-     * The recipes of `test/resources/edit/vectors.json`, which the Edit panel's modules read too: those of its tone and
-     * saturation groups, and those of its geometry group with the upright size of each.
+     * The tone, saturation and geometry recipes of `test/resources/edit/vectors.json`, which the JS tests read too, the geometry
+     * ones with an upright size.
      *
      * Assertions:
      *
-     * Each parses to an Edit whose JSON is the recipe as written, so it is normalized already. Each geometry recipe's edited size
-     * is the one the vectors give for its upright size.
+     * Each writes back exactly as written, so it is already normalized, and each geometry recipe's edited size is the one the
+     * vectors give.
      */
     val vectors = ujson.read(getClass.getResourceAsStream("/edit/vectors.json").readAllBytes())
     val recipes = List("tone", "saturation", "geometry").flatMap(group => vectors(group).arr.map(_("recipe")))

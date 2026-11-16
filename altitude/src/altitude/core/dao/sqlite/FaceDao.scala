@@ -14,8 +14,7 @@ import altitude.core.models.Person
 class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with SqliteOverrides:
 
   private def toVectorAsF32Arg(values: Array[Float]): String =
-    // Must match: vector_as_f32('[0.3, 1.0, ...]')
-    // We bind just the bracketed list as a String parameter.
+    // The bracketed list `vector_as_f32(?)` parses, e.g. '[0.3, 1.0, ...]', bound as a String
     values.mkString("[", ", ", "]")
 
   override def add(face: Face, asset: Asset, person: Person): Face =
@@ -69,8 +68,8 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     nearest(features, List(excludedPersonId), limit, distanceThreshold)
 
   /**
-   * The nearest Faces of a vector: an exact scan of every Face, filtered afterwards, the excluded Person's Faces among the rows
-   * filtered out when there is one (`excludedPersonId`, the one element of the list or none)
+   * The nearest Faces to a vector by an exact scan of every Face, filtered afterwards. `excludedPersonId` holds at most one
+   * Person, whose Faces are left out.
    */
   private def nearest(features: Array[Float], excludedPersonId: List[String], limit: Int, distanceThreshold: Double): List[Face] =
     val personFilter = if excludedPersonId.nonEmpty then "AND face.person_id <> ?" else ""

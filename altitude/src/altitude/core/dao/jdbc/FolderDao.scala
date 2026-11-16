@@ -16,7 +16,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
   final override type Row[T[_]] = FolderRow[T]
   final override protected def table: Table[Row] = FolderRow
 
-  // `numOfChildren` is a computed column of the hand-written queries; the typed paths never select it, as before
+  // `numOfChildren` is computed only by the hand-written queries
   override protected def toModel(row: FolderRow[Sc]): Folder =
     Folder(
       id = Option(row.id),
@@ -35,12 +35,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
     )
 
   override def getById(id: String): Folder =
-    /**
-     * The wrinkle here is that we need to return the number of children for the folder, but if the folder is a root folder, we
-     * need to subtract 1 from the count, because the root folder is its own parent, introducing a one-off error.
-     *
-     * Hand-written, so it carries the repository itself: another repository's folder is not found, as with any scoped read.
-     */
+    // The root folder is its own parent, so its child count is one less than the rows that name it as parent
     val sql = """
       SELECT f.*, (
         CASE
@@ -83,19 +78,8 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
 
   def getChildren(parentId: String): List[Folder] =
     /**
-     * Postgres does not allow ORDER BY inside a recursion, but it's not needed - the order is correct via the final "order by"
-     * clause.
-     *
-     * SQLite DOES allow ORDER BY during recursion, and it IS needed to get the correct order.
-     *
-     * While normally we create an override function for each engine if a query is different, the query here is complex and
-     * effectively the same, except for one line of SQL, so we are going to break the rules and do the engine-specific logic in
-     * the query itself.
-     *
-     * This kind of shenanigan is normally not recommended.
-     *
-     * Both arms of the recursion carry the repository, as every hand-written folder read does: another repository's folder has no
-     * children here.
+     * PostgreSQL does not allow ORDER BY inside the recursion and the final ORDER BY suffices; SQLite needs it there for the
+     * right order. The engines differ in this one line only, so it is switched inline rather than in an engine override.
      */
     val recursiveOrderByClause = getDataSourceType match
       case C.DbEngineName.POSTGRES => ""
@@ -136,22 +120,13 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
     val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId, repositoryId, repositoryId))
     recs.map(makeModel)
 
-  /**
-   * Every folder above `folderId` short of the repository root (its own parent), the top-level folder first. Another repository's
-   * folder has no ancestors here.
-   */
+  /** Every folder above `folderId` short of the repository root (its own parent), the top-level folder first */
   def getAncestors(folderId: String): List[Folder] = pathFrom(folderId, firstLevel = 1)
 
-  /**
-   * The folder's path: its ancestors ([[getAncestors]]) and then the folder itself, so the root's is the root alone. An ID that
-   * names no folder of the repository has no path.
-   */
+  /** The folder's ancestors and then the folder itself, so the root's path is the root alone; empty for an unknown ID */
   def getPath(folderId: String): List[Folder] = pathFrom(folderId, firstLevel = 0)
 
-  /**
-   * The folders from `folderId` up, short of the repository root when it is above it, the highest first: `firstLevel` 0 starts at
-   * the folder itself and 1 at its parent. Both arms of the recursion carry the repository.
-   */
+  /** The folders from `folderId` up, short of the root above it, highest first; `firstLevel` 1 skips the folder itself */
   private def pathFrom(folderId: String, firstLevel: Int): List[Folder] =
     val sql = """
       WITH RECURSIVE ancestors AS (
@@ -196,8 +171,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
 
   override def lockTree(): Unit = advisoryLock(s"folder-tree:${RequestContext.getRepository.persistedId}")
 
-  // This does NOT return the child counts. Both arms of the recursion carry the repository: another repository's folder has no
-  // children here
+  // Does not return the child counts
   def getChildrenRecursive(parentId: String): List[Folder] =
     val sql = """
       WITH RECURSIVE children AS (

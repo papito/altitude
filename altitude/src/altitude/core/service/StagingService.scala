@@ -15,20 +15,18 @@ import altitude.core.Altitude
 import altitude.core.Const
 
 /**
- * The staging directory, `data/staging`: where a file to import lands before the pipeline runs, and where it stays until the file
- * store renames it into place or the pipeline drops the asset. It is on the same filesystem as the store, so that rename is
- * atomic. A staged file is named by a fresh UUID, never by its upload name.
+ * The staging directory, `data/staging`, where a file to import waits until the file store renames it into place or the pipeline
+ * drops the asset. It shares the store's filesystem, so that rename is atomic. Staged files are named by a fresh UUID, never by
+ * their upload name.
  */
 class StagingService(app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   val dir: Path = Path.of(app.dataPath, Const.DataStore.STAGING)
 
-  /** Moves a file into staging; the source is gone after */
   def stageMove(source: Path): Path =
     logStaged(source.toString, Files.move(source, freshPath(), StandardCopyOption.REPLACE_EXISTING))
 
-  /** Copies a file into staging, leaving the source alone */
   def stageCopy(source: Path): Path =
     logStaged(source.toString, Files.copy(source, freshPath(), StandardCopyOption.REPLACE_EXISTING))
 

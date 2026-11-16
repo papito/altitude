@@ -1,10 +1,8 @@
 /**
- * The search parameters' rules for a description (`altitude/static/js/stores/search-params.js`): a
- * Describe search's `describe` beside the other parameters, what clears it, the sort it opens in,
- * what a search that holds one is sent without, and what comes back when it goes. The store's module is the browser's
- * as it is: `constants.js` publishes itself on `window`, and the store reads the remembered layout
- * from `localStorage`, so a stand-in for each is in place before the module is loaded. Run by
- * `make test-js`.
+ * The search parameters' rules for a description (`altitude/static/js/stores/search-params.js`).
+ * The store's module is loaded as the browser runs it: `constants.js` publishes itself on `window`,
+ * and the store reads remembered choices from `localStorage`, so a stand-in for each is in place
+ * before the module is loaded. Run by `make test-js`.
  */
 import { beforeEach, test } from "node:test"
 import assert from "node:assert/strict"
@@ -264,7 +262,7 @@ test("a continuation of a described search carries the description, the filters,
     const params = seedSearchParams(
         "?describe=a+cactus&folderId=trips&sort=filename0&groupBy=dateTaken&layout=map",
     )
-    // What infinite scroll sends for a grid rendered flat (js/search-results/infinite-scroll.js)
+    // What infinite scroll sends for a grid rendered flat
     const continuation = serializeSearchParams(params, {
         layout: "grid",
         groupBy: null,

@@ -42,7 +42,7 @@ import altitude.core.util.Util
     asset
   }
 
-  /** A frame in triage, in the Sequences `inSequence` stamps it into */
+  /** A dated frame in triage, for `inSequence` to stamp into a Sequence */
   private def persistFrame(taken: String, filename: String): Asset = {
     val asset = testContext.persistAsset(isTriaged = true)
     testApp.service.asset.rename(asset.persistedId, filename)
@@ -81,8 +81,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Each cell of the HTML grid names its media type, and only the Video's cell wears the play badge and shows its duration as
-     * 1:05.
+     * Each cell names its media type, and only the Video's wears the play badge and shows its duration as 1:05.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -121,9 +120,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The first page heads the group with its Category › Location path, reflects the grouping in the Group menu and the
-     * fragment's data attributes, and gives an asset in a Location a cell ID qualified by it. The continuation finishes Beach
-     * without repeating its header and opens No location, whose cell keeps the plain asset ID.
+     * The first page heads the group with its Category › Location path, reflects the grouping in the Group menu and the fragment,
+     * and qualifies the cell ID of an asset in a Location by it. The continuation finishes Beach without repeating its header and
+     * opens No location, whose cell keeps the plain asset ID.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -174,10 +173,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Each header is the group's first capture's day and time beside its count, with No sequence last. The Sequence of two has a
-     * Curate button naming it and carrying `Const.Curation.MIN_FRAMES`, which the Sequence of one and No sequence do not have. A
-     * frame's cell is its plain ID. The Group menu marks the option and the grid carries the grouping for its continuations, with
-     * no direction.
+     * Each header is the day and time of the group's first capture beside its count, with No sequence last. Only the Sequence of
+     * two has a Curate button, naming it and carrying `Const.Curation.MIN_FRAMES`. A frame's cell is its plain ID. The Group menu
+     * marks the option, and the grid carries the grouping, with no direction, for its continuations.
      *
      * Edge cases:
      *
@@ -246,7 +244,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The button follows the count of the group's matching frames: two shown have it and the count reads two; one shown does not.
+     * The button follows the count of the group's matching frames: two shown have it, one shown does not.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -283,8 +281,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The first Sequence has its Curate button; the second, whose three frames shown leave one the User may curate, has none, as
-     * Curation would show it too few frames.
+     * The first Sequence has its Curate button. The second has none, since only one of its three frames is the User's to curate,
+     * too few for Curation.
      *
      * Edge cases:
      *
@@ -303,7 +301,7 @@ import altitude.core.util.Util
         val mine = inSequence(persistFrame("2026-09-06T10:00:00", "a.jpg"), persistFrame("2026-09-06T10:00:01", "b.jpg"))
         val ownInMixed = persistFrame("2026-09-07T10:00:00", "c.jpg")
         val theirs = List(persistFrame("2026-09-07T10:00:01", "d.jpg"), persistFrame("2026-09-07T10:00:02", "e.jpg"))
-        // Persisted once the frames are, which the test context's one account persists
+        // Persisted after the frames: persisting a frame needs the test context to hold a single account
         val other = testContext.persistUser()
         testApp.txManager.withTransaction {
           for (frame <- theirs)
@@ -344,14 +342,13 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Triage's Group menu offers Sequence beside its other options; the other views' offer it nowhere. Outside Triage the
-     * grouping is no grouping and not a 400: no header, "No grouping" checked, the grid carrying no grouping for its
-     * continuations, while the URL keeps what was asked for, so a reload still knows it.
+     * Only Triage's Group menu offers Sequence. Elsewhere the grouping is ignored rather than refused: no header, "No grouping"
+     * checked and no grouping carried for continuations, while the URL keeps what was asked for, so a reload still knows it.
      *
      * Edge cases:
      *
-     * A direction is refused with the grouping wherever it was asked for, as with a Location grouping. A page continued outside
-     * Triage under the asked-for grouping reads as the flat page it is.
+     * A direction with the grouping is refused wherever it is asked for, as with a Location grouping. A continuation outside
+     * Triage under the grouping is flat.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -470,15 +467,14 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The Location and bounding-box filters narrow the ungrouped, Location and day grids to the member, and the fragment carries
-     * the Location scope. The map layout ignores the grid-only parameters, plotting and totalling the whole search with the Group
-     * control disabled and keeping layout, Location and box in the replaced URL. Malformed box and layout values are plain-text
-     * 400s.
+     * The Location and box filters narrow the ungrouped, Location and day grids to the member, and the fragment carries the
+     * Location scope. The map layout plots and totals the whole search with the Group control disabled, keeping layout, Location
+     * and box in the replaced URL. A malformed box or layout is a plain-text 400.
      *
      * Edge cases:
      *
-     * Invalid grouping, cursor and paging parameters, which the map layout ignores rather than rejects, and a box with a latitude
-     * out of range.
+     * The map layout ignores invalid grouping, cursor and paging parameters rather than refusing them. A latitude out of range
+     * makes the box malformed.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -551,12 +547,12 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Descending, the dated days come first and the No date group trails with its full count and no date element; the
-     * continuation adds the remaining undated asset without another header and ends the cursor. Ascending, No date leads.
+     * Descending, No date trails the dated days with its full count and no date element; the continuation adds the remaining
+     * undated asset without another header and ends the cursor. Ascending, No date leads.
      *
      * Edge cases:
      *
-     * SQLite's null placement, which the controller tests run on: null days trail descending and lead ascending.
+     * This is SQLite's null placement, which the controller tests run on.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -567,7 +563,6 @@ import altitude.core.util.Util
         val newer = persistDated("2026-09-06T10:00:00", "b.jpg")
         val first = persistUndated("c.jpg")
         val second = persistUndated("d.jpg")
-        // Controller tests use SQLite: null days trail DESC and lead ASC.
         val params = Map("groupBy" -> "dateTaken", "groupDirection" -> "desc", "rpp" -> "3", "sort" -> "filename0")
         val page = htmlSearch(host, repoId, params).text()
         ordered(page, cell(newer), cell(older))
@@ -597,8 +592,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The no date badge and the cell's no-date marker appear on the undated asset's cell only, and only when the results are
-     * sorted by capture time.
+     * The no date badge and marker appear on the undated asset's cell alone, and only when sorted by capture time.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -636,7 +630,7 @@ import altitude.core.util.Util
       .get
       .group(1)
 
-  /** The cursor the page's last cell carries, if any */
+  /** Every cursor on the page; a page carries at most one, on its last cell */
   private def cursorOf(html: String): List[String] =
     "data-app-search-after=\"([^\"]+)\"".r.findAllMatchIn(html).map(_.group(1)).toList
 
@@ -650,12 +644,12 @@ import altitude.core.util.Util
   /** The assets of the page's cells, in the order of the grid */
   private def cellIds(html: String): List[String] = "id=\"asset-([^\"]+)\"".r.findAllMatchIn(html).map(_.group(1)).toList
 
-  /** The embedding the server's instance gives a description, which the fixtures of a Describe search are placed around */
+  /** The server's embedding of a description, which a Describe search's fixtures are placed around */
   private def embeddingOf(description: String): SceneEmbedding = App.altitude.describeEmbedder.embed(description).get
 
   /**
-   * An asset with no file whose SigLIP 2 Scene embedding is at `cosine` to the description's, as the server embeds it
-   * (`TestContext.atCosine`). The default Describe match threshold is a cosine of 0.066.
+   * An asset with no file whose SigLIP 2 Scene embedding is at `cosine` to the description's. The default Describe match
+   * threshold is a cosine of 0.066.
    */
   private def lookingLike(description: String, cosine: Double, seed: Int, isTriaged: Boolean = false): Asset =
     testContext.insertAsset(
@@ -664,9 +658,8 @@ import altitude.core.util.Util
         .copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(TestContext.atCosine(embeddingOf(description), cosine, seed)))))
 
   /**
-   * `copies` copies of the asset in its repository and folder, written straight to the table, with IDs and checksums of their own
-   * that open with "seeded-": more assets than a test could import. Returns what removes them again, since the bundle's database
-   * is every test's.
+   * Writes `copies` copies of the asset straight to the table, with "seeded-" IDs and checksums: more assets than a test could
+   * import. Returns their removal, since every test shares the bundle's database.
    */
   private def seedCopies(repositoryId: String, template: Asset, copies: Int): () => Unit = {
     val (id, checksum) =
@@ -696,17 +689,16 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with one asset and as many copies of it as the cap a search counts its matches to, 10,000:
-     * one match more than the cap.
+     * A logged-in user's repository with one asset and as many copies as the cap a search counts to, 10,000: one match past it.
      *
      * Assertions:
      *
-     * The first page of the flat grid shows the cap as its total and says there are more, as the grouped grid and the map layout
-     * do of the same search: each page is told the cap its own query counted to.
+     * The first page of the flat grid, the grouped grid and the map layout each shows the cap as its total and says there are
+     * more, each told the cap its own query counted to.
      *
      * Edge cases:
      *
-     * With one copy fewer, exactly the cap's matches, each shows the cap as its total and does not say there are more.
+     * With the original recycled, exactly the cap's matches, each shows the cap and does not say there are more.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -747,14 +739,13 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The first page is an HTML fragment whose replaced URL carries the grouping, with a header giving the whole day's count, the
-     * overall total, cells in sort order and the grouping reflected in the Group menu; only its last cell carries the cursor, and
-     * no cell a page number. The continuation completes the day without repeating its header, opens the next one and, as the last
-     * page, carries no cursor.
+     * The first page is an HTML fragment whose replaced URL carries the grouping, with the day's header giving its whole count,
+     * the overall total, cells in sort order and the grouping in the Group menu; only its last cell carries the cursor. The
+     * continuation completes the day without repeating its header, opens the next and, as the last page, carries no cursor.
      *
      * Edge cases:
      *
-     * Continuing from the first cursor after the remaining assets were recycled is a 204 with nothing to append.
+     * Continuing after the remaining assets were recycled is a 204 with nothing to append.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -780,7 +771,6 @@ import altitude.core.util.Util
         response.headers("hx-replace-url").head should include("sort=filename0&groupBy=dateTaken&groupDirection=desc")
         val page1 = response.text()
 
-        // The one day on the page: its header with the whole day's count, then its cells in sort order; the footer total
         page1 should include("""<time datetime="2026-09-06">Sunday, September 6, 2026</time>""")
         page1 should include("""<span class="count" data-count="3">(3 items)</span>""")
         page1 should include("""data-results-total="4"""")
@@ -790,13 +780,11 @@ import altitude.core.util.Util
         ordered(page1, cell(a1), cell(a2))
         page1.contains(cell(a3)) shouldBe false
 
-        // The Group menu reflects the grouping
         page1 should include(
           """data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" aria-checked="true"""")
         page1 should include("""data-results-group-by="dateTaken"""")
         page1 should include("""data-results-group-direction="desc"""")
 
-        // The last cell, and only it, carries the cursor
         val cursors = cursorOf(page1)
         cursors.length shouldBe 1
         ordered(page1, cell(a2), "data-app-search-after")
@@ -815,7 +803,7 @@ import altitude.core.util.Util
         ordered(page2, header("2026-09-05"), cell(b1))
         page2.contains("data-app-search-after") shouldBe false
 
-        // Continuing past the end, after the remaining images left the results, has nothing to append
+        // Past the end, once the remaining assets left the results, there is nothing to append
         testApp.service.library.recycleAssets(Set(a3.persistedId, b1.persistedId))
         val past = htmlSearch(
           host,
@@ -871,12 +859,12 @@ import altitude.core.util.Util
      * Assertions:
      *
      * Every malformed or contradictory grouping, direction, cursor, page size or sort is a plain-text 400 naming the parameter at
-     * fault. A cursor is refused for a different search but accepted with another page size.
+     * fault. A cursor is refused for another search but accepted with another page size.
      *
      * Edge cases:
      *
-     * An empty groupBy, the removed dateImported grouping, a direction with the Location grouping, a cursor that decodes to an
-     * empty JSON object, the page sizes 0 and 501, and a valid cursor sent without isContinuousScroll.
+     * An empty groupBy, a dateImported grouping, a direction with the Location grouping, a cursor decoding to an empty JSON
+     * object, the page sizes 0 and 501, and a valid cursor without isContinuousScroll.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -936,8 +924,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Page sizes outside 1..500 are plain-text 400s stating the bounds, on first pages and continuations alike, and a page size
-     * of 1 or 500 returns one asset or both.
+     * A page size outside 1..500 is a plain-text 400 stating the bounds, on a first page and a continuation alike; 1 and 500 are
+     * served.
      *
      * Edge cases:
      *
@@ -985,12 +973,12 @@ import altitude.core.util.Util
      * Assertions:
      *
      * Search text defaults to the Relevance sort on every grid shape and the map layout, ranking the album match above the
-     * file-name match, while a sort the request names wins and no usable text defaults to the newest import. A Relevance page
-     * continues by cursor, and the Relevance sort without usable text, or with a direction appended, is a plain-text 400.
+     * file-name match; a sort the request names wins, and no usable text defaults to the newest import. A Relevance page
+     * continues by cursor. The Relevance sort without usable text, or with a direction, is a plain-text 400.
      *
      * Edge cases:
      *
-     * Text without a usable term ("- OR") is no text; the day grouping puts the two assets on different days, so their order is
+     * Text without a usable term ("- OR") is no text. The day grouping puts the two assets on different days, so their order is
      * not compared there.
      */
     testContext.persistRepository()
@@ -1064,8 +1052,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * With Search text the fragment carries it in data-results-q and the Relevance option is selected, or offered unselected when
-     * the request names another sort; without usable text data-results-q is empty and Relevance is not offered.
+     * With Search text the fragment carries it and the Relevance option is selected, or offered unselected beside another named
+     * sort. Without usable text the fragment's text is empty and Relevance is not offered.
      *
      * Edge cases:
      *
@@ -1111,8 +1099,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Search text in the trash is a plain-text 400 naming the trash, while the trash alone, the trash with text that has no
-     * usable term, and text in another view are served.
+     * Search text in the trash is a plain-text 400 naming the trash. The trash alone, the trash with no usable term, and text in
+     * another view are served.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1150,8 +1138,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The repository view renders the sorted cell alone. With `triaged=true` it renders both cells and the bookmarkable URL
-     * carries the parameter. The triage view with `triaged=false` is a plain-text 400 naming the view, as the map layout is.
+     * The repository view renders the sorted cell alone; with `triaged=true` both, and the replaced URL keeps the parameter. The
+     * triage view with `triaged=false` is a plain-text 400 naming the view, in the map layout too.
      *
      * Edge cases:
      *
@@ -1198,9 +1186,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * An unauthenticated grouped request is redirected when it asks for HTML and refused with a 401 when it asks for JSON. A
-     * logged-in user asking for the other user's repository is a 404 that shows none of its assets, as for any foreign entity,
-     * and a repository that does not exist is the same 404.
+     * Without a login an HTML request is redirected and a JSON one is a 401. The other user's repository is a 404 showing none of
+     * its assets, the same as for a repository that does not exist.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1215,7 +1202,6 @@ import altitude.core.util.Util
 
     withServer(App) {
       host =>
-        // An HTML request is sent to the login page, a JSON one is told so
         val html = requests.get(
           s"$host/htmx/search/r/$repoId",
           params = Map(Api.Field.Search.GROUP_BY -> "dateTaken"),
@@ -1230,7 +1216,6 @@ import altitude.core.util.Util
           check = false)
         json.statusCode shouldBe 401
 
-        // A logged-in user cannot read a repository that is not theirs
         val foreignPage = htmlSearch(host, strangersRepo.persistedId, Map(Api.Field.Search.GROUP_BY -> "dateTaken"))
         foreignPage.statusCode shouldBe 404
         foreignPage.text().contains(cell(foreign)) shouldBe false
@@ -1250,9 +1235,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The first page carries the total, whether it is capped, and the cursor of the next page on its last cell alone; the second
-     * page, requested with that cursor, holds the remaining asset with neither a cursor nor a total. A cursor without
-     * isContinuousScroll, a malformed one and one sent with another sort are plain-text 400s.
+     * The first page carries the total, whether it is capped, and the next page's cursor on its last cell alone; the second page
+     * holds the remaining asset with neither cursor nor total. A cursor without isContinuousScroll, a malformed one and one sent
+     * with another sort are plain-text 400s.
      *
      * Edge cases:
      *
@@ -1311,8 +1296,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The first page's thumbnail names its preview URL in both src, so it paints before any script runs, and data-src, so the
-     * lazy-image observer can release and reload it like any other; the continuation's thumbnail names it in data-src alone.
+     * The first page's thumbnail names its preview URL in src, so it paints before any script runs, and in data-src, so the
+     * lazy-image observer can release and reload it; a continuation's names it in data-src alone.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1344,8 +1329,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The edited asset's thumbnail names its Preview URL with `?v=1` in src and data-src; the other's names the plain Preview
-     * URL.
+     * The edited asset's thumbnail names its Preview URL with `?v=1`; the other's names the plain URL.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1381,9 +1365,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Without an Accept header the ungrouped search is an HTML grid in grid layout, with no grouping, no group headers and no
-     * bounding-box scope. Asking for JSON, by the Accept header or by the legacy Content-Type, is a 400 with a JSON error
-     * pointing to HTML.
+     * Without an Accept header the ungrouped search is an HTML grid in grid layout, with no grouping, header or box scope. Asking
+     * for JSON, by Accept or by Content-Type, is a 400 with a JSON error pointing to HTML.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1405,7 +1388,7 @@ import altitude.core.util.Util
         page.contains("""id="bboxScope"""") shouldBe false
         page.contains("""class="result-group"""") shouldBe false // the style block names it; no header is rendered
 
-        // Nothing asks for results as JSON any more: the detail modal walks the grid
+        // No client reads results as JSON: the detail modal walks the grid
         for (params <- Seq(Map[String, String](), Map(Api.Field.Search.GROUP_BY -> "dateTaken"))) {
           val json = search(host, repoId, params)
           json.statusCode shouldBe 400
@@ -1429,16 +1412,15 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Unscoped results render no title block. A folder scope renders a title block with the folder icon, the ancestors as folder
-     * search triggers, the folder as the leaf and the way back to the whole result set (a trigger clearing the person scope,
-     * which the store's rules widen to every scope); the toolbar keeps "Total:" with and without a scope. An album scope shows
-     * the album's icon, name and creation day; a Location scope its icon, name and category; Search text its icon, the text and
-     * "in this library".
+     * Unscoped results render no title block. A folder scope's block has the folder icon, the ancestors as search triggers, the
+     * folder as the leaf and the way back to all results (a trigger clearing the person scope, which the search store widens to
+     * every scope). An album's shows its name and creation day, a Location's its name and category, Search text the text and
+     * where it searches. The toolbar keeps its total throughout.
      *
      * Edge cases:
      *
-     * The root folder is the whole repository and renders no title block. In the Triage view the Search text's title says "in
-     * Triage", the assets it searches there.
+     * The root folder is the whole repository and renders no title block. In the Triage view, Search text's title says it
+     * searches Triage.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1504,14 +1486,13 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * In Triage, `subset=unknownPeople` renders the cell of the asset with the unknown person alone, under the Results title
-     * "Unknown people" with its icon and the way back, and `subset=noLocation` the two assets no Location points at under "No
-     * Location"; both grid shapes and the map layout render the title, and the replaced URL carries the subset. In Browse,
-     * `subset=unknownPeople` renders the sorted asset with the unknown person.
+     * In Triage, `subset=unknownPeople` renders the asset with the unknown person alone, under its title with the way back, and
+     * `subset=noLocation` the two assets in no Location under theirs; both grid shapes and the map layout render the title, and
+     * the replaced URL keeps the subset. In Browse, `subset=unknownPeople` renders the sorted asset with the unknown person.
      *
      * Edge cases:
      *
-     * A subset that is not one of the two, or empty, is a plain-text 400, in the grid and in the map layout.
+     * An unknown or empty subset is a plain-text 400, in the grid and in the map layout.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1591,8 +1572,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Through the first repository, a search scoped to each of the four, or to an ID of each kind that does not exist, answers a
-     * plain-text 404 that names none of them, in the grid layout and in the map layout.
+     * Through the first repository, a search scoped to any of the four, or to an unknown ID of each kind, is a plain-text 404
+     * naming none of them, in the grid and the map layout.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -1643,14 +1624,14 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * `personId` naming both, comma-separated, renders the asset with both alone, as `peopleMatch=all` does, and
-     * `peopleMatch=any` the three assets with either, in both grid shapes; the map layout counts the same matches. The replaced
-     * URL carries the people as given and the people match. A page of the search is continued by its cursor.
+     * `personId` naming both renders the asset with both alone, by default as with `peopleMatch=all`, and `peopleMatch=any` the
+     * three with either, in both grid shapes; the map layout counts the same. The replaced URL keeps the people and the match. A
+     * page continues by its cursor.
      *
      * Edge cases:
      *
-     * An ID that names nobody, beside Alice's, is no 404: all of the two match nothing, and any of them match Alice's assets. A
-     * cursor of the search matching any does not continue the one matching all.
+     * An ID naming nobody beside Alice's is no 404: all of the two match nothing, any of them Alice's assets. A cursor of the
+     * search matching any does not continue the one matching all.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1694,7 +1675,7 @@ import altitude.core.util.Util
         htmlSearch(host, repoId, people ++ mapLayout).text() should include("""data-results-total="1"""")
         htmlSearch(host, repoId, any ++ mapLayout).text() should include("""data-results-total="3"""")
 
-        // The cursor carries the people match: the second page of any follows the first, and is refused for all
+        // The cursor carries the people match, so it is refused for all
         val firstPage = htmlSearch(host, repoId, any + ("rpp" -> "2")).text()
         firstPage should include(cell(both))
         firstPage should include(cell(aliceOnly))
@@ -1719,13 +1700,13 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with the person Alice and three assets with a Face of hers, all captured in June 2026, and a
-     * filtered search of Alice within that month, two assets a page.
+     * A logged-in user's repository with Alice on three assets captured in June 2026, searched by Alice within that month, two
+     * assets a page.
      *
      * Assertions:
      *
-     * The first page, which renders the results title, reads the names behind the search's IDs once (`SearchService.filterNames`,
-     * by its DEBUG line); the page that continues it, which renders cells alone, reads none, and still renders the third asset.
+     * The first page, which renders the results title, reads the names behind the search's IDs once; its continuation, cells
+     * alone, reads none and still renders the third asset.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1790,12 +1771,12 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * `locationId` naming Lisbon and Sintra, comma-separated, renders the assets of the two, in both grid shapes, and the map
-     * layout counts them; the replaced URL carries the Locations as given.
+     * `locationId` naming Lisbon and Sintra renders the assets of the two in both grid shapes, the map layout counts them, and
+     * the replaced URL keeps the Locations.
      *
      * Edge cases:
      *
-     * An ID that names no Location, beside Lisbon's, is no 404 and adds nothing to Lisbon's assets.
+     * An ID naming no Location beside Lisbon's is no 404 and adds nothing to Lisbon's assets.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1840,20 +1821,19 @@ import altitude.core.util.Util
      * Setup:
      *
      * A logged-in user's repository with assets taken at the first moment of June 1, on June 15, in the last second of June 30
-     * and at the first moment of July 1, 2024, imported on four consecutive days at noon UTC, an asset with no capture time
-     * imported on the fifth, and a triaged asset taken on June 15.
+     * and at the first moment of July 1, 2024, imported on four consecutive days at noon UTC; an asset with no capture time
+     * imported on the fifth; and a triaged asset taken on June 15.
      *
      * Assertions:
      *
-     * `takenFrom` and `takenTo` of June 1 and June 30 render the three assets of June, in both grid shapes, and the map layout
-     * counts them; `takenFrom` alone renders the assets from that day on and `takenTo` alone those up to it. `importedFrom` and
-     * `importedTo` render the assets imported on those days of the server's time zone and between them. Both ranges together
-     * render the assets in both. The replaced URL carries the four dates.
+     * A Date Taken range of June renders the three June assets in both grid shapes, and the map layout counts them; an open end
+     * reaches from or up to the other. A Date Imported range renders the assets imported on its days, in the server's time zone.
+     * Both ranges together render the assets in both. The replaced URL keeps the four dates.
      *
      * Edge cases:
      *
-     * The asset with no capture time is in no Date Taken range, not even one open at an end. `triaged=true` adds the triaged
-     * asset of June 15 to the range's results, which leave it out otherwise.
+     * The asset with no capture time is in no Date Taken range, not even an open one. The triaged asset joins the range's results
+     * only with `triaged=true`.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1918,12 +1898,12 @@ import altitude.core.util.Util
      *
      * A logged-in user's repository with the folder Trips, the people Alice and Bob, and the Locations Lisbon and Sintra. One
      * asset, beach.jpg in Trips, taken on June 15, 2024, has a Face of each and is in Lisbon; five more each differ from it in
-     * one way: named forest.jpg, in no folder of Trips, without Bob, in Porto, and taken on July 15.
+     * one way: named forest.jpg, in the folder Elsewhere, without Bob, in Porto, and taken on July 15.
      *
      * Assertions:
      *
-     * A search for the text "beach" in Trips, with both people, in Lisbon or Sintra, taken in June 2024 and imported on the day
-     * the assets were, renders the one asset that passes every filter, in both grid shapes, and the map layout counts it.
+     * A search combining all those filters, with the import day, renders the one asset that passes every filter in both grid
+     * shapes, and the map layout counts it.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1995,10 +1975,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * A date that is not an ISO day, a year of five digits included, a range whose start is after its end, a `peopleMatch` that
-     * is neither `all` nor `any`, eleven people or eleven Locations in one parameter, and an album or a Triage subset beside a
-     * date range or two people are each a plain-text 400. So are a date range, two people and two Locations with the trash view,
-     * naming the trash.
+     * A date that is not an ISO day (a five-digit year included), a reversed range, an unknown `peopleMatch`, eleven people or
+     * Locations, and an album or a Triage subset beside a date range or two people are each a plain-text 400. So is a date range,
+     * two people or two Locations in the trash, naming the trash.
      *
      * Edge cases:
      *
@@ -2051,12 +2030,12 @@ import altitude.core.util.Util
   }
 
   /**
-   * A chip of a filtered search's results title: the search parameters its × leaves out of the search, each with the value the
-   * chip carries (`data-app-filter-<param>`, the parameter in kebab case), and the text it shows
+   * A chip of a filtered search's title: the parameters its × removes, with the values it carries (`data-app-filter-<param>`,
+   * kebab case), and its text
    */
   private case class FilterChip(filter: Map[String, String], text: String)
 
-  /** The chips of the results title in `html` (`data-app-filter`), in document order */
+  /** The chips of the results title, in document order */
   private def filterChipsIn(html: String): List[FilterChip] =
     """(?s)<li\b[^>]*\bdata-app-filter=.*?</li>""".r.findAllIn(html).toList.map {
       element =>
@@ -2070,7 +2049,7 @@ import altitude.core.util.Util
   private def describeChip(description: String): FilterChip =
     FilterChip(Map("describe" -> description), s"Describe: “$description”")
 
-  /** The opening tag of a choice menu's host (`sortMenuHost`, `groupMenuHost`), which says whether the menu is disabled */
+  /** The opening tag of a choice menu's host, which says whether the menu is disabled */
   private def menuHost(html: String, id: String): String = s"""<div id="$id"[^>]*>""".r.findFirstIn(html).get
 
   private val menuDisabled = "data-choice-menu-disabled"
@@ -2098,24 +2077,21 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with the folder Lisbon under 2024 under Trips, the people Alice, with a Face and so a cover,
-     * and Bob, with none, the Location Lisbon in the Category Portugal and the Location Sintra.
+     * A logged-in user's repository with the folder Trips › 2024 › Lisbon, Alice with a Face and so a cover, Bob with none, the
+     * Location Lisbon in the Category Portugal and the Location Sintra.
      *
      * Assertions:
      *
-     * A search by the text "beach", the folder, Bob and Alice matching any of them, Sintra and Lisbon, a Date Taken range and a
-     * Date Imported range is titled "Search results" with the Edit control, over one chip per filter, in the order of the panel's
-     * fields: the text, the folder by its path, each person by name in the order given, each Location with its Category in the
-     * order given, then the two ranges as "Taken" and "Imported" days. Each chip carries the parameters its × leaves out: the
-     * text, the folder, its own person or Location, or both days of its range. The text's chip names its remove control "Remove
-     * Keywords beach", as the panel labels the field. Alice's chip leads with her cover Face; the people are announced as "any
-     * of" them, and as "all of" them when the match is left out.
+     * A search by text, the folder, Bob and Alice matching any, Sintra and Lisbon, and both date ranges is titled "Search
+     * results" with Edit over one chip per filter in the order of the panel's fields: the folder by its path, the people and
+     * Locations in the order given, a Location with its Category, the ranges as days. Each chip carries the parameters its ×
+     * removes. The text chip's remove control is labelled as the panel labels the field. Alice's chip leads with her cover Face,
+     * and the people read "any of", or "all of" without the match.
      *
      * Edge cases:
      *
-     * The title of one scope is not rendered: no person block, no folder crumbs, no quoted text. The search has no description:
-     * no chip is a description's, the Sort and Group menus are enabled, with no Similarity option, the layout toggle offers the
-     * map, and the title says nothing of an empty result, though nothing matches.
+     * No single scope's title is rendered. With no description, the Sort and Group menus are enabled with no Similarity option,
+     * the layout toggle offers the map, and the title says nothing of the empty result.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2190,10 +2166,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * A search by a date range alone is a filtered search: its one chip reads a range within a year with the year once ("Taken 1
-     * Jun – 30 Jun 2024"), a range across two years with both ("Imported 28 Dec 2023 – 3 Jan 2024"), a range of one day as that
-     * day ("Taken 8 Jun 2024"), a range with no last day as "from" its first ("Taken from 8 Jun 2024") and one with no first day
-     * as "until" its last ("Imported until 21 Jun 2024"), and carries the days the request gave, an open end none.
+     * A date range alone is a filtered search with one chip. It names the year once within a year and both across two, a single
+     * day once, an open end as "from" or "until", and carries the days the request gave.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2228,10 +2202,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Two people alone, two Locations alone, the text with a folder, the text with a person, a folder with a Location, and a
-     * person with a Location are each a filtered search, titled "Search results" over their chips. One person alone keeps the
-     * person's block with the Hide link, one folder alone its crumbs, one Location alone its name, and the text alone its quoted
-     * text, none with a chip or the Edit control.
+     * Two people, two Locations, or any two of text, folder, person and Location make a filtered search, titled "Search results"
+     * over their chips. One person alone keeps the person's block with the Hide link, one folder its crumbs, one Location its
+     * name and the text its quoted text, none with a chip or Edit.
      *
      * Edge cases:
      *
@@ -2296,20 +2269,18 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with Alice, who has a Face on an asset taken on June 15, 2024, in the folder Trips and the
-     * Location Lisbon, and a second repository of theirs with the person Eve, the folder "Eve's folder" and the Location "Eve's
-     * place".
+     * A logged-in user's repository with Alice, who has a Face on an asset taken on June 15, 2024, and a second repository of
+     * theirs with the person Eve, the folder "Eve's folder" and the Location "Eve's place".
      *
      * Assertions:
      *
-     * A search of June 2024 scoped to a person, a folder or a Location that is the other repository's, or that does not exist,
-     * answers 200 with no result and no chip but the range's, naming nothing of the other repository, in the grid and the map
-     * layouts. Beside Alice, an unknown person has no chip while Alice keeps hers, and the people matching all of the two match
-     * nothing.
+     * A search of June 2024 scoped to the other repository's person, folder or Location, or an unknown one, answers 200 with no
+     * result and the range's chip alone, naming nothing of the other repository, in the grid and the map layouts. Beside Alice,
+     * an unknown person has no chip while Alice keeps hers, and all of the two match nothing.
      *
      * Edge cases:
      *
-     * The same IDs beside June alone are matched as the scope: June 2024 alone finds the asset.
+     * June 2024 alone finds the asset.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -2361,19 +2332,16 @@ import altitude.core.util.Util
      *
      * A logged-in user's repository with five sorted assets whose Scene embeddings are at cosines of 0.9, 0.5, 0.3, 0.2 and 0.1
      * to the embedding of "a cactus"; a sixth at 0.01, under the default Describe match threshold; one in triage at 0.8; one at
-     * 0.95 that is recycled; and one with no embedding. The description is searched two to a page, with spaces around it, then on
+     * 0.95 that is recycled; and one with no embedding. The description is searched two to a page with spaces around it, then on
      * one page, then with the triaged assets.
      *
      * Assertions:
      *
-     * The first page is the results fragment with the two nearest assets in order and the total of 5, not capped: it names no
-     * Search text, it is titled "Search results" with the Edit control, as a filtered search is, over one chip, the
-     * description's, "Describe: “a cactus”", which carries the description, trimmed, and is the one place the fragment holds it;
-     * its last cell carries the cursor of the next page, and the replaced URL carries the description and the similarity sort.
-     * The toolbar offers what the search takes: the Sort menu holds "Similarity" first, checked, a search trigger as the column
-     * sorts after it are, and no Relevance, the Group menu is enabled, and the layout toggle has no Map segment. On one page the
-     * five are in the order of their cosines and no cell carries a cursor. With the triaged assets the total is 6, the triaged
-     * one second, and the URL keeps the flag.
+     * The first page holds the two nearest in order and the total of 5, not capped. It names no Search text and is titled "Search
+     * results" with Edit over the description's chip, the one place the fragment holds the description, trimmed. Its last cell
+     * carries the cursor, and the replaced URL carries the description and the similarity sort. The Sort menu offers Similarity
+     * first, checked, and no Relevance; the Group menu is enabled; the layout toggle has no Map. On one page the five are in
+     * cosine order with no cursor. With the triaged assets the total is 6, the triaged one second, and the URL keeps the flag.
      *
      * Edge cases:
      *
@@ -2438,22 +2406,20 @@ import altitude.core.util.Util
      *
      * A logged-in user's repository with three triaged assets whose Scene embeddings are at cosines of 0.8, 0.4 and 0.2 to the
      * embedding of "a cactus", the middle one named beach.jpg; a triaged one at 0.01, under the default Describe match threshold;
-     * a sorted one at 0.9; and a triaged one at 0.95 that is recycled. The description is searched in the Triage view: alone, one
-     * to a page and beside the Search text "beach"; and, before the three are there, alone and beside "beach".
+     * a sorted one at 0.9; and a triaged one at 0.95 that is recycled. The description is searched in the Triage view alone, one
+     * to a page and beside the Search text "beach", and before the three exist, alone and beside "beach".
      *
      * Assertions:
      *
-     * Alone, the results are the three triaged assets in the order of their cosines, with the total of 3, titled "Search results"
-     * over the description's chip with Edit, in the Triage view, and the replaced URL carries the view and the description. The
-     * toolbar offers what the search takes: the Sort menu holds "Similarity", checked, the Group menu is enabled, and the layout
-     * toggle has no Map segment. One to a page, the first page's cursor continues to the second asset. Beside "beach" the one
-     * triaged asset of that name is shown, under the chips of both.
+     * Alone, the results are the three triaged assets in cosine order, total 3, titled "Search results" over the description's
+     * chip with Edit, and the replaced URL keeps the view and the description. The Sort menu offers Similarity, checked, the
+     * Group menu is enabled and the layout toggle has no Map. One to a page, the cursor continues to the second asset. Beside
+     * "beach" the one triaged asset of that name shows, under both chips.
      *
      * Edge cases:
      *
-     * The sorted asset, though nearer than any triaged one, the one under the threshold and the recycled one are in no page.
-     * While no triaged image looks like the description, the title says that nothing in Triage does when the description stands
-     * alone, and that nothing within these filters does beside the Search text.
+     * The sorted asset, though nearest, the one under the threshold and the recycled one are in no page. With no triaged match,
+     * the title says nothing in Triage looks like it, or, beside the Search text, nothing within these filters.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2531,20 +2497,19 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with a sorted asset whose Scene embedding is at a cosine of 0.01 to the embedding of "a
-     * cactus", under the default Describe match threshold, and an asset with no embedding.
+     * A logged-in user's repository with sorted assets at cosines of 0.9 and 0.5 to the embedding of "a cactus", recycled once a
+     * first page's cursor is taken; one at 0.01, under the default Describe match threshold; and one with no embedding.
      *
      * Assertions:
      *
-     * "a cactus" answers 200 with the results fragment, a total of 0 and no cell, and the replaced URL carries the description.
-     * Its title keeps the description's chip and Edit, and says after Edit that nothing in this Library looks like that. Within a
-     * Date Taken range or a Search text that match nothing, it says that nothing within these filters does, after the chips of
-     * the description and the filter and Edit.
+     * "a cactus" answers the results fragment with a total of 0 and no cell, and the replaced URL keeps the description. Its
+     * title keeps the description's chip and Edit, and says after Edit that nothing in this Library looks like that. Within a
+     * date range or Search text that match nothing, it says nothing within these filters does, after both chips.
      *
      * Edge cases:
      *
-     * A continuation of it, from a cursor a moment old whose rows are gone, is a 204 with nothing to add. The same filters
-     * without the description find nothing too, and say nothing of it.
+     * The continuation from the old cursor, whose rows are gone, is a 204. The same filters without the description find nothing
+     * too and say nothing of it.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2599,20 +2564,18 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with a sorted asset whose Scene embedding is at a cosine of 0.9 to the embedding of a
-     * description of two lines, the first of them markup around a quoted word and an ampersand: `<b>"a" & b</b>`.
+     * A logged-in user's repository with a sorted asset near a two-line description whose first line is markup around a quoted
+     * word and an ampersand: `<b>"a" & b</b>`.
      *
      * Assertions:
      *
-     * The results find the asset, and nowhere hold the description's markup as markup. Its chip carries the description as an
-     * attribute, shows it after "Describe:" and names its remove control by it, each with the angle brackets, the quotes and the
-     * ampersand as character references and the line break as it is. The replaced URL carries the description percent-encoded,
-     * the line break included, so no header holds one.
+     * The results find the asset and never hold the markup as markup. The chip's attribute, text and remove label hold the
+     * description with the brackets, quotes and ampersand as character references and the line break kept. The replaced URL
+     * percent-encodes it, line break included, so no header holds one.
      *
      * Edge cases:
      *
-     * The advanced search panel opened on the search holds the description in its Describe field, a textarea, escaped the same
-     * way, with its line break.
+     * The advanced search panel's Describe textarea holds it escaped the same way, with its line break.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2631,7 +2594,7 @@ import altitude.core.util.Util
         (page should not).include("<b>\"a\"")
         (page should not).include("b</b>")
 
-        // The chip's text, read with the line break as a space, as every run of whitespace between its tags is
+        // `filterChipsIn` reads the line break as a space, as it does every run of whitespace
         filterChipsIn(page) shouldBe
           List(FilterChip(Map("describe" -> escaped), s"Describe: “${escaped.replace('\n', ' ')}”"))
         page should include(s"""data-app-filter-describe="$escaped"""")
@@ -2666,14 +2629,12 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The second page is cells alone, with no results fragment around them and no total: the third and fourth assets, the last
-     * cell carrying the next cursor. The third page is the fifth asset, with no cursor. The three pages hold the five once each,
-     * in the order of their cosines.
+     * The second page is cells alone, with no fragment or total, its last cell carrying the next cursor; the third has no cursor.
+     * The pages hold the five once each, in cosine order.
      *
      * Edge cases:
      *
-     * A continuation may ask for another page size: one asset after the first page's cursor is the third. A cursor sent without
-     * the continuation flag is refused with a 400.
+     * A continuation may ask for another page size. A cursor without the continuation flag is a 400.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2710,15 +2671,14 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with five sorted assets whose Scene embeddings are at cosines of 0.9, 0.8, 0.7, 0.5 and 0.3
-     * to the embedding of "a cactus", and a Describe weaker matches ratio of 0.75: the line is at a cosine of 0.675, so the last
-     * two are weaker matches. The description is searched on one page, then two to a page.
+     * A logged-in user's repository with five sorted assets at cosines of 0.9, 0.8, 0.7, 0.5 and 0.3 to the embedding of "a
+     * cactus", and a Describe weaker matches ratio of 0.75: the line is at a cosine of 0.675, so the last two are weaker matches.
+     * The description is searched on one page, then two to a page.
      *
      * Assertions:
      *
-     * On one page a group header stands between the third cell and the fourth: "Weaker matches" with the count "(2 items)" and
-     * the number 2 for the client to count down, and no checkbox. Two to a page, the header is on the second page alone, between
-     * its two cells, with the same count.
+     * On one page the "Weaker matches" header stands between the third cell and the fourth, with their count of 2 for the client
+     * to count down and no checkbox. Two to a page, it is on the second page alone, between its two cells.
      *
      * Edge cases:
      *
@@ -2765,19 +2725,17 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with five sorted assets whose Scene embeddings are at cosines of 0.9, 0.8, 0.7, 0.5 and 0.3
-     * to the embedding of "a cactus", named c, a, e, d and b, the first, third and fifth taken on January 2, 2026 and the others
-     * on January 1; a Describe weaker matches ratio of 0.75, so d and b are weaker matches. The description is searched sorted by
-     * file name, then grouped by Date Taken.
+     * A logged-in user's repository with five sorted assets at cosines of 0.9, 0.8, 0.7, 0.5 and 0.3 to the embedding of "a
+     * cactus", named c, a, e, d and b, the first, third and fifth taken on January 2, 2026 and the others on January 1; a
+     * Describe weaker matches ratio of 0.75, so d and b are weaker matches. The description is searched sorted by file name, then
+     * grouped by Date Taken.
      *
      * Assertions:
      *
-     * Sorted by file name, the cells are a, c, e and then b, d, the weaker matches' header between e and b with their count of 2;
-     * the Sort menu's checked option is File Name (A-Z), with "Similarity" offered before it, unchecked, and the replaced URL
-     * carries the sort. Two to a page, the second page holds e, the header and b, and the third d alone. Grouped by Date Taken,
-     * the page has four day headers: January 2 with c and e and January 1 with a, then the weaker matches' header, then January 2
-     * with b and January 1 with d; the Group menu's checked option is Date Taken (Newest first), and the replaced URL carries the
-     * grouping.
+     * By file name the cells are a, c, e, then the weaker matches' header with their count, then b, d; the Sort menu checks the
+     * file name sort with Similarity offered unchecked, and the replaced URL keeps the sort. Two to a page, the second page holds
+     * e, the header and b. Grouped by Date Taken, January 2 (c, e) and January 1 (a) come before the weaker matches' header, and
+     * January 2 (b) and January 1 (d) after it; the Group menu checks the grouping, and the replaced URL keeps it.
      *
      * Edge cases:
      *
@@ -2863,20 +2821,17 @@ import altitude.core.util.Util
      * Setup:
      *
      * A logged-in user's repository with three sorted assets near the embedding of "a cactus", two of them named for a cactus,
-     * and one in triage. Three searches, one asset to a page, each with the cursor of its first page: the Search text "cactus",
+     * and a fourth in triage. Three searches, one asset to a page, each with its first page's cursor: the Search text "cactus",
      * the description "a cactus", and the description within that Search text.
      *
      * Assertions:
      *
-     * Each cursor continues its own search, and is refused for the other two with a 400 saying the cursor does not belong to the
-     * search: the filters' cursor for the same filters with a description, the Describe search's for the same filters without it,
-     * and the description's alone for the description within filters and the reverse.
+     * Each cursor continues its own search and is refused for the other two with a 400 saying it does not belong to the search.
      *
      * Edge cases:
      *
-     * A Describe search's cursor is refused for another description within the same filters, for the same description within
-     * another Search text, and with the triaged assets, which are other searches. The description within the Search text
-     * continues to the second asset named for a cactus, and not to the nearer one that is not.
+     * A Describe search's cursor is refused for another description, another Search text, and with the triaged assets. The
+     * description within the Search text continues to the second asset named for a cactus, not to the nearer one that is not.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2932,24 +2887,21 @@ import altitude.core.util.Util
      *
      * A logged-in user's repository with the folder Trips, the person Alice and the Location Lisbon. Six sorted assets near the
      * embedding of "a cactus", at cosines of 0.9, 0.8, 0.7, 0.6, 0.5 and 0.4, all named for a beach and taken in June 2024: the
-     * first is outside the folder, the second has no Face of Alice, the fourth is outside the Location, and the other three are
-     * in the folder, with a Face of Alice, in the Location.
+     * first is outside the folder, the second has no Face of Alice, the fourth is outside the Location, and the other three match
+     * every filter.
      *
      * Assertions:
      *
-     * The description within the Search text "beach", the folder, Alice, the Location and June 2024, two to a page, answers the
-     * results fragment with the two nearest of the three assets every filter matches, in the order of their cosines, and the
-     * total of 3. The fragment names the Search text; it is titled "Search results" with the Edit control and the description's
-     * chip, which carries the description, then a chip for each of the filters, in the order of the panel's fields; and the
-     * replaced URL carries every filter with the description and no sort. The page after its cursor is the third asset, cells
-     * alone, with no title.
+     * The description within the Search text "beach", the folder, Alice, the Location and June 2024, two to a page, shows the two
+     * nearest of the three matching assets in cosine order, total 3. The fragment names the Search text and is titled "Search
+     * results" with Edit over the description's chip, then a chip per filter in the order of the panel's fields. The replaced URL
+     * keeps every filter, the description and the similarity sort. The next page is the third asset, cells alone.
      *
      * Edge cases:
      *
-     * The description within one filter, the folder or the person alone, is titled "Search results" over the description's chip
-     * and that filter's, not by the folder's path or the person's block. A person the repository does not have beside the
-     * description is no 404: it matches nothing and has no chip, so the description's is the only one, and the empty result is
-     * said to be the Library's.
+     * The description within the folder or the person alone is titled "Search results" over the two chips, not by the folder's
+     * path or the person's block. An unknown person beside the description is no 404: it matches nothing and has no chip, and the
+     * empty result is said to be the Library's.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -3037,23 +2989,20 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with the folder Trips, and requests with a description that is empty, blank and of 301
-     * characters; a description beside an album, a Triage subset, a map area and the map layout; a description in the trash; a
-     * description beside a filter that is refused on its own: eleven people, a date that is no day, an unknown people match; and
-     * a description beside a sort or a grouping that no search takes.
+     * A logged-in user's repository with the folder Trips, and requests with a description that is empty, blank or of 301
+     * characters; beside an album, a Triage subset, a map area or the map layout; in the trash; beside a filter refused on its
+     * own; and beside a sort or a grouping no search takes.
      *
      * Assertions:
      *
-     * Each is a plain-text 400 whose message says what is wrong: a blank description, one past 300 characters, the parameter a
-     * description takes none of, the view a description does not search, what the filter is refused for without a description, or
-     * what the sort or the grouping is refused for: the Relevance sort with no Search text, an unknown sort, an unknown grouping.
+     * Each is a plain-text 400 whose message says what is wrong: the description's length, the parameter or view a description
+     * does not take, or why the filter, sort or grouping is refused without a description.
      *
      * Edge cases:
      *
-     * A description of 300 characters, one with the grid layout and the triage filter named, one beside each Search filter (the
-     * Search text, the folder, a person, a Location, a people match, each end of the two date ranges), and one beside a sort (a
-     * column's, the similarity sort itself, Relevance with Search text) or a grouping are answered. A page size out of bounds is
-     * refused for a description as for any search, and the similarity sort for a search with no description.
+     * A description of 300 characters, with the grid layout and the triage filter named, beside each Search filter, or beside a
+     * sort or grouping a search takes is answered. A page size out of bounds is refused as for any search, and the similarity
+     * sort without a description.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId

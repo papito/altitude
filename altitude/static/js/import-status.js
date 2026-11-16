@@ -1,52 +1,31 @@
 import { Const } from "./constants.js"
 
 /**
- * The Import page's status feed (the `hx-ws:connect` element of `pipeline.scala.html`, the vendored
- * `lib/hx-ws.js`) and what the Import history does with it.
+ * The Import page's status feed (`hx-ws`) and the Import history it keeps current. `hx-ws` swaps each
+ * Import status into the element the status names; this module does the rest:
  *
- * Every message of the feed is JSON (`ImportStatusWsActor`). An Import's status names the element
- * it replaces, the Import's status in the history, and `hx-ws` swaps it in with the Import's title
- * beside it. This module does the rest:
+ * - a status of an Import the page does not show, or of one that closed, reads the history again, so
+ *   the Import appears or moves from in progress to earlier; so does the feed reopening, to catch up;
+ * - an Import's shown files are read again with each of its statuses;
+ * - each part of the history, and the Watch folder cards, is read one request at a time; what is asked
+ *   meanwhile is read once it answers, so what is shown is never older than the last change and a
+ *   view the user picked is never undone by a read begun before the click;
+ * - expanded Imports are `hx-preserve`, and the one in view keeps its place on screen.
  *
- * - a status of an Import the page does not show (one just opened) is not swapped, and one of an
- *   Import that closed is; either way the history is read again, so the Import appears, or moves
- *   from "In progress" to "Earlier". So it is when the feed opens again after it was lost: the
- *   page catches up with what it missed;
- * - an Import whose files are shown has them read again with each of its statuses, so the list
- *   follows the Import at the feed's rate;
- * - a part of the history is read through one sequence of requests (`request`): the history
- *   itself, and each Import's files, are each read by the route their root names
- *   (`data-app-view-url`), one request at a time, and a control inside names the view it asks for
- *   instead (`data-app-view`: an outcome filter, "Show more", "Show earlier Imports"). What is
- *   asked for while a request is on its way is read once it has answered, so the last answer shown
- *   is never older than the last change, and a view the user picked is never undone by a read
- *   that began before the click;
- * - an Import's files are read when its `<details>` opens. The `<details>` are `hx-preserve`, so
- *   reading the history again leaves an expanded Import open, with its filter and its files; the
- *   one in view also stays where it is on the screen, whatever was added above it;
- * - a message that says the Library's Watch folders changed swaps nothing: it is announced on the
- *   page (`Const.events.watchFoldersChanged`), and `import/watch-folders.js` reads the cards
- *   again through the same sequence of requests (`readAgain`, which this module exports for it).
- *
- * The extension reconnects a socket the server closed with a code worth trying again on (1013:
- * the account changed, `ImportStatusWsActor.CloseAllFor`), but it would go on forever after a
- * handshake the server refuses (an account deactivated meanwhile, or one that no longer holds
- * Import): after `MAX_RECONNECTS` reconnects in a row that failed, it is stopped here, with no
- * patch to the library, by cancelling the next one (`htmx:ws:before:connection`, whose
- * `connection.attempt` counts the reconnects since the socket last opened), and the status area
- * says to reload. An open socket hides the notice again. A refused session may send the window to
- * the login first, through the nav's poll (`common/session.js`).
+ * `hx-ws` reconnects after a 1013 close but would retry forever after a refused handshake (an account
+ * deactivated, or no longer holding Import), so after `MAX_RECONNECTS` failed reconnects in a row it
+ * is stopped and the page says to reload.
  */
 export const MAX_RECONNECTS = 5
 
 const HISTORY_ID = "importHistoryList"
 const attributes = Const.attributes
 
-// The status each message of the feed holds, for the listener that runs once it is swapped in
+// Each message's parsed status, for the listener that runs once it is swapped in
 const statuses = new WeakMap()
 
-// The parts of the page being read, by the ID of their root: `next` is the route asked for
-// while a request is on its way, or null for the view shown, read again
+// Parts being read, by root ID. `next` is what to read once the request in flight answers: a route,
+// null for the shown view again, undefined for nothing
 const reading = new Map()
 
 export function registerImportStatus() {
@@ -112,9 +91,8 @@ export function registerImportStatus() {
 }
 
 /**
- * Reads a message before `hx-ws` handles it, which waits for this. One that is no JSON is none of
- * the feed's and is dropped, since `hx-ws` would swap its text in. A status of an Import the page
- * does not show is dropped too, its element being nowhere, and the history is read again.
+ * Runs before `hx-ws` handles a message, which waits for it. Non-JSON is dropped, since `hx-ws` would
+ * swap its text in; so is a status whose element is not on the page, and the history is read again.
  */
 async function readStatus(detail) {
     let status
@@ -130,7 +108,7 @@ async function readStatus(detail) {
             new CustomEvent(Const.events.watchFoldersChanged),
         )
     }
-    // Anything but an Import's status ("connected", the Watch folders' change) swaps nothing
+    // Only an Import's status swaps anything
     if (!status?.target) {
         return
     }
@@ -142,7 +120,6 @@ async function readStatus(detail) {
     statuses.set(detail.message, status)
 }
 
-/** An Import's status was swapped in: its files follow if they are shown, and the history if it closed */
 function followStatus(status) {
     if (!status) {
         return
@@ -160,19 +137,14 @@ function followStatus(status) {
     }
 }
 
-/**
- * Reads the view a part of the page shows again, by the route its root names: a part of the
- * history, or the Watch folders' cards
- */
+/** Reads a part of the page again, by the route its root names */
 export function readAgain(root) {
     request(root, null)
 }
 
 /**
- * Shows the view at `url` in a part of the page, replacing its root (`url` null: the view it
- * shows, read again), one request at a time for the part. Asked while one is on its way, it is
- * read once that has answered, by the route the root names then; a view asked for by a click is
- * not replaced by a read of the old one asked for after it.
+ * Swaps the view at `url` (null: the root's own route) in for a part's root, one request at a time per
+ * part. A pending click's route is never overwritten by a later re-read.
  */
 async function request(root, url) {
     const id = root?.id
@@ -198,7 +170,7 @@ async function request(root, url) {
             if (!target || !route) {
                 break
             }
-            // A failed request is reported by the rule for every htmx request (listeners/htmx-requests.js)
+            // A failure is reported like any htmx request's (listeners/htmx-requests.js)
             await htmx.ajax("GET", route, { target, swap: "outerHTML" })
         }
     } finally {
@@ -207,11 +179,10 @@ async function request(root, url) {
 }
 
 /**
- * Keeps the expanded Import in view where it is on the screen when the history is read again: the
- * Imports above it may have grown, appeared or moved to "Earlier". Its `<details>` is the same
- * element after the swap (`hx-preserve`), so the page scrolls by as much as it moved. htmx
- * announces a swap before it replaces the root and, in the same turn, the settle that follows as
- * soon as the new root is in place, so the settle after the history's swap is its own.
+ * Keeps the expanded Import in view at its screen position when the history is swapped, since the
+ * Imports above it may change. Its `<details>` survives the swap (`hx-preserve`), so the page scrolls
+ * by as much as it moved. htmx fires the settle in the same turn as the swap, so the next settle after
+ * the history's swap is its own.
  */
 function keepExpandedImportInPlace() {
     let kept = null

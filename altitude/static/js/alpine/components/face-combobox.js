@@ -1,60 +1,10 @@
 /**
- * The Change combobox of a People row in Asset detail's Detail panel (`htmx/detail_panel_people`,
- * views/AGENTS.md **Detail panel**): the people a Face can be given to, with autocomplete. Hand-built
- * with core Alpine on the ARIA combobox pattern (`docs/reference/alpine-components/headless-combobox.md`):
- * an input with `role="combobox"` (`aria-expanded`, `aria-controls`, `aria-activedescendant`) over a
- * `role="listbox"` popover of `role="option"` rows, the active one `aria-selected`, with focus staying in
- * the input throughout. The listbox is a manual popover in the top layer, so the panel's scrolling never
- * clips it, placed by CSS anchor positioning under the input (the anchor named per Face in `init`).
- *
- * The component root is a row's `.face-actions`, holding Search, Change and Remove (`changing` false) or the
- * combobox in their place (`changing` true): Change calls `open()`, which loads the options once per
- * opening from the assignable route for the Face (`assignablePeopleUrl`, the one place the URL is
- * built), parses the fragment's options and filters them on the client as the user types, the first
- * `MAX_SHOWN_OPTIONS` matches rendered with lazy covers; the server leaves the Face's own Person,
- * who is no target, out of them. The fragment opens with the Suggested group, the people whose Faces are nearest the Face's
- * vector (`docs/faces.md` **Corrections**), each marked and listed once: the component renders them as
- * a labelled group above the list while nothing is typed, so the listbox announces the heading with
- * them, and from the first character the group is left out and they are filtered with the rest, ahead
- * of them. The server is the one source of the options, the component their one renderer. A name that
- * no Person has, within the name length rules, is offered as the Create row; an existing name, in any
- * case or Unicode form, picks that Person instead, so a name is never created twice. Enter picks the
- * active option: before the arrows move it, the Person of the exact name, else the first match, else
- * the Create row.
- *
- * Two modes, by the row's Person (`data-person-named`, `data-person-name`, `data-person-asset-count`
- * on the row). For a Face of a named Person every pick moves this Face only. For a Face of a Person
- * with no name the combobox acts on the whole Person (`wholePerson`) unless the "This face only"
- * switch beside the input is on (`faceOnly`, off at every opening and never remembered): a named
- * option reads "· merge Unknown 7 (5 assets)" and merges the Person into the picked one, the Create
- * row reads "Name Unknown 7 'X' (5 assets)" and names the Person, and a nameless option reads
- * "· this face" and still moves this Face only, since two nameless people are never merged from here.
- * With the switch on, every pick moves this Face only, as for a named Person's Face. Merging People is
- * Organize's (`Const.permission.organize`): without it a named option never merges, and moves this Face
- * only, "· this face", as a nameless one does, while the Create row still names the Person (Edit
- * Metadata's, as every correction here is). The switch is a
- * `.switch` (`button[role="switch"]`) with its label, both inside the component root, so Tab to it
- * keeps the listbox open (`onFocusOut`); a pointer press on either keeps focus in the input
- * (`mousedown` prevented, the label's own click replaced by the component's), so Enter still picks
- * after a click on the switch, while a keyboard user who tabbed to it flips it with Space.
- *
- * A merge cannot be undone here, so it takes two picks, as Remove takes two clicks: the first pick
- * of a merge arms its option (`armedKey`), whose label becomes "Merge Unknown 7 into Andrei? Pick
- * again" (`armedLabel`), and a second pick of the armed option merges. A change of the active
- * option, typing, the switch and the listbox closing disarm it. The active option's text changing
- * under `aria-activedescendant` is not announced reliably, so a visually hidden `role="status"` in
- * the component says the armed label.
- *
- * A pick is announced as `Const.events.facePersonPicked` with the Face and an `action`: `"move"` with
- * the Person (`personId`) or the name, `"name"` with the Face's Person (`sourcePersonId`) and the
- * name, or `"merge"` with the Face's Person and the Person picked (`destPersonId`);
- * `face-corrections.js` sends the correction. The X (`cancel`) announces
- * `Const.events.faceChangeCancelled`, which clears the selection, and `reset` returns the row to its
- * buttons; the panel dispatches `face-combobox-close` on every row as the selection changes.
- *
- * Escape with the listbox open closes the listbox alone: `global.js` calls `closeOpenFaceCombobox`
- * before it would close Asset detail, and the next Escape clears the selected row (`clearSelectedFaceRow`). The browser reports the popover's state through `toggle`, which
- * `expanded` follows. `m` and `p` are left to the input, as every text field's keys are.
+ * The Change combobox of a People row in Asset detail: an ARIA combobox (focus stays in the input)
+ * whose listbox is a manual top-layer popover, so the panel's scrolling never clips it. For a
+ * nameless Person a pick acts on the whole Person unless "This face only" is on; two nameless
+ * people are never merged from here. A merge cannot be undone, so it takes two picks: the first
+ * arms it. A hidden status region says the armed label, since text changing under
+ * `aria-activedescendant` is not announced reliably.
  */
 import { Const } from "../../constants.js"
 import { context } from "../../context.js"
@@ -62,31 +12,22 @@ import { nameKey, partialMatchKey } from "../../common/name-key.js"
 import { showErrorSnackBar } from "../../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../../http/client.js"
 
-// The listbox popover of every combobox, by which the open one is found
+// The open listbox is found by this class
 export const LISTBOX_CLASS = "face-listbox"
 
 // The most matches rendered at once: the list can hold thousands of people, and the query narrows it
 export const MAX_SHOWN_OPTIONS = 50
 
-// The key of the Create row among the options' Person IDs (no Person ID is this word)
+// The Create row's option key; no Person ID is this word
 export const CREATE_KEY = "create"
 
-/**
- * The URL the options load from: the one place it is built. With the Face (`faceId`) the route opens
- * the options with the Suggested group of the people nearest it; without, it answers the list alone.
- */
+/** With `faceId` the answer leads with the Suggested group: the people nearest that Face */
 export function assignablePeopleUrl({ repoId, faceId }) {
     const url = `/htmx/people/r/${repoId}/assignable`
     return faceId ? `${url}?faceId=${encodeURIComponent(faceId)}` : url
 }
 
-/**
- * Reads the options out of the assignable people fragment (`htmx/assignable_people`), wherever they
- * sit in it: each option's Person, their name, whether named (`data-person-named`), whether Hidden,
- * their cover's URL, and whether the option is in the Suggested group (`data-suggested`). Each
- * option carries its name's two forms, computed once here rather than on every keystroke: its name
- * key (`nameKey`, for the exact name) and its form for the substring match (`partialMatchKey`).
- */
+/** The name keys are computed once here rather than on every keystroke */
 export function parseAssignablePeople(html) {
     const doc = new DOMParser().parseFromString(html, "text/html")
 
@@ -108,10 +49,7 @@ export function parseAssignablePeople(html) {
     )
 }
 
-/**
- * Closes the open listbox, if any, and returns whether one was open. Escape's first job in Asset
- * detail (`global.js`), ahead of closing the dialog.
- */
+/** Returns whether a listbox was open */
 export function closeOpenFaceCombobox() {
     const listboxEl = document.querySelector(`.${LISTBOX_CLASS}:popover-open`)
     if (!listboxEl) {
@@ -123,11 +61,8 @@ export function closeOpenFaceCombobox() {
 }
 
 /**
- * Clears the selected People row, which closes its actions, and returns whether a row was selected.
- * Escape's next job in Asset detail (`global.js`), ahead of closing the dialog. Focus goes to the row
- * first, since the control that held it may be going. The row's own click clears the selection, as
- * clicking the selected row does; `global.js` calls this only while Asset detail is the active host,
- * since a closed host keeps its last fragment.
+ * Returns whether a row was selected. Focus goes to the row first, since the control that held it
+ * may be going; clicking the selected row deselects it.
  */
 export function clearSelectedFaceRow() {
     const rowEl = document.querySelector(
@@ -142,7 +77,6 @@ export function clearSelectedFaceRow() {
     return true
 }
 
-/** "1 asset", "5 assets" */
 function assetCountText(count) {
     return `${count} ${count === 1 ? "asset" : "assets"}`
 }
@@ -154,37 +88,32 @@ export function faceCombobox() {
     return {
         CREATE_KEY,
 
-        // The combobox shows in place of Search, Change and Remove
+        // Shown in place of Search, Change and Remove
         changing: false,
-        // The listbox popover is open (the browser's state, followed through `toggle`)
+        // Follows the popover's state through `toggle`
         expanded: false,
-        // What was typed
         query: "",
-        // Every assignable Person, as loaded on this opening
+        // Loaded on each opening
         options: [],
-        // The option Enter picks: a Person's ID or the Create row's key, or null; changed through `setActive`
+        // The option Enter picks; set through `setActive`
         activeKey: null,
-        // "This face only": every pick moves this Face only; off at every opening
+        // "This face only"; off at every opening
         faceOnly: false,
-        // The named Person's option a first pick armed a merge for, which a second pick merges; or null
+        // The option a first pick armed a merge for
         armedKey: null,
 
-        /** The listbox is anchored to this row's input: an anchor name per Face, since a panel holds a row per Face */
+        /** An anchor name per Face, since a panel holds a row per Face */
         init() {
             const anchorName = `--face-combobox-${this.faceId}`
             this.$refs.input.style.setProperty("anchor-name", anchorName)
             this.$refs.listbox.style.setProperty("position-anchor", anchorName)
         },
 
-        /** The Face of the row, read from the row (`htmx/detail_panel_people`) */
         get faceId() {
             return this.rowEl()?.getAttribute(Const.attributes.faceId) ?? ""
         },
 
-        /**
-         * The row's Person, read from the row (`htmx/detail_panel_people`): their ID, their name, whether
-         * named, and their number of assets (`numOfFaces`, the assets outside the trash with a Face of theirs)
-         */
+        /** `assetCount` counts the Person's assets outside the trash */
         get rowPerson() {
             const rowEl = this.rowEl()
             return {
@@ -199,12 +128,10 @@ export function faceCombobox() {
             }
         },
 
-        /** A pick acts on the row's Person as a whole: they have no name, and "This face only" is off */
         get wholePerson() {
             return !this.rowPerson.named && !this.faceOnly
         },
 
-        /** The option's pick merges the row's Person into it: a named option, picked for the whole Person, by a holder of Organize */
         mergesInto(option) {
             return (
                 this.wholePerson &&
@@ -217,24 +144,18 @@ export function faceCombobox() {
             return `faceListbox-${this.faceId}`
         },
 
-        /** The Suggested group's heading, which labels the group for the listbox */
         get suggestedHeadingId() {
             return `faceSuggested-${this.faceId}`
         },
 
-        /** The Suggested group: the people nearest the Face, closest first, shown while nothing is typed */
+        /** Nearest the Face first; shown only while nothing is typed */
         get suggested() {
             return nameKey(this.query) === ""
                 ? this.options.filter((option) => option.suggested)
                 : []
         },
 
-        /**
-         * The options the query leaves, in the server's order (named first, then Unknowns), the first
-         * few dozen: with nothing typed, the list under the Suggested group, which holds the rest;
-         * typed, every option whose name holds the query in any case or Unicode form (`partialMatchKey`),
-         * the suggested people ahead of the others
-         */
+        /** In the server's order (named first, then Unknowns); the query matches in any case or Unicode form */
         get matches() {
             const key = partialMatchKey(this.query)
 
@@ -248,9 +169,8 @@ export function faceCombobox() {
         },
 
         /**
-         * The name the Create row offers: what was typed, trimmed, when it is a name no option has (in
-         * any case) and the server would accept its length; else null. The Face's own Person is no
-         * option, so their name is offered too, and the server refuses it as already theirs.
+         * The Face's own Person is no option, so their name is offered too, and the server refuses it
+         * as already theirs.
          */
         get createName() {
             const name = this.query.trim()
@@ -266,7 +186,6 @@ export function faceCombobox() {
                 : name
         },
 
-        /** The Create row: the row's Person named, as a whole, or a new Person for this Face only */
         get createLabel() {
             const { name, assetCount } = this.rowPerson
             return this.wholePerson
@@ -274,11 +193,7 @@ export function faceCombobox() {
                 : `Create '${this.createName}'`
         },
 
-        /**
-         * What an option's pick does, after its name, while the pick acts on the row's Person as a
-         * whole: a merge into a named Person, or a move of this Face alone to a nameless one. Nothing
-         * otherwise, and nothing on the armed option, whose label says it all.
-         */
+        /** What a pick does, while picks act on the whole Person; the armed option's label says it all */
         optionSuffix(option) {
             if (!this.wholePerson || this.isArmed(option.personId)) {
                 return ""
@@ -290,12 +205,12 @@ export function faceCombobox() {
                 : "· this face"
         },
 
-        /** An option's label: the Person's name, or on the armed option the question its second pick answers */
+        /** On the armed option, the question its second pick answers */
         optionLabel(option) {
             return this.isArmed(option.personId) ? this.armedLabel : option.name
         },
 
-        /** The armed option's label, which the status region also says; empty while nothing is armed */
+        /** The status region says it too */
         get armedLabel() {
             const option =
                 this.armedKey &&
@@ -306,7 +221,6 @@ export function faceCombobox() {
                 : ""
         },
 
-        /** The keys of the options shown, in order: the Suggested group, the matches, then the Create row */
         get keys() {
             return [
                 ...this.suggested.map((option) => option.personId),
@@ -315,7 +229,7 @@ export function faceCombobox() {
             ]
         },
 
-        /** The active option's element ID, for `aria-activedescendant`; none when the active option left the list */
+        /** None when the active option left the list */
         get activeOptionId() {
             return this.activeKey && this.keys.includes(this.activeKey)
                 ? this.optionId(this.activeKey)
@@ -334,7 +248,7 @@ export function faceCombobox() {
             return this.armedKey === key
         },
 
-        /** Makes `key` the active option; another option than the armed one disarms the merge */
+        /** Another option than the armed one disarms the merge */
         setActive(key) {
             if (key !== this.activeKey) {
                 this.armedKey = null
@@ -346,7 +260,6 @@ export function faceCombobox() {
             return this.$root.closest(`[${Const.attributes.faceId}]`)
         },
 
-        /** Change: the combobox takes the buttons' place, the options load, and the listbox opens on all of them */
         async open() {
             this.changing = true
             this.query = ""
@@ -392,9 +305,8 @@ export function faceCombobox() {
         },
 
         /**
-         * Waits until the combobox is drawn. Alpine's `x-show` shows an element on the next animation
-         * frame (a timeout in a hidden tab), so options that load sooner would focus a hidden input:
-         * the focus would not take, the hidden Change button would then lose it to the body, and that
+         * Alpine's `x-show` shows on the next animation frame (a timeout in a hidden tab). Focusing the
+         * input sooner would not take, the hidden Change button would lose focus to the body, and that
          * `focusout` would close the listbox. A wait scheduled now runs after Alpine's.
          */
         async untilShown() {
@@ -423,7 +335,7 @@ export function faceCombobox() {
             }
         },
 
-        /** The browser owns the popover's visibility; `expanded` follows it. Closing disarms a merge */
+        /** Closing disarms a merge */
         onToggle(event) {
             this.expanded = event.newState === "open"
             if (!this.expanded) {
@@ -431,7 +343,7 @@ export function faceCombobox() {
             }
         },
 
-        /** Typing filters the options, disarms a merge and puts the active option back at its default; the listbox opens if Escape had closed it */
+        /** Also reopens a listbox Escape closed */
         onInput(event) {
             this.query = event.target.value
             this.armedKey = null
@@ -440,19 +352,15 @@ export function faceCombobox() {
         },
 
         /**
-         * "This face only" flips, which changes what every pick does, so a merge is disarmed. A pointer
-         * press on the switch or its label does not take focus from the input (`mousedown` is prevented
-         * on both, and the label's click comes here instead of to the switch), so Enter still picks.
+         * A press on the switch or its label keeps focus in the input (`mousedown` is prevented and the
+         * label's click comes here), so Enter still picks.
          */
         toggleFaceOnly() {
             this.faceOnly = !this.faceOnly
             this.armedKey = null
         },
 
-        /**
-         * The option Enter picks before the arrows move it: the Person of the exact name, else the
-         * first match, else the Create row; nothing while the input is empty.
-         */
+        /** The option Enter picks before the arrows move it */
         defaultActiveKey() {
             const key = nameKey(this.query)
             if (key === "") {
@@ -468,11 +376,7 @@ export function faceCombobox() {
             )
         },
 
-        /**
-         * Down and Up move the active option, wrapping, and open the listbox when it is closed; Enter
-         * picks the active option, or opens the listbox when it is closed. Escape is `global.js`'s,
-         * which closes the listbox alone. Every other key is the input's own.
-         */
+        /** Enter on a closed listbox only opens it. Escape is handled in `global.js`. */
         onKeydown(event) {
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                 event.preventDefault()
@@ -510,7 +414,7 @@ export function faceCombobox() {
             )
         },
 
-        /** A click on an option picks it; the listbox's `mousedown` is prevented, so focus stays in the input */
+        /** The listbox's `mousedown` is prevented, so focus stays in the input */
         onOptionClick(event) {
             const key = this.optionKeyOf(event.target)
             if (key) {
@@ -518,7 +422,6 @@ export function faceCombobox() {
             }
         },
 
-        /** The pointer over an option makes it the active one, as the arrows would */
         onOptionHover(event) {
             const key = this.optionKeyOf(event.target)
             if (key) {
@@ -532,20 +435,14 @@ export function faceCombobox() {
             )
         },
 
-        /** Focus leaving the combobox (Tab, a click elsewhere) closes the listbox; the input stays as it was */
+        /** Focus leaving the combobox closes the listbox; the input keeps its text */
         onFocusOut(event) {
             if (!this.$root.contains(event.relatedTarget)) {
                 this.hideListbox()
             }
         },
 
-        /**
-         * Picks the option of `key`, announced for `face-corrections.js` to send the correction. While
-         * the pick acts on the row's Person as a whole, the Create row names them and a named Person's
-         * option merges them into that Person, on a second pick of the option the first pick armed;
-         * otherwise, and for a nameless Person's option always, this Face alone moves. An option no
-         * longer shown picks nothing.
-         */
+        /** A merging option merges on its second pick; an option no longer shown picks nothing */
         pick(key) {
             const faceId = this.faceId
             const sourcePersonId = this.rowPerson.personId
@@ -597,7 +494,7 @@ export function faceCombobox() {
             )
         },
 
-        /** The X: back to the buttons, with nothing selected (the panel clears the selection) */
+        /** The X: the panel clears the selection on the event */
         cancel() {
             const faceId = this.faceId
             this.reset()
@@ -608,7 +505,7 @@ export function faceCombobox() {
             )
         },
 
-        /** The row's original state: Search, Change and Remove, no listbox, nothing typed or armed, the switch off; a load in flight is dropped */
+        /** A load in flight is dropped */
         reset() {
             loadToken++
             this.hideListbox()

@@ -46,33 +46,23 @@ import altitude.core.routes.web.partial.WatchFolderController
 
 object App extends cask.Main:
   /**
-   * Load the OpenCV native library.
-   *
-   * OpenCV for Java has two competing APIs, which is confusing enough (org.opencv, org.bytedeco), and every example under the sun
-   * directs to do this in order to have native lib linking errors go away:
-   *
-   * System.loadLibrary(Core.NATIVE_LIBRARY_NAME)
-   *
-   * But it doesn't work. While we are using the org.opencv API, the native lib is loaded by the org.bytedeco API.
-   *
-   * https://stackoverflow.com/a/58064096/53687
+   * The code uses the org.opencv API, but its native library is loaded through org.bytedeco: the usual
+   * `System.loadLibrary(Core.NATIVE_LIBRARY_NAME)` does not link it. https://stackoverflow.com/a/58064096/53687
    */
   Loader.load(classOf[opencv_java])
 
   val altitude: Altitude = new Altitude()
 
-  // Check if the instance is in setup mode, and cache the value of isInitialized in memory for quick access.
+  // Cached in memory: whether the instance is past setup
   altitude.setIsInitializedState()
 
-  // Before anything is offered to the import queue: what is pending now was cut off when the server last stopped. The Import
-  // history is pruned here too, for a server that restarts more often than the daily prune runs
+  // Before anything is offered to the import queue: what is pending now was cut off when the server last stopped
   altitude.service.imports.startup()
   altitude.service.library.pruneDanglingAssets()
   altitude.service.library.requeuePurgePending()
   altitude.service.editRender.requeuePendingRenders()
   altitude.service.library.reconcileStats()
-  // The startup scan of the Watch folders, which catches up on what arrived while the server was down, and then one every
-  // interval: after the Imports a stop interrupted are failed, so no scan's Import is taken for one of them
+  // After the interrupted Imports are failed, so no Watch folder scan's Import is taken for one of them
   altitude.service.watchFolder.start()
 
   given logger: Logger = LoggerFactory.getLogger(getClass)

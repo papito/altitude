@@ -3,8 +3,7 @@
 
 @(categories: List[Location], formJson: ujson.Obj, fieldErrors: Map[String, String], labelled: Boolean = true)
 
-@* Add location shows the label among its other fields; Move to category, whose title names the field, passes
-   labelled = false and the select carries an aria-label instead *@
+@* Move to category's title names the field, so it passes labelled = false and the select carries an aria-label *@
 @defining(Api.Field.Location.CATEGORY_ID) { field =>
   @if(labelled) {<label for="field-@{field}">Category</label>}
   <select id="field-@{field}" name="@{field}" @if(!labelled) {aria-label="Category"}>

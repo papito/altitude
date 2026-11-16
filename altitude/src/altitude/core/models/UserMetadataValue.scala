@@ -9,10 +9,7 @@ object UserMetadataValue:
   given JsonCodec.ReadWriter[UserMetadataValue] = JsonCodec.macroRW
   given Conversion[ujson.Value, UserMetadataField] = json => JsonCodec.read[UserMetadataField](json)
 
-  /**
-   * The boolean a BOOL field's value stands for, in any form the field accepts: "true" or "false" in any letter case, "1" or "0".
-   * `None` for any other value, which the field refuses. The value is stored as given, and indexed as this boolean.
-   */
+  /** A BOOL value is stored as given and indexed as this boolean; `None` for a value the field refuses */
   def asBoolean(value: String): Option[Boolean] =
     if value == "1" || value.equalsIgnoreCase("true") then Some(true)
     else if value == "0" || value.equalsIgnoreCase("false") then Some(false)

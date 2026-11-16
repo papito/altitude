@@ -1,7 +1,5 @@
-/* The login page (login.scala.html): the brand above one card, the two centered in the window. The card wears the dialogs'
-   surface, and its labels their small caps (core.css). The bundle applies on every page, so the page's rules are scoped to
-   its body's class at zero specificity */
-/* body:where(), as setup.css's, to win over core.css's body grid of nav, content and footer */
+/* Scoped to the body's class at zero specificity, since the bundle applies on every page; body:where(), as in
+   setup.css, to replace core.css's body grid of nav, content and footer */
 body:where(.login) {
   grid-template-rows: 1fr;
   place-items: center;
@@ -13,7 +11,7 @@ body:where(.login) {
   row-gap: var(--space-7);
 }
 
-/* The brand at the size of a page's title, under the nav's look */
+/* The nav's brand at the size of a page's title */
 :where(body.login) .brand a {
   font-size: var(--font-size-display);
 }

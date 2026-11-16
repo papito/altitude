@@ -7,28 +7,12 @@ import {
 } from "./click-suppression.js"
 
 /**
- * BOX SELECTION
- *
- * Dragging a rectangle over the results grid selects the thumbnails it touches. Viselect owns the
- * gesture: it draws the rectangle, autoscrolls `#content` near its vertical edges, and keeps the
- * list of thumbnails currently inside the rectangle. It changes no selection state of its own: it
- * adds no classes, and this module reads its list once, on release. Only then does the box go
- * through the `selectedAssets` store, like every other selection change: `reset()` for a
- * replacement box, then `select()` for each thumbnail it touched.
- *
- * Gesture rules:
- * - A plain drag from empty grid space (padding, gaps, a cell's metadata) replaces the selection.
- * - A Shift-drag from anywhere in the grid, thumbnails included, adds to it. Shift is read when
- *   the button goes down; releasing it mid-drag changes nothing. `dragdrop/assets.js` declines to
- *   start an asset drag while Shift is held, which is what leaves that gesture to the box.
- * - A thumbnail counts as soon as the rectangle touches any part of its image box.
- * - Release commits. Escape, the window losing focus, the page being hidden, or the grid being
- *   replaced discards the box without touching the selection.
- * - The click the browser fires on release is swallowed so it cannot toggle a thumbnail or open
- *   its detail view.
- *
- * One controller exists per displayed grid. `bindBoxSelection` is called from the search-results
- * fragment hydrator, the one place that knows a grid was just replaced.
+ * Box selection: dragging a rectangle over the results grid selects the thumbnails it touches.
+ * Viselect owns the gesture (the rectangle, autoscroll of `#content`, the list of thumbnails inside)
+ * but holds no selection state; on release this module commits its list through the `selectedAssets`
+ * store. A plain drag from empty grid space replaces the selection; a Shift-drag from anywhere,
+ * thumbnails included, adds to it, Shift being read when the button goes down. Escape, window blur, a
+ * hidden page or a replaced grid discard the box. One controller exists per displayed grid.
  */
 
 const AUTOSCROLL_EDGE_PX = 32
@@ -50,8 +34,8 @@ export function bindBoxSelection({ assetsElement, contentElement }) {
 }
 
 function createBoxSelection({ assetsElement, contentElement }) {
-    // The thumbnail box is the `.drag-drop` div carrying the asset ID. Its `<img>` carries the same
-    // attribute, so the selector names the div explicitly.
+    // The thumbnail box is the `.drag-drop` div; its `<img>` carries the asset ID too, so the selector
+    // names the div
     const thumbnailSelector = `#assets div[${Const.attributes.assetId}]`
 
     // The gesture in progress, from the button going down to release or cancellation
@@ -107,8 +91,7 @@ function createBoxSelection({ assetsElement, contentElement }) {
         }
 
         const { additive } = gesture
-        // What was inside the rectangle when the button came up. A card that left the grid
-        // in the meantime is dropped.
+        // What was inside the rectangle on release, less cards that have left the grid since
         const candidates = [...new Set(store.selected)].filter((el) =>
             assetsElement.contains(el),
         )
@@ -139,9 +122,9 @@ function createBoxSelection({ assetsElement, contentElement }) {
         // The button is down: block native text selection until it is released
         listen(document, "selectstart", preventDefault)
 
-        // A press that never travels past the threshold is a click, for which Viselect emits
-        // nothing, so the gesture ends here. This runs before Viselect's own `mouseup` handler,
-        // which is registered after `beforestart`, so a real drag is left to the `stop` handler.
+        // A press that never passes the threshold is a click, for which Viselect emits nothing, so the
+        // gesture ends here. This runs before Viselect's own `mouseup` handler, registered after
+        // `beforestart`, so a real drag is left to `stop`.
         listen(document, "mouseup", () => {
             if (!gesture?.dragging) {
                 endGesture()
@@ -171,9 +154,8 @@ function createBoxSelection({ assetsElement, contentElement }) {
         // loading and takes its real size
         listen(assetsElement, "load", refreshGeometry, { capture: true })
 
-        // Panel resizing and metadata visibility changes move the thumbnails. A ResizeObserver
-        // reports the current sizes once as soon as it starts observing; only later notifications
-        // mean something changed.
+        // Panel resizes and metadata toggles move the thumbnails. A ResizeObserver reports once on
+        // starting; only later notifications mean a change.
         let initialSizesReported = false
         const observer = new ResizeObserver(() => {
             if (!initialSizesReported) {
@@ -206,14 +188,9 @@ function createBoxSelection({ assetsElement, contentElement }) {
     }
 
     /**
-     * Keeps the pointer's real position, from the document's own `mousemove`, for the replays
-     * below.
-     *
-     * Viselect's `move` event cannot be the source: while its scroll loop runs, Viselect 3.9.0
-     * emits `move` on every frame with the event that started the loop, so a pointer that has
-     * since left the edge band would still read as resting in it. Replaying that stale position
-     * would pin the box's edge in the band and keep the pane scrolling with the mouse mid-pane.
-     * The replays themselves carry no new position and are skipped.
+     * Keeps the pointer's real position for the replays. Viselect 3.9.0's `move` cannot be the source:
+     * while its scroll loop runs it carries the event that started the loop, so a pointer that has
+     * left the edge band would still read as in it and keep the pane scrolling. Replays are skipped.
      */
     function trackPointer(event) {
         if (!replaying) {
@@ -222,30 +199,20 @@ function createBoxSelection({ assetsElement, contentElement }) {
     }
 
     /**
-     * Makes Viselect re-evaluate the rectangle against the current layout while the pointer is
-     * still.
-     *
-     * Viselect 3.9.0 recomputes intersections, and the autoscroll speed, only in a frame it
-     * schedules from a `mousemove`. So a page appended under a resting pointer, or a thumbnail
-     * that loads and takes its real size, would go unnoticed. Replaying the last pointer position
-     * as a synthetic `mousemove` on `document`, where Viselect binds its move handler for the
-     * duration of the drag, schedules that frame. Only DOM events and public behaviour are used,
-     * so the vendored library stays unchanged. Revisit when upgrading it.
+     * Viselect 3.9.0 recomputes intersections and the autoscroll speed only in a frame it schedules
+     * from a `mousemove`, so a page appended or a thumbnail resized under a resting pointer would go
+     * unnoticed. Replaying the last position as a synthetic `mousemove` on `document` schedules that
+     * frame without patching the vendored library. Revisit when upgrading it.
      */
     function refreshGeometry() {
         replayPointer()
     }
 
     /**
-     * Keeps autoscroll going for a pointer resting in the edge band.
-     *
-     * Viselect starts its scroll loop only from a `mousemove` that arrives after a frame computed
-     * a non-zero speed, and the loop ends for good once the container cannot scroll further. A
-     * pointer whose last movement lands in the band, or that rests there while continuous scroll
-     * appends a page, would therefore stay still. Each frame reports through `move`; when it
-     * finds the pointer in the band with room left to scroll, one more replay in the next frame
-     * starts the loop. Once the loop runs, the replay coincides with its own frames, and at the
-     * end of the container the replays stop.
+     * Viselect starts its scroll loop only from a `mousemove` after a frame computed a non-zero speed,
+     * and ends it for good at the container's end, so a pointer resting in the edge band would not
+     * scroll. When a `move` frame finds the pointer in the band with room to scroll, one replay in the
+     * next frame starts the loop.
      */
     function resumeAutoscrollAtEdge() {
         if (!gesture?.dragging || !gesture.pointer || gesture.replayScheduled) {

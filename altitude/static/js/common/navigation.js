@@ -1,4 +1,3 @@
-/** Marks `tabEl` as the selected tab of its tab list, and its siblings as not selected */
 export function selectTab(tabEl) {
     tabEl
         .closest('[role="tablist"]')

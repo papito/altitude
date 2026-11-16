@@ -11,23 +11,14 @@ import altitude.core.SearchCursorException
 import altitude.core.util.Query.QueryParam
 
 /**
- * Where a search continues from: the last returned image's position (its group, sort value, ID) and a fingerprint of the search
- * the cursor belongs to. A search starts at its first page and is continued from a position, never by page number. It is an
- * opaque, versioned token to the client and supplies only a position: every request re-applies authorization and every filter,
- * and the values are bound, never inlined. The page size is not part of it, so a continuation may ask for a different one.
+ * Where a search continues from, never a page number: the last returned image's position and a fingerprint of its search. To the
+ * client it is an opaque, versioned token that supplies only a position: every request re-applies authorization and every filter,
+ * and the values are bound, never inlined. The page size is not part of it, so a continuation may change it.
  *
- * The group is `key`, the value the groups are ordered by (the ISO day of a date grouping, the path key of a Location grouping,
- * the first capture of a Sequence grouping), and for a Location or a Sequence also `groupId`, its ID. Both absent means the
- * trailing group of images with no date, no Location or no Sequence; a Sequence whose matching frames have no capture time has
- * `groupId` alone. A flat search has no groups, but one sorted by capture time is ordered by day first, and its cursor carries
- * the image's ISO day as `key`.
- *
- * The Relevance sort orders by two values before the ID, so its position has `secondSortValue` as well: the image's capture time,
- * [[SortValue.Null]] when it has none. Under any other sort it is absent, and it is read only under that sort.
- *
- * A Describe search in its own order, likeness, has no groups: its position is the image's cosine distance from the description,
- * a [[SortValue.Real]], and its ID. Sorted or grouped it is read in two parts, each a search like any other, and a cursor's
- * position is that search's, in the part its fingerprint names.
+ * `key` and `groupId` are the group's (`SearchGroupKey.cursorKey`, `cursorGroupId`); a flat search sorted by capture time is
+ * ordered by day first, so its `key` is the image's ISO day. `secondSortValue` is the Relevance sort's capture time,
+ * [[SortValue.Null]] when there is none. A Describe search in likeness order is positioned by cosine distance, a
+ * [[SortValue.Real]]; sorted or grouped, it is read in two parts, and the fingerprint names the part.
  */
 case class SearchCursor(
     key: Option[String],
@@ -53,7 +44,7 @@ case class SearchCursor(
   def requireScope(currentScope: String): Unit =
     if scope != currentScope then throw SearchCursorException("The cursor does not belong to this search")
 
-  /** The second value of a position under the Relevance sort; a cursor without it cannot continue such a search */
+  /** A cursor without it cannot continue a Relevance-sorted search */
   def requireSecondSortValue: SortValue =
     secondSortValue.getOrElse(throw SearchCursorException("Malformed cursor"))
 
@@ -77,9 +68,8 @@ object SearchCursor:
       case _: Exception => throw SearchCursorException("Malformed cursor")
 
   /**
-   * Identifies the search a cursor may continue: the engine, repository, filters as requested (a folder filter as given, not its
-   * currently expanded descendants; a date range as its days, not the instants a Date Imported day begins and ends at), grouping
-   * if any, ordering. Not a secret: it only tells apart searches.
+   * The filters as requested: a folder filter as given, not its current descendants, and a date range as its days, not the
+   * instants a Date Imported day spans. Not a secret: it only tells searches apart.
    */
   def scopeFingerprint(query: SearchQuery, repositoryId: String, dbEngine: String): String =
     def canonical(value: Any): String = value match
@@ -111,11 +101,8 @@ object SearchCursor:
     )
 
   /**
-   * Identifies the Describe search a cursor may continue: the description as written, with what identifies its filters' search
-   * ([[scopeFingerprint]]: the engine, the repository, the filters as requested and the view's flags, `triaged` among them, and
-   * the sort and the grouping of a search that has them). Marked as a description's, so the same filters without the description
-   * have another fingerprint, whatever their Search text. A sorted or grouped Describe search is read in two parts, and a cursor
-   * continues one of them: its fingerprint carries the `part`.
+   * Marked as a description's, so the same filters without the description have another fingerprint, whatever their Search text.
+   * A cursor of a sorted or grouped Describe search continues one of its two parts, so the `part` is in it too.
    */
   def describeFingerprint(
       description: String,
@@ -126,7 +113,7 @@ object SearchCursor:
     fingerprintOf(
       Seq(Api.Field.Search.DESCRIBE, description) ++ part.map(_.toString) :+ scopeFingerprint(query, repositoryId, dbEngine)*)
 
-  /** The first 16 bytes of the SHA-256 of what identifies a search, in hex */
+  /** The first 16 bytes of the SHA-256, in hex */
   private def fingerprintOf(parts: String*): String =
     MessageDigest
       .getInstance("SHA-256")

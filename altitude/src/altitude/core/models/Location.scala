@@ -10,10 +10,9 @@ object Location:
   given Conversion[ujson.Value, Location] = json => JsonCodec.read[Location](json)
 
 /**
- * A row of the `location` table: a category (`kind` Category: a named container, one level deep, no pin, no assets) or a Location
- * (`kind` Location: a pin, optionally under a category). Both kinds share one name pool per repository, under the name key.
- * Membership lives in `location_asset`; an asset can be in any number of Locations. `numOfAssets` and `categoryName` are computed
- * on read (`LocationDao.getAll`) and never stored.
+ * A row of the `location` table: a category (a named container one level deep, with no pin and no assets) or a Location (a pin,
+ * optionally under a category). Both kinds share one name pool per repository. An asset can be in any number of Locations.
+ * `numOfAssets` and `categoryName` are computed on read and never stored.
  */
 case class Location(
     id: Option[String] = None,

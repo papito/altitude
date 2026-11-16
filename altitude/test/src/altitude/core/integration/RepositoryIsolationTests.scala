@@ -174,9 +174,7 @@ import altitude.core.util.QueryResult
     /**
      * Setup:
      *
-     * Two repositories, the second holding a row of every scoped table that a DAO reads: an asset, a folder, an album, a
-     * Location, a Person, a Face, a metadata field, an Import, an Import file, a Watch folder, a file it remembers, an Edit and a
-     * stat of a dimension only it has.
+     * Two repositories, the second holding a row of every scoped table, its stat of a dimension only it has.
      *
      * Assertions:
      *
@@ -223,9 +221,7 @@ import altitude.core.util.QueryResult
     /**
      * Setup:
      *
-     * Two repositories, the second holding a row of every scoped table: an asset with its Search document, a folder, an album and
-     * a Location each holding the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a
-     * pending file, an edited image, and its stats.
+     * Two repositories, the second holding a row of every scoped table.
      *
      * Assertions:
      *
@@ -620,9 +616,7 @@ import altitude.core.util.QueryResult
     /**
      * Setup:
      *
-     * Two repositories, each with an asset (with its Search document) in a folder, an album and a Location holding it, a Person
-     * with a Face on it, a metadata field with a value on it and an Import with a pending file; the first's asset also has an
-     * Edit, and the second has a Location category.
+     * Two repositories, each with a row of every scoped table, and a Location category in the second.
      *
      * Assertions:
      *
@@ -674,9 +668,7 @@ import altitude.core.util.QueryResult
     /**
      * Setup:
      *
-     * A repository with a row of every scoped table: an asset with its Search document, a folder, an album and a Location holding
-     * the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a pending file, the asset's
-     * saved Edit, and its stats.
+     * A repository with a row of every scoped table.
      *
      * Assertions:
      *
@@ -707,9 +699,9 @@ import altitude.core.util.QueryResult
      *
      * Assertions:
      *
-     * The triaged asset's row holds no folder (NULL), which the asset's folder key does not check, and the asset read back has an
-     * empty folder ID, as the model has always had for an asset in no folder. The sorted asset's row and model hold the root
-     * folder. Once the triaged asset is moved into the root folder, its row holds that folder.
+     * The triaged asset's row holds NULL, which the asset's folder key does not check, and its model reads an empty folder ID.
+     * The sorted asset's row and model hold the root folder. Once the triaged asset is moved into the root folder, its row holds
+     * that folder.
      */
     val triaged = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
     val sorted = testContext.insertAsset()

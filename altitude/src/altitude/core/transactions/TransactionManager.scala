@@ -30,36 +30,27 @@ object TransactionManager:
   private val HNSW_UNCAPPED_SCAN_TUPLES = Int.MaxValue
 
   /**
-   * The memory a scan of a vector search may hold, as a multiple of `work_mem` (`hnsw.scan_mem_multiplier`): a scan that goes on
-   * holds what it has visited and stops when that passes the cap. Measured on pgvector 0.8.2, a scan to the end of an index of a
-   * million vectors of 768 dimensions takes between 128 and 192 MB, and about 14 seconds: with the connections' 64 MB of
-   * `work_mem` it finds a third of the rows that pass its filter under a multiplier of 1, two thirds under 2, and all of them
-   * from 3 on. At 8, 512 MB, the read statement timeout ends a scan that long before its memory does.
+   * The memory an iterative vector-search scan may hold, as a multiple of `work_mem` (`hnsw.scan_mem_multiplier`); past it the
+   * scan stops. Measured on pgvector 0.8.2: a scan to the end of a million-vector, 768-dimension index takes 128-192 MB and about
+   * 14 s. With 64 MB of `work_mem`, a multiplier of 1 finds a third of the rows that pass the filter, 2 two thirds, 3 or more all
+   * of them. At 8 (512 MB) the read statement timeout ends such a scan long before its memory does.
    */
   private val HNSW_SCAN_MEM_MULTIPLIER = 8
 
 /**
- * Connections and the transactions on them. Every transaction runs on a connection borrowed from a HikariCP pool and carried by
- * `RequestContext.conn` for as long as it lasts; a transaction started inside another, on the same thread, joins it, and a thread
- * started inside one is outside of it. A pool logs a connection held longer than `db.pool.leak_detection_threshold`.
+ * Connections and transactions. A transaction runs on a connection borrowed from a HikariCP pool and carried by
+ * `RequestContext.conn`; one started inside another on the same thread joins it, and a thread started inside one is outside it.
  *
- * PostgreSQL has one pool, every connection opened with `db.postgres.options`. A read transaction is `REPEATABLE READ` and
- * `READ ONLY`, so all of its statements see one snapshot, and each of its statements has the read statement timeout Setting as
- * its time limit; a write transaction is the engine's default `READ COMMITTED`.
+ * PostgreSQL has one pool. A read transaction is `REPEATABLE READ, READ ONLY` (one snapshot), limited by the read statement
+ * timeout Setting; a write is the default `READ COMMITTED`.
  *
- * SQLite has a read pool and a write pool of one connection over the same file, every connection opened with the same PRAGMAs. A
- * write transaction begins `IMMEDIATE`, taking the write lock when it starts, and the single write connection queues writers in
- * the process instead of failing them with `SQLITE_BUSY`. A read transaction reads one WAL snapshot, and its connection refuses
- * writes (`query_only`): a "write" nested in a read transaction would otherwise be discarded by its closing rollback.
+ * SQLite has a read pool and a one-connection write pool over the same file. Writes begin `IMMEDIATE`, so the single write
+ * connection queues writers in the process instead of failing them with `SQLITE_BUSY`. Read connections refuse writes
+ * (`query_only`): a write nested in a read transaction would otherwise be discarded by its closing rollback.
  *
- * Both engines end a read transaction with a rollback: it has nothing to keep. A rollback that fails is logged, so a failed
- * transaction always fails with its own exception.
- *
- * A manager given an `explainer` (development only) hands out each connection wrapped in an [[ExplainingConnection]], which
- * offers the explainer every DML statement prepared on it. Without one, a transaction runs on the pooled connection itself.
- *
- * `settings` is the current Settings snapshot, read as each transaction begins so a saved value is used by the next one, or
- * nothing before the first load: the migration of a fresh database runs then, and its transactions set no time limit.
+ * Read transactions end with a rollback. An `explainer` (development only) wraps each connection in an [[ExplainingConnection]].
+ * `settings` is read as each transaction begins; it is None before the first load, when a fresh database's migration runs without
+ * a time limit.
  */
 class TransactionManager(val config: Config, explainer: Option[SqlExplainer], settings: () => Option[Settings]):
 
@@ -67,7 +58,7 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
 
   private val engine: String = config.getString(Const.Conf.DB_ENGINE)
 
-  // The limit of the vector search that set this thread's transaction up ([[settingUpVectorSearch]]), 0 for the face vectors'
+  // The vector search limit this thread's transaction is set up for ([[settingUpVectorSearch]]); 0 for face vectors
   private val vectorSearchLimit = new ThreadVariable[Option[Int]](None)
 
   // The actions `afterCommit` registered in the thread's outermost transaction, which runs them once it has committed
@@ -122,30 +113,24 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
     if isInTransaction then f else transaction(readOnly = false)(f)
 
   /**
-   * A write transaction that can search face vectors: what the engine needs for it ([[vectorSearchSetup]], for no more rows than
-   * the vector index search width Setting keeps candidates) is run once, for the outermost call. A SQLite connection is set up
-   * for it as it is opened ([[setUpSqliteConnection]]), so there the call is a plain write transaction.
+   * A write transaction set up to search face vectors ([[vectorSearchSetup]]). On SQLite, whose connections are set up as they
+   * open, it is a plain write transaction.
    */
   def withFaceVector[A](f: => A): A = withTransaction(settingUpVectorSearch(limit = 0)(f))
 
   /**
-   * A read transaction that can search face vectors: [[asReadOnly]], set up as [[withFaceVector]] sets a write up (`SET LOCAL` is
-   * allowed in a read-only transaction). A search that stores nothing reads one snapshot on PostgreSQL and takes none of SQLite's
-   * one write connection.
+   * [[withFaceVector]] as a read transaction (`SET LOCAL` is allowed in one), for a search that stores nothing: one snapshot on
+   * PostgreSQL, and SQLite's write connection stays free.
    */
   def withFaceVectorReadOnly[A](f: => A): A = asReadOnly(settingUpVectorSearch(limit = 0)(f))
 
-  /**
-   * A read transaction that can search a vector column for the `limit` rows nearest a vector, among the rows its statement's
-   * filters pass: [[asReadOnly]], set up for a search that long ([[vectorSearchSetup]]). A Describe search's.
-   */
+  /** A read transaction set up to find the `limit` nearest rows that pass the statement's filters (a Describe search) */
   def withVectorSearch[A](limit: Int)(f: => A): A = asReadOnly(settingUpVectorSearch(limit)(f))
 
   /**
-   * Runs `f` with the thread's transaction set up for a vector search of up to `limit` rows, 0 for a search of the face vectors.
-   * The outermost call of the thread sets it up, and a call nested in it does so again only for a higher limit, which then stays
-   * for the rest of the transaction: `SET LOCAL` lasts until it ends, and a search set up for more rows than it asks for finds
-   * its own.
+   * Runs `f` with the thread's transaction set up for a vector search of up to `limit` rows (0 for face vectors). A nested call
+   * sets it up again only for a higher limit, which then stays: `SET LOCAL` lasts until the transaction ends, and a setup for
+   * more rows serves a smaller search too.
    */
   private def settingUpVectorSearch[A](limit: Int)(f: => A): A =
     if vectorSearchLimit.value.exists(_ >= limit) then f
@@ -159,20 +144,16 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
           vectorSearchLimit.withValue(Some(limit))(f)
 
   /**
-   * What a transaction runs before it searches a vector column for up to `limit` rows. PostgreSQL sets, for the transaction, how
-   * its vector indexes are searched. The candidates a scan keeps (`hnsw.ef_search`) are the vector index search width Setting's,
-   * read when the setup runs, so a save later in the same transaction can leave a face's match count out of step with it, which
-   * `iterative_scan = relaxed_order` tolerates, or `limit` when that is more, up to pgvector's most. A scan goes on past its
-   * candidates until the statement's limit is met (`hnsw.iterative_scan`), since the statement's filters (the repository, the bad
-   * matches, the trash) are applied after the index is read.
+   * The statements a transaction runs before searching a vector column for up to `limit` rows. On PostgreSQL a scan keeps the
+   * larger of the vector index search width Setting and `limit` as candidates (`hnsw.ef_search`, capped at pgvector's most), and
+   * goes on past them (`hnsw.iterative_scan`), since the statement's filters (repository, bad matches, trash) apply after the
+   * index is read. The Setting is read as the setup runs, so a save later in the same transaction can leave a face's match count
+   * out of step with it, which `relaxed_order` tolerates.
    *
-   * A search with a limit must not end short of it while rows that pass the filters are left, as pgvector's own caps on a scan
-   * that goes on would have it: 20,000 tuples visited, which the candidates of a wide search alone can pass, and `work_mem` of
-   * memory. So it lifts the first and raises the second ([[TransactionManager.HNSW_SCAN_MEM_MULTIPLIER]]), and the limit, the end
-   * of the index or the read statement timeout ends its scan. A search of the face vectors (`limit` 0) asks for a few candidates
-   * and keeps pgvector's caps.
-   *
-   * SQLite needs nothing: its connections are set up when they are opened, and its scans are exact.
+   * A search with a limit must not stop short while matching rows remain, as pgvector's scan caps would have it (20,000 tuples,
+   * which a wide search's candidates alone can pass, and `work_mem`): it lifts the first and raises the second
+   * ([[TransactionManager.HNSW_SCAN_MEM_MULTIPLIER]]). A face vector search (`limit` 0) keeps the caps. SQLite's scans are exact
+   * and need nothing.
    */
   private def vectorSearchSetup(limit: Int): List[String] = engine match
     case Const.DbEngineName.SQLITE => Nil
@@ -190,10 +171,9 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
         ("SET LOCAL hnsw.iterative_scan = relaxed_order" :: uncapped)
 
   /**
-   * Replaces the pooled connections once a fresh database has its schema. A SQLite connection is set up for the schema as it is
-   * opened ([[setUpSqliteConnection]]), which the ones opened before the schema existed, while the database's version was read
-   * and its schema created, could not be: each is closed as it is returned to its pool, which opens a replacement. A PostgreSQL
-   * connection is set up with nothing of the schema.
+   * Replaces the pooled SQLite connections once a fresh database has its schema: those opened before it missed the per-table
+   * setup ([[setUpSqliteConnection]]), so each is closed as it returns to its pool, which opens a replacement. PostgreSQL
+   * connections need nothing of the schema.
    */
   def schemaCreated(): Unit =
     if engine != Const.DbEngineName.SQLITE then return
@@ -207,9 +187,8 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
 
   /**
    * Runs `action` once the thread's outermost transaction has committed, with no connection held, or at once outside a
-   * transaction; a transaction that rolls back, which every read transaction does, drops it. For what must not be seen to happen
-   * unless the change it reports does, such as a log line. An action that throws is logged at WARN and does not fail the
-   * committed transaction, nor stop the actions after it.
+   * transaction; a rollback (as every read transaction ends) drops it. For what must not happen unless the change does, such as a
+   * log line. A throwing action is logged and fails neither the transaction nor the actions after it.
    */
   def afterCommit(action: => Unit): Unit =
     afterCommitActions.value match
@@ -333,11 +312,9 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
     new HikariDataSource(hikari)
 
   /**
-   * What a SQLite connection needs past its PRAGMAs: the vector extension, with the two columns it scans registered with it, a
-   * Face's `face.features` and an asset's SigLIP 2 Scene embedding, each when its table exists (a database being created has no
-   * tables when its first connections are opened; see [[schemaCreated]]), and the statistics of the tables that need them (cheap,
-   * and before the connection plans anything). The write connection checkpoints the WAL every 500 pages; a read connection then
-   * refuses writes.
+   * Sets a SQLite connection up past its PRAGMAs: loads the vector extension and registers the columns it scans when their tables
+   * exist (a database being created has none yet; see [[schemaCreated]]), and refreshes stale statistics, cheaply, before the
+   * connection plans anything. The write connection checkpoints the WAL every 500 pages; read connections refuse writes.
    */
   private def setUpSqliteConnection(conn: Connection, isReadPool: Boolean): Unit =
     val statement = conn.createStatement()

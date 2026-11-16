@@ -20,8 +20,7 @@ import altitude.core.util.JsonCodec
      *
      * Assertions:
      *
-     * They are Import, Curate own, Curate all, Organize, Edit metadata, Create Users, Create Guests, Recycle, Purge and Edit
-     * images, in that order, on bits 0 to 9: the bitmask is stored and carried in tokens, so a bit never moves.
+     * They are in the UI's order on bits 0 to 9. The bitmask is stored and carried in tokens, so a bit never moves.
      */
     Permission.values.toList.map(p => p -> p.bit) shouldBe List(
       Permission.Import -> 0,
@@ -46,8 +45,8 @@ import altitude.core.util.JsonCodec
      *
      * Assertions:
      *
-     * Import and Purge are the mask 257, hold exactly those two and list them in order. Every Permission is the mask 1023 and
-     * none is 0, which is empty. The JSON of a set is its bare mask, and reads back as the same set.
+     * Import and Purge are the mask 257, holding and listing exactly those two. Every Permission is 1023 and none is an empty 0.
+     * A set's JSON is its bare mask and reads back as the same set.
      *
      * Edge cases:
      *

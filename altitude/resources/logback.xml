@@ -12,7 +12,7 @@
     </root>
 
     <logger name="altitude.core" level="INFO" />
-    <!-- Request START/END $ -->
+    <!-- Request START/END lines; the trailing $ names the Scala object -->
     <logger name="altitude.core.routes.decorators$" level="DEBUG" />
     <logger name="org.xnio" level="WARN" />
     <logger name="com.zaxxer.hikari" level="WARN" />

@@ -74,11 +74,11 @@ object IntegrationTestUtil {
     while (y < h) {
       var x = 0
       while (x < w) {
-        val a = (Math.random * 256).toInt // alpha
-        val r = (Math.random * 256).toInt // red
-        val g = (Math.random * 256).toInt // green
-        val b = (Math.random * 256).toInt // blue
-        val p = (a << 24) | (r << 16) | (g << 8) | b // pixel
+        val a = (Math.random * 256).toInt
+        val r = (Math.random * 256).toInt
+        val g = (Math.random * 256).toInt
+        val b = (Math.random * 256).toInt
+        val p = (a << 24) | (r << 16) | (g << 8) | b
         bufferedImage.setRGB(x, y, p)
         x += 1
       }
@@ -125,11 +125,11 @@ object IntegrationTestUtil {
     while (y < h) {
       var x = 0
       while (x < w) {
-        val a = (Math.random * 256).toInt // alpha
-        val r = (Math.random * 256).toInt // red
-        val g = (Math.random * 256).toInt // green
-        val b = (Math.random * 256).toInt // blue
-        val p = (a << 24) | (r << 16) | (g << 8) | b // pixel
+        val a = (Math.random * 256).toInt
+        val r = (Math.random * 256).toInt
+        val g = (Math.random * 256).toInt
+        val b = (Math.random * 256).toInt
+        val p = (a << 24) | (r << 16) | (g << 8) | b
         bufferedImage.setRGB(x, y, p)
         x += 1
       }

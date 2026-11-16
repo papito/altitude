@@ -1,9 +1,7 @@
 @import altitude.core.Const
 
-@* The login page (GET /login, and a refused POST /login), in the app's look and the theme the nav remembers: the brand above
-   one card, centered in the window, holding the login (an email address or a username) and the password, and Log in. A refused
-   login comes back with one error, the same whatever refused it (`LOGIN_FAILED`), the login as typed (`login`) and focus on the
-   password; `redirect` is the page to come back to. Styled by static/css/pages/login.css. *@
+@* The login page (GET /login, and a refused POST /login). A refused login comes back with one error, the same whatever
+   refused it, the login as typed and focus on the password; `redirect` is the page to come back to. *@
 @(redirect: Option[String] = None, login: String = "", failed: Boolean = false)
 
 <!DOCTYPE html>

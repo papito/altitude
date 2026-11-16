@@ -17,10 +17,8 @@ import altitude.core.routes.decorators.requireLibraryCreator
 import altitude.core.routes.decorators.requireLogin
 
 /**
- * The New library dialog, an Admin's or that of an account with the Create Libraries flag (`requireLibraryCreator`), opened from
- * the nav's Library menu: it creates a Library, which an Admin reaches by type and any other creator by the grant of every
- * Permission it is given (`RepositoryService.addRepository`), and sends the browser to its Import page. Both routes are scoped to
- * the Library the dialog was opened from, as every partial is.
+ * The New library dialog. A creator who is not an Admin reaches the new Library by a grant of every Permission
+ * (`RepositoryService.addRepository`).
  */
 class LibraryActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/library"
@@ -32,11 +30,8 @@ class LibraryActionController(using logger: Logger) extends BaseController:
     htmlResponse(htmx.html.new_library_dialog())
 
   /**
-   * Creates the Library under the submitted name. The name is neither scrubbed nor checked by the request validator: the Library
-   * name rule normalizes and checks it in `addRepository`, and a trim here would drop the control characters at its ends that the
-   * rule refuses. A refused name, or a creator already holding as many grants as an account may, re-renders the form with the
-   * typed name and the error under the field; a created Library answers with `HX-Redirect` to its Import page, whose load records
-   * it as the last active one.
+   * The name is not scrubbed here: the Library name rule normalizes and checks it in `addRepository`, and a trim would hide the
+   * control characters at its ends that the rule refuses. A created Library redirects to its Import page.
    */
   @requireLogin()
   @requireLibraryCreator()
@@ -59,7 +54,7 @@ class LibraryActionController(using logger: Logger) extends BaseController:
     catch
       case ex: ValidationException => responseWithValidationError(ex.errors.getOrElse(FieldConst.Repository.NAME, ex.message))
       case ex: DuplicateException => responseWithValidationError(ex.message.getOrElse(C.Msg.Err.LIBRARY_NAME_TAKEN.format(name)))
-      // A creator who is no Admin already holds as many grants as an account may (`TOO_MANY_GRANTS`): no Library is created
+      // A creator who is not an Admin already holds as many grants as an account may
       case ex: IllegalOperationException => responseWithValidationError(ex.getMessage)
 
   initialize()

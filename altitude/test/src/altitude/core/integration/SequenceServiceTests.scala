@@ -20,9 +20,8 @@ import altitude.core.util.SearchQuery
 import altitude.core.util.SequenceRule
 
 /**
- * Sequences as the import assigns them, over the synthesized burst of `BurstFrames`. Every frame the pipeline decodes is embedded
- * by both Scene models, so two frames no model embedded both of, which the hash decides, cannot be produced here;
- * `SequenceRuleTests` (unit) covers that fallback.
+ * Sequences as the import assigns them, over the synthesized burst of `BurstFrames`. Every decoded frame gets both Scene
+ * embeddings, so the hash fallback for frames without them cannot be produced here; `SequenceRuleTests` (unit) covers it.
  */
 @DoNotDiscover class SequenceServiceTests(override val testApp: Altitude)
   extends IntegrationTestCore
@@ -31,12 +30,12 @@ import altitude.core.util.SequenceRule
   import BurstFrames.*
   import SequenceServiceTests.*
 
-  /** Pairing and parting real frames by their likeness is the suite's subject, so every import runs the Scene models */
+  /** Pairing frames by their likeness is the suite's subject, so every import runs the Scene models */
   override protected def usesSceneModels: Boolean = true
 
   private def stored(asset: Asset): Asset = testApp.service.asset.getById(asset.persistedId)
 
-  /** The similarity of two imported frames' Scene embeddings of a model, as the import returned them */
+  /** The similarity of two imported frames by `model`, from the embeddings the import returned */
   private def similarity(model: SceneModel, a: Asset, b: Asset): Double =
     a.sceneEmbeddings.of(model).value.similarity(b.sceneEmbeddings.of(model).value)
 
@@ -48,7 +47,7 @@ import altitude.core.util.SequenceRule
     case SceneModel.Dinov2 => STRICT_DINOV2_SIMILARITY
     case SceneModel.Siglip2 => STRICT_SIGLIP2_SIMILARITY
 
-  /** Runs `f` under thresholds no two frames of the burst clear by either model, so no pair is a Sequence by its likeness */
+  /** Runs `f` under thresholds no two frames of the burst clear by either model, so no pair is a Sequence */
   private def withStrictThresholds[T](f: => T): T =
     withSetting(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, STRICT_DINOV2_SIMILARITY.toString) {
       withSetting(Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY, STRICT_SIGLIP2_SIMILARITY.toString)(f)
@@ -64,9 +63,8 @@ import altitude.core.util.SequenceRule
      *
      * Assertions:
      *
-     * The first frame comes out of its import with no Sequence, since it is alone; the second comes out in a Sequence, and the
-     * first is read back in the same one. The different picture has none, and every one of the three has its Image quality and
-     * hash.
+     * The first frame, alone, gets no Sequence. The second gets one, and the first is read back in it. The different picture has
+     * none, and all three have their Image quality and hash.
      */
     val first = importFrame(frame(0))
     first.sequenceId shouldBe None
@@ -91,14 +89,13 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * A frame a second before midnight and the next frame a second after it, so the candidate window spans two calendar days;
-     * then, under a gap of two days, a frame thirty hours before the first, so the window spans five days and the frame's day is
-     * strictly inside it.
+     * A frame a second before midnight and the next a second after it, so the candidate window spans two calendar days. Then,
+     * under a two-day gap, a frame thirty hours earlier, so the window spans five days with the frame's day strictly inside it.
      *
      * Assertions:
      *
-     * The two frames around midnight share a Sequence, and the frame thirty hours earlier joins it under the longer gap: every
-     * day of the window is read, not only its first and last.
+     * The frames around midnight share a Sequence, and the earlier frame joins it: every day of the window is read, not only its
+     * first and last.
      */
     val before = importFrame(frame(0), taken = Some("2024:06:01 23:59:59"))
     val after = importFrame(frame(1), taken = Some("2024:06:02 00:00:01"))
@@ -116,14 +113,13 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * Two frames of a burst imported under thresholds no two frames clear by either model, so they are not paired; then, at the
-     * defaults, a move of the first out of triage held open in a transaction of its own while the second is assigned its
-     * Sequence.
+     * Two frames of a burst imported unpaired under strict thresholds. Then, at the defaults, a move of the first out of triage
+     * held open in its own transaction while the second is assigned.
      *
      * Assertions:
      *
-     * The assignment waits for the move (the candidates are read locked), and once the move commits the sorted frame is no
-     * candidate: neither frame is in a Sequence, and the first is sorted.
+     * The assignment waits on the locked candidate, and once the move commits the sorted frame is no candidate: neither frame is
+     * in a Sequence, and the first is sorted.
      */
     val (first, second) = withStrictThresholds {
       (importFrame(frame(0)), importFrame(frame(4), taken = Some(takenAt(1))))
@@ -145,15 +141,13 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * A frame seeded into 5,000 copies whose capture times are spread a minute apart over days, one in ten of them in triage and
-     * the rest sorted, analyzed and rolled back once the plan is read, and the statement that reads the candidates of a frame a
-     * second after the original.
+     * A frame seeded into 5,000 copies captured a minute apart over days, one in ten in triage, and the candidates statement for
+     * a frame a second after the original.
      *
      * Assertions:
      *
-     * The engine's plan reads `asset_triage_date_taken` for it: over a library the planner has rows to choose by, the window's
-     * days and times are what the index leads with, and the partial index over the triage set is the smaller of the two
-     * capture-day indexes, which otherwise tie by shape (over a handful of rows every index on the repository ties).
+     * The plan reads `asset_triage_date_taken`, which leads with the window's days and times and, being partial over the triage
+     * set, is the smaller of the two capture-day indexes that otherwise tie by shape.
      */
     val stamped = stored(importFrame(frame(0)))
     val next = stamped.copy(originalCreatedAt = stamped.originalCreatedAt.map(_.plusSeconds(1)))
@@ -162,8 +156,7 @@ import altitude.core.util.SequenceRule
 
     val plan = atScale {
       seedCopies(stamped.persistedId, copies = 5000, folders = 1)
-      // The copies take their import times, a minute apart, as capture times, and a hash, so they are candidates by shape;
-      // every copy whose zero-padded number does not end in 0 is sorted, so the triage set is a tenth of the library
+      // Capture times from the import times, and a hash, make the copies candidates; nine in ten are sorted
       update("UPDATE asset SET original_created_at = created_at, perceptual_hash = 1 WHERE id <> ?", stamped.persistedId)
       update("UPDATE asset SET is_triaged = FALSE WHERE id <> ? AND substr(id, 36, 1) <> '0'", stamped.persistedId)
     }(lookupPlanOf(sql, values))
@@ -175,16 +168,14 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * An undated frame seeded into 5,000 copies, imported a minute apart, with a hash and no capture time, one in ten of them in
-     * triage and the rest sorted, analyzed and rolled back once the plan is read, and the statement that reads the undated
-     * candidates of the frame with a limit under the undated triage rows of its size, as the cap is under them when it matters.
+     * An undated frame seeded into 5,000 copies imported a minute apart, one in ten in triage, and the undated candidates
+     * statement with a limit under the triage rows of the frame's size, as the cap is when it matters.
      *
      * Assertions:
      *
-     * The engine's plan reads `asset_triage_undated` for it and sorts nothing: the repository's undated triage rows of the size
-     * in import order are what the index holds, so the engine walks it backwards from the newest and stops at the limit, rather
-     * than sorting what a wider index passes (with a limit over those rows, PostgreSQL may read the same run of the index as a
-     * bitmap and sort it, which costs the same rows and nothing of the rest of triage).
+     * The plan reads `asset_triage_undated` and sorts nothing: the index holds the undated triage rows by size in import order,
+     * so the engine walks it backwards and stops at the limit. With a limit over those rows, PostgreSQL may instead bitmap-read
+     * the same run and sort it, which costs no more.
      */
     val undated = stored(importUndated(frame(0), 1))
     undated.originalCreatedAt shouldBe None
@@ -193,8 +184,7 @@ import altitude.core.util.SequenceRule
 
     val plan = atScale {
       seedCopies(undated.persistedId, copies = 5000, folders = 1)
-      // The copies carry no capture time, as the template does, and take a hash, so they are candidates by shape; every copy
-      // whose zero-padded number does not end in 0 is sorted, so the triage set is a tenth of the library
+      // A hash and no capture time make the copies undated candidates; nine in ten are sorted
       update("UPDATE asset SET perceptual_hash = 1 WHERE id <> ?", undated.persistedId)
       update("UPDATE asset SET is_triaged = FALSE WHERE id <> ? AND substr(id, 36, 1) <> '0'", undated.persistedId)
     }(lookupPlanOf(sql, values))
@@ -209,18 +199,20 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * Imported with no metadata under names that carry no time, under thresholds no two frames clear by either model, so the
-     * import pairs none of them and the read is tested on its own: the different picture at the frames' size, a half-size frame,
-     * two frames of the burst, and then a new frame of the burst; its undated matches read through the DAO under the rule at the
-     * defaults, with a cap of 100, then of 1, then under a test that refuses every candidate; then a dated frame of the burst,
-     * and the read again.
+     * Undated imports under strict thresholds, so the import pairs none and the read is tested alone: the different picture at
+     * the frames' size, a half-size frame, two burst frames, and a new burst frame. The new frame's undated matches are read
+     * through the DAO under the default rule, with caps of 100 and 1 and with a test that refuses everything; then a dated burst
+     * frame is imported and the read repeated.
      *
      * Assertions:
      *
-     * None of the undated imports has a capture time or a Sequence. The read keeps the two burst frames alone, newest first, and
-     * scanned three rows: the two frames and the different picture, which are at the new frame's size, and not the half-size
-     * frame or the frame itself. Capped at 1, it keeps the newest frame alone and scanned one row; refusing everything, it keeps
-     * nothing and still scanned three. The dated frame is not scanned.
+     * No undated import has a capture time or a Sequence. The read keeps the two burst frames, newest first, and scans three
+     * rows: those two and the different picture, which share the new frame's size. Capped at 1 it keeps and scans one row;
+     * refusing everything, it keeps none and still scans three.
+     *
+     * Edge cases:
+     *
+     * The half-size frame, the new frame itself and the dated frame are never scanned.
      */
     val (other, halfSize, first, second, newFrame) = withStrictThresholds {
       (
@@ -261,15 +253,14 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * Imported with no metadata under names that carry no time: a frame, the next frame of its burst, the different picture at
-     * the frames' size and a half-size frame; then a frame of the burst with the camera's clock and model.
+     * Undated imports: a frame, the next frame of its burst, the different picture at the frames' size and a half-size frame.
+     * Then a burst frame with the camera's clock and model.
      *
      * Assertions:
      *
-     * The first frame comes out of its import with no Sequence, since it is alone; the second comes out in a Sequence, and the
-     * first is read back in the same one. Neither has a capture time, and each has its Image quality and hash. The different
-     * picture and the half-size frame have none, and so has the dated frame: the undated frames pair by their likeness among the
-     * undated frames of their size, and never with a dated one.
+     * The first frame, alone, gets no Sequence; the second gets one, and the first is read back in it. Neither has a capture
+     * time, and both have their Image quality and hash. The different picture, the half-size frame and the dated frame have no
+     * Sequence: undated frames pair by likeness among undated frames of their size, never with a dated one.
      */
     val first = importUndated(frame(0), 1)
     first.sequenceId shouldBe None
@@ -298,14 +289,12 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * Three undated frames of the burst imported under thresholds no two frames clear by either model, so none is paired; then,
-     * at the defaults, the third assigned again, with its embeddings as the import returned them, through a service built with a
-     * cap of one candidate.
+     * Three undated burst frames imported unpaired under strict thresholds. Then, at the defaults, the third assigned again
+     * through a service with a cap of one candidate.
      *
      * Assertions:
      *
-     * The third frame comes out in a Sequence with the second, the newest of the two undated frames before it, which the cap
-     * admitted alone; the first, older than the cap reaches, stays out.
+     * The third frame shares a Sequence with the second, the only frame the cap admits; the first stays out.
      */
     val (first, second, third) = withStrictThresholds {
       (importUndated(frame(0), 1), importUndated(frame(1), 2), importUndated(frame(2), 3))
@@ -323,17 +312,14 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * Two undated frames of the burst imported under thresholds no two frames clear by either model, so they are not paired;
-     * then, at the defaults, a move of the first out of triage held open in a transaction of its own while the second, with its
-     * embeddings as the import returned them, is assigned its Sequence.
+     * Two undated burst frames imported unpaired under strict thresholds. Then, at the defaults, a move of the first out of
+     * triage held open in its own transaction while the second is assigned.
      *
      * Assertions:
      *
-     * The assignment waits for the move, and once the move commits the sorted frame is no candidate: neither frame is in a
-     * Sequence, and the first is sorted. The undated candidates are read without row locks, so on PostgreSQL the first frame
-     * comes back a match before the move commits; the matches are then re-read locked, which waits on the moved row and leaves it
-     * out once the move commits, so the second frame is not stamped alone (on SQLite the assignment waits for the one write
-     * connection and finds the sorted frame no candidate).
+     * Neither frame ends in a Sequence, and the first is sorted. On PostgreSQL the unlocked undated read finds the first frame a
+     * match before the move commits, and the locked re-read waits on it and then leaves it out, so the second is not stamped
+     * alone. On SQLite the assignment waits for the one write connection and finds no candidate.
      */
     val (first, second) = withStrictThresholds {
       (importUndated(frame(0), 1), importUndated(frame(4), 2))
@@ -355,14 +341,13 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * A burst of three frames within a second (0, .5 and 1 s) and a burst of two a minute and a half in (90 and 90.5 s), too far
-     * apart to pair, so two Sequences; then a frame at 45.5 s, within the gap of the first burst's last frame and the second
-     * burst's first.
+     * A burst of three frames at 0, 0.5 and 1 s and a burst of two at 90 and 90.5 s, too far apart to pair. Then a frame at 45.5
+     * s, within the gap of both.
      *
      * Assertions:
      *
-     * Before the bridge, the bursts are two Sequences of three and two. After it, all six frames are in the first burst's
-     * Sequence, since it had more members, and nothing carries the second burst's any more.
+     * Before the bridge there are two Sequences, of three and two. After it all six frames are in the larger one, and nothing
+     * carries the other.
      */
     val a1 = importFrame(frame(0))
     val a2 = importFrame(frame(1), subSecond = Some("500"))
@@ -386,13 +371,11 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * A burst of two frames at 90 and 91 s imported first, then a burst of two at 0 and 1 s, then a frame at 45.5 s that bridges
-     * them.
+     * A burst of two frames at 90 and 91 s imported first, then a burst at 0 and 1 s, then a frame at 45.5 s that bridges them.
      *
      * Assertions:
      *
-     * Two Sequences of two before the bridge; after it, all five are in the Sequence of the burst captured first, although the
-     * other Sequence was made first.
+     * All five end in the Sequence of the burst captured first, although the other was made first.
      */
     val later1 = importFrame(frame(0), taken = Some(takenAt(90)))
     val later2 = importFrame(frame(1), taken = Some(takenAt(91)))
@@ -413,15 +396,14 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * A frame, then within the gap: the next frame from another camera, a half-size copy of a frame, a different picture at the
-     * frames' size; and a frame a minute and a half later.
+     * A frame, then within the gap the next frame from another camera, a half-size frame and a different picture at the frames'
+     * size; and a frame a minute and a half later.
      *
      * Assertions:
      *
-     * None of the five is in a Sequence. The different picture's similarity to the frame is checked to be under each Scene
-     * model's default threshold, so the test fails on its fixture rather than passing by accident (a DINOv2 similarity of about
-     * 0.25 against 0.80, a SigLIP 2 one of about 0.58 against 0.90); the half-size copy looks alike by either model, and only its
-     * size keeps it out.
+     * None of the five is in a Sequence. The different picture is checked to be under each model's default threshold (about 0.25
+     * against 0.80 by DINOv2, 0.58 against 0.90 by SigLIP 2), so a broken fixture fails the test. The half-size frame clears both
+     * thresholds, so only its size keeps it out.
      */
     val first = importFrame(frame(0))
     val otherCamera = importFrame(frame(1), subSecond = Some("500"), model = Some("Nikon Z8"))
@@ -448,7 +430,7 @@ import altitude.core.util.SequenceRule
      *
      * Assertions:
      *
-     * The first two share a Sequence, the default gap being a minute inclusive; the third, 61 s from the nearest frame, has none.
+     * The first two share a Sequence, since the default gap of a minute is inclusive. The third, 61 s on, has none.
      */
     val first = importFrame(frame(0))
     val minuteLater = importFrame(frame(1), taken = Some(takenAt(60)))
@@ -486,15 +468,13 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * A frame with no metadata at all, neither a camera model nor a clock, named as Apple's export names it; then a frame of the
-     * burst with the camera's clock and model, half a second in; then another frame with no metadata, named a second after the
-     * first; and the different picture at the frames' size, named a second after that.
+     * A frame with no metadata, named as Apple's export names it; a burst frame with the camera's clock and model half a second
+     * in; another bare frame named a second after the first; and the different picture at the frames' size, named a second later.
      *
      * Assertions:
      *
-     * The two named frames' capture times came from their file names, each has its Image quality and hash, and they share a
-     * Sequence. The different picture, named within the gap, has none. The frame with the camera's clock, within the gap of both
-     * named frames, is in no Sequence: it names a camera and they name none.
+     * The two named frames take their capture times from their file names, have their Image quality and hash, and share a
+     * Sequence. The different picture has none. The dated frame is in no Sequence: it names a camera and they name none.
      */
     val first = importNamed(frame(0), "Photo Jun 1 2024, 12 00 00 PM.jpg")
     val dated = importFrame(frame(1), subSecond = Some("500"))
@@ -524,7 +504,7 @@ import altitude.core.util.SequenceRule
      * Assertions:
      *
      * The moved frame is sorted with no Sequence, and the two in triage keep theirs. Once every frame has moved, no asset carries
-     * the id: the Sequence ended with its last member's move. A sorted frame moved again between folders stays without one.
+     * the Sequence. A sorted frame moved again between folders stays without one.
      */
     val frames = List(
       importFrame(frame(0)),
@@ -560,9 +540,8 @@ import altitude.core.util.SequenceRule
      *
      * Assertions:
      *
-     * In the trash the frame keeps its triage flag and its Sequence (a Sequence whose members are all in the trash still exists),
-     * and the restored frame is back in triage and in the Sequence. Moved out of the trash into a folder it leaves triage, so it
-     * leaves the Sequence as a move does, while the other frame keeps it.
+     * In the trash the frame keeps its triage flag and its Sequence, and restored it is back in both. Moved from the trash into a
+     * folder it leaves triage and the Sequence, while the other frame keeps it.
      */
     val first = importFrame(frame(0))
     val second = importFrame(frame(1), taken = Some(takenAt(1)))
@@ -596,13 +575,12 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * A frame imported and recycled while still alone; then the next frame of its burst, imported a second later; then the first
-     * restored.
+     * A frame imported and recycled while alone, then the next frame of its burst a second later, then the first restored.
      *
      * Assertions:
      *
-     * The second frame comes out of its import in a Sequence with the recycled first one, which keeps its trash and triage flags;
-     * the restore brings the first back with the Sequence it took in the trash, so the pair is together.
+     * The second frame shares a Sequence with the recycled first, which keeps its trash and triage flags. Restored, the first
+     * keeps the Sequence it took in the trash.
      */
     val first = importFrame(frame(0))
     testApp.service.library.recycleAssets(Set(first.persistedId))
@@ -627,14 +605,13 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * A burst of three frames and a burst of two a minute and a half in, two Sequences; the repository's triage asset count row
-     * deleted behind the services' back, so counting the next completed asset fails; then a frame that would bridge the two.
+     * Two Sequences, of three frames and of two, a minute and a half apart. The triage asset count row is deleted behind the
+     * services' back, so counting the next completed asset fails. Then a frame that would bridge the two.
      *
      * Assertions:
      *
-     * The bridge's import fails on the missing stat (a `ConstraintException` naming the dimension), and since the assignment ran
-     * in the completion's transaction, the three frames are still in the first Sequence and the two in the second, with their
-     * member counts; the bridge itself is discarded, so the repository holds five assets.
+     * The bridge's import fails with a `ConstraintException` naming the stat. The assignment ran in the completion's transaction,
+     * so both Sequences keep their members and counts, and the bridge is discarded: the repository holds five assets.
      */
     val a =
       List(importFrame(frame(0)), importFrame(frame(1), subSecond = Some("500")), importFrame(frame(2), taken = Some(takenAt(1))))
@@ -671,7 +648,7 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * A synthesized clip (TestVideos.portrait) imported.
+     * A synthesized clip imported.
      *
      * Assertions:
      *
@@ -689,17 +666,15 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * Under a 500 ms gap, two frames a second apart. Under a hash distance of 0, two frames a second apart at 120 and 121 s, past
-     * the first pair's minute, whose hashes differ by a few bits. Under thresholds no two frames of the burst clear by either
-     * model, two frames at 240 and 241 s. Then, at the defaults again, a frame at 242 s.
+     * Pairs of frames a second apart, each pair past the last one's gap: at 0 s under a 500 ms gap, at 120 s under a hash
+     * distance of 0 (their hashes differ by a few bits), and at 240 s under strict thresholds. Then, at the defaults, a frame at
+     * 242 s.
      *
      * Assertions:
      *
-     * The first pair is no Sequence under the short gap. The second pair is one although its hashes differ, since both frames
-     * carry the embeddings and the similarities decide, not the hash. The third pair is no Sequence: its similarity by each model
-     * is checked to be under that model's raised threshold and at or above its default, so it is the thresholds alone that keep
-     * them apart. The frame at 242 s pairs with the frames at 240 and 241 s once the defaults are back, so the rule is read from
-     * the Settings as saved.
+     * The first pair is no Sequence. The second is one although its hashes differ, since the embeddings decide. The third is no
+     * Sequence, and its similarities are checked to lie between the strict thresholds and the defaults, so the thresholds alone
+     * part it. The frame at 242 s joins the third pair once the defaults are back: the rule reads the Settings as saved.
      */
     val (first, second) = withSetting(Settings.SEQUENCE_MAX_GAP_MS, "500") {
       (importFrame(frame(0)), importFrame(frame(1), taken = Some(takenAt(1))))
@@ -736,16 +711,13 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * For each Scene model, under a threshold of that model no two frames of the burst clear while the other model's threshold
-     * stays at its default: two frames a second apart, in a window of their own (0 and 1 s for the first model, 120 and 121 s for
-     * the second). Then, under both thresholds raised, a third pair at 240 and 241 s.
+     * For each Scene model, two frames a second apart in a window of their own (0 s, then 120 s), under a strict threshold for
+     * that model and the default for the other. Then a third pair at 240 s under both strict thresholds.
      *
      * Assertions:
      *
-     * Each of the first two pairs is a Sequence by the model left at its default: the frames' similarity by that model is checked
-     * to be at or above its default threshold while their similarity by the raised model is under its raised threshold, so it is
-     * the other model's likeness alone that pairs them. The third pair, alike by neither model under the raised thresholds, is no
-     * Sequence, so neither model's likeness is assumed.
+     * Each of the first two pairs is a Sequence, and its similarities are checked to be under the strict model's threshold and at
+     * or above the other's default, so the other model alone pairs it. The third pair, alike by neither, is no Sequence.
      */
     val thresholdOf = Map(
       Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> SceneModel.Dinov2,
@@ -779,13 +751,12 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * Two frames a second apart, and the Sequence candidates of the second read through the DAO; then a search of the repository.
+     * Two frames a second apart, the second's Sequence candidates read through the DAO, then a search of the repository.
      *
      * Assertions:
      *
-     * The candidate holds an embedding of each Scene model, of its dimensions, which is what the rule compared. Every record of
-     * the search holds neither, as a read by ID does not (`AssetImportServiceTests` proves that one, and the locking read of a
-     * library operation): the embeddings are bulky columns no general read selects.
+     * The candidate holds an embedding of each Scene model, of its dimensions. No search record holds either, since the
+     * embeddings are bulky columns no general read selects.
      */
     val first = importFrame(frame(0))
     val second = importFrame(frame(1), taken = Some(takenAt(1)))
@@ -805,10 +776,8 @@ import altitude.core.util.SequenceRule
 object SequenceServiceTests {
 
   /**
-   * A threshold of each Scene model no two frames of the synthesized burst clear: frames a few pixels apart measure 0.982 to
-   * 0.998 by DINOv2 and 0.983 to 0.996 by SigLIP 2, so 0.999 is above every pair of either with a margin, and far above the
-   * defaults of 0.80 and 0.90, which every pair clears. A test that keeps frames apart with one asserts the observed similarity
-   * lies between it and the default, so the threshold, and nothing else, is what parts them.
+   * A threshold no two frames of the synthesized burst clear: frames a few pixels apart measure 0.982 to 0.998 by DINOv2 and
+   * 0.983 to 0.996 by SigLIP 2, while every pair clears the defaults of 0.80 and 0.90.
    */
   private val STRICT_DINOV2_SIMILARITY = 0.999
   private val STRICT_SIGLIP2_SIMILARITY = 0.999

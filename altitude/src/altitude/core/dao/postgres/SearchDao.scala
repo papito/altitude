@@ -13,19 +13,15 @@ import altitude.core.util.SearchQuery
 class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.SearchDao(config) with PostgresOverrides:
   override protected val searchDialect: SearchDialect = PostgresSearchDialect
 
-  /** The ranking read exactly for the searches that leave few assets to rank, through the vector index for the rest */
+  /** Exact for the searches that leave few assets to rank, through the vector index for the rest */
   override def rankingFor(query: SearchQuery, ranking: DescribeRanking): DescribeRanking =
     ranking.copy(throughIndex = !ranksExactly(query))
 
   /**
-   * The choice follows how many assets the search leaves to rank: its view's (the repository, outside the trash and, unless asked
-   * for, outside triage) that pass its filters and carry an embedding. Few are ranked one by one, each embedding compared with
-   * the description's, since the vector index would walk far past them to find the ones the search matches; many are ranked
-   * through the index, which reaches enough of them soon. What separates the two is `SearchQuery.describeExactLimit`
-   * (`Const.Search.DESCRIBE_EXACT_LIMIT`): the matches that carry an embedding are counted up to one past it, in the statement of
-   * a capped count, and at most that many are ranked exactly. A description with no filter is counted too, since the index holds
-   * every repository's embeddings and the view is a filter of its scan as any other is: a small Library beside a large one, or
-   * one mostly in triage or in the trash, would have the scan walk the whole index for its few rows.
+   * Counts the view's matches that carry an embedding, up to one past `SearchQuery.describeExactLimit`. Few are ranked exactly,
+   * since the index would walk far past them to find them; many go through the index, which reaches enough soon. A description
+   * with no filter is counted too: the index holds every repository's embeddings, so a small Library beside a large one, or one
+   * mostly in triage or the trash, would walk the whole index for its few rows.
    */
   private def ranksExactly(query: SearchQuery): Boolean =
     import dialect.*

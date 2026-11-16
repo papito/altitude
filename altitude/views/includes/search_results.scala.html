@@ -13,31 +13,20 @@
 @import altitude.core.models.SearchFilters
 @import altitude.core.util.Util
 
-@* The results fragment, re-swapped into #content on every search: the controls and the first page of the grid, which the
-   controller renders with the grid partial that fits the search (htmx/results_grid, or htmx/results_grid_grouped with
-   `grouping`, or htmx/map_view for the map layout) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the Group and Sort choice menus. `text` is the Search text the
-   results were matched by, when `q` had a usable term: it is what makes the Relevance sort available. `total` counts the matches
-   up to one past `totalCap`, which means more than the cap. `person`, `folderPath` (the folder's ancestors, top-level first,
-   then the folder; empty for the root), `album`, `location` (with its category's name) and `subset` (a Triage subset)
-   are the scope the results title names (includes/results_title); `text` is its title when none of them is set. `filters` are
-   a filtered search's, which the title names in their place, a chip each (includes/search_filter_chips), the description's
-   first. `view` is the view searched: in the Triage view the Search text's title and a description's empty line name Triage, the
-   assets searched there. A search with a description is a filtered one, and its filters say so (`isDescribed`): the Sort menu
-   then offers "Similarity" first, the order such a search has unless it names another, and the layout toggle has no Map
-   segment, so the toolbar offers nothing the server refuses beside a description. An empty result of a description is said in
-   the title, after Edit. *@
+@* The results fragment, swapped into #content on every search: the controls and the first page of the grid the
+   controller renders and passes in. `sort` and `grouping` are the effective ones the server used. `text` is the Search
+   text the results were matched by, which makes the Relevance sort available. `total` counts up to one past `totalCap`,
+   meaning more than the cap. `person`, `folderPath` (top-level first, empty for the root), `album`, `location` and
+   `subset` are the scope the results title names, `text` its title when none is set, and `filters` a filtered search's,
+   named in their place. A description makes a search a filtered one (`isDescribed`): the toolbar then offers Similarity,
+   its default order, and no Map, so it offers nothing the server refuses beside a description. *@
 @(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None, subset: Option[TriageSubset] = None, filters: Option[SearchFilters] = None)
 
-@* Whether the results are a Describe search's, ranked by a description: the description is one of the search's filters, and
-   its chip is where the fragment holds it *@
 @isDescribed = @{ filters.exists(_.description.isDefined) }
 
-@* The effective scope of these results, as the server resolved them from the search parameters it was sent;
-   the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js).
-   The grid's behaviours (selection, infinite scroll, the page window, lazy images, metadata visibility, box selection) are bound by that
-   hydrator from the modules under js/search-results/. The layout and grouping the grid was rendered with are what a
-   continuation of it sends (js/search-results/infinite-scroll.js): the crowded-pin panel's grid is a plain grid while
-   the store says map. *@
+@* The effective scope of these results, as the server resolved it; the folder tree and the album list highlight the
+   viewed one from it. A continuation of the grid sends the layout and grouping it was rendered with: the crowded-pin
+   panel's grid is a plain grid while the store says map. *@
 <div data-app-fragment="search-results"
      @if(layout == Const.Search.Layout.MAP) {class="map-layout"}
      data-results-total="@{total.min(totalCap)}"
@@ -53,10 +42,8 @@
      data-results-group-by="@{grouping.map(_.by.apiValue).getOrElse("")}"
      data-results-group-direction="@{grouping.filter(_.by.dateField.isDefined).map(_.direction.toString.toLowerCase).getOrElse("")}">
 
-@* The results title (views/AGENTS.md **Results title**): one block for every scope, which the scope rules of the searchParams
-   store keep exclusive. A person's block is also the person actions' swap target (htmx/person); a folder's title is the
-   path's breadcrumb, each ancestor a search trigger for that folder. A filtered search, which the advanced search panel
-   combines, is "Search results" over its filters, under the panel's sliders icon. *@
+@* The results title: one block for every scope, which the search params' scope rules keep exclusive. A folder's title is
+   the path's breadcrumb, each ancestor a search trigger for that folder. *@
 @if(filters.isDefined) {
 @includes.html.results_title("fa-sliders-h", filters = Some(includes.html.search_filter_chips(filters.get, foundNothing = total == 0, inTriage = view == Const.Search.View.TRIAGE))) {
 <span class="name">Search results</span>
@@ -90,15 +77,14 @@
 }
 }
 
-@* Three groups in a wrapping row (includes/search_results.css): the lead (the total, then the batch ops while assets are
-   selected), the controls, and the trail (the trash view's Purge button). The side groups share what the controls leave,
-   so the controls sit on the bar's center until the lead needs more room and pushes them right, and a second row once the
-   lead and the controls no longer fit on one. *@
+@* Three groups in a wrapping row: the lead, the controls and the trail. The side groups share what the controls leave,
+   so the controls sit on the bar's center until the lead needs more room and pushes them right, and wrap to a second row
+   once they no longer fit. *@
 <div id="searchControl" x-data>
   <div class="lead">
     <div class="total">
       <strong>Total:</strong> <span class="results-total" x-text="$store.resultsTotal.label"></span>
-      @* The map-area scope of the crowded-pin panel (js/map/map-panel.js); its × clears `bbox` in either layout *@
+      @* The crowded-pin panel's map-area scope; its × clears `bbox` in either layout *@
       @if(bbox.isDefined) {
         <button id="bboxScope" type="button" class="filter-chip" title="Showing the map area only" data-app-search="click" data-app-search-bbox="">Map area &times;</button>
       }
@@ -107,8 +93,7 @@
   </div>
 
   <div class="controls">
-    @* Grid or map (js/map/map-view.js): a literal `layout` parameter each, remembered by the store in localStorage. A
-       description's results are on the grid alone, so its toggle offers no map *@
+    @* A description's results are on the grid alone, so the toggle then offers no map *@
     <div id="layoutToggle" class="toggle-group" role="group" aria-label="Layout">
       <button type="button" title="Grid" aria-pressed="@{layout == Const.Search.Layout.GRID}"
               data-app-search="click" data-app-search-layout="@{Const.Search.Layout.GRID}"><i class="fas fa-th"></i></button>
@@ -117,27 +102,21 @@
               data-app-search="click" data-app-search-layout="@{Const.Search.Layout.MAP}"><i class="fas fa-map"></i></button>
       }
     </div>
-    @* The ⚙ View control is a dialog-trigger context menu, built into this host by
-       js/search-results/view-settings-control.js like the Add album and Add folder controls; its dialog also holds the
-       repository view's triage filter (htmx/view_settings_dialog), which runs a search. `hx-preserve` carries this very
-       element, the built control and its open panel included, from the old fragment into the new one, so the dialog stays
+    @* `hx-preserve` carries the built ⚙ View control, its open panel included, into the new fragment, so its dialog stays
        open while the results it changed are swapped in under it. *@
     <div id="viewSettingsActions" hx-preserve></div>
 
     <div class="group">
-      @* A choice menu (js/common/choice-menus.js wraps the host into its trigger and popover panel). The option marked
-         aria-checked is the effective grouping the server used. Each option is a search trigger carrying the two parameters it
-         sets (js/search-results/search-triggers.js), which the search funnel combines with every other parameter in the
-         `searchParams` store. Grouping is a reorder, like the sort: it survives a change of folder, person, album or view.
-         The map layout groups nothing, so its host is then disabled. *@
+      @* The checked option is the effective grouping the server used. Grouping is a reorder, like the sort: it survives a
+         change of folder, person, album or view. The map layout groups nothing, so the host is then disabled. *@
       <div id="groupMenuHost" data-choice-menu="Group" data-choice-menu-icon="fas fa-layer-group" @if(layout == Const.Search.Layout.MAP) {data-choice-menu-disabled}>
         <button type="button" data-app-search="click" data-app-search-group-by="" data-app-search-group-direction="" @if(grouping.isEmpty) {aria-checked="true"}>No grouping</button>
         <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))) {aria-checked="true"}>Date Taken (Newest first)</button>
         <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="asc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.ASC))) {aria-checked="true"}>Date Taken (Oldest first)</button>
         @* Path order, fixed: the option sets no direction *@
         <button type="button" data-app-search="click" data-app-search-group-by="location" data-app-search-group-direction="" @if(grouping.exists(_.by == GroupBy.Location)) {aria-checked="true"}>Location</button>
-        @* Only a frame in triage carries a Sequence. Elsewhere the server groups nothing for it and this menu marks that, while the
-           store keeps the choice, so a return to Triage groups by Sequence again. The queue's order, fixed: no direction. *@
+        @* Only a frame in triage carries a Sequence. Elsewhere the server groups nothing for it while the store keeps the
+           choice, so a return to Triage groups by Sequence again. The queue's order is fixed: no direction. *@
         @if(view == Const.Search.View.TRIAGE) {
           <button type="button" data-app-search="click" data-app-search-group-by="sequence" data-app-search-group-direction="" @if(grouping.exists(_.by == GroupBy.Sequence)) {aria-checked="true"}>Sequence</button>
         }
@@ -145,9 +124,7 @@
     </div>
 
     <div class="sort">
-      @* A choice menu whose checked option is the effective sort the server used; each option is a search trigger carrying
-         its sort, which the search funnel combines with every other search parameter held in the `searchParams` store
-         (js/search-results/search.js) *@
+      @* The checked option is the effective sort the server used *@
       <div id="sortMenuHost" data-choice-menu="Sort" data-choice-menu-icon="fas fa-sort-amount-down">
         @* Similarity ranks by the description, so it is offered only while the results have one: the server refuses it otherwise *@
         @if(isDescribed) {
@@ -171,7 +148,8 @@
     </div>
   </div>
 
-  @* The trash view's Purge button holds the right edge of the toolbar. The trail stays empty elsewhere, so the controls keep the bar's center *@
+  @* The trash view's Purge button holds the toolbar's right edge; elsewhere the trail stays empty, so the controls keep
+     the bar's center *@
   <div class="trail">
     @if(view == Const.Search.View.TRASHBIN && RequestContext.holds(Permission.Purge)) {
     @htmx.html.trashbin_header()
@@ -179,9 +157,9 @@
   </div>
 </div>
 
-@* Triage's row under the toolbar, outside it so it scrolls away with the grid: the button that opens Curation on the whole
-   queue, whatever the search shows, since only a frame in triage carries a Sequence. The row waits for the count, and goes at
-   zero (js/stores/sequences-to-curate.js). It is a Curate Permission's, as is every way into Curation *@
+@* Triage's row, outside the toolbar so it scrolls away with the grid: Curation on the whole queue, whatever the search
+   shows, since only a frame in triage carries a Sequence. It waits for the count and goes at zero. It is a Curate
+   Permission's, as is every way into Curation *@
 @if(view == Const.Search.View.TRIAGE && RequestContext.holds(Permission.CurateOwn, Permission.CurateAll)) {
 <div id="curateQueue" style="display: none" x-data x-show="$store.sequencesToCurate.hasAny">
   <button id="curateSequences"

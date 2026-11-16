@@ -20,8 +20,7 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * The common setup's repository and its account, with the request context cleared, then a system initialization with a new
-     * admin, a repository named "My Repository" and a password.
+     * The common setup's repository and user, with the request context cleared, then a system initialization with a new admin.
      *
      * Assertions:
      *
@@ -43,10 +42,7 @@ import altitude.core.util.Query
     val repos = testApp.service.repository.query(new Query())
     val users = testApp.service.user.query(new Query())
 
-    /**
-     * !!!! NOTE that since the common test setup creates a repository and an account (a regular user), we should have 2 records
-     * in each table - the one we created in the test setup and the one created by the system initialization test.
-     */
+    // One of each comes from the common test setup
     repos.records.size shouldBe 2
     users.records.size shouldBe 2
 
@@ -60,7 +56,7 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * The seeded system row, then a second row inserted next to it, with the default id and with the only id the table allows.
+     * The seeded system row, then a second row inserted with the default id and with the only id the table allows.
      *
      * Assertions:
      *
@@ -87,8 +83,7 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * The system row with its signing key cleared, as a database is before its first start with this column, then the signing key
-     * asked for.
+     * The system row with its signing key cleared, as before a database's first start with this column, then the key asked for.
      *
      * Assertions:
      *
@@ -125,8 +120,8 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A signing key in the system row, then another key written over it through the DAO, as a second instance that lost the race
-     * to create the key would.
+     * A stored signing key, then another written over it through the DAO, as a second instance that lost the race to create the
+     * key would.
      *
      * Assertions:
      *
@@ -144,9 +139,8 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * The system row with its signing key cleared. One transaction stores a key and holds the row until the signing key, asked
-     * for in another transaction, waits for it: on PostgreSQL that one has found no key and waits to store its own, on SQLite it
-     * waits for the write connection.
+     * The system row with its signing key cleared. One transaction stores a key and holds the row until another, asking for the
+     * key, waits: on PostgreSQL it has found no key and waits to store its own, on SQLite it waits for the write connection.
      *
      * Assertions:
      *

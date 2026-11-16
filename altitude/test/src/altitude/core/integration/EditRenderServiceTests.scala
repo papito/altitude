@@ -35,17 +35,13 @@ import altitude.core.service.EditRenderService.Outcome
   private def eventually[T](f: => T): T =
     Eventually.eventually(Eventually.timeout(Span(30, Seconds)), Eventually.interval(Span(100, Millis)))(f)
 
-  /**
-   * Runs `f` with the render delay at an hour, so a render the test runs itself is never raced by the one a change queued; the
-   * delay is put back after
-   */
+  /** Runs `f` with the render delay at an hour, so a queued render never races the one the test runs itself */
   private def withDebounce[T](f: => T): T = {
     renders.debounce = scala.concurrent.duration.DurationInt(1).hour
     try f
     finally renders.debounce = EditRenderService.DEBOUNCE
   }
 
-  /** The asset's `last_rev`, as stored */
   private def lastRev(assetId: String): Int = testApp.txManager.asReadOnly {
     query("SELECT last_rev FROM asset_edit WHERE asset_id = ?", assetId).head("last_rev").toString.toInt
   }
@@ -61,7 +57,7 @@ import altitude.core.service.EditRenderService.Outcome
   private def bytesOf(assetId: String, kind: String): Array[Byte] =
     Files.readAllBytes(testApp.service.fileStore.editedImagePath(assetId, kind))
 
-  /** The temporary files a render writes its edited images to before it publishes them, of both kinds */
+  /** The temporary files a render stages its two edited images in before publishing them */
   private def stagedFiles(assetId: String): List[java.nio.file.Path] =
     List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY).map {
       kind =>
@@ -90,9 +86,8 @@ import altitude.core.service.EditRenderService.Outcome
      *
      * Assertions:
      *
-     * The first render stores the edited Preview and the Display image as revision 1, which the asset's `edit_rev` and the Edit's
-     * state (`rev`) name, with version 1 rendered. The second stores revision 2, names it, has version 2 rendered, and the asset
-     * still has one file of each kind, now holding the second render's bytes.
+     * The first render stores both edited images as revision 1, named by the asset's `edit_rev` and the Edit's `rev`. The second
+     * stores revision 2 with version 2 rendered, and the asset still has one file of each kind, now the second render's.
      *
      * Edge cases:
      *
@@ -132,9 +127,8 @@ import altitude.core.service.EditRenderService.Outcome
      *
      * Assertions:
      *
-     * The identity's render stores nothing, sets `edit_rev` to 0 with version 2 rendered, and deletes both edited images, while
-     * `last_rev` keeps 1. The Edit saved again is rendered as revision 2, never 1 again, so a URL naming revision 1 is never
-     * built for the new images.
+     * The identity's render sets `edit_rev` to 0 with version 2 rendered and deletes both edited images, while `last_rev` keeps
+     *   1. The Edit saved again is rendered as revision 2, never 1 again, so no URL of the old images ever names the new ones.
      */
     withDebounce {
       val assetId = testContext.persistAsset().persistedId
@@ -165,8 +159,8 @@ import altitude.core.service.EditRenderService.Outcome
      *
      * Assertions:
      *
-     * The identity's render is `Original`, yet the later render's images stay: its delete runs under the asset's lock and only
-     * while the asset shows its original, which it no longer does. The asset shows revision 2.
+     * The identity's render is `Original`, yet the later render's images stay at revision 2: the delete runs under the asset's
+     * lock and only while the asset shows its original.
      */
     withDebounce {
       val assetId = testContext.persistAsset().persistedId
@@ -195,8 +189,8 @@ import altitude.core.service.EditRenderService.Outcome
      *
      * Assertions:
      *
-     * The render is discarded: nothing is stored, no temporary file of its images is left, and edit version 1 is never recorded
-     * rendered. The asset is queued again, and the queue renders edit version 2 as revision 1.
+     * The render is discarded: nothing is stored or left staged, and version 1 is never recorded rendered. The asset is queued
+     * again, and the queue renders version 2 as revision 1.
      */
     val assetId = testContext.persistAsset().persistedId
     withDebounce(edits.save(assetId, 0, brighter, testContext.user))
@@ -219,13 +213,12 @@ import altitude.core.service.EditRenderService.Outcome
     /**
      * Setup:
      *
-     * An imported image saved twice. A transaction saving a third Edit, held open until a render of the asset, whose write locks
-     * the asset and the Edit, waits for it (for the asset's row on PostgreSQL, for the one write connection on SQLite).
+     * An imported image saved twice. A transaction saving a third Edit, held open until a render of the asset waits for it.
      *
      * Assertions:
      *
-     * The render never stores version 2 as rendered: on PostgreSQL, where it read version 2 before the save committed, it is
-     * discarded once its locks are granted; on SQLite, where it waits before it reads, it renders version 3.
+     * The render never records version 2 rendered: on PostgreSQL, having read version 2 before the commit, it is discarded once
+     * its locks are granted; on SQLite, which waits before the read, it renders version 3.
      */
     withDebounce {
       val assetId = testContext.persistAsset().persistedId
@@ -243,9 +236,9 @@ import altitude.core.service.EditRenderService.Outcome
   }
 
   /**
-   * Runs `firstLocks` in a transaction on a thread of its own, then `second` in a transaction on another, and once `second` waits
-   * for the first (for a lock on PostgreSQL, for the one write connection on SQLite) or has ended, `firstThen` in the first's
-   * transaction, which then commits. What either throws, a deadlock the database broke included, is thrown here.
+   * Runs `firstLocks` in a transaction on its own thread, then `second` in a transaction on another, and once `second` waits for
+   * the first (a lock on PostgreSQL, the write connection on SQLite) or has ended, `firstThen` in the first's transaction, which
+   * then commits. What either throws, a deadlock the database broke included, is rethrown here.
    */
   private def interleave(firstLocks: => Unit, second: => Unit, firstThen: => Unit): Unit = {
     val held = new java.util.concurrent.CountDownLatch(1)
@@ -294,14 +287,13 @@ import altitude.core.service.EditRenderService.Outcome
     /**
      * Setup:
      *
-     * An imported image saved once and rendered. A transaction that takes the locks a render's write takes, in its order: the
-     * asset's first, then, once a second save is waiting for it or done, the Edit's.
+     * An imported image saved once and rendered. A transaction takes the locks a render's write takes, in its order: the asset's,
+     * then, once a second save waits for it or is done, the Edit's.
      *
      * Assertions:
      *
-     * Both commit, one after the other, and the second save is the Edit's version 2. On PostgreSQL a save that locked the Edit
-     * before the asset would hold the Edit while waiting for the asset, which the render's write holds while waiting for the
-     * Edit: a deadlock the database breaks by failing one of them.
+     * Both commit, and the save is version 2. A save locking the Edit before the asset would deadlock against the render's write
+     * on PostgreSQL, which breaks it by failing one of them.
      */
     val assetId = testContext.persistAsset().persistedId
     withDebounce {
@@ -344,8 +336,8 @@ import altitude.core.service.EditRenderService.Outcome
     /**
      * Setup:
      *
-     * An imported image saved once, rendered by the queue; then its rendered version cleared by hand, as a stop before its render
-     * leaves it; then the startup's requeue.
+     * An imported image saved and rendered by the queue, its rendered version then cleared as a stop before the render leaves it,
+     * and the startup's requeue.
      *
      * Assertions:
      *
@@ -374,8 +366,8 @@ import altitude.core.service.EditRenderService.Outcome
      *
      * Assertions:
      *
-     * The first's Display image is its edited size, 75 × 150; its edited Preview is 200 × 200, the image 100 px wide in the
-     * middle and transparent on either side. The second's Display image is 3840 × 288, its long edge brought down to the cap.
+     * The first's Display image is 75 × 150, and its edited Preview 200 × 200, transparent on either side of the image. The
+     * second's Display image is 3840 × 288, its long edge brought down to the cap.
      */
     withDebounce {
       val small = testContext.persistAsset().persistedId
@@ -407,9 +399,8 @@ import altitude.core.service.EditRenderService.Outcome
      *
      * Assertions:
      *
-     * The purged asset's render finds it gone and stores nothing. The others cannot be rendered: each is recorded rendered at its
-     * version with revision 0, so it shows its original, keeps no edited image (the first render's are deleted), and is not
-     * queued again at the next start.
+     * The purged asset's render stores nothing. The others are each recorded rendered at their version with revision 0, so they
+     * show their original, keep no edited image (the first render's are deleted) and are not queued again at the next start.
      */
     val purged = testContext.persistAsset().persistedId
     val gone = testContext.persistAsset().persistedId
@@ -443,8 +434,8 @@ import altitude.core.service.EditRenderService.Outcome
     /**
      * Setup:
      *
-     * An imported image saved once, never rendered, with bytes that are no image at the paths of its edited images, as a render
-     * whose transaction failed after it stored them leaves them; then the Edit rendered.
+     * An imported image saved once, never rendered, with non-image bytes at its edited images' paths, as a render whose
+     * transaction failed after storing them leaves them; then the Edit rendered.
      *
      * Assertions:
      *
@@ -470,13 +461,13 @@ import altitude.core.service.EditRenderService.Outcome
     /**
      * Setup:
      *
-     * An imported image whose Display image cannot be staged (a directory with a file in it stands where its temporary file
-     * goes), saved once with the render delay at 100 ms; the directory removed a second later.
+     * An imported image whose Display image cannot be staged (a non-empty directory stands at its temporary path), saved with the
+     * render delay at 100 ms; the directory removed a second later.
      *
      * Assertions:
      *
-     * The queue's render fails and nothing is rendered while the directory stands; once it is gone, a later try, queued again
-     * after a growing delay, renders the Edit as revision 1 with both edited images stored.
+     * Nothing is rendered while the directory stands; once it is gone, a retry after a growing delay renders the Edit as revision
+     * 1 with both edited images.
      */
     val assetId = testContext.persistAsset().persistedId
     val blocking = stagedFiles(assetId).last
@@ -504,14 +495,14 @@ import altitude.core.service.EditRenderService.Outcome
     /**
      * Setup:
      *
-     * As many imported images as the queue renders at once, each saved with the render delay at 10 ms, whose queued renders throw
-     * an `OutOfMemoryError` before they start (the service's hook before a queued render), as a render reading a huge original
-     * may; once they all have, one more image saved, and one of the first saved again with nothing thrown.
+     * As many imported images as the queue renders at once, saved with the render delay at 10 ms, whose queued renders throw an
+     * `OutOfMemoryError`, as a render of a huge original may. Then one more image saved, and one of the first saved again with
+     * nothing thrown.
      *
      * Assertions:
      *
-     * The last image is rendered as revision 1, so no render that threw kept its place in the queue, and so is the image saved
-     * again, which no render of its own still holds. The others are left unrendered, for the next startup.
+     * The new image and the one saved again are rendered, so no render that threw kept its place in the queue. The others are
+     * left unrendered, for the next startup.
      */
     val doomed = (1 to testApp.editRenderParallelism).map(_ => testContext.persistAsset().persistedId).toSet
     val healthy = testContext.persistAsset().persistedId
@@ -551,7 +542,7 @@ import altitude.core.service.EditRenderService.Outcome
      *
      * Assertions:
      *
-     * Its `enqueue` neither fails nor renders: a second later the Edit is still not rendered, which the next start would queue.
+     * Its `enqueue` neither fails nor renders: a second later the Edit is still not rendered.
      */
     val assetId = testContext.persistAsset().persistedId
     withDebounce(edits.save(assetId, 0, brighter, testContext.user))

@@ -15,17 +15,13 @@ import altitude.core.models.Asset
 import altitude.core.models.ExtractedMetadata
 
 /**
- * A burst synthesized at test time, for the suites of Sequences and Curation: the frames are `images/2.jpg` shifted by a few
- * pixels and brightened a little, so their checksums differ and their hashes are near; the camera's model and clock are seeded as
- * upstream metadata on the asset handed to the pipeline, which the extraction keeps since the file carries none.
+ * A burst synthesized at test time: `images/2.jpg` shifted a few pixels and brightened a little, so the checksums differ and the
+ * hashes are near. The camera's model and clock are seeded as upstream metadata, which extraction keeps since the file has none.
  */
 trait BurstFrames { self: IntegrationTestCore =>
   import BurstFrames.*
 
-  /**
-   * A frame imported with the camera's model, its `Date/Time Original` and its `Sub-Sec Time Original` seeded as upstream
-   * metadata, so no EXIF writer is needed
-   */
+  /** A frame imported with its camera model and capture time seeded as upstream metadata, so no EXIF writer is needed */
   protected def importFrame(
       bytes: Array[Byte],
       taken: Option[String] = Some(TAKEN),
@@ -41,7 +37,7 @@ trait BurstFrames { self: IntegrationTestCore =>
     testApp.service.library.addAsset(dataAsset.copy(asset = dataAsset.asset.copy(extractedMetadata = metadata)))
   }
 
-  /** A frame imported with no metadata at all, neither a camera model nor a clock, under `fileName`, so only its name dates it */
+  /** A frame imported with no metadata under `fileName`, so only its name dates it */
   protected def importNamed(bytes: Array[Byte], fileName: String): Asset =
     importFrame(bytes, taken = None, model = None, fileName = fileName)
 
@@ -59,10 +55,7 @@ object BurstFrames {
 
   private lazy val base: Array[Byte] = Files.readAllBytes(IntegrationTestUtil.getImportAsset("images/2.jpg").path)
 
-  /**
-   * Burst frame `n` of `images/2.jpg`: the file as it is for 0, else a copy shifted `n` pixels each way (the edge filled by its
-   * border) and brightened by `6n` levels, re-encoded, so its checksum differs and its hash is near; at `scale` of its size
-   */
+  /** Frame `n`: the file itself for 0, else shifted `n` pixels each way and `6n` levels brighter; at `scale` of its size */
   def frame(n: Int, scale: Double = 1.0): Array[Byte] =
     if (n == 0 && scale == 1.0) base
     else

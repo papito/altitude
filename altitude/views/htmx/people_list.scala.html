@@ -6,29 +6,11 @@
 
 @(listed: ListedPeople, pane: String)
 
-@* The list of one pane of the People tab (htmx/people): the people in the People buckets the pane asked for
-   (GET /htmx/people/r/:repoId/list?pane=...&buckets=..., with &triaged=true while triaged items are shown and on every
-   load in Triage), one `.cell` each, found
-   by `data-person-id` wherever one is looked up, since a person may be in both panes. A cell's number (`.count`, not
-   displayed in Triage: pages/index.css) is the visible count, what opening the person from the repository view finds,
-   and never `Person.numOfFaces` directly. A hidden person's cell carries the eye-slash badge, and its name link says
-   so to assistive tech in a `.visually-hidden` ", hidden" after the number: the link is named by its content, the name,
-   the number, which is not displayed in Triage and so is no part of the name there, and then "hidden". An Unmatched
-   person is told apart by its
-   orange "Unknown N" name. A person with no cover (no Face left to be one) shows the no-cover placeholder (`.no-cover`,
-   core.css) in place of the face. The face's link and the name link are search triggers for the person; in Triage a person with no
-   triaged assets gets the scope dialog instead (js/search-results/search-triggers.js), a popover dialog anchored to the
-   name link whichever of the two was clicked: the name link is `personLink-<pane>-<id>` with that `anchor-name`, the pane
-   in the ID for the reason the pencil's has it, and both links name it in `data-app-dialog-anchor`, so the dialog sits
-   under the tile's name rather than over it. After the name link, and outside it so that it is no search trigger, the
-   rename pencil
-   (`.rename`, shown while the cell is hovered or holds keyboard focus, and always on a touch screen: htmx/people.css)
-   requests the rename dialog
-   (htmx/rename_person_dialog) into the popover host, anchored to itself: its ID carries `pane`, the pane the list is for,
-   so the pencils of a person listed in both panes are two anchors, and the dialog's return-focus selector finds the copy
-   a reload renders; it is Edit metadata's, rendered only for the account holding it. With no one listed, one line
-   of text and no grid: that everyone is only in triaged items when the buckets hold people the triage switch left off
-   (`leftOffByTriage`), and otherwise that no one is in the buckets. *@
+@* One pane's list of the People tab. A person may be in both panes, so a cell is found by `data-person-id` and the name
+   link's and the pencil's IDs carry the pane. The `.count` is the visible count, what opening the person from the repository
+   view finds, never `numOfFaces`; it is not displayed in Triage, so it is no part of the link's name there. Both links anchor
+   Triage's scope dialog to the name link, so it sits under the tile's name. The rename pencil, Edit metadata's, sits outside
+   the name link so it is no search trigger. *@
 
 @if(listed.leftOffByTriage) {
 <p class="empty">Everyone here is only in triaged items. Turn on Show triaged items to see them.</p>

@@ -12,8 +12,8 @@ class StaticController(using logger: Logger) extends cask.Routes:
   @cask.staticResources("/static/")
   def staticFileRoutes() = "static"
 
-  // The stylesheet bundle, under a name that changes with its content (see `cssBundle` in build.mill). Only this build's name
-  // is served: any other under the prefix is not this build's bundle, whatever the classpath holds there
+  // The stylesheet bundle, named by its content hash (`cssBundle` in build.mill). Only this build's name is served, whatever
+  // else the classpath holds under the prefix
   @cachedForever()
   @cask.get("/assets/:name")
   def assetRoutes(name: String): cask.Response.Raw =

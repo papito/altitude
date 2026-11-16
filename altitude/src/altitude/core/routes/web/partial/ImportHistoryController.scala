@@ -14,18 +14,14 @@ import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.decorators.requirePermission
 
 /**
- * The Import history of the Import page: the Library's Imports, and the Import files of one. Both are read by every account that
- * holds Import in the Library, whichever account delivered the Import, unlike the upload routes (`ImportController`), which take
- * an Import's own account alone.
+ * The Import history: the Library's Imports and the files of one. Any holder of Import reads them, whichever account delivered
+ * the Import, unlike the upload routes (`ImportController`), which take an Import's own account alone.
  */
 class ImportHistoryController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/import"
   private val sizes = Const.ImportHistory
 
-  /**
-   * The top of the Library's Import history: its first `shown` Imports, the ones in progress first, then the newest first.
-   * `shown` is held between what the history shows at first and the most it shows.
-   */
+  /** The first `shown` Imports, those in progress first, then the newest; `shown` is clamped to the history's sizes */
   @requireLogin()
   @requirePermission(Permission.Import)
   @cask.get(f"/$prefix/r/:repoId/history")
@@ -33,11 +29,7 @@ class ImportHistoryController(using logger: Logger) extends BaseController:
     val within = shown.max(sizes.IMPORTS_STEP).min(sizes.MAX_IMPORTS)
     htmlResponse(htmx.html.import_history(App.altitude.service.imports.history(within), within))
 
-  /**
-   * The first `shown` Import files of an Import in path order, those of one `outcome` when it names one (an unknown one is a
-   * 400). `shown` is held between what the list shows at first and the most it shows. An Import that is not the Library's is a
-   * 404.
-   */
+  /** The first `shown` files of an Import in path order, optionally of one `outcome`; `shown` is clamped as above */
   @requireLogin()
   @requirePermission(Permission.Import)
   @cask.get(f"/$prefix/r/:repoId/imports/:importId/files")

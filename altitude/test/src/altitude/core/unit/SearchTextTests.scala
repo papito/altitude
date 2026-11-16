@@ -52,10 +52,6 @@ import altitude.core.util.SearchText
      * Assertions:
      *
      * Each term is a group of its own, so all three must match.
-     *
-     * Edge cases:
-     *
-     * A run of spaces and a tab as separators.
      */
     SearchText.parse("alice  paris\tbeach") shouldBe expression(Seq(bare("alice")), Seq(bare("paris")), Seq(bare("beach")))
   }
@@ -311,12 +307,8 @@ import altitude.core.util.SearchText
      *
      * Assertions:
      *
-     * The exclusion is kept as the sixteenth term; y would be the seventeenth, so it is dropped rather than joined to the
-     * exclusion as an alternative, and the OR before it goes with it.
-     *
-     * Edge cases:
-     *
-     * An OR whose right-hand term falls past the cap.
+     * The exclusion is kept as the sixteenth term; y, the seventeenth, is dropped with the OR before it rather than joined to the
+     * exclusion as an alternative.
      */
     val words = (1 to 15).map(n => "w" + ('a' + n).toChar)
 
@@ -334,10 +326,6 @@ import altitude.core.util.SearchText
      * Assertions:
      *
      * All sixteen are kept and nothing is logged.
-     *
-     * Edge cases:
-     *
-     * A term count exactly at the cap.
      */
     val words = (1 to 16).map(n => "w" + ('a' + n).toChar)
     var parsed = Option.empty[SearchExpression]
@@ -357,20 +345,18 @@ import altitude.core.util.SearchText
      *
      * Assertions:
      *
-     * A term is in the name when its words appear consecutively and in order, all of them whole but the last, which may be a
-     * prefix.
+     * A term is in the name when its words appear consecutively and in order, all whole but the last, which may be a prefix.
      *
      * Edge cases:
      *
-     * A prefix in a word that is not the last, words that are not adjacent or are out of order, a suffix ("unset"), a term
-     * running past the end of the name, and a name with no reading.
+     * A prefix in a word that is not the last, words not adjacent or out of order, a suffix, a term running past the end of the
+     * name, and a name with no reading do not match.
      */
     val name = Seq(Seq("img", "1234", "beach", "sunset"))
 
     bare("beach").isIn(name) shouldBe true
     bare("sun").isIn(name) shouldBe true
     bare("1234", "bea").isIn(name) shouldBe true
-    // Only the last word is a prefix, and the words are consecutive
     bare("im", "1234").isIn(name) shouldBe false
     bare("img", "beach").isIn(name) shouldBe false
     bare("beach", "1234").isIn(name) shouldBe false
@@ -392,7 +378,7 @@ import altitude.core.util.SearchText
      *
      * Edge cases:
      *
-     * A partial last word, reversed words, and a phrase longer than the name.
+     * A partial last word, reversed words, and a phrase longer than the name do not match.
      */
     val name = Seq(Seq("golden", "gate", "bridge"))
 
@@ -416,7 +402,7 @@ import altitude.core.util.SearchText
      *
      * Edge cases:
      *
-     * A phrase that would match only by running from the end of one reading into the start of the other.
+     * A phrase that would match only by running from one reading into the other does not match.
      */
     val name = Seq(Seq("la", "guardia", "airport"), Seq("laguardia", "airport"))
 

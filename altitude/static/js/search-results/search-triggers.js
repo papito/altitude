@@ -4,31 +4,16 @@ import { literalsOf } from "../fragments/helpers.js"
 import { runSearch } from "./search.js"
 
 /**
- * Declarative search triggers, hydrated centrally the same way `data-app-fragment` roots are.
+ * Declarative search triggers. An element with `data-app-search="<DOM event>"` runs a search when that
+ * event fires, contributing its `data-app-search-<param>` literals (an empty one clears the
+ * parameter); the `searchParams` store supplies the rest, so markup never spells out a whole search.
  *
- * An element with `data-app-search="<DOM event>"` runs a search when that event fires. The
- * parameters it contributes are its `data-app-search-<param>="<value>"` literals, e.g.
- * `data-app-search-person-id="abc"`, or the sort and grouping an option of a choice menu carries;
- * an empty literal clears the parameter.
- *
- * Everything else - the folder you are in, the sort you picked - comes from the `searchParams`
- * store, so markup never has to spell out a whole search.
- *
- * The hydrator also owns the one rule on where a trigger's event goes in the current view
- * (`routeOf`), so it holds for every explorer row and for the Results title's crumbs alike:
- *
- * - In the Trash, which spans every folder and has no explorer, a trigger carrying a folder does
- *   nothing.
- * - In Triage, a trigger naming a folder, a Person or a Location asks the Triage scope route
- *   (`GET /htmx/triage/r/:repoId/dialogs/scope`) instead. A folder holds no triaged asset, so it is
- *   always described by the popover dialog the route answers, except the root folder, the whole
- *   repository, which does nothing. A Person or a Location with triaged assets is a 204, and the
- *   trigger then searches as anywhere else (`runTriggerSearch`, called by `listeners/dialogs.js`);
- *   one without them is the dialog. The request is an open request of the popover host like any
- *   other (`common/modal.js`): it is issued from the trigger, so the dialog is placed against the
- *   anchor the trigger names in `data-app-dialog-anchor`, and an open the user replaced or dismissed
- *   meanwhile neither shows its dialog nor searches. An empty value names nothing and searches, so
- *   the Results title's × and the Triage summary's total still clear a scope there.
+ * `routeOf` is the one rule on where a trigger's event goes in the current view:
+ * - In the Trash, which has no explorer, a trigger carrying a folder does nothing.
+ * - In Triage, a trigger naming a folder, a Person or a Location asks the Triage scope route instead.
+ *   A folder holds no triaged asset, so it always gets the dialog, except the root folder, which does
+ *   nothing. A Person or a Location with triaged assets is a 204 and then searches; one without them
+ *   gets the dialog. An empty value names nothing and searches, so a scope can still be cleared.
  * - Everything else searches.
  */
 const PREFIX = "appSearch"
@@ -48,11 +33,11 @@ const Route = {
 const RESERVED_KEYS = new Set([
     EVENT_KEY,
     BOUND_KEY,
-    // The last cell's continuation, read by the infinite-scroll observer (js/search-results/infinite-scroll.js)
+    // The last cell's continuation cursor, read by infinite scroll
     "appSearchAfter",
 ])
 
-/** Binds every search trigger in `root` (and `root` itself). Idempotent, so re-hydration is safe. */
+/** Binds every search trigger in `root` and `root` itself; idempotent, so re-hydration is safe */
 export function bindSearchTriggers(root) {
     triggerElements(root).forEach((triggerEl) => {
         if (triggerEl.dataset[BOUND_KEY] === "true") {
@@ -81,10 +66,7 @@ export function bindSearchTriggers(root) {
     })
 }
 
-/**
- * Runs the search `triggerEl` declares, as its event would have outside Triage: what a 204 from the
- * Triage scope route asks for. A source that is no search trigger is left alone.
- */
+/** Runs the search `triggerEl` declares, as its event would outside Triage: what a 204 from the scope route asks for */
 export function runTriggerSearch(triggerEl) {
     if (!triggerEl?.dataset[EVENT_KEY]) {
         return
@@ -110,16 +92,11 @@ function triggerElements(root) {
     return elements
 }
 
-/** The `data-app-search-<param>` literals of `triggerEl`, keyed by parameter name */
 function searchParamsOf(triggerEl) {
     return literalsOf(triggerEl, PREFIX, RESERVED_KEYS)
 }
 
-/**
- * Where the event of a trigger asking for `params` goes in the current view: `Route.search`,
- * `Route.nothing`, or `{ scope }`, the one explorer scope the Triage scope route is asked about
- * (`{ folderId }`, `{ personId }` or `{ locationId }`). See the module comment.
- */
+/** `Route.search`, `Route.nothing`, or `{ scope }`, the one explorer scope to ask the Triage scope route about */
 function routeOf(params) {
     const currentView = Alpine.store(Const.state.currentView)
 
@@ -142,10 +119,7 @@ function routeOf(params) {
     return { scope: { [scopeParam]: id } }
 }
 
-/**
- * Whether `folderId` is the repository's root folder, the one tree node marked `data-is-root`. The
- * Results title has no crumb for the root, so the tree's root row is the one trigger naming it.
- */
+/** The Results title has no crumb for the root folder, so the tree's root row is the one trigger naming it */
 function isRootFolder(folderId) {
     return (
         document.getElementById(`folder-${folderId}`)?.dataset.isRoot === "true"
@@ -153,9 +127,8 @@ function isRootFolder(folderId) {
 }
 
 /**
- * Asks the Triage scope route about `scope` from `triggerEl`, into the popover host: a dialog opens
- * against the trigger's anchor, and a 204 searches (`runTriggerSearch`). A failure is reported as
- * any failed dialog open is.
+ * Asks the Triage scope route about `scope`, issued from `triggerEl` so the dialog opens against its
+ * anchor and an open the user replaced or dismissed meanwhile neither shows nor searches.
  */
 function requestScopeDialog(triggerEl, scope) {
     htmx.ajax("GET", `/htmx/triage/r/${window.ctx.getRepoId()}/dialogs/scope`, {

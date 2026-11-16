@@ -31,10 +31,9 @@ import altitude.core.dao.sql.tables.AssetRow
      *
      * Assertions:
      *
-     * Both dialects build the base `TableOps`, which threads the dialect it is given. ScalaSql's `SqliteDialect.TableOps`
-     * resolves the dialect from the library's `SqliteDialect` object instead of the one in scope. A table built through it reads
-     * and writes every column with the stock type mappers, which silently loses this project's timestamp handling; the symptom is
-     * a wall-clock timestamp shifted by the JVM zone, far from its cause.
+     * Both dialects build the base `TableOps`, which threads the dialect it is given. ScalaSql's `SqliteDialect.TableOps` would
+     * use the library's own dialect and stock type mappers, silently losing this project's timestamp handling: a wall-clock time
+     * comes back shifted by the JVM zone.
      */
     AltitudeSqliteDialect.TableOpsConv(AssetRow).getClass shouldBe classOf[TableOps[?]]
     AltitudePostgresDialect.TableOpsConv(AssetRow).getClass shouldBe classOf[TableOps[?]]
@@ -45,17 +44,17 @@ import altitude.core.dao.sql.tables.AssetRow
     /**
      * Setup:
      *
-     * A wall-clock time that falls in the US daylight-saving gap (2026-03-08 02:30), the SQLite dialect's temporal type mappers
-     * run against stubbed JDBC statements and rows, and the JVM zone set to America/New_York, where that time does not exist.
+     * The SQLite dialect's temporal mappers over stubbed JDBC statements and rows, the JVM zone set to America/New_York, and a
+     * wall-clock time in its daylight-saving gap (2026-03-08 02:30).
      *
      * Assertions:
      *
-     * Every temporal type binds as text. The wall-clock mapper writes and reads exactly the `yyyy-MM-dd HH:mm:ss` text the schema
-     * stores, and the instant mapper writes an instant's UTC wall clock and reads the text back as that moment at UTC.
+     * Every temporal type binds as text. The wall-clock mapper writes and reads exactly the stored `yyyy-MM-dd HH:mm:ss` text,
+     * and the instant mapper writes and reads the instant's UTC wall clock.
      *
      * Edge cases:
      *
-     * A time inside a daylight-saving gap, which any round trip through the JVM zone would move by an hour.
+     * The time in the gap, which a round trip through the JVM zone would move by an hour, survives.
      */
     val wallClock = LocalDateTime.of(2026, 3, 8, 2, 30, 0)
     // The stored format, which the day expression `date(col)` and a cursor comparison both depend on
@@ -106,8 +105,7 @@ import altitude.core.dao.sql.tables.AssetRow
      *
      * Assertions:
      *
-     * Neither dialect casts its bound parameters, so the SQL carries a plain placeholder for each. Identifier quoting is covered
-     * by RowColumnTests.
+     * Neither dialect casts its bound parameters, so the SQL carries a plain placeholder for each.
      */
     AltitudeSqliteDialect.castParams shouldBe false
     AltitudePostgresDialect.castParams shouldBe false

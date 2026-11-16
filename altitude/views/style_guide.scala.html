@@ -10,17 +10,15 @@
 @import altitude.core.util.PeopleMatch
 @import java.time.LocalDate
 
-@* The style guide (dev only, StyleGuideController). `scanJson` is the source scan (StyleGuideScan): the `styleGuide`
-   Alpine component (js/style-guide.js) reads it, and the templates below render the tokens, the icons and the token
-   audit from the component, which is also the state of the theme switcher. The specimens are static markup using
-   the real classes of core.css and tabs.css; the guide's own layout is static/css/pages/style_guide.css. *@
+@* The style guide (dev only). `scanJson` is the source scan (StyleGuideScan), which the `styleGuide` Alpine component
+   reads; the templates below render the tokens, the icons and the token audit from it. The specimens are static markup
+   using the real classes of core.css and tabs.css. *@
 @(stats: Stats, scanJson: String)
 
-@* The cards of the `:root` tokens whose value is of one of `kinds` (space-separated), one kind after another, in
-   `group` when one is given (the groups are named in js/style-guide.js). A card is mostly a button: clicking it copies
-   the token's var() reference. A token whose declaration references other tokens shows it as written, with the tokens
-   it comes from; any other shows the value it resolves to. The card of a token with an alpha slider
-   (js/style-guide.js) has the slider below the button, and a button that copies the value the slider gives it. *@
+@* The cards of the `:root` tokens whose value is of one of `kinds` (space-separated), in `group` when one is given.
+   Clicking a card copies the token's var() reference. A token whose declaration references other tokens shows it as
+   written, with the tokens it comes from; any other shows its resolved value. A token with an alpha slider also gets a
+   button that copies the value the slider gives. *@
 @tokenCards(kinds: String, group: String = "") = {
   <div class="sg-tokens">
     <template x-for="token in tokensOf('@kinds', '@group')">
@@ -71,7 +69,7 @@
       @includes.html.dock_glyphs()
 
       <div id="styleGuideToc">
-        @* The theme switcher: the page is shown in the pressed theme, which this browser remembers for every page, as the nav's switch does *@
+        @* The theme switcher: the page shows the pressed theme, which this browser remembers for every page *@
         <div id="styleGuideTheme" class="toggle-group" role="group" aria-label="Theme">
           <button type="button" :aria-pressed="isTheme('light')" @@click="setTheme('light')">Light</button>
           <button type="button" :aria-pressed="isTheme('dark')" @@click="setTheme('dark')">Dark</button>
@@ -274,8 +272,7 @@
               </div>
             </div>
           </div>
-          @* A filtered search's title over its real chips, whose remove buttons and Edit nothing binds here: the results
-             hydrator binds them (js/search-results/filtered-title.js) *@
+          @* A filtered search's title over its real chips; nothing binds their remove buttons or Edit here *@
           <div class="results-title">
             <div class="text">
               <div class="title">
@@ -333,9 +330,9 @@
              placeholder (<code>.no-cover</code>, core.css) in the face's box: <code>fa-user</code> in
              <code>--theme-neutral-3</code> at <code>--font-size-xl</code> on <code>--theme-secondary</code>, as it does,
              at the size and shape of the face there, in the results title and the merge modal.</p>
-          @* The People tab's cells, hand-written to htmx/people_list's markup inside the tab's ID, which the rules of
-             static/css/htmx/people.css are scoped by, with --face-box set as htmx/people sets it. No drag-drop or dropzone
-             class and no search trigger, so nothing binds to them, and the pencils request nothing *@
+          @* The People tab's cells, hand-written to htmx/people_list's markup inside the tab's ID, which the people rules are
+             scoped by, with --face-box set as htmx/people sets it. With no drag-drop, dropzone or search trigger class,
+             nothing binds to them, and the pencils request nothing *@
           <div id="people" style="--face-box: @{altitude.core.service.FaceDetectionService.faceDetectionBoxPx}px">
             <div class="sg-row">
               <div class="cell">
@@ -823,8 +820,8 @@
             <div class="brand"><a href="#navigation-tabs"><i class="fas fa-chevron-up"></i><span>Altitude</span></a></div>
             <div class="menu"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu</span></a></div>
             <div class="menu" aria-current="page"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>aria-current</span></a></div>
-            @* The Library menu as includes/nav renders it, over a Library of a long name and another; its links lead here, and
-               New library opens the style guide's New library sample (StyleGuideController), which creates nothing *@
+            @* The Library menu over a long-named Library and another; its links lead here, and New library opens a sample
+               dialog that creates nothing *@
             @defining(RequestContext.getRepository) { library =>
             <div class="menu repository" aria-current="page">
               @includes.html.library_menu(
@@ -935,10 +932,9 @@
              the accent itself. Clear, a secondary button, is at the left and Search, the accent button, at the right.
              The specimen is the panel's form with sample values; its comboboxes offer this Library's names and its
              calendars open, and its Search searches nothing. The listbox under it is a static one.</p>
-          @* The panel's real form (htmx/search_panel) over sample names, inside the panel's class, which the rules of
-             static/css/htmx/search_panel.css are scoped by. The wrapper takes the form's submit on its way down, so
-             Search searches nothing; Clear and the fields are live. Its IDs open with a prefix of its own, so the nav's
-             panel, which holds the same form while it is open, repeats none of them *@
+          @* The panel's real form over sample names, inside the panel's class, which its rules are scoped by. The wrapper
+             takes the form's submit, so Search searches nothing; Clear and the fields are live. Its IDs carry a prefix of
+             their own, so they never repeat those of the nav's panel *@
           <div class="sg-row">
             <div class="search-panel" x-data x-on:submit.capture.prevent.stop>
               @htmx.html.search_panel(

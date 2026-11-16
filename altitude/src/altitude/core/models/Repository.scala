@@ -14,13 +14,10 @@ object Repository:
   given JsonCodec.ReadWriter[Repository] = JsonCodec.macroRW
   given Conversion[ujson.Value, Repository] = json => JsonCodec.read[Repository](json)
 
-  // Unicode whitespace: a tab, a newline and a no-break space are runs to collapse like spaces
+  // Unicode-aware, so a no-break space collapses like a space
   private val WHITESPACE = "(?U)\\s+".r
 
-  /**
-   * A Library name as stored: trimmed, each run of whitespace one space, and in NFC, so a name typed with a combining accent and
-   * the same name typed precomposed are one name
-   */
+  /** Trimmed, whitespace runs collapsed to one space, and in NFC so a combining accent and its precomposed form are one name */
   def normalizedName(name: String): String =
     NameKey.normalized(WHITESPACE.split(name).filter(_.nonEmpty).mkString(" "))
 
@@ -28,22 +25,17 @@ object Repository:
   private val ZERO_WIDTH_JOINER = 0x200d
 
   /**
-   * A code point a name may not hold, all refused as control characters: an ISO control character; an invisible format character
-   * (Unicode `Cf`: a zero-width space, a bidirectional override or isolate, a byte order mark, a soft hyphen, a tag), which would
-   * let two names that look the same differ, or reorder the text around a name; and an unpaired surrogate. The two join controls
-   * are spelling, not formatting, and are allowed: ZERO WIDTH JOINER joins an emoji sequence, and ZERO WIDTH NON-JOINER is part
-   * of words in Persian and the Indic scripts.
+   * ISO controls, unpaired surrogates and invisible format characters (Unicode `Cf`: zero-width space, bidi overrides, BOM, soft
+   * hyphen), which would let two look-alike names differ or reorder the text around a name. The two join controls are spelling
+   * and stay allowed: ZWJ joins emoji sequences, ZWNJ is part of words in Persian and the Indic scripts.
    */
   private def isControlCharacter(codePoint: Int): Boolean =
     Character.isISOControl(codePoint) || Character.getType(codePoint) == Character.SURROGATE ||
       (Character.getType(codePoint) == Character.FORMAT && codePoint != ZERO_WIDTH_NON_JOINER && codePoint != ZERO_WIDTH_JOINER)
 
   /**
-   * The Library name rule, which setup and the New library dialog share through `RepositoryService.addRepository`: the name
-   * normalized, or a `ValidationException` giving the name field (`FieldConst.Repository.NAME`) the first error of: a name is
-   * required, holds no control characters (`isControlCharacter`), is 2 to 80 characters long once normalized (counted in code
-   * points, so an emoji is one), and has a name key within `NameKey.MAX_KEY_BYTES`, as every keyed name has
-   * (`Validators.validName`).
+   * The Library name rule: the normalized name, or a `ValidationException` on the name field with the first rule broken. Length
+   * is counted in code points, so an emoji is one.
    */
   def validName(name: String): String =
     val normalized = normalizedName(name)

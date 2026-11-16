@@ -1,7 +1,3 @@
-/* The Import page's upload sections (includes/upload_sections), File upload and Folder upload, scoped by the ID of
-   their root */
-
-/* One section under the other */
 #importUploads {
   display: grid;
   align-content: start;
@@ -9,7 +5,6 @@
   min-width: 0;
 }
 
-/* A section's panel: the drop zone, the option under it, then the progress of its upload or what the last one came to */
 #importUploads form {
   display: grid;
   justify-items: start;
@@ -20,7 +15,6 @@
   background-color: var(--theme-neutral-2);
 }
 
-/* The dashed zone, its prompt and its button centered in it */
 #importUploads .drop-zone {
   display: grid;
   justify-items: center;
@@ -38,18 +32,18 @@
   font-size: var(--font-size-display);
 }
 
-/* Something is dragged over the zone and a drop would upload it */
+/* A drop would upload what is dragged over the zone */
 #importUploads .drop-zone.over {
   border-color: var(--theme-accent);
   background-color: hsl(from var(--theme-accent) h s l / 0.12);
 }
 
-/* The other section's upload is running, or this one's: the zone takes nothing until it ends */
+/* An upload is running in either section: the zone takes nothing until it ends */
 #importUploads .drop-zone.waiting {
   opacity: 0.5;
 }
 
-/* The zone's button is disabled only while the zone waits, which dims it with the rest: it is not dimmed a second time */
+/* The button is disabled only while the zone waits, which already dims it */
 #importUploads .drop-zone .action-button:disabled {
   opacity: 1;
 }
@@ -58,14 +52,13 @@
   cursor: default;
 }
 
-/* The destination folder is the advanced search panel's Folder field, whose rules are scoped by the panel's class
-   (htmx/search_panel.css): its host wears the class for them and draws no box, so none of the panel's surface shows and
-   the field, its error and the mapping example lie in the section's own column */
+/* The destination is the advanced search panel's Folder field: its host wears `.search-panel` for those rules but
+   draws no box, so the field, its error and the mapping example lie in the section's column */
 #importUploads .destination {
   display: contents;
 }
 
-/* "into" before the field's box, on its row */
+/* The "into" label on the field box's row */
 #importUploads .field {
   grid-template-columns: max-content 1fr;
   align-items: center;
@@ -81,7 +74,7 @@
   margin-top: 0;
 }
 
-/* The example of the mapping, a path of the tree and where it lands, set back on the accent's edge */
+/* The mapping example: a path of the tree and where it lands */
 #importUploads .mapping {
   margin: 0;
   padding-left: var(--space-5);
@@ -92,7 +85,6 @@
   overflow-wrap: anywhere;
 }
 
-/* The upload's progress: the bar, then the files and bytes sent with Cancel at the right, then the reminder */
 #importUploads .progress {
   display: grid;
   justify-self: stretch;

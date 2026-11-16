@@ -138,12 +138,12 @@ import altitude.core.util.ImageUtil.matFromBytes
     /**
      * Setup:
      *
-     * `affleck.jpg` letterboxed into a 640x480 clip frame, once sharp and once Gaussian-blurred at FRAME_BLUR. The frame is used
-     * rather than the full-size photo because a blur small against the face disappears in the 112 px alignment.
+     * `affleck.jpg` letterboxed into a 640x480 clip frame, once sharp and once blurred at FRAME_BLUR. Not the full-size photo,
+     * since a blur small against the face disappears in the 112 px alignment.
      *
      * Assertions:
      *
-     * The raw ArcFace embedding norm of the detected face, the measure behind Face quality, is lower for the blurred copy.
+     * The raw ArcFace embedding norm, the measure behind Face quality, is lower for the blurred copy.
      */
     embeddingNorm(TestVideos.personFrame("affleck.jpg")) should be > embeddingNorm(
       TestVideos.personFrame("affleck.jpg", TestVideos.FRAME_BLUR))
@@ -158,7 +158,7 @@ import altitude.core.util.ImageUtil.matFromBytes
      *
      * Assertions:
      *
-     * Its face is enrolled, and its quality, the value the decision is made on, clears the configured enroll threshold.
+     * Its face is enrolled, its quality at or above the enroll threshold.
      */
     val face = testApp.service.faceDetection.extractFaces(IntegrationTestUtil.getImportAsset("people/affleck.jpg").bytes).head._1
     face.quality should be >= testApp.settings.current.faceQualityEnrollThreshold
@@ -207,18 +207,17 @@ import altitude.core.util.ImageUtil.matFromBytes
     /**
      * Setup:
      *
-     * The aligned faces of `people/affleck.jpg` and `people/damon.jpg`, embedded one at a time for the expected vectors, then by
-     * 8 threads, more than the ArcFace pool has nets, 20 embeddings a thread, alternating the faces.
+     * Two aligned faces embedded one at a time for the expected vectors, then alternately by 8 threads, more than the ArcFace
+     * pool has nets, 20 embeddings a thread.
      *
      * Assertions:
      *
-     * The two faces' vectors differ, and every concurrent embedding is its own face's vector, within float noise.
+     * The two faces' vectors differ, and every concurrent embedding matches its own face's vector within float noise.
      *
      * Edge cases:
      *
-     * A net's output shares its data with the net, so a copy of it made after the net is back in the pool would race the next
-     * borrower's forward pass and silently give a face a wrong vector. Such a race does not fire on every run, so one pass here
-     * does not prove its absence.
+     * A net's output shares its data with the net, so copying it after the net is back in the pool would race the next borrower
+     * and give a face a wrong vector. The race is intermittent, so one passing run does not prove its absence.
      */
     val faces = List("people/affleck.jpg", "people/damon.jpg").map {
       path => alignedFace(matFromBytes(IntegrationTestUtil.getImportAsset(path).bytes))

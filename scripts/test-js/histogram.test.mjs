@@ -1,6 +1,5 @@
 /**
- * The Histogram's SVG paths (`altitude/static/js/common/histogram.js`), which Curation's strips and the Edit panel
- * draw from bin arrays. Run by `make test-js`.
+ * The Histogram's SVG paths drawn from bin arrays (`altitude/static/js/common/histogram.js`). Run by `make test-js`.
  */
 import { test } from "node:test"
 import assert from "node:assert/strict"

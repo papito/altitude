@@ -36,7 +36,7 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The repository's main page answers with a redirect to the login page, which carries the page's address to return to.
+     * The main page redirects to login, carrying the page's address to return to.
      */
     val repo = testContext.persistRepository()
     testApp.service.system.readMetadata.isInitialized shouldBe true
@@ -58,8 +58,8 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The asset's URL answers with the main page: the Asset detail host the client opens the asset in and the nav with Browse
-     * marked, with no parameter and with the Detail panel's.
+     * The asset's URL answers the main page, with the Asset detail host and Browse marked, with and without the Detail panel's
+     * parameter.
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -91,11 +91,11 @@ import altitude.core.models.Permissions
     /**
      * Setup:
      *
-     * A logged-in user's repository holding a recycled image, which Asset detail opens from the trash view.
+     * A logged-in user's repository holding a recycled image.
      *
      * Assertions:
      *
-     * The asset's URL answers with the main page, so reloading a detail opened from the trash does not lose it.
+     * The asset's URL answers the main page, so reloading a detail opened from the trash does not lose it.
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -121,8 +121,7 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The page asked for through the first repository is a 404 for an ID that names no asset, and for the other repository's
-     * asset too, which it does not name.
+     * Through the first repository, the page is a 404 for an unknown asset ID and for the other repository's asset.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -152,8 +151,7 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The asset's URL redirects to the login page, carrying the whole address to return to, the Detail panel's parameter
-     * included.
+     * The asset's URL redirects to login, carrying the whole address to return to, the Detail panel's parameter included.
      */
     val repoId = testContext.persistRepository().persistedId
 
@@ -176,9 +174,9 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The Search form is in the main page's nav and the import page's, and a nav reload carries it too. Its input says "quick
-     * search" on Browse, on the Trash and on the import page, and "search triage" in Triage, the assets a search typed there
-     * covers; a nav reload says what the entry it is asked for says.
+     * The Search form is in the nav of the main page, the import page and a nav reload. Its placeholder names Triage in the
+     * Triage view, the assets a search there covers, and is the quick search elsewhere; a nav reload follows the entry it is
+     * asked for.
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -196,7 +194,6 @@ import altitude.core.models.Permissions
         get(s"pipeline/r/$repoId") should include(searchForm)
         get(s"htmx/nav/r/$repoId") should include(searchForm)
 
-        /** The placeholder of the quick search input */
         def placeholder(page: String): String =
           """<input type="search" name="q"[^>]*\bplaceholder="([^"]*)"""".r.findFirstMatchIn(page).get.group(1)
 
@@ -218,8 +215,8 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The main page marks Browse, or the view its URL asks for; the import and settings pages mark their own entries; a nav
-     * reload marks the entry passed as `current`, and no entry without one.
+     * The main page marks Browse or the view its URL asks for, the import and settings pages their own entries, and a nav reload
+     * the entry passed as `current`, or none.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
 
@@ -256,9 +253,9 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The main page is titled "Smith & Sons · Altitude", in any view, the import page "Import · Smith & Sons · Altitude" and the
-     * Settings page "Settings · Smith & Sons · Altitude", the name in each a first-strong isolate (U+2068 … U+2069), so a
-     * right-to-left name neither sets the title's direction nor reorders the text beside it.
+     * The main page's title is the Library's name in any view, and the import and Settings pages put their own name first. The
+     * Library's name is a first-strong isolate (U+2068 … U+2069), so a right-to-left name neither sets the title's direction nor
+     * reorders the text beside it.
      *
      * Edge cases:
      *
@@ -294,8 +291,8 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The main page of the other user's Library and of a Library ID that names none answer the same plain-text 404, "Library not
-     * found"; an API request for either is the JSON 404 of a foreign entity.
+     * The main page of the other user's Library and of an unknown Library ID answer the same plain-text 404; an API request for
+     * either is a JSON 404.
      */
     testContext.persistRepository()
     login()
@@ -327,8 +324,8 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The Admin opens the main page of both Libraries. The User and the Guest open the first one's, and the second one's answers
-     * the plain-text 404 of a Library that does not exist.
+     * The Admin opens both Libraries. The User and the Guest open the first, and the second answers the plain-text 404 of an
+     * unknown Library.
      */
     val shared = addLibrary("Shared", testApp.service.user.add(testContext.makeUser(), TestContext.USER_PASSWORD))
     val nobodys = addLibrary("Nobody's", testApp.service.user.add(testContext.makeAdminUser(), TestContext.USER_PASSWORD))
@@ -365,7 +362,7 @@ import altitude.core.models.Permissions
     page.substring(start, page.indexOf("</div>", start))
   }
 
-  /** The Libraries the Library menu lists, in order: each one's link, its title and whether it is checked */
+  /** The Library menu's options in order: link, title, and whether it is checked */
   private def browseMenuOptions(page: String): List[(String, String, Boolean)] =
     """<a href="([^"]+)" title="([^"]*)"( aria-checked="true")?>""".r
       .findAllMatchIn(browseMenu(page))
@@ -382,12 +379,10 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * On the main page of "client 2", its Import and Settings pages, the Browse cell holds Browse, a link (the database icon) to
-     * the main page of "client 2" with no search, then the Library menu, a choice menu whose trigger shows the choice alone (the
-     * Library's name). It lists the Libraries by name, case-insensitively and naturally (Alpha, Beta, client 2, Client 10), each
-     * a link to its Library's main page titled with its name, with "client 2" alone checked; then a separator and "New library…",
-     * which requests the New library dialog of "client 2" into the popover dialog host. The main page's Browse cell keeps
-     * `aria-current="page"`.
+     * On the main, Import and Settings pages of "client 2", the Browse cell holds a Browse link to its main page, then the
+     * Library menu, whose trigger shows the Library's name alone. The menu lists the Libraries in natural, case-insensitive
+     * order, each linking to its main page, "client 2" alone checked, then a separator and New library, which loads its dialog
+     * into the popover. The main page's Browse cell keeps `aria-current`.
      *
      * Edge cases:
      *
@@ -443,7 +438,7 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The main page lists the User's Library alone, checked, in the Library menu, with no separator and no New library entry.
+     * The Library menu lists the User's Library alone, checked, with no separator and no New library entry.
      */
     val repoId = loginAs(AccountType.User, Permissions.none)
     val name = testContext.repository.name
@@ -468,9 +463,8 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * A nav reload's Browse cell holds the Browse link to the current Library's main page, then the Library menu's host by its
-     * ID, `hx-preserve` and empty: no Library, no choice menu attributes and no New library entry, since htmx keeps the page's
-     * built host in its place and drops the one the reload carries.
+     * A nav reload's Browse cell holds the Browse link, then the Library menu's host, `hx-preserve` and empty, since htmx keeps
+     * the page's built host and drops the reload's.
      */
     val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
     val repoId = addLibrary("Library A", admin).persistedId
@@ -504,8 +498,7 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * `/` redirects to B. Once C's main page has loaded, `/` redirects to C, though the login's token was issued before the
-     * switch.
+     * `/` redirects to B, and once C's main page has loaded, to C, though the login's token predates the switch.
      */
     val user = testContext.persistUser()
     addLibrary("Library A", user)
@@ -531,8 +524,8 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * With the other user's Library recorded as the last active one, and then with an ID that names no Library, `/` redirects to
-     * "Client 2", which is recorded as the last active one.
+     * With the other user's Library, then an unknown ID, recorded as the last active one, `/` redirects to "Client 2" and records
+     * it.
      */
     val user = testContext.persistUser()
     addLibrary("Client 10", user)
@@ -562,7 +555,7 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The login redirects to `/`, which answers 404 in plain text saying there is no library to open.
+     * The login redirects to `/`, which answers a plain-text 404 saying there is no library to open.
      */
     testContext.persistUser()
 
@@ -591,13 +584,11 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * A's main page, its Triage view, the image's page, Import and Settings each answer and record A when B is recorded before
-     * the load, and a reload of each writes nothing.
+     * With B recorded, A's main page, Triage view, image page, Import and Settings each record A, and a reload writes nothing.
      *
      * Edge cases:
      *
-     * With B recorded, A's nav reload, its folder tree API and the page of an asset A does not hold leave B recorded and write
-     * nothing.
+     * With B recorded, A's nav reload, its folder tree API and an unknown asset's page leave B recorded and write nothing.
      */
     val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
     val a = addLibrary("Library A", admin)
@@ -638,8 +629,7 @@ import altitude.core.models.Permissions
     /**
      * Setup:
      *
-     * A logged-in user with Libraries A and B, B recorded as the last active one, and a trigger on the account table that refuses
-     * every update, so recording A fails.
+     * A logged-in user with Libraries A and B, B recorded as the last active one, and a trigger refusing every account update.
      *
      * Assertions:
      *

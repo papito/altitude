@@ -28,15 +28,14 @@ import altitude.core.models.SceneModel
 import altitude.core.util.OnnxSceneEmbedder
 
 /**
- * The Scene embeddings of [[OnnxSceneEmbedder]] over the `people/` photos, as orderings of similarities, never values: the one
- * place the preprocessing is checked against what the models were trained on. Needs the model files (`TestModelFiles`), as the
- * face tests need ArcFace.
+ * [[OnnxSceneEmbedder]]'s Scene embeddings of the `people/` photos, as orderings of similarities, never values: the one place the
+ * preprocessing is checked against what the models were trained on. Needs the model files (`TestModelFiles`).
  */
 @DoNotDiscover class SceneEmbedderTests extends AnyFunSuite with BeforeAndAfterAll with TestFocus {
 
   Loader.load(classOf[opencv_java])
 
-  /** One embedder for the suite, opened before the first test and closed after the last: a session per Scene model is 550 MB */
+  /** One embedder for the suite, since a session per Scene model is about 550 MB */
   private var embedder: OnnxSceneEmbedder = uninitialized
 
   override def beforeAll(): Unit = embedder = OnnxSceneEmbedder(TestModelFiles.models)
@@ -79,8 +78,8 @@ import altitude.core.util.OnnxSceneEmbedder
     out
 
   /**
-   * A BGR image of the size computed from its coordinates alone, so it is the same on every run: diagonal ramps of a different
-   * period per channel, between a flat blue band down its left tenth and a flat red one down its right tenth
+   * A deterministic BGR image: diagonal ramps of a different period per channel, between a flat blue band down its left tenth and
+   * a flat red one down its right tenth
    */
   private def pattern(width: Int, height: Int): Mat =
     val bytes = new Array[Byte](width * height * 3)
@@ -109,7 +108,6 @@ import altitude.core.util.OnnxSceneEmbedder
       bytes
     finally rgb.release()
 
-  /** The image resized to the size with the interpolation, as packed RGB bytes */
   private def resizedRgb(image: Mat, width: Int, height: Int, interpolation: Int): Array[Byte] =
     val resized = new Mat()
     try
@@ -117,7 +115,7 @@ import altitude.core.util.OnnxSceneEmbedder
       rgbBytes(resized)
     finally resized.release()
 
-  /** The center square of the side, of the image resized to the size with the interpolation, as packed RGB bytes */
+  /** The center square of the image after the resize, as packed RGB bytes */
   private def centerSquareRgb(image: Mat, width: Int, height: Int, side: Int, interpolation: Int): Array[Byte] =
     val resized = new Mat()
     try
@@ -127,7 +125,7 @@ import altitude.core.util.OnnxSceneEmbedder
       finally square.release()
     finally resized.release()
 
-  /** The RGB pixel at a column and a row of a prepared input of the side, as its three levels */
+  /** The RGB levels of a prepared input's pixel */
   private def pixel(prepared: Array[Byte], side: Int, x: Int, y: Int): Seq[Int] =
     (0 until 3).map(channel => prepared((y * side + x) * 3 + channel) & 0xff)
 
@@ -142,8 +140,8 @@ import altitude.core.util.OnnxSceneEmbedder
      *
      * Assertions:
      *
-     * For each Scene model, the embedding has the model's dimensions and a sum of squares of 1 within 1e-4, so two embeddings
-     * compare by their dot product; the second pass gives the same vector, a similarity of 1 within float noise.
+     * For each Scene model, the embedding has the model's dimensions and unit norm within 1e-4, so embeddings compare by dot
+     * product, and the second pass gives the same vector within float noise.
      */
     val image = fixture("people/bullock.jpg")
     try
@@ -162,16 +160,14 @@ import altitude.core.util.OnnxSceneEmbedder
     /**
      * Setup:
      *
-     * Three synthetic images, each with a blue band down its left edge and a red one down its right: a 1200x800 landscape and a
-     * 600x900 portrait, both shrunk to fit, and a 150x100 landscape, smaller than the input and so enlarged.
+     * Three synthetic images with a blue band down the left edge and a red one down the right: a 1200x800 landscape and a 600x900
+     * portrait, both shrunk, and a 150x100 landscape, enlarged.
      *
      * Assertions:
      *
-     * DINOv2's prepared input of each is 224x224 RGB, and is byte for byte the image resized so its short side is 224
-     * (`INTER_AREA` where it shrinks, `INTER_CUBIC` where it is enlarged) and cut to its center square. Each one's SHA-256 is the
-     * digest the preparation gave when every Scene model shared this one square, before a model had a fit of its own, so DINOv2's
-     * input, which its threshold is calibrated to, is unchanged. The landscape's bands are outside the square: its first and last
-     * columns are the pattern's, neither blue nor red.
+     * Each prepared input is 224x224 RGB, byte for byte the image resized so its short side is 224 (`INTER_AREA` shrinking,
+     * `INTER_CUBIC` enlarging) and cut to its center square. Each one's SHA-256 is pinned, since DINOv2's threshold is calibrated
+     * to this input. The landscape's bands fall outside the square.
      */
     val side = SceneModel.Dinov2.inputSize
     side shouldBe 224
@@ -204,20 +200,18 @@ import altitude.core.util.OnnxSceneEmbedder
     /**
      * Setup:
      *
-     * The synthetic images with a blue band down the left edge and a red one down the right: a 1200x800 landscape and a 600x900
-     * portrait, both larger than the input, a 150x100 landscape smaller than it, and a 1000x200 strip, wider than the input and
-     * less tall.
+     * The banded synthetic images: a 1200x800 landscape and a 600x900 portrait, both larger than the input, a 150x100 landscape
+     * smaller than it, and a 1000x200 strip, wider and less tall.
      *
      * Assertions:
      *
-     * SigLIP 2's prepared input of each is 256x256 RGB, and is byte for byte the whole image resized to 256x256 with its aspect
-     * not kept. The edges of the frame are in view, where DINOv2's center square leaves them out: the first column of the
-     * landscape's input is the blue band and the last the red one.
+     * Each prepared input is 256x256 RGB, byte for byte the whole image resized to 256x256 regardless of aspect, so the frame's
+     * edges stay in view: the landscape's first column is the blue band and its last the red one.
      *
      * Edge cases:
      *
-     * The resize is `INTER_AREA` only where neither side is enlarged: the small image, and the strip, which is enlarged on one
-     * side while it shrinks on the other, are resized with `INTER_CUBIC`.
+     * The resize is `INTER_AREA` only where neither side is enlarged; the small image and the strip, enlarged on one side, use
+     * `INTER_CUBIC`.
      */
     val side = SceneModel.Siglip2.inputSize
     side shouldBe 256
@@ -243,20 +237,19 @@ import altitude.core.util.OnnxSceneEmbedder
     /**
      * Setup:
      *
-     * `people/bullock.jpg`; a copy shifted by three pixels each way and brightened by 12 levels, as the next frame of a burst
-     * differs; a copy flipped upside down (not mirrored: SigLIP 2 reads a mirrored picture as the same scene and ranks it beside
-     * the burst-like copy); the middle third of the photo; and `people/affleck.jpg`, a different picture.
+     * `people/bullock.jpg`; a burst-like copy shifted three pixels each way and brightened by 12 levels; a copy flipped upside
+     * down (not mirrored, which SigLIP 2 ranks beside the burst-like copy); the middle third of the photo; and
+     * `people/affleck.jpg`.
      *
      * Assertions:
      *
-     * For each Scene model, the burst-like copy is more similar to the original than the flipped copy, the crop and the other
-     * photo are, so a burst frame stands out from a reframed or a different shot; the other photo is less similar than the
-     * flipped copy.
+     * For each Scene model, the burst-like copy is closer to the original than the flipped copy, the crop and the other photo,
+     * and the other photo is farther than the flipped copy.
      *
      * Edge cases:
      *
-     * By DINOv2 the other photo is also less similar than the crop, the least similar of all. That order is not SigLIP 2's: it
-     * reads what a picture shows, and finds another portrait about as near as a tight crop of this one (0.69 and 0.68).
+     * By DINOv2 the other photo is also the farthest of all. SigLIP 2 reads what a picture shows and finds another portrait about
+     * as near as a tight crop (0.69 and 0.68).
      */
     val image = fixture("people/bullock.jpg")
     val shifted = shiftedAndBrightened(image)
@@ -285,13 +278,13 @@ import altitude.core.util.OnnxSceneEmbedder
     /**
      * Setup:
      *
-     * `people/bullock.jpg` as decoded (BGR), the same converted to BGRA (as a PNG with alpha decodes), and the same converted to
-     * one gray channel (as a grayscale file decodes) beside that gray picture converted back to three equal channels.
+     * `people/bullock.jpg` as decoded (BGR), converted to BGRA (as a PNG with alpha decodes), and converted to one gray channel
+     * (as a grayscale file decodes) beside that gray converted back to three equal channels.
      *
      * Assertions:
      *
-     * For each Scene model, the BGRA image embeds as the BGR one and the one-channel image as its three-channel copy: each pair
-     * is one picture to the model, so the similarity is 1 within float noise, an equality rather than an ordering.
+     * For each Scene model, the BGRA image embeds as the BGR one and the one-channel image as its three-channel copy, within
+     * float noise.
      */
     val bgr = fixture("people/bullock.jpg")
     val bgra = converted(bgr, Imgproc.COLOR_BGR2BGRA)
@@ -315,7 +308,7 @@ import altitude.core.util.OnnxSceneEmbedder
      *
      * Assertions:
      *
-     * `embed` returns no embedding for either Scene model and does not throw, as a measurement failure is the file's, never the
+     * `embed` returns no embedding for either Scene model rather than throwing, so the failure stays the file's, never the
      * import's.
      */
     val image = new Mat(120, 160, CvType.CV_8UC2, new Scalar(128, 128))

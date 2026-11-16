@@ -2,12 +2,11 @@
 
 @includes.html.cannot_organize("Locations")
 
-@* Hosts for the add controls, built by js/common/location-list.js: "Add location" opens a modal and
-   "Add category" a popover dialog. The renderer shows one host or the other: the top buttons normally, the centered "Add your first
-   location" while there are no Locations; both stay hidden until the list has loaded *@
+@* Hosts for the add controls, built by js/common/location-list.js: the top buttons normally, the centered one while there
+   are no Locations; both stay hidden until the list has loaded *@
 <div id="locationActions" hidden></div>
 
 <div id="noLocations" hidden></div>
 
-@* Rendered client-side by js/common/location-list.js once the tab has settled (js/fragments/explorer.js) *@
+@* Rendered client-side by js/common/location-list.js once the tab has settled *@
 <div id="locationList" class="location-list" data-app-fragment="location-list"></div>

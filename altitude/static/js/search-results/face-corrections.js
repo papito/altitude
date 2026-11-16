@@ -1,36 +1,18 @@
 /**
- * The Face corrections of Asset detail's People section (views/AGENTS.md **Detail panel**,
- * `docs/faces.md` **Corrections**): Remove and Change, offered under the selected row
- * (`htmx/detail_panel_people`). This module owns the two clicks of Remove, the request each
- * correction sends and what its answer means; `detail-panel.js`, which creates it, owns the
- * selection and what the swapped-in section changes on screen (`afterEdit`, `reloadSection`,
- * `cancelChange`).
+ * The Face corrections under the selected People row: Remove, and the Change picks of the combobox.
+ * This module owns Remove's two clicks and the requests; `detail-panel.js` owns the selection and
+ * what an answer changes on screen.
  *
- * Remove cannot be undone, so the two clicks are its only guard: the first click arms the button,
- * whose label changes to the one it carries ("Remove (last click)"), and the second click, on the
- * same Face, sends `DELETE /htmx/asset/r/:repoId/face/:faceId`; a change of the selection disarms it
- * and puts the first label back. Change is the combobox's (`alpine/components/face-combobox.js`),
- * which announces a pick as `Const.events.facePersonPicked` with its `action`; this module answers
- * it by the action: a move with `PUT /htmx/asset/r/:repoId/face/:faceId/person`, the body naming the
- * Person or the new name; a name of the Face's Person as a whole with `PUT …/person/name`
- * (`{ personId, name }`); a merge of the Face's Person into a named Person with `PUT …/person/merge`
- * (`{ personId, destPersonId }`). The `personId` of the last two is the Person the panel showed with
- * the Face, which the server checks, since the Face may have moved since.
- *
- * Each answers the asset's People section (200), which replaces the one shown, with the result
- * message, any deleted Person and, after a merge, the merged Person and the Person they were merged
- * into read from its root's data attributes; a name also tells the panel who was named. A 400 (the
- * body, a reserved name, a name held by someone) is a message to show and nothing changes; a 404
- * (the Face gone or moved meanwhile, a merge target no longer live) or a 409 (the asset recycled
- * meanwhile, or the Person named meanwhile, whose row would otherwise offer a name and a merge
- * forever) means the section is stale: the panel reloads and the server's message is shown. One
- * request at a time per Face, so a second pick during one is dropped.
+ * Remove cannot be undone, so two clicks on the same Face are its only guard; a selection change
+ * disarms it. A name or merge carries the Person the panel showed with the Face, which the server
+ * checks, since the Face may have moved since. A 404 or 409 means the section is stale (the Face
+ * moved, the asset recycled, the Person named meanwhile). One request at a time per Face.
  */
 import { Const } from "../constants.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
 import { allowHttpStatuses, getHttpErrorMessage, http } from "../http/client.js"
 
-// The statuses the routes answer a refused correction with, each a plain-text message
+// A refused correction's statuses, each answered with a plain-text message
 const REFUSED = 400
 const STALE = [404, 409]
 
@@ -46,7 +28,7 @@ export function createFaceCorrections({
     // The Faces with a correction in flight
     const inFlight = new Set()
 
-    /** Binds the page-wide listeners once: Remove's clicks, the combobox's pick and its X */
+    /** Binds the page-wide listeners once */
     function bind() {
         document.addEventListener("click", (event) => {
             const buttonEl = event.target.closest?.(
@@ -85,7 +67,7 @@ export function createFaceCorrections({
         )
     }
 
-    /** The selection changed: Remove is disarmed, and every row's combobox returns to its buttons */
+    /** Disarms Remove and returns every row's combobox to its buttons */
     function selectionChanged() {
         disarm()
         sectionEl()
@@ -101,7 +83,6 @@ export function createFaceCorrections({
             ?.getAttribute(Const.attributes.faceId)
     }
 
-    /** The first click arms Remove for its Face and shows the last label; the second click on the same Face removes */
     function handleRemoveClick(buttonEl) {
         const faceId = faceIdOf(buttonEl)
         if (!faceId || inFlight.has(faceId)) {
@@ -128,7 +109,7 @@ export function createFaceCorrections({
         armed = null
     }
 
-    /** Remove: deletes the Face and its files; not undoable */
+    /** Deletes the Face and its files */
     function remove(faceId) {
         return send(faceId, () =>
             http.delete(`/htmx/asset/r/${context.getRepoId()}/face/${faceId}`, {
@@ -137,12 +118,12 @@ export function createFaceCorrections({
         )
     }
 
-    /** Change: gives the Face to `target`, `{ personId }` or `{ name }` */
+    /** Gives the Face to `target`, `{ personId }` or `{ name }` */
     function move(faceId, target) {
         return send(faceId, () => putPerson(faceId, "", target))
     }
 
-    /** Change, for a Face of a Person with no name: names that Person, `personId`, as a whole */
+    /** Names the Face's nameless Person, `personId`, as a whole */
     function namePerson(faceId, personId, name) {
         return send(
             faceId,
@@ -151,14 +132,13 @@ export function createFaceCorrections({
         )
     }
 
-    /** Change, for a Face of a Person with no name: merges that Person, `personId`, into the named `destPersonId` */
+    /** Merges the Face's nameless Person, `personId`, into the named `destPersonId` */
     function mergePerson(faceId, personId, destPersonId) {
         return send(faceId, () =>
             putPerson(faceId, "/merge", { personId, destPersonId }),
         )
     }
 
-    /** The PUT of a Change: the Face's Person route, or its `/name` or `/merge` */
     function putPerson(faceId, subPath, body) {
         return http.put(
             `/htmx/asset/r/${context.getRepoId()}/face/${faceId}/person${subPath}`,
@@ -168,10 +148,8 @@ export function createFaceCorrections({
     }
 
     /**
-     * Sends one correction of `faceId` and settles its answer: the People section for the panel to
-     * swap in, with `outcome` (what the request alone knows, such as who was named) beside what the
-     * section says, a refusal's message, or a stale section to reload. The row's controls are
-     * disabled while it runs.
+     * Sends one correction and settles its answer. `outcome` is what only the request knows (who was
+     * named), merged with what the section says. The row's controls are disabled while it runs.
      */
     async function send(faceId, request, outcome = {}) {
         if (inFlight.has(faceId)) {
@@ -221,11 +199,7 @@ export function createFaceCorrections({
     return { bind, selectionChanged }
 }
 
-/**
- * The People section a correction answers with (`htmx/detail_panel_people`): the section's element,
- * adopted into this document, with what its root carries: the result message, the deleted Person,
- * and after a merge the merged Person and the Person they were merged into.
- */
+/** The People section a correction answers with, adopted into this document, and what its root carries */
 export function parsePeopleSection(html) {
     const doc = new DOMParser().parseFromString(html, "text/html")
     const sectionEl = document.adoptNode(

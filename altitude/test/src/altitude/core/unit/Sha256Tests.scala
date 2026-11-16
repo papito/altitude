@@ -16,10 +16,13 @@ import altitude.core.util.Sha256
   test("The hex digest matches the FIPS 180-4 test vectors") {
 
     /**
+     * Setup:
+     *
+     * The empty array and the bytes of `abc`.
+     *
      * Assertions:
      *
-     * The empty array and the three bytes of `abc` hash to the digests FIPS 180-4 publishes, as 64 lowercase hex characters, the
-     * form `sha256sum` prints.
+     * Each hashes to its FIPS 180-4 digest, as 64 lowercase hex characters.
      */
     Sha256.hex(Array.emptyByteArray) shouldEqual "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     Sha256.hex("abc".getBytes("US-ASCII")) shouldEqual "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
@@ -30,17 +33,15 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * Arrays of seeded random bytes of every length from 0 to 70, plus lengths around one and two 8 KiB read chunks and one of
-     * 50,000 bytes.
+     * Seeded random arrays of every length from 0 to 70, lengths around one and two 8 KiB read chunks, and 50,000 bytes.
      *
      * Assertions:
      *
-     * Hashing each array as a stream gives the same digest as hashing it in memory.
+     * Each hashes the same as a stream and in memory.
      *
      * Edge cases:
      *
-     * The empty stream, lengths on either side of SHA-256's 64-byte block, and lengths that end just before, on and just after a
-     * read chunk boundary.
+     * The empty stream, lengths around SHA-256's 64-byte block, and lengths ending just before, on and after a chunk boundary.
      */
     val random = new Random(7)
     val lengths = (0 to 70) ++ Seq(8191, 8192, 8193, 8195, 16384, 16387, 50_000)
@@ -60,16 +61,15 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * 50,000 seeded random bytes, fed to one digest in pieces of uneven lengths, and to another as the first 20,000 bytes and
-     * then a stream of the rest.
+     * 50,000 seeded random bytes, fed to one digest in uneven pieces, and to another as an array prefix then a stream.
      *
      * Assertions:
      *
-     * Both digests give the hash of the whole array.
+     * Both give the hash of the whole array.
      *
      * Edge cases:
      *
-     * A piece of no bytes changes nothing, and a digest read once is empty again: fed the same bytes, it gives the same hash.
+     * An empty piece changes nothing, and reading a digest resets it, so the same bytes again give the same hash.
      */
     val bytes = new Array[Byte](50_000)
     new Random(13).nextBytes(bytes)
@@ -97,11 +97,11 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A temporary file of 100,003 seeded random bytes, a length that is neither a whole number of hash blocks nor of read chunks.
+     * A temporary file of 100,003 seeded random bytes, a whole number of neither hash blocks nor read chunks.
      *
      * Assertions:
      *
-     * Hashing the file by its path gives the same digest as hashing its bytes in memory.
+     * The file hashes the same by its path as its bytes in memory.
      */
     val bytes = new Array[Byte](100_003)
     new Random(11).nextBytes(bytes)

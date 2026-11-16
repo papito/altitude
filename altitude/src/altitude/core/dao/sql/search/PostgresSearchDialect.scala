@@ -37,14 +37,13 @@ object PostgresSearchDialect extends SearchDialect:
   override val dayWrapper: (String, String) = ("", "::date")
 
   /**
-   * `tsv` is not part of the shared row class - SQLite's table has no such column - so it is named directly. The subquery this
-   * lands in reads `search_document` as its innermost table (a source's CTE, the probe, or a probe on one asset's row) and no
-   * asset column is called `tsv`, so the reference is unambiguous. The query is read with the `simple` configuration the vector
-   * is generated with.
+   * `tsv` is not in the shared row class (SQLite's table has none), so it is named directly; the subquery it lands in reads
+   * `search_document` innermost and no asset column is called `tsv`, so it is unambiguous. The query uses the `simple`
+   * configuration the vector is built with.
    *
-   * The term's words are letters and digits only, so they are safe to join into tsquery syntax: `<->` is "directly followed by",
-   * and `:*` makes the last word a prefix (`img <-> 12:*`). The readings of a term are alternatives joined by `|`, which binds
-   * looser than `<->` (`mc <-> donald:* | mcdonald:*`).
+   * A term's words are letters and digits only, so they are safe to join into tsquery syntax: `<->` is "directly followed by",
+   * `:*` makes the last word a prefix (`img <-> 12:*`), and readings are alternatives joined by `|`, which binds looser than
+   * `<->` (`mc <-> donald:* | mcdonald:*`).
    */
   override def textMatch(document: SearchDocumentRow[Expr], term: SearchTerm): Expr[Boolean] =
     val tsQuery = term.variants.map(_.mkString(" <-> ") + (if term.isPhrase then "" else ":*")).mkString(" | ")
@@ -57,17 +56,13 @@ object PostgresSearchDialect extends SearchDialect:
     val cte = SqlStr.raw(relation)
     Expr[Boolean](implicit ctx => sql"(NOT EXISTS (SELECT 1 FROM $cte WHERE $cte.asset_id = $assetId))")
 
-  /** The ranked rows as the ranking asks for them: through the vector index ([[rankedByIndex]]), or exactly ([[rankedExactly]]) */
   override def ranked(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows =
     if ranking.throughIndex then rankedByIndex(matching, ranking) else rankedExactly(matching, ranking)
 
-  /** The type the `asset_describe` index holds a SigLIP 2 Scene embedding as: the column's vector at half precision */
+  /** The half-precision type `asset_describe` indexes the Scene embedding as */
   private val HALF_PRECISION: SqlStr = SqlStr.raw(s"halfvec(${SceneModel.Siglip2.dimensions})")
 
-  /**
-   * The assets of `matches`, each with the exact cosine distance of its SigLIP 2 Scene embedding from the description's, whose
-   * pgvector literal is `literal`, at the column's full precision: what both ways of ranking read
-   */
+  /** Each match with the exact, full-precision cosine distance of its Scene embedding from `literal`: what both rankings read */
   private def distances(
       matches: Select[AssetRow[Expr], AssetRow[Sc]],
       literal: String): Select[(Expr[String], Expr[Double]), (String, Double)] =
@@ -75,11 +70,9 @@ object PostgresSearchDialect extends SearchDialect:
     matches.map(asset => (asset.id, Expr[Double](implicit ctx => sql"$column <=> $literal::vector")))
 
   /**
-   * The matching assets that carry an embedding, each with its exact distance, then the cutoff, the order and the limit over
-   * those distances. The order is over the `vector` column itself and not the half-precision cast `asset_describe` is built on,
-   * so the planner cannot answer it from that index: it reads the matching assets through the filters' own indexes and sorts.
-   * `OFFSET 0` keeps it from flattening the inner select into the outer one, where each distance would be computed once for the
-   * cutoff and again for the order.
+   * Ordering by the `vector` column, not the half-precision cast `asset_describe` is built on, keeps the planner off that index:
+   * it reads the matches through the filters' own indexes and sorts. `OFFSET 0` keeps the inner select from being flattened into
+   * the outer one, which would compute each distance twice, for the cutoff and for the order.
    */
   def rankedExactly(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows =
     val embedded = distances(SearchQueries.embedded(matching), PostgresOverrides.vectorLiteral(ranking.embedding.values))
@@ -91,18 +84,11 @@ object PostgresSearchDialect extends SearchDialect:
        LIMIT ${SqlStr.raw(ranking.limit.toString)}""")
 
   /**
-   * The same ranked rows read through the vector index, PostgreSQL's alone, for the searches that leave too many assets to
-   * compare one by one (`postgres.SearchDao` chooses): the index hands out the embeddings nearest the description's and the
-   * filters of `matching` are applied to each as it does, until the ranking's `limit` of them pass. The result is approximate, as
-   * the index is.
-   *
-   * The candidates come from `asset_describe`, the HNSW index over the SigLIP 2 Scene embeddings at half precision, which the
-   * inner order is written to match. The filters of the search are in the inner select's `WHERE`, so they are applied as the
-   * index is read: the transaction is set up for a vector search of `limit` rows (`TransactionManager.withVectorSearch`), so the
-   * scan goes on until that many rows pass them, or the index ends. Each candidate's distance is the exact one, at full
-   * precision, and the cutoff is applied to it outside: inside, a description with nothing near enough would send the index
-   * looking for rows that are not there. An asset with no embedding is not in the index, and where the planner scans the table
-   * instead, over a few rows, its distance is NULL, which the cutoff drops.
+   * The ranked rows through `asset_describe`, the half-precision HNSW index the inner order matches, approximate as the index is.
+   * The search's filters are in the inner `WHERE`, so they apply as the index is read, and the transaction
+   * (`TransactionManager.withVectorSearch`) keeps the scan going until `limit` rows pass or the index ends. The cutoff is applied
+   * outside, on the exact distance: inside, a description with nothing near enough would send the index looking for rows that are
+   * not there. Where the planner scans the table instead, an asset with no embedding has a NULL distance, which the cutoff drops.
    */
   def rankedByIndex(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows =
     val literal = PostgresOverrides.vectorLiteral(ranking.embedding.values)
@@ -125,8 +111,8 @@ object PostgresSearchDialect extends SearchDialect:
     def jdbcType: JDBCType = JDBCType.OTHER
 
     /**
-     * pgJDBC hands temporal columns out as `java.sql` types by default, which represent instants in the JVM zone. The column's
-     * own type decides how it is read, exactly as `PostgresOverrides.javaTimeRowProcessor` does for the raw paths.
+     * pgJDBC's default `java.sql` temporal types represent instants in the JVM zone, so the column's own type decides how it is
+     * read, as in `PostgresOverrides.javaTimeRowProcessor`
      */
     def get(r: ResultSet, idx: Int): SortValue =
       r.getMetaData.getColumnTypeName(idx) match
