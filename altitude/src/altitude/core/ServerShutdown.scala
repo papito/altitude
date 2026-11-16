@@ -22,6 +22,9 @@ import scala.concurrent.duration.FiniteDuration
  *
  * The actor system, which the queues run on, terminates in a later phase. `App.main` builds the HTTP server itself rather than
  * through cask's `main`, whose own shutdown hook would stop the server at once, beside these tasks and not after them.
+ *
+ * The last task is registered first, as soon as there is an instance ([[registerCleanup]]), and the two of the requests once
+ * there is a server ([[registerRequests]]): a stop during the startup tasks cleans up too.
  */
 object ServerShutdown:
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -45,20 +48,39 @@ object ServerShutdown:
   val SERVER_STOP_TIMEOUT: FiniteDuration = 5.seconds
 
   /**
-   * Adds the three tasks to the actor system's coordinated shutdown.
+   * Adds the stop's last task to the actor system's coordinated shutdown: the cleanup, then the HTTP server's stop. `App`
+   * registers it the moment its instance is built, before the startup tasks and before there is a server, so a SIGTERM at any
+   * moment from then on drains the queues and closes the database. Without it Pekko terminates the actor system under the queues.
    *
-   * @param requests
-   *   the handler in front of every route, which refuses new requests and knows of those under way
    * @param cleanup
    *   `Altitude.cleanup()`
    * @param stopServer
-   *   stops the HTTP server; run after `cleanup`, and also when `cleanup` fails
+   *   stops the HTTP server and answers whether there was one to stop; run after `cleanup`, and also when `cleanup` fails
    */
-  def register(
+  def registerCleanup(system: ActorSystem[?], cleanup: () => Unit, stopServer: () => Boolean): Unit =
+    CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceStop, "cleanup-then-stop-server") {
+      () =>
+        onOwnThread("altitude-stop") {
+          logger.info("Draining the queues and closing the database")
+          // A failed cleanup must still stop the server, whatever it failed with: an error (a `LinkageError`, a
+          // `StackOverflowError`) as much as an exception. Hence `Throwable`, and the `finally` for a log call that fails too.
+          try cleanup()
+          catch case e: Throwable => logger.error("The cleanup failed; the HTTP server is stopped all the same", e)
+          finally
+            if stopServer() then logger.info("The HTTP server has stopped")
+            else logger.info("The stop came before the HTTP server was started: there is none to stop")
+        }
+    }
+
+  /**
+   * Adds the two tasks of the requests, once there is a server to take any.
+   *
+   * @param requests
+   *   the handler in front of every route, which refuses new requests and knows of those under way
+   */
+  def registerRequests(
       system: ActorSystem[?],
       requests: GracefulShutdownHandler,
-      cleanup: () => Unit,
-      stopServer: () => Unit,
       requestsGrace: FiniteDuration = REQUESTS_GRACE): Unit =
     val shutdown = CoordinatedShutdown(system)
 
@@ -77,19 +99,8 @@ object ServerShutdown:
         }
     }
 
-    shutdown.addTask(CoordinatedShutdown.PhaseServiceStop, "cleanup-then-stop-server") {
-      () =>
-        onOwnThread("altitude-stop") {
-          logger.info("Draining the queues and closing the database")
-          // A failed cleanup must still stop the server, whatever it failed with: an error (a `LinkageError`, a
-          // `StackOverflowError`) as much as an exception. Hence `Throwable`, and the `finally` for a log call that fails too.
-          try cleanup()
-          catch case e: Throwable => logger.error("The cleanup failed; the HTTP server is stopped all the same", e)
-          finally
-            stopServer()
-            logger.info("The HTTP server has stopped")
-        }
-    }
+  /** Whether the actor system's coordinated shutdown has begun: a start still under way then has nothing left to serve */
+  def hasBegun(system: ActorSystem[?]): Boolean = CoordinatedShutdown(system).shutdownReason().isDefined
 
   /**
    * Runs blocking work on a thread of its own and completes when it ends: a task's function runs on Pekko's internal dispatcher,

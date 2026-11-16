@@ -47,8 +47,8 @@ import altitude.core.ServerShutdown
     PatienceConfig(timeout = scaled(Span(20, Seconds)), interval = scaled(Span(50, Millis)))
 
   /**
-   * A second instance and its HTTP server on a free port, with the stop registered. `/held` answers only once the test releases
-   * it; every other path answers at once. The fixture records what the stop's last task does, in order.
+   * A second instance and its HTTP server on a free port, with the stop's three tasks registered. `/held` answers only once the
+   * test releases it; every other path answers at once. The fixture records what the stop's last task does, in order.
    */
   final private class Stoppable(requestsGrace: FiniteDuration) {
     val instance: Altitude = TestAltitudeApp.build(testApp.dataSourceType)
@@ -80,9 +80,9 @@ import altitude.core.ServerShutdown
     val host: String =
       s"http://localhost:${server.getListenerInfo.get(0).getAddress.asInstanceOf[InetSocketAddress].getPort}"
 
-    ServerShutdown.register(
+    // In `App`'s order: the cleanup as soon as the instance exists, the requests' tasks once there is a server
+    ServerShutdown.registerCleanup(
       instance.actorSystem,
-      requestsHandler,
       cleanup = () => {
         events.add(s"cleanup, the server answering ${statusOf("/new")}")
         instance.cleanup()
@@ -90,9 +90,10 @@ import altitude.core.ServerShutdown
       stopServer = () => {
         events.add("server stop")
         server.stop()
-      },
-      requestsGrace
+        true
+      }
     )
+    ServerShutdown.registerRequests(instance.actorSystem, requestsHandler, requestsGrace)
 
     def statusOf(path: String): Int = requests.get(s"$host$path", check = false).statusCode
 
@@ -207,6 +208,49 @@ import altitude.core.ServerShutdown
     }
   }
 
+  test("A stop that comes before there is a server cleans the instance up") {
+
+    /**
+     * Setup:
+     *
+     * A second instance with the cleanup's task alone registered, as `App` registers it the moment the instance is built: no HTTP
+     * server exists yet and the requests' tasks are not registered, as during the startup tasks. Then the coordinated shutdown.
+     *
+     * Assertions:
+     *
+     * The stop has not begun before it is started, and has once it is. The cleanup runs, and after it the task asks for the
+     * server's stop, which finds none. Afterwards the database is closed and the actor system has terminated.
+     */
+    val instance = TestAltitudeApp.build(testApp.dataSourceType)
+    val events = ConcurrentLinkedQueue[String]()
+    try {
+      ServerShutdown.registerCleanup(
+        instance.actorSystem,
+        cleanup = () => {
+          events.add("cleanup")
+          instance.cleanup()
+        },
+        stopServer = () => {
+          events.add("no server to stop")
+          false
+        }
+      )
+      ServerShutdown.hasBegun(instance.actorSystem) shouldBe false
+      Try(instance.service.system.readMetadata).isSuccess shouldBe true
+
+      val stopped = CoordinatedShutdown(instance.actorSystem).run(CoordinatedShutdown.UnknownReason)
+      ServerShutdown.hasBegun(instance.actorSystem) shouldBe true
+      Await.ready(stopped, 2.minutes)
+
+      events.asScala.toList shouldBe List("cleanup", "no server to stop")
+      Try(instance.service.system.readMetadata).isSuccess shouldBe false
+      Await.ready(instance.actorSystem.whenTerminated, 30.seconds)
+    } finally {
+      instance.actorSystem.terminate()
+      Await.ready(instance.actorSystem.whenTerminated, 3.minutes)
+    }
+  }
+
   test("A cleanup that dies of an error still stops the server, and the stop does not wait its phase out") {
 
     /**
@@ -225,11 +269,12 @@ import altitude.core.ServerShutdown
      *
      * A server's stop that dies of an error itself ends its task too: the stop completes as promptly.
      */
-    def stopOf(cleanup: () => Unit, stopServer: () => Unit): FiniteDuration = {
+    def stopOf(cleanup: () => Unit, stopServer: () => Boolean): FiniteDuration = {
       val phases = ConfigFactory.parseString("pekko.coordinated-shutdown.phases.service-stop.timeout = 30 s")
       val system = ActorSystem(Behaviors.empty[Nothing], "server-shutdown-tests", phases.withFallback(ConfigFactory.load()))
       try {
-        ServerShutdown.register(system, GracefulShutdownHandler(_ => ()), cleanup, stopServer, requestsGrace = 1.second)
+        ServerShutdown.registerCleanup(system, cleanup, stopServer)
+        ServerShutdown.registerRequests(system, GracefulShutdownHandler(_ => ()), requestsGrace = 1.second)
         val started = System.nanoTime
         Await.ready(CoordinatedShutdown(system).run(CoordinatedShutdown.UnknownReason), 2.minutes)
         FiniteDuration(System.nanoTime - started, TimeUnit.NANOSECONDS)
@@ -245,7 +290,7 @@ import altitude.core.ServerShutdown
         events.add("cleanup")
         throw new LinkageError("The cleanup dies of an error")
       },
-      stopServer = () => events.add("server stop"): Unit
+      stopServer = () => events.add("server stop")
     )
     events.asScala.toList shouldBe List("cleanup", "server stop")
     afterFailedCleanup should be < 15.seconds

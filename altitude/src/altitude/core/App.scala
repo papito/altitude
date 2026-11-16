@@ -51,28 +51,48 @@ import altitude.core.routes.web.partial.WatchFolderController
 object App extends cask.Main:
   given logger: Logger = LoggerFactory.getLogger(getClass)
 
-  // Before anything is built: logback is logging by the default in place of a logging variable it could not take
-  requireLogSettings()
-
   /**
-   * The code uses the org.opencv API, but its native library is loaded through org.bytedeco: the usual
-   * `System.loadLibrary(Core.NATIVE_LIBRARY_NAME)` does not link it. https://stackoverflow.com/a/58064096/53687
+   * The instance, built and started by the first to ask for it: `main`, or a test's server.
+   *
+   * Not in this object's initializer. While a class initializes, every other thread that calls into it waits for the initializer
+   * to end, and the stop's cleanup, which runs on a shutdown thread, is a function of this object: a SIGTERM during the startup
+   * tasks would drain nothing until they had ended.
    */
-  Loader.load(classOf[opencv_java])
+  lazy val altitude: Altitude = start()
 
-  val altitude: Altitude = new Altitude()
+  /** The HTTP server, once [[main]] has built it: the stop's last task stops it after the cleanup */
+  @volatile private var server: Option[Undertow] = None
 
-  // Cached in memory: whether the instance is past setup
-  altitude.setIsInitializedState()
+  /** Builds the instance, registers its cleanup for the stop, and runs the startup tasks */
+  private def start(): Altitude =
+    // Before anything is built: logback is logging by the default in place of a logging variable it could not take
+    requireLogSettings()
 
-  // Before anything is offered to the import queue: what is pending now was cut off when the server last stopped
-  altitude.service.imports.startup()
-  altitude.service.library.pruneDanglingAssets()
-  altitude.service.library.requeuePurgePending()
-  altitude.service.editRender.requeuePendingRenders()
-  altitude.service.library.reconcileStats()
-  // After the interrupted Imports are failed, so no Watch folder scan's Import is taken for one of them
-  altitude.service.watchFolder.start()
+    // The code uses the org.opencv API, but its native library is loaded through org.bytedeco: the usual
+    // `System.loadLibrary(Core.NATIVE_LIBRARY_NAME)` does not link it. https://stackoverflow.com/a/58064096/53687
+    Loader.load(classOf[opencv_java])
+
+    val instance = new Altitude()
+
+    // From the moment there is an instance to clean up, and not from `main`, which comes after the startup tasks: those can
+    // take long (a large Library's stats, requeued purges and renders, a Watch folder's first scan), and a SIGTERM during them
+    // drains the queues and closes the database as any other does. The functions take the local instance, never `altitude`,
+    // which a shutdown thread would wait for while the start is still under way.
+    ServerShutdown.registerCleanup(instance.actorSystem, cleanup = () => instance.cleanup(), stopServer = () => stopServer())
+
+    // Cached in memory: whether the instance is past setup
+    instance.setIsInitializedState()
+
+    // Before anything is offered to the import queue: what is pending now was cut off when the server last stopped
+    instance.service.imports.startup()
+    instance.service.library.pruneDanglingAssets()
+    instance.service.library.requeuePurgePending()
+    instance.service.editRender.requeuePendingRenders()
+    instance.service.library.reconcileStats()
+    // After the interrupted Imports are failed, so no Watch folder scan's Import is taken for one of them
+    instance.service.watchFolder.start()
+
+    instance
 
   /** The address the server binds: `server.host` and `server.port` */
   override def host: String = altitude.config.getString(Const.Conf.SERVER_HOST)
@@ -90,6 +110,9 @@ object App extends cask.Main:
   override def main(args: Array[String]): Unit =
     if !verbose then cask.main.Main.silenceJboss()
 
+    // The whole start, before there is a server: no request arrives before the startup tasks are done
+    val system = altitude.actorSystem
+
     val requests = GracefulShutdownHandler(defaultHandler)
     val undertow = Undertow.builder
       .addHttpListener(port, host)
@@ -97,24 +120,27 @@ object App extends cask.Main:
       .setServerOption[Integer](UndertowOptions.SHUTDOWN_TIMEOUT, ServerShutdown.SERVER_STOP_TIMEOUT.toMillis.toInt)
       .setHandler(requests)
       .build
+    server = Some(undertow)
+    ServerShutdown.registerRequests(system, requests)
 
-    ServerShutdown.register(
-      altitude.actorSystem,
-      requests,
-      cleanup = () => altitude.cleanup(),
-      stopServer = () =>
-        undertow.stop()
-        // cask's own, which runs the WebSocket actors
-        executionContext.shutdown()
-    )
+    // A stop that began during the start has cleaned the instance up, or is doing so: nothing is served on it
+    if ServerShutdown.hasBegun(system) then logger.info("The stop began during the start: the HTTP server is not started")
+    else
+      undertow.start()
+      logStart()
 
-    undertow.start()
-    logStart()
+  /** Stops the HTTP server, if [[main]] has built one, and cask's execution context; whether there was a server to stop */
+  private def stopServer(): Boolean =
+    val built = server
+    built.foreach(_.stop())
+    // cask's own, which runs the WebSocket actors
+    executionContext.shutdown()
+    built.isDefined
 
   /**
    * Fails the start when `ALTITUDE_LOG_FORMAT` or `ALTITUDE_LOG_LEVEL` has an unknown value, in any environment. The refusal
-   * names the variable and its accepted values. It is logged as well as thrown: thrown from this object's initializer, it reaches
-   * the console as the cause of an `ExceptionInInitializerError`, on stderr alone.
+   * names the variable and its accepted values. It is logged as well as thrown: thrown from the start, it reaches the console as
+   * an uncaught exception's stack trace, on stderr alone.
    */
   private def requireLogSettings(): Unit =
     try LogSettings.requireValid(sys.props.toMap, sys.env)

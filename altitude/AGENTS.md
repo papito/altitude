@@ -52,7 +52,7 @@ These apply to every change, server or frontend.
 
 Altitude is a Scala 3 application built with Mill: Cask serves HTTP, Twirl renders the templates, Pekko Streams runs the import and purge pipelines, ScalaSql and JDBC reach SQLite or PostgreSQL, OpenCV and FFmpeg (through Bytedeco) decode media, and ONNX Runtime runs the Scene models and the text tower of the Describe search. The versions are in `build.mill`.
 
-`App.scala` (`object App extends cask.Main`) is the single entrypoint. It registers every route (`allRoutes`), builds the app with `new Altitude()`, then runs the startup tasks before anything is offered to the import queue, the Watch folder scans last; only then does its `main` build and start the HTTP server and register the stop. The order and its reasons are under **Startup** and **Shutdown** in **Library stats and purging**.
+`App.scala` (`object App extends cask.Main`) is the single entrypoint. It registers every route (`allRoutes`), builds the app with `new Altitude()` and registers its cleanup for the stop, then runs the startup tasks before anything is offered to the import queue, the Watch folder scans last; only then does its `main` build and start the HTTP server. `App.altitude` is a lazy val: that start runs when `main`, or a test's server, first asks for the instance, never in the object's initializer. The order and its reasons are under **Startup** and **Shutdown** in **Library stats and purging**.
 
 `Altitude.scala` is the dependency-injection root. Its constructor first loads the config (**Config & Environments**) and refuses PostgreSQL with an empty password, then builds everything in a fixed order: the settings service (empty) → the transaction manager → the DAOs → `migrationService.migrate()` → `settings.load()` → `importParallelism` → the model files (`models`, downloaded if missing; see **Model files**) → the actor system → the Scene and Describe embedders (see **Sequences and Image quality**) → the services. The comment above `settings` in `Altitude.scala` gives the reason for each step; a new component keeps to it (see **Settings** and **Schema migrations**).
 
@@ -367,18 +367,19 @@ A **Watch folder** (`CONTEXT.md`) is a directory on the server that the app scan
 
 Around those tasks, in `App`:
 
-- Before anything is built, `requireLogSettings()` refuses an unknown logging variable (**Logging** in **Config & Environments**); then OpenCV loads and `new Altitude()` runs its constructor (**Architecture Overview**).
-- After them `App.main` builds the HTTP server on `server.host` and `server.port`, registers the stop and starts it, so no request arrives before the tasks are done, the model download included.
+- Before anything is built, `requireLogSettings()` refuses an unknown logging variable (**Logging** in **Config & Environments**); then OpenCV loads, `new Altitude()` runs its constructor (**Architecture Overview**), and the stop's cleanup is registered at once (`ServerShutdown.registerCleanup`), so a stop during the tasks cleans up too (**Shutdown**).
+- After them `App.main` builds the HTTP server on `server.host` and `server.port`, registers the stop's tasks of the requests and starts it, so no request arrives before the tasks are done, the model download included. When a stop began meanwhile, the server is not started.
 - `logStart` then logs the address, the Data directory, the Models directory and the time zone, a WARN while `server.secure_cookies` is false, and a WARN while no Admin exists, which names the address and says its first visitor runs Setup.
 
-**Shutdown.** `ServerShutdown.register`, called by `App.main`, adds three tasks to Pekko's coordinated shutdown. Pekko runs it from a JVM shutdown hook, so a SIGTERM, a Ctrl-C and a container's stop all stop the server this way:
+**Shutdown.** `ServerShutdown` adds three tasks to Pekko's coordinated shutdown: the last one as soon as `App` has built its instance, before the startup tasks (`registerCleanup`), and the two of the requests from `App.main`, once there is a server (`registerRequests`). Pekko runs it from a JVM shutdown hook, so a SIGTERM, a Ctrl-C and a container's stop all stop the server this way:
 
 | Phase | Task |
 |---|---|
 | `service-unbind` | The `GracefulShutdownHandler` in front of every route answers new requests 503. |
 | `service-requests-done` | The requests under way get `ServerShutdown.REQUESTS_GRACE` (10 seconds) to finish. |
-| `service-stop` | `Altitude.cleanup()` (its order: **Import Pipeline**), then Undertow and cask's execution context stop, also when the cleanup fails. |
+| `service-stop` | `Altitude.cleanup()` (its order: **Import Pipeline**), then Undertow, when `main` has built it, and cask's execution context stop, also when the cleanup fails. |
 
+- A stop during the startup tasks (a large Library's stats, requeued purges and renders) drains and closes like any other: the cleanup's task is registered before them, and the tasks then fail or finish on an instance that is cleaned up, which the next start puts right. For that the start is not in `App`'s initializer: a thread that calls into a class still initializing waits for its initializer, and the task's functions are `App`'s, so the stop would drain nothing until the startup tasks had ended. They take the local instance, never `App.altitude`, for the same reason. A stop that began during the start leaves the HTTP server unstarted (`ServerShutdown.hasBegun`).
 - `App.main` builds Undertow itself, over the handler around `defaultHandler`, and never calls cask's `main`: cask registers a shutdown hook of its own that stops the server at once, beside these tasks. Undertow's `SHUTDOWN_TIMEOUT` (`SERVER_STOP_TIMEOUT`, 5 seconds) keeps a request still held from hanging the stop.
 - The phase timeouts (15 seconds for `service-requests-done`; 10 minutes for `service-stop`, a backstop, since `cleanup()` bounds itself by `pipeline.shutdown_timeout` for each of its three queues) are set in the config overlay the actor system is built with in `Altitude.scala`, not in `reference.conf`, whose order against Pekko's own `reference.conf` is not fixed. Pekko's default of 5 seconds would cut both.
 - A task's blocking work runs on a daemon thread of its own (`onOwnThread`), never on Pekko's dispatcher, and a hung stop cannot keep the JVM up. The task ends whatever its work ends with, an `Error` included, so no phase waits out its timeout for a thread that is gone; and the server stops after a cleanup that failed with anything at all.
