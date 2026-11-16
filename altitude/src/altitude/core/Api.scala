@@ -176,8 +176,6 @@ object Api:
       val MERGE_DEST_ID = "mergeDestId"
       val MERGE_SOURCE_PERSON = "mergeSourcePerson"
       val MERGE_DEST_PERSON = "mergeDestPerson"
-      // Referenced nowhere; it matches the people merge route's `:srcPersonId` path parameter
-      val SRC_PERSON_ID = "srcPersonId"
       // The Person a Face's Person is merged into
       val DEST_PERSON_ID = "destPersonId"
 
