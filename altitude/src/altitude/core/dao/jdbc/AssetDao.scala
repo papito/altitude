@@ -328,8 +328,43 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       """
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).nonEmpty
 
-  override def lockTriaged(assetIds: Set[String]): List[Asset] =
-    lockAssets(Some(assetIds), isRecycled = None, triagedOnly = true)
+  override def lockPurged(assetId: String): Boolean =
+    val sql = s"""
+      SELECT id
+        FROM asset
+       WHERE ${FieldConst.REPO_ID} = ? AND id = ? AND ${FieldConst.Asset.IS_PURGED} = TRUE
+      $forUpdate
+      """
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).nonEmpty
+
+  override def shareLockLive(assetIds: Set[String]): Unit =
+    // SQLite has no row locks, and its one write connection already holds off a recycle
+    if assetIds.isEmpty || forKeyShare.isEmpty then return
+
+    val sql = s"""
+      SELECT ${FieldConst.ID}
+        FROM asset
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.ID} $inIdSet
+         AND ${FieldConst.Asset.IS_RECYCLED} = FALSE
+    ORDER BY ${FieldConst.ID}
+         $forKeyShare
+    """
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(assetIds))): Unit
+
+  override def lockSequenceFrames(assetIds: Set[String], sequenceIds: Set[String]): List[Asset] =
+    if assetIds.isEmpty && sequenceIds.isEmpty then return List.empty[Asset]
+
+    // Both tests in one statement, so the rows are locked in one pass in ID order
+    val (inSequences, sequenceValues) =
+      if sequenceIds.isEmpty then ("", Nil) else (s" OR ${FieldConst.Asset.SEQUENCE_ID} $inIdSet", List(idSet(sequenceIds)))
+    lockWhere(
+      (s"AND (${FieldConst.ID} $inIdSet$inSequences)", idSet(assetIds) :: sequenceValues),
+      isRecycled = None,
+      triagedOnly = true)
+
+  override def lockCompleted(assetIds: Set[String]): List[Asset] =
+    lockAssets(Some(assetIds), isRecycled = None)
 
   /**
    * Locks the repository's completed, unpurged assets in ID order. The flags are SQL literals, which each engine reads as its own
@@ -337,8 +372,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
    */
   private def lockAssets(assetIds: Option[Set[String]], isRecycled: Option[Boolean], triagedOnly: Boolean = false): List[Asset] =
     if assetIds.exists(_.isEmpty) then return List.empty[Asset]
+    lockWhere(assetIds.fold(("", Nil))(ids => (s"AND id $inIdSet", List(idSet(ids)))), isRecycled, triagedOnly)
 
-    val idFilter = assetIds.fold("")(_ => s"AND id $inIdSet")
+  /** As [[lockAssets]], over the rows `selection` picks: a test, empty for every row, and its bind values */
+  private def lockWhere(selection: (String, List[Any]), isRecycled: Option[Boolean], triagedOnly: Boolean): List[Asset] =
     val recycledFilter = isRecycled.fold("")(flag => s"AND ${FieldConst.Asset.IS_RECYCLED} = ${if flag then "TRUE" else "FALSE"}")
     val triagedFilter = if triagedOnly then s"AND ${FieldConst.Asset.IS_TRIAGED} = TRUE" else ""
 
@@ -348,14 +385,14 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
        WHERE ${FieldConst.REPO_ID} = ?
          AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
          AND ${FieldConst.Asset.IS_PURGED} = FALSE
-         $idFilter
+         ${selection._1}
          $recycledFilter
          $triagedFilter
     ORDER BY ${FieldConst.ID}
          $forUpdate
     """
 
-    val values = RequestContext.getRepository.persistedId :: assetIds.map(idSet).toList
+    val values = RequestContext.getRepository.persistedId :: selection._2
     manyBySqlQuery(sql, values).map(makeModel)
 
   override def getSequenceCandidates(asset: Asset, gapMs: Int): List[Asset] =
@@ -379,8 +416,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   /**
    * Public so the query-plan tests can explain it. Each calendar day of the window leads the triage capture-day index and the
    * timestamp seeks within it. `is_recycled` is probed for both values: an asset recycled from triage keeps its Sequence, so a
-   * burst frame imported meanwhile still joins it. The rows are locked, so a move sorting one out of triage meanwhile excludes it
-   * once it commits. The source test completes the copy of `SequenceRule.isDated`.
+   * burst frame imported meanwhile still joins it. Not locked, as the undated statement is not: the matches are locked through
+   * [[lockSequenceFrames]] before they are stamped. The source test completes the copy of `SequenceRule.isDated`.
    */
   def sequenceCandidatesStatement(asset: Asset, gapMs: Int): Option[(String, List[Any])] =
     asset.originalCreatedAt.map {
@@ -399,7 +436,6 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
              AND ${dayOf(FieldConst.Asset.ORIGINAL_CREATED_AT)} IN (${placeholders(days)})
              AND ${FieldConst.Asset.ORIGINAL_CREATED_AT} BETWEEN ? AND ?
              AND ${FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE} IN (${placeholders(sources)})
-             $forUpdate
         """
 
         val values = RequestContext.getRepository.persistedId :: asset.persistedId :: days.map(nativeLocalDate) :::
@@ -416,8 +452,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
    * walked from the newest and stopped at the limit, so an undated import's cost is bounded by the limit whatever else triage
    * holds (below the limit PostgreSQL may bitmap-scan and sort instead, at the same cost). The capture-time and size tests
    * complete the copy of `SequenceRule.isUndated`. Not locked: Sequence writers take turns through [[lockSequences]], and the
-   * matches are re-read locked through [[lockTriaged]] before they are stamped. The caller streams the rows, so only the matches'
-   * embeddings are held.
+   * matches are re-read locked through [[lockSequenceFrames]] before they are stamped. The caller streams the rows, so only the
+   * matches' embeddings are held.
    */
   def undatedSequenceCandidatesStatement(asset: Asset, limit: Int): (String, List[Any]) =
     val sql = s"""
@@ -544,12 +580,15 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     val (toCurate, values) = sequencesToCurate(owner)
     (s"SELECT COUNT(*) AS sequences FROM ($toCurate) AS to_curate", values)
 
-  /** The `FROM` of the live frames whose Sequence passes `sequenceTest`; its values follow the Sequence's */
+  /**
+   * The `FROM` of the live frames whose Sequence passes `sequenceTest`, which may go on with `OR` (it is parenthesized); its
+   * values follow the test's
+   */
   private def liveFramesOfSequences(sequenceTest: String, owner: Option[String] = None): (String, List[Any]) =
     val (byOwner, ownerValues) = ownerTest(owner)
     val sql = s"""
         FROM asset
-       WHERE ${FieldConst.Asset.SEQUENCE_ID} $sequenceTest
+       WHERE (${FieldConst.Asset.SEQUENCE_ID} $sequenceTest)
          AND ${FieldConst.REPO_ID} = ?
          AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
          AND ${FieldConst.Asset.IS_RECYCLED} = FALSE
@@ -579,19 +618,21 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
   override def lockSequences(): Unit = advisoryLock(s"sequences:${RequestContext.getRepository.persistedId}")
 
-  override def getLiveSequenceMembers(sequenceIds: Set[String]): List[Asset] =
-    if sequenceIds.isEmpty then return List.empty[Asset]
+  override def lockLiveFrames(sequenceIds: Set[String], assetIds: Set[String]): List[Asset] =
+    if sequenceIds.isEmpty && assetIds.isEmpty then return List.empty[Asset]
 
-    val (sql, values) = liveSequenceMembersStatement(sequenceIds)
+    val (sql, values) = liveSequenceMembersStatement(sequenceIds, assetIds)
     manyBySqlQuery(sql, values).map(makeModel)
 
   /**
-   * Public so the query-plan tests can explain it. Locked in ID order, as the library operations' locking select is, so the two
-   * cannot deadlock.
+   * Public so the query-plan tests can explain it. The live frames of the Sequences and those among `assetIds`, in one pass in ID
+   * order, as the library operations' locking select is, so the two cannot deadlock.
    */
-  def liveSequenceMembersStatement(sequenceIds: Set[String]): (String, List[Any]) =
-    val (frames, values) = liveFramesOfSequences(inIdSet)
-    (s"SELECT $assetWithoutBulkyMetadata $frames ORDER BY ${FieldConst.ID} $forUpdate", idSet(sequenceIds) :: values)
+  def liveSequenceMembersStatement(sequenceIds: Set[String], assetIds: Set[String] = Set.empty): (String, List[Any]) =
+    val (frames, values) =
+      if assetIds.isEmpty then liveFramesOfSequences(inIdSet) else liveFramesOfSequences(s"$inIdSet OR ${FieldConst.ID} $inIdSet")
+    val tested = idSet(sequenceIds) :: (if assetIds.isEmpty then Nil else List(idSet(assetIds)))
+    (s"SELECT $assetWithoutBulkyMetadata $frames ORDER BY ${FieldConst.ID} $forUpdate", tested ::: values)
 
   override def clearSequence(assetIds: Set[String]): Int =
     if assetIds.isEmpty then return 0
@@ -617,10 +658,11 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   override def repointSequences(fromIds: Set[String], toId: String): Int =
     if fromIds.isEmpty then return 0
 
+    // A row marked for purging is left as it is: it is in no locking select, and its delete is under way
     val sql = s"""
       UPDATE asset
          SET ${FieldConst.Asset.SEQUENCE_ID} = ?
-       WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.Asset.SEQUENCE_ID} $inIdSet
+       WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.Asset.SEQUENCE_ID} $inIdSet AND ${FieldConst.Asset.IS_PURGED} = FALSE
     """
     updateByBySql(sql, List(toId, RequestContext.getRepository.persistedId, idSet(fromIds)))
 
@@ -630,16 +672,28 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     getLongField(executeAndGetOne(sql, List(accountId))("assets")).get.toInt
 
   override def reassignOwner(fromAccountId: String, toAccountId: String): Int =
-    val sql = s"UPDATE asset SET ${FieldConst.Asset.OWNER_USER_ID} = ? WHERE ${FieldConst.Asset.OWNER_USER_ID} = ?"
+    val sql = s"""
+      UPDATE asset
+         SET ${FieldConst.Asset.OWNER_USER_ID} = ?
+       WHERE ${inIdOrder(s"${FieldConst.Asset.OWNER_USER_ID} = ?")}
+    """
     updateByBySql(sql, List(toAccountId, fromAccountId))
 
   override def rewriteImporterRecords(snapshot: AccountSnapshot): Int =
     val sql = s"""
       UPDATE asset
          SET ${FieldConst.Asset.ORIGINAL_OWNER} = $jsonFunc
-       WHERE ${jsonText(FieldConst.Asset.ORIGINAL_OWNER, "id")} = ?
+       WHERE ${inIdOrder(s"${jsonText(FieldConst.Asset.ORIGINAL_OWNER, "id")} = ?")}
     """
     updateByBySql(sql, List(ujson.write(snapshot.toJson), snapshot.id))
+
+  /**
+   * The rows passing `test`, locked in ID order by a subquery before the update writes them, as a library operation locks its
+   * rows: an update's own scan would lock them in its scan's order, and two writers of the same rows in different orders can
+   * deadlock
+   */
+  private def inIdOrder(test: String): String =
+    s"${FieldConst.ID} IN (SELECT ${FieldConst.ID} FROM asset WHERE $test ORDER BY ${FieldConst.ID} $forNoKeyUpdate)"
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Int =
     val existingMetadata = getUserMetadata(assetId)

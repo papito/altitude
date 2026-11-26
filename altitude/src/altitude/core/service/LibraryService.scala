@@ -105,6 +105,9 @@ class LibraryService(val app: Altitude):
    */
   def completeImport(asset: Asset, origin: Option[ImportOrigin] = None): Asset =
     txManager.withTransaction {
+      // The asset's owner, its importer too, before its row: a rename or a delete of the account locks the account and then
+      // rewrites its assets in ID order, this one among them, while the completion locks its burst's frames after its own row
+      app.service.user.shareLock(asset.ownerUserId)
       val completed = app.service.asset.markAsCompleted(asset)
       val destination = origin.flatMap(o => app.service.imports.destinationOf(o.importFileId).map((_, o.folderPath)))
       val placed = destination match
@@ -418,13 +421,16 @@ class LibraryService(val app: Altitude):
    * The purge's last step for an asset: deletes its row, which cascades to its Faces and its Edit, and then the unnamed people it
    * leaves with no Face. A named person keeps their row and name with no Face, still someone a Face can be given to.
    *
-   * The people of its Faces are locked first (`PersonService.lockAssetPeople`, whoever has the Faces once locked), before the
-   * delete row-locks the Faces: people, then their Faces, the order a merge or a correction takes them in. A Face an import gives
-   * one of them meanwhile either has committed, and they keep it, or waits and then finds them gone. The asset itself is not
-   * locked: being marked for purging, it is in no other operation. Not found when the row is already gone.
+   * The asset is locked first, as a library operation locks its assets before their people: marked for purging, it is in no
+   * library operation, but an account write may hold it, rewriting the importer records or the owner of the account's assets.
+   * Then the people of its Faces (`PersonService.lockAssetPeople`, whoever has the Faces once locked), before the delete
+   * row-locks the Faces: people, then their Faces, the order a merge or a correction takes them in. A Face an import gives one of
+   * them meanwhile either has committed, and they keep it, or waits and then finds them gone. Not found when the row is already
+   * gone.
    */
   def deletePurgedAsset(assetId: String): Unit =
     txManager.withTransaction {
+      app.service.asset.lockPurged(assetId): Unit
       val people = app.service.person.lockAssetPeople(Set(assetId))
       app.service.asset.deleteById(assetId): Unit
       val deleted = app.service.person.deleteUnnamedPeopleWithoutFaces(people)

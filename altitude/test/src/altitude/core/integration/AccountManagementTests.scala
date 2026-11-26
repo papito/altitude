@@ -622,6 +622,90 @@ import altitude.core.util.Util
     testApp.txManager.withTransaction(testApp.DAO.user.lockActiveAdmins()).map(_.persistedId) shouldBe List(admin.persistedId)
   }
 
+  test("An Admin's import does not wait for another Admin's change to a third account") {
+
+    /**
+     * Setup:
+     *
+     * Two Admins and a User. The first Admin deactivates the User and holds the transaction open, holding the active Admins'
+     * rows; meanwhile the second Admin imports an image.
+     *
+     * Assertions:
+     *
+     * The import completes, owned by the second Admin, before the deactivation commits; the User is deactivated once it does.
+     *
+     * Edge cases:
+     *
+     * The import share-locks its importer, an Admin, whose row the deactivation holds: a lock that let no foreign key check
+     * through would keep every Admin's imports, Edits and Watch folder edits waiting on any Admin's account write.
+     */
+    assume(testApp.dataSourceType == C.DbEngineName.POSTGRES)
+    val (admin, importer) = (persistAdmin(), persistAdmin())
+    val account =
+      users.create(admin.persistedId, model(), "password 1", Map(testContext.repository.persistedId -> Permissions.none))
+    val holding = new java.util.concurrent.CountDownLatch(1)
+    val release = new java.util.concurrent.CountDownLatch(1)
+    val imported = new java.util.concurrent.atomic.AtomicReference[Option[Asset]](None)
+    val (holder, holderFailure) = onAnotherThread {
+      testApp.txManager.withTransaction {
+        users.deactivate(admin.persistedId, account.persistedId)
+        holding.countDown()
+        release.await(60, java.util.concurrent.TimeUnit.SECONDS): Unit
+      }
+    }
+
+    try {
+      holding.await(30, java.util.concurrent.TimeUnit.SECONDS) shouldBe true
+      val (importing, importFailure) = onAnotherThread(imported.set(Some(testContext.persistAsset(user = Some(importer)))))
+      importing.join(20000)
+      withClue("The import still waits: ")(importing.isAlive shouldBe false)
+      importFailure.get shouldBe None
+    } finally {
+      release.countDown()
+      holder.join()
+    }
+    holderFailure.get shouldBe None
+
+    imported.get.map(_.ownerUserId) shouldBe Some(importer.persistedId)
+    users.getById(account.persistedId).isActive shouldBe false
+  }
+
+  test("A rename rewriting the importer records and a recycle of the assets at once both commit") {
+
+    /**
+     * Setup:
+     *
+     * An Admin, and a User who imported ten images. A third transaction holds the image of the lowest ID; then a recycle of all
+     * ten starts and waits on it; then the Admin's rename of the User starts, which rewrites the ten importer records, and waits
+     * or ends; then the image is let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither fails. The ten are recycled, and each importer record names the User as renamed.
+     *
+     * Edge cases:
+     *
+     * A rewrite that locks the images in the order its scan reaches them would hold some of a higher ID while waiting on the
+     * lowest, which the recycle, locking in ID order, holds while it waits on them: a deadlock PostgreSQL ends by failing one of
+     * them. Unless the scan happens to reach the lowest first, which ten images make unlikely.
+     */
+    assume(testApp.dataSourceType == C.DbEngineName.POSTGRES)
+    val admin = persistAdmin()
+    val grants = Map(testContext.repository.persistedId -> Permissions.all)
+    val account = users.create(admin.persistedId, model(), "password 1", grants)
+    val assets = List.fill(10)(testContext.persistAsset(user = Some(account)))
+    val renamed = account.copy(name = s"Renamed ${Util.randomStr(6)}")
+    val opened = stateOf(account)
+
+    whileHolding(query("SELECT id FROM asset WHERE id = ? FOR UPDATE", assets.map(_.persistedId).min): Unit)(
+      () => testApp.service.library.recycleAssets(assets.map(_.persistedId).toSet),
+      () => users.update(admin.persistedId, renamed, grants, opened): Unit
+    )
+
+    assets.map(asset => testApp.service.asset.getById(asset.persistedId).isRecycled).distinct shouldBe List(true)
+    ownership(assets*).values.map(_._2.name).toSet shouldBe Set(renamed.name)
+  }
+
   test("An edit saved over an account another Admin changed since the form was opened is refused, and changes nothing") {
 
     /**

@@ -88,6 +88,9 @@ class AssetEditService(val app: Altitude):
     val upright = uprightSizeOf(assetId)
 
     txManager.withTransaction {
+      // The saver first, whom the Edit's row references, as an import locks its importer: an account write, which locks the
+      // account and then rewrites its assets, waits for this save or is waited for
+      app.service.user.lockActor(account.persistedId): Unit
       val (asset, edit) = lockAt(assetId, base, upright)
 
       if normalized == edit.fold(EditRecipe.Identity)(_.recipe) then

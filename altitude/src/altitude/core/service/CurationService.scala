@@ -107,9 +107,13 @@ class CurationService(val app: Altitude):
       AssetRules.requireCurate(picks.filter(_.isTriaged))
 
       // The members are locked, so a move or a recycle meanwhile is settled in what they say; a Pick moved after the read above
-      // is no longer among them
+      // is no longer among them. The frames to recycle are locked in the same pass, in ID order, as a library operation locks the
+      // rows it writes, so the two never wait on each other in a cycle
       val owner = AssetRules.curatedOwner
-      val members = dao.getLiveSequenceMembers(picks.flatMap(_.sequenceId).toSet).filter(m => owner.forall(_ == m.ownerUserId))
+      val sequenceIds = picks.flatMap(_.sequenceId).toSet
+      val members = dao
+        .lockLiveFrames(sequenceIds, recycleIds)
+        .filter(m => m.sequenceId.exists(sequenceIds.contains) && owner.forall(_ == m.ownerUserId))
       val cleared = members
         .groupBy(_.sequenceId.get)
         .toList
@@ -141,6 +145,10 @@ class CurationService(val app: Altitude):
 
     val (result, stamped) = txManager.withTransaction {
       dao.lockSequences()
+      // The tree's turn, which the restore takes, comes before any row lock, as a restore and a folder delete take it. Then the
+      // Picks it stamps and the frames it restores are locked in one pass, in ID order, as a move locks them
+      app.service.folder.lockTree()
+      dao.lockCompleted(keepIds ++ recycleIds): Unit
       val picks = requireKnown(keepIds ++ recycleIds).filter(asset => keepIds.contains(asset.persistedId))
       AssetRules.requireCurate(picks.filter(_.isTriaged))
       val result = app.service.library.restoreRecycledAssets(recycleIds)

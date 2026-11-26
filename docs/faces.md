@@ -194,7 +194,9 @@ while it held, from a snapshot in which its Face still existed, the count would 
 The faces themselves go with the asset on purge, and their files with them (`LibraryService.deletePurgedAsset`, the
 purge's last step). An unnamed person left with no Face then goes too (`deletePeopleWithoutFaces` with `keepNamed`); a
 named one keeps their row and name with no Face, still holding the name under `person_01` and offered in the Change
-combobox, so a Face can be given to them again. The people of the asset's Faces are locked before the row is deleted,
+combobox, so a Face can be given to them again. The asset's row is locked first (`AssetDao.lockPurged`), as a library
+operation locks its assets before their people, since an account write may hold it. The people of the asset's Faces
+are locked before the row is deleted,
 which row-locks the Faces (`PersonService.lockAssetPeople`): people, then their Faces, the order a merge or a correction
 takes them in. A Face an import gives one of them meanwhile either has committed, and they keep it, or waits and then
 finds them gone. Before their rows

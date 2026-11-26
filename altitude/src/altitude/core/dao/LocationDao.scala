@@ -14,7 +14,10 @@ trait LocationDao extends BaseDao[Location]:
    */
   def getAll: List[Location]
 
-  /** Returns how many were new. Only existing, non-recycled assets are added. */
+  /**
+   * Returns how many were new. Only existing, non-recycled assets are added, and a member already there is skipped. The caller
+   * share-locks the assets first (`AssetDao.shareLockLive`), so none recycled meanwhile is added.
+   */
   def addAssets(locationId: String, assetIds: Set[String]): Int
 
   def removeAssets(locationId: String, assetIds: Set[String]): Int

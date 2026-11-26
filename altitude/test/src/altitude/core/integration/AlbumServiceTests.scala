@@ -374,6 +374,112 @@ import altitude.core.util.SearchQuery
     testApp.service.album.getAssetIds(album.persistedId) shouldEqual Set(asset.persistedId)
   }
 
+  test("Two adds of one asset to an album at once both succeed, the second counting only what it added") {
+
+    /**
+     * Setup:
+     *
+     * One album and two imported assets. The first add, of one asset, holds its transaction open until the second, of both, waits
+     * for it (`contend`): a double submit.
+     *
+     * Assertions:
+     *
+     * Neither add fails. The first counts its asset, the second only the other one, and the album holds both, once each.
+     *
+     * Edge cases:
+     *
+     * On PostgreSQL the second cannot see the first's uncommitted member, so it inserts the same pair and waits on the unique
+     * index, which must skip the row rather than fail the add.
+     */
+    val album: Album = testApp.service.album.add("album")
+    val (asset1, asset2) = (testContext.persistAsset(), testContext.persistAsset())
+    val counts = new java.util.concurrent.ConcurrentLinkedQueue[Int]()
+
+    contend(
+      first = counts.add(testApp.service.album.addAssets(album.persistedId, Set(asset1.persistedId))): Unit,
+      second = counts.add(testApp.service.album.addAssets(album.persistedId, Set(asset1.persistedId, asset2.persistedId))): Unit
+    )
+
+    counts.toArray.toList shouldEqual List(1, 1)
+    testApp.service.album.getAssetIds(album.persistedId) shouldEqual Set(asset1.persistedId, asset2.persistedId)
+    albumCounts(album.persistedId) shouldEqual 2
+  }
+
+  test("Two adds of the same assets to an album at once, read in opposite orders, both succeed") {
+
+    /**
+     * Setup:
+     *
+     * An album and two imported assets, the one of the higher ID first in the table's physical order. Two adds of both: one reads
+     * the assets by index, in ID order, the other by a sequential scan, in the table's order. A third transaction holds a lock
+     * that stops each add before its second row (`pausingInserts`); then both adds start, each waiting on it; then it is let go
+     * (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither fails: the adds count two between them, and the album holds both assets once each.
+     *
+     * Edge cases:
+     *
+     * Adds that wrote their rows in the order they read them would each hold the row the other inserts next, waiting on the
+     * unique index for each other: a deadlock PostgreSQL ends by failing one of them.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val target: Album = testApp.service.album.add("album")
+    val (higher, lower) = assetsOutOfIdOrder()
+    val both = Set(higher.persistedId, lower.persistedId)
+    val counts = new java.util.concurrent.ConcurrentLinkedQueue[Int]()
+    def add(scans: String, pauseOn: Asset): () => Unit = () => {
+      // The one read this add may use: by the ID index, or a sequential scan in the table's physical order
+      List("enable_bitmapscan", "enable_indexonlyscan", scans).foreach(setting => update(s"SET LOCAL $setting = off"))
+      update(s"SET LOCAL test.pause_on = '${pauseOn.persistedId}'")
+      counts.add(testApp.service.album.addAssets(target.persistedId, both)): Unit
+    }
+
+    val cleanup = pausingInserts("album_asset")
+    try
+      whileHolding(query(s"SELECT pg_advisory_xact_lock($INSERT_PAUSE_KEY)"): Unit)(
+        add("enable_seqscan", pauseOn = higher),
+        add("enable_indexscan", pauseOn = lower))
+    finally cleanup()
+
+    counts.toArray.toList.map(_.asInstanceOf[Int]).sum shouldEqual 2
+    testApp.service.album.getAssetIds(target.persistedId) shouldEqual both
+    albumCounts(target.persistedId) shouldEqual 2
+  }
+
+  test("An add racing a recycle of the asset leaves it out of the album") {
+
+    /**
+     * Setup:
+     *
+     * One album and an imported asset. A recycle of the asset holds its transaction open until an add of it to the album waits
+     * for it (`contend`).
+     *
+     * Assertions:
+     *
+     * The add counts nothing once the recycle commits, and the album holds no asset: its count matches what its grid shows.
+     *
+     * Edge cases:
+     *
+     * On PostgreSQL the add's read sees the asset live until the recycle commits, and the recycle's removal from every album
+     * cannot see the add's uncommitted member.
+     */
+    val album: Album = testApp.service.album.add("album")
+    val asset: Asset = testContext.persistAsset()
+    val added = new java.util.concurrent.atomic.AtomicInteger(-1)
+
+    contend(
+      first = testApp.service.library.recycleAssets(Set(asset.persistedId)),
+      second = added.set(testApp.service.album.addAssets(album.persistedId, Set(asset.persistedId)))
+    )
+
+    added.get shouldEqual 0
+    testApp.service.album.getAssetIds(album.persistedId) shouldEqual Set()
+    albumCounts(album.persistedId) shouldEqual 0
+    searchAlbum(album) shouldEqual Set()
+  }
+
   test("A selection larger than a statement's parameter limit is added to and removed from an album", Slow) {
 
     /**

@@ -538,6 +538,112 @@ import altitude.core.models.Repository
     testApp.service.location.getAssetIds(category.persistedId) shouldEqual Set()
   }
 
+  test("Two adds of one asset to a Location at once both succeed, the second counting only what it added") {
+
+    /**
+     * Setup:
+     *
+     * One Location and two imported assets. The first add, of one asset, holds its transaction open until the second, of both,
+     * waits for it (`contend`): a double submit.
+     *
+     * Assertions:
+     *
+     * Neither add fails. The first counts its asset, the second only the other one, and the Location holds both, once each.
+     *
+     * Edge cases:
+     *
+     * On PostgreSQL the second cannot see the first's uncommitted member, so it inserts the same pair and waits on the unique
+     * index, which must skip the row rather than fail the add.
+     */
+    val location: Location = addLocation("location")
+    val (asset1, asset2) = (testContext.persistAsset(), testContext.persistAsset())
+    val counts = new java.util.concurrent.ConcurrentLinkedQueue[Int]()
+
+    contend(
+      first = counts.add(testApp.service.location.addAssets(location.persistedId, Set(asset1.persistedId))): Unit,
+      second =
+        counts.add(testApp.service.location.addAssets(location.persistedId, Set(asset1.persistedId, asset2.persistedId))): Unit
+    )
+
+    counts.toArray.toList shouldEqual List(1, 1)
+    testApp.service.location.getAssetIds(location.persistedId) shouldEqual Set(asset1.persistedId, asset2.persistedId)
+    locationCounts(location.persistedId) shouldEqual 2
+  }
+
+  test("Two adds of the same assets to a Location at once, read in opposite orders, both succeed") {
+
+    /**
+     * Setup:
+     *
+     * A Location and two imported assets, the one of the higher ID first in the table's physical order. Two adds of both: one
+     * reads the assets by index, in ID order, the other by a sequential scan, in the table's order. A third transaction holds a
+     * lock that stops each add before its second row (`pausingInserts`); then both adds start, each waiting on it; then it is let
+     * go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither fails: the adds count two between them, and the Location holds both assets once each.
+     *
+     * Edge cases:
+     *
+     * Adds that wrote their rows in the order they read them would each hold the row the other inserts next, waiting on the
+     * unique index for each other: a deadlock PostgreSQL ends by failing one of them.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val target: Location = addLocation("location")
+    val (higher, lower) = assetsOutOfIdOrder()
+    val both = Set(higher.persistedId, lower.persistedId)
+    val counts = new java.util.concurrent.ConcurrentLinkedQueue[Int]()
+    def add(scans: String, pauseOn: Asset): () => Unit = () => {
+      // The one read this add may use: by the ID index, or a sequential scan in the table's physical order
+      List("enable_bitmapscan", "enable_indexonlyscan", scans).foreach(setting => update(s"SET LOCAL $setting = off"))
+      update(s"SET LOCAL test.pause_on = '${pauseOn.persistedId}'")
+      counts.add(testApp.service.location.addAssets(target.persistedId, both)): Unit
+    }
+
+    val cleanup = pausingInserts("location_asset")
+    try
+      whileHolding(query(s"SELECT pg_advisory_xact_lock($INSERT_PAUSE_KEY)"): Unit)(
+        add("enable_seqscan", pauseOn = higher),
+        add("enable_indexscan", pauseOn = lower))
+    finally cleanup()
+
+    counts.toArray.toList.map(_.asInstanceOf[Int]).sum shouldEqual 2
+    testApp.service.location.getAssetIds(target.persistedId) shouldEqual both
+    locationCounts(target.persistedId) shouldEqual 2
+  }
+
+  test("An add racing a recycle of the asset leaves it out of the Location") {
+
+    /**
+     * Setup:
+     *
+     * One Location and an imported asset. A recycle of the asset holds its transaction open until an add of it to the Location
+     * waits for it (`contend`).
+     *
+     * Assertions:
+     *
+     * The add counts nothing once the recycle commits, and the Location holds no asset: its count matches what its grid shows.
+     *
+     * Edge cases:
+     *
+     * On PostgreSQL the add's read sees the asset live until the recycle commits, and the recycle's removal from every Location
+     * cannot see the add's uncommitted member.
+     */
+    val location: Location = addLocation("location")
+    val asset: Asset = testContext.persistAsset()
+    val added = new java.util.concurrent.atomic.AtomicInteger(-1)
+
+    contend(
+      first = testApp.service.library.recycleAssets(Set(asset.persistedId)),
+      second = added.set(testApp.service.location.addAssets(location.persistedId, Set(asset.persistedId)))
+    )
+
+    added.get shouldEqual 0
+    testApp.service.location.getAssetIds(location.persistedId) shouldEqual Set()
+    locationCounts(location.persistedId) shouldEqual 0
+  }
+
   test("Removing assets from a Location leaves the assets alone") {
 
     /**

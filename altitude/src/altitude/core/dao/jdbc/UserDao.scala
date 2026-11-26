@@ -51,7 +51,7 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
     manyBySqlQuery(s"SELECT * FROM account WHERE ${FieldConst.ID} = ? $forUpdate", List(id)).headOption
       .map(row => (makeModel(row), row(FieldConst.User.PASSWORD_HASH).asInstanceOf[String]))
 
-  override def lockAsImporter(id: String): Option[User] =
+  override def shareLock(id: String): Option[User] =
     manyBySqlQuery(s"SELECT * FROM account WHERE ${FieldConst.ID} = ? $forKeyShare", List(id)).headOption.map(makeModel)
 
   override def getAll: List[User] =
@@ -74,7 +74,7 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
     val sql = s"""
       SELECT * FROM account
        WHERE ${FieldConst.User.ACCOUNT_TYPE} = ? AND ${FieldConst.User.IS_ACTIVE} = ?
-       ORDER BY ${FieldConst.ID} $forUpdate
+       ORDER BY ${FieldConst.ID} $forNoKeyUpdate
     """
     manyBySqlQuery(sql, List(AccountType.Admin.toString, nativeBool(true))).map(makeModel)
 

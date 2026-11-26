@@ -454,6 +454,51 @@ import altitude.core.util.Query
     }
   }
 
+  test("A purge's delete, a rename of the asset's importer and a recycle of their other asset at once all commit") {
+
+    /**
+     * Setup:
+     *
+     * A User who imported two assets, a Person with a Face on each, and the asset of the lower ID marked for purging. A third
+     * transaction holds the Library's stat rows; then a recycle of the other asset starts and waits on them; then an Admin's
+     * rename of the User, which rewrites both importer records in ID order, starts and waits on the recycle; then the purge's
+     * delete of the marked asset starts and waits or ends; then the stat rows are let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * None fails. The marked asset is gone, the other is recycled, and its importer record names the User as renamed.
+     *
+     * Edge cases:
+     *
+     * A delete that locks the Person before the asset would hold the Person while waiting on the rename, which holds the asset
+     * and waits on the recycle, which waits on the Person to take the recycled asset from its count: a deadlock of three.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val users = testApp.service.user
+    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val grants = Map(testContext.repository.persistedId -> altitude.core.models.Permissions.all)
+    val importer = users.create(admin.persistedId, testContext.makeUser(), "password 1", grants)
+    val List(marked, other) =
+      List.fill(2)(testContext.insertAsset(testContext.makeAsset(user = Some(importer)))).sortBy(_.persistedId)
+    val person = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(person, marked, TestContext.unitVector(1))
+    testContext.addTestFace(testApp.service.person.getById(person.persistedId), other, TestContext.unitVector(2))
+    markForPurging(marked)
+    val renamed = importer.copy(name = s"Renamed ${altitude.core.util.Util.randomStr(6)}")
+    val opened = users.openForEdit(importer.persistedId).state
+
+    whileHolding(
+      query("SELECT dimension FROM stats WHERE repository_id = ? FOR UPDATE", testContext.repository.persistedId): Unit)(
+      () => testApp.service.library.recycleAssets(Set(other.persistedId)),
+      () => users.update(admin.persistedId, renamed, grants, opened): Unit,
+      () => testApp.service.library.deletePurgedAsset(marked.persistedId)
+    )
+
+    intercept[NotFoundException](testApp.service.asset.getById(marked.persistedId))
+    val kept = testApp.service.asset.getById(other.persistedId)
+    (kept.isRecycled, kept.originalOwner.name) shouldBe (true, renamed.name)
+  }
+
   test("Purging the recycle bin should not affect other assets") {
 
     /**

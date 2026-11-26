@@ -310,6 +310,61 @@ abstract class IntegrationTestCore
       query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
     }
 
+  /** How many PostgreSQL backends of the test database wait on a lock, for work running on threads the test cannot name */
+  def backendsWaitingOnLocks: Int =
+    testApp.txManager.asReadOnly {
+      query("SELECT count(*) AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()")
+        .head("n")
+        .toString
+        .toInt
+    }
+
+  /** The advisory key [[pausingInserts]] waits on, which a holder takes with `SELECT pg_advisory_xact_lock(...)` */
+  val INSERT_PAUSE_KEY = 4242
+
+  /**
+   * On PostgreSQL, until the cleanup runs: an insert into `table` of the row whose `asset_id` the inserting transaction names in
+   * `test.pause_on` (`SET LOCAL`) first waits for a shared hold of [[INSERT_PAUSE_KEY]], so a holder of the key stops a multi-row
+   * insert between two of its rows
+   */
+  protected def pausingInserts(table: String): () => Unit = {
+    require(testApp.dataSourceType == Const.DbEngineName.POSTGRES, "Advisory locks to wait on are PostgreSQL's")
+    testApp.txManager.withTransaction {
+      update(
+        "CREATE FUNCTION paused_by_test() RETURNS trigger AS $$ BEGIN " +
+          "IF NEW.asset_id = current_setting('test.pause_on', true) " +
+          s"THEN PERFORM pg_advisory_xact_lock_shared($INSERT_PAUSE_KEY); END IF; RETURN NEW; END $$$$ LANGUAGE plpgsql")
+      update(s"CREATE TRIGGER paused_by_test BEFORE INSERT ON $table FOR EACH ROW EXECUTE FUNCTION paused_by_test()")
+    }
+    () =>
+      testApp.txManager.withTransaction {
+        update(s"DROP TRIGGER paused_by_test ON $table")
+        update("DROP FUNCTION paused_by_test()")
+      }
+  }
+
+  /**
+   * Two of the context repository's assets, the first of a higher ID but earlier in the table's physical order, so a sequential
+   * scan reaches them in the opposite order of an ID-ordered read; assets are imported until two are so
+   */
+  def assetsOutOfIdOrder(): (Asset, Asset) = {
+    val assets = scala.collection.mutable.ListBuffer[Asset]()
+    def pair: Option[(String, String)] = {
+      val physical = testApp.txManager.asReadOnly {
+        query(
+          "SELECT id FROM asset WHERE id = ANY(?) ORDER BY ctid",
+          RequestContext.getConn.createArrayOf("varchar", assets.map(_.persistedId).toArray[AnyRef])).map(_("id").toString)
+      }
+      physical.combinations(2).collectFirst { case List(first, second) if first > second => (first, second) }
+    }
+    while (pair.isEmpty) {
+      require(assets.size < 20, "No two assets out of ID order")
+      assets += testContext.persistAsset()
+    }
+    val (first, second) = pair.get
+    (assets.find(_.persistedId == first).get, assets.find(_.persistedId == second).get)
+  }
+
   /** Has the database refuse `event` (`DELETE`, `UPDATE OF <column>`) on the row of `table` with the ID until the cleanup runs */
   protected def refuse(event: String, table: String, rowId: String): () => Unit = {
     val (create, drop) = testApp.dataSourceType match {

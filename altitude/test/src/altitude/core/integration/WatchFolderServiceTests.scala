@@ -28,6 +28,7 @@ import scala.jdk.CollectionConverters.*
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.FieldConst
+import altitude.core.ForbiddenException
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
@@ -858,13 +859,6 @@ import altitude.core.util.Sha256
     val locked = new CountDownLatch(1)
     val release = new CountDownLatch(1)
 
-    def waitingForLocks: Int = testApp.txManager.asReadOnly {
-      query("SELECT count(*) AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()")
-        .head("n")
-        .toString
-        .toInt
-    }
-
     if (isPostgres) testApp.txManager.withTransaction {
       update(
         "INSERT INTO watch_folder_file (id, repository_id, watch_folder_id, rel_path, size_bytes, modified_at, state, last_seen_at) " +
@@ -891,11 +885,11 @@ import altitude.core.util.Sha256
     try {
       scan(watchFolder, locking) shouldBe ScanResult.Scanned(1)
       // The image's import waits at its memory's write
-      if (isPostgres) eventually(waitingForLocks shouldBe 1)
+      if (isPostgres) eventually(backendsWaitingOnLocks shouldBe 1)
 
       val next = watchFolders.scan(watchFolder.persistedId)
       // And the next scan at its read of the memory
-      if (isPostgres) eventually(waitingForLocks shouldBe 2)
+      if (isPostgres) eventually(backendsWaitingOnLocks shouldBe 2)
       release.countDown()
 
       Await.result(next, 60.seconds) shouldBe ScanResult.Scanned(0)
@@ -908,6 +902,114 @@ import altitude.core.util.Sha256
     recorded(watchFolder) shouldBe List(("only.png", ImportOutcome.Imported, None))
     importsOf(watchFolder) should have size 1
     memory(watchFolder)("only.png") shouldBe (WatchFileState.Handled, 0)
+  }
+
+  /**
+   * Runs `first` in a transaction of its own and holds it open while a scan of the Watch folder starts and waits on a lock, then
+   * while each of `meanwhile` starts, on a thread of its own, and waits too or ends; then lets `first` commit. Returns the scan's
+   * result and what each of `meanwhile` threw.
+   */
+  private def scanWhileHolding(watchFolder: WatchFolder)(first: => Unit)(
+      meanwhile: (() => Unit)*): (ScanResult, List[Option[Throwable]]) = {
+    val holding = new CountDownLatch(1)
+    val release = new CountDownLatch(1)
+    val (holder, holderFailure) = onAnotherThread {
+      testApp.txManager.withTransaction {
+        first
+        holding.countDown()
+        release.await(60, TimeUnit.SECONDS): Unit
+      }
+    }
+
+    try {
+      holding.await(30, TimeUnit.SECONDS) shouldBe true
+      val scanning = watchFolders.scan(watchFolder.persistedId)
+      eventually(backendsWaitingOnLocks shouldBe 1)
+      val others = meanwhile.zipWithIndex.map {
+        (other, waiting) =>
+          val started = onAnotherThread(asAdmin(testContext.repository)(other()))
+          eventually((backendsWaitingOnLocks == waiting + 2 || !started._1.isAlive) shouldBe true)
+          started
+      }
+      release.countDown()
+
+      others.foreach(_._1.join())
+      val result = Await.result(scanning, 60.seconds)
+      (result, others.map(_._2.get).toList)
+    } finally {
+      release.countDown()
+      holder.join()
+      holderFailure.get.foreach(throw _)
+    }
+  }
+
+  test("A scan and an edit of its Watch folder at once both end, the edit as made") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder whose image was imported and has changed since, beside a new image. A third transaction holds the Watch
+     * folder's row while a scan reaches its memory write and waits; then an edit switching the deletion of imported files on
+     * starts and waits; then the row is let go.
+     *
+     * Assertions:
+     *
+     * Neither fails. The scan, first in line, remembers the changed image and the new one as seen and reads neither yet; the
+     * Watch folder deletes imported files from then on.
+     *
+     * Edge cases:
+     *
+     * A memory write that updates the changed image's row before it writes the Watch folder's would hold that row while the edit,
+     * holding the Watch folder's, reads its imported files again: a deadlock PostgreSQL ends by failing one of them.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val dir = directory()
+    image(dir, "changed.png")
+    val watchFolder = watch(dir)
+    scanTwice(watchFolder) shouldBe ScanResult.Scanned(1)
+    image(dir, "changed.png", size = 60)
+    image(dir, "new.png")
+
+    val (result, failures) =
+      scanWhileHolding(watchFolder)(query("SELECT id FROM watch_folder WHERE id = ? FOR UPDATE", watchFolder.persistedId): Unit)(
+        () => watchFolders.update(watchFolder.persistedId, WatchFolderSpec(watchFolder.name, dir.toString, None, true)): Unit)
+
+    failures shouldBe List(None)
+    result shouldBe ScanResult.Scanned(0)
+    watchFolders.getById(watchFolder.persistedId).deletesImported shouldBe true
+    memory(watchFolder) shouldBe Map("changed.png" -> (WatchFileState.Seen, 0), "new.png" -> (WatchFileState.Seen, 0))
+  }
+
+  test("A Watch folder removed while its scan walks ends the scan as removed") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder with an image it has not seen. Its removal holds its transaction open while a scan reaches its memory write
+     * and waits; then the removal commits.
+     *
+     * Assertions:
+     *
+     * The scan ends as blocked by the removal, remembering nothing, and nothing is imported.
+     *
+     * Edge cases:
+     *
+     * A memory write that inserts the image's row before it writes the Watch folder's fails its foreign key once the removal
+     * commits, and the scan would end with a stack trace.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val dir = directory()
+    image(dir, "new.png")
+    val watchFolder = watch(dir)
+
+    val (result, _) = scanWhileHolding(watchFolder)(watchFolders.remove(watchFolder.persistedId))()
+
+    result shouldBe ScanResult.Blocked(altitude.core.service.WatchFolderService.REMOVED)
+    intercept[NotFoundException](watchFolders.getById(watchFolder.persistedId))
+    testApp.txManager.asReadOnly(
+      query("SELECT id FROM watch_folder_file WHERE watch_folder_id = ?", watchFolder.persistedId)) shouldBe
+      empty
+    importsOf(watchFolder) shouldBe empty
   }
 
   test("A Watch folder whose directory is unavailable says why, keeps what it remembers, and scans again once it is back") {
@@ -1303,6 +1405,126 @@ import altitude.core.util.Sha256
       watchFolders.resume(elsewhere.persistedId)
       stored(elsewhere) shouldBe (false, None, deactivated.persistedId)
     }
+  }
+
+  test("An edit of a Watch folder and another Admin's delete of its owner at once both commit") {
+
+    /**
+     * Setup:
+     *
+     * An Admin who owns a Watch folder and an asset, and a second Admin who deletes them. A third transaction holds the asset
+     * while the delete locks the Admins' rows and waits on it to pass it on; then the suite's Admin edits the Watch folder, which
+     * makes them its owner, and waits or ends; then the asset is let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither fails. The owner is gone, their asset is the deleting Admin's, and the Watch folder is the editor's, as edited.
+     *
+     * Edge cases:
+     *
+     * The edit's foreign key check against its editor, an Admin the delete holds among the active Admins, goes through that lock.
+     * A lock that stopped it would leave the edit holding the Watch folder while it waits on the delete, and the delete waiting
+     * on the Watch folder to pass it on: a deadlock PostgreSQL ends by failing one of them.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val owner = persistAdmin()
+    val deleter = persistAdmin()
+    val dir = directory()
+    switchContextUser(owner)
+    val watchFolder = watch(dir)
+    val asset = testContext.persistAsset(user = Some(owner))
+    switchContextUser(admin)
+
+    whileHolding(query("SELECT id FROM asset WHERE id = ? FOR UPDATE", asset.persistedId): Unit)(
+      () => testApp.service.user.delete(deleter.persistedId, owner.persistedId): Unit,
+      () => watchFolders.update(watchFolder.persistedId, WatchFolderSpec("Edited", dir.toString, None)): Unit
+    )
+
+    testApp.txManager.asReadOnly(testApp.DAO.user.getAll).map(_.persistedId) should not contain owner.persistedId
+    testApp.service.asset.getById(asset.persistedId).ownerUserId shouldBe deleter.persistedId
+    val edited = watchFolders.getById(watchFolder.persistedId)
+    (edited.name, edited.accountId) shouldBe ("Edited", admin.persistedId)
+  }
+
+  test("An edit of a Watch folder by an Admin being deleted is refused once the delete commits") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder of the suite's Admin, and a second Admin who owns an asset. A third transaction holds the asset while a
+     * third Admin's delete of the second locks their account and waits on it; then the second edits the Watch folder, which would
+     * make them its owner, and waits or ends; then the asset is let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * The delete commits and the edit is refused as the act of an account no longer active: the Watch folder stays as it was, the
+     * suite's Admin's.
+     *
+     * Edge cases:
+     *
+     * An edit that wrote the Watch folder before it share-locked its editor would fail its foreign key once the delete commits, a
+     * raw `SQLException`.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val dir = directory()
+    val watchFolder = watch(dir)
+    val (editor, deleter) = (persistAdmin(), persistAdmin())
+    val asset = testContext.persistAsset(user = Some(editor))
+
+    intercept[ForbiddenException] {
+      whileHolding(query("SELECT id FROM asset WHERE id = ? FOR UPDATE", asset.persistedId): Unit)(
+        () => testApp.service.user.delete(deleter.persistedId, editor.persistedId): Unit,
+        () =>
+          RequestContext.account.withValue(Some(editor)) {
+            watchFolders.update(watchFolder.persistedId, WatchFolderSpec("Edited", dir.toString, None)): Unit
+          }
+      )
+    }
+
+    testApp.txManager.asReadOnly(testApp.DAO.user.getAll).map(_.persistedId) should not contain editor.persistedId
+    val kept = watchFolders.getById(watchFolder.persistedId)
+    (kept.name, kept.accountId) shouldBe (watchFolder.name, admin.persistedId)
+  }
+
+  test("An edit of a Watch folder by an Admin being demoted is refused once the demotion commits") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder of the suite's Admin, and a second Admin who owns another. A third transaction holds the second's Watch
+     * folder while a third Admin's demotion of the second to a User locks their account and waits on it to pause it; then the
+     * second edits the suite's Admin's Watch folder, which would make them its owner, and waits; then the Watch folder is let go
+     * (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * The demotion commits and the edit is refused, the act of an account that is no Admin any more: the Watch folder stays the
+     * suite's Admin's, as it was, since a User cannot own one.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val users = testApp.service.user
+    val dir = directory()
+    val watchFolder = watch(dir)
+    val (editor, demoter) = (persistAdmin(), persistAdmin())
+    switchContextUser(editor)
+    val theirs = watch(directory(), name = "Theirs")
+    switchContextUser(admin)
+    val grants = Map(testContext.repository.persistedId -> Permissions.all)
+    val opened = users.openForEdit(editor.persistedId).state
+
+    intercept[ForbiddenException] {
+      whileHolding(query("SELECT id FROM watch_folder WHERE id = ? FOR UPDATE", theirs.persistedId): Unit)(
+        () => users.update(demoter.persistedId, editor.copy(accountType = AccountType.User), grants, opened): Unit,
+        () =>
+          RequestContext.account.withValue(Some(editor)) {
+            watchFolders.update(watchFolder.persistedId, WatchFolderSpec("Edited", dir.toString, None)): Unit
+          }
+      )
+    }
+
+    users.getById(editor.persistedId).accountType shouldBe AccountType.User
+    val kept = watchFolders.getById(watchFolder.persistedId)
+    (kept.name, kept.accountId) shouldBe (watchFolder.name, admin.persistedId)
   }
 
   test("An edit makes the editor the owner, a new path forgets the old one's files, and a removal leaves files and Imports") {

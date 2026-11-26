@@ -445,10 +445,33 @@ class UserService(val app: Altitude) extends BaseService[User]:
    */
   def lockImporter(accountId: String): User =
     txManager.withTransaction {
-      dao.lockAsImporter(accountId) match
+      dao.shareLock(accountId) match
         case None => throw ImporterUnavailableException(Const.Msg.Err.IMPORTER_GONE)
         case Some(account) if !account.isActive => throw ImporterUnavailableException(Const.Msg.Err.IMPORTER_DEACTIVATED)
         case Some(account) => account
+    }
+
+  /**
+   * Share-locks the account, whatever its state, for a write of rows an account write of it rewrites (an import's completion of
+   * an asset it owns), taken before them as an account write takes the account before them; nothing for an account gone
+   */
+  def shareLock(accountId: String): Unit =
+    txManager.withTransaction {
+      dao.shareLock(accountId): Unit
+    }
+
+  /**
+   * The acting account of a write that stores a reference to it (an Edit's saver, a Watch folder's owner), share-locked as
+   * [[lockImporter]] locks an importer. Taken before the write's first row: an account write locks the account before the rows it
+   * changes, so the two then take turns rather than each holding what the other waits on. An account deleted or deactivated since
+   * its login is refused, and with `mustBeAdmin` one that is no Admin by then (a Watch folder's owner must be an active Admin).
+   */
+  def lockActor(accountId: String, mustBeAdmin: Boolean = false): User =
+    txManager.withTransaction {
+      val actor =
+        dao.shareLock(accountId).filter(_.isActive).getOrElse(throw ForbiddenException(Const.Msg.Err.FORBIDDEN_INACTIVE))
+      if mustBeAdmin && actor.accountType != AccountType.Admin then throw ForbiddenException(Const.Msg.Err.FORBIDDEN_ADMIN)
+      actor
     }
 
   /** How many assets the account owns, in every Library: what deleting it moves to the Admin */

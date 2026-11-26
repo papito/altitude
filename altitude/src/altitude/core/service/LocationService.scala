@@ -93,6 +93,9 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       requireLocation(locationId)
       if assetIds.isEmpty then 0
       else
+        // A recycle of one of them meanwhile either waits for this add and then drops the member, or is waited for, and the
+        // asset is then left out
+        app.service.asset.shareLockLive(assetIds)
         val added = dao.addAssets(locationId, assetIds)
         logger.debug(s"Added $added of ${assetIds.size} asset(s) to location [$locationId]")
         added

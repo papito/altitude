@@ -233,6 +233,16 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       )
     }
 
+  def lockPurged(assetId: String): Boolean =
+    txManager.withTransaction {
+      dao.lockPurged(assetId)
+    }
+
+  def shareLockLive(assetIds: Set[String]): Unit =
+    txManager.withTransaction {
+      dao.shareLockLive(assetIds)
+    }
+
   def getAssetsToRecycle(assetIds: Set[String]): List[Asset] =
     txManager.withTransaction {
       dao.getAssetsToRecycle(assetIds)

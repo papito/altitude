@@ -175,7 +175,9 @@ object WatchFolderService:
   private val REST = java.time.Duration.ofSeconds(Const.WatchFolder.REST_SECONDS)
 
   private val STOPPING = "the server is stopping"
-  private val REMOVED = "the Watch folder was removed"
+
+  /** Why a scan of a Watch folder removed before or during it scans nothing */
+  val REMOVED = "the Watch folder was removed"
 
 /**
  * Watch folders: server directories the app scans, each for one Library, importing the files that arrive. Files are only ever
@@ -249,6 +251,7 @@ class WatchFolderService(val app: Altitude):
   def update(id: String, spec: WatchFolderSpec): WatchFolder =
     txManager.withTransaction {
       dao.lockPaths()
+      lockEditor()
       val stored = dao.getById(id)
       val valid = validated(spec, Some(stored))
       val edited = stored.copy(
@@ -301,6 +304,7 @@ class WatchFolderService(val app: Altitude):
    */
   def resume(id: String): Unit =
     txManager.withTransaction {
+      lockEditor()
       val stored = dao.getById(id)
       if !owns(app.DAO.user.getById(stored.accountId)) then
         val owner = RequestContext.getAccount
@@ -310,6 +314,15 @@ class WatchFolderService(val app: Altitude):
       logger.info(s"Resumed Watch folder [$id]")
       changed()
     }
+
+  /**
+   * Share-locks the context account (`UserService.lockActor`), which an edit or a resume may make the owner, before the Watch
+   * folder's row: an account write locks the accounts first and then pauses or passes on Watch folders, so the two take turns.
+   * After `lockPaths`, as an add's insert share-locks its owner after it. An editor deactivated, deleted or demoted by then is
+   * refused, since a Watch folder's owner must be an active Admin.
+   */
+  private def lockEditor(): Unit =
+    app.service.user.lockActor(RequestContext.getAccount.persistedId, mustBeAdmin = true): Unit
 
   /** Makes the Watch folder's failed files (final, to retry and parked) read again, as never tried; returns how many */
   def retryFailed(id: String): Int =
@@ -659,10 +672,14 @@ class WatchFolderService(val app: Altitude):
                     // Nothing of such a directory is remembered or read, the files beside the app's own included
                     case Walked(_, _, Some(met)) => unavailable(Const.WatchFolder.PATH_HOLDS_DATA.format(met))
                     case walked @ Walked(found, _, None) =>
-                      val files = txManager.withTransaction(remember(watchFolder, found, walkStarted, walked.problem))
-                      logger.debug(
-                        s"Watch folder [$id] \"${watchFolder.name}\": ${found.size} files found, ${files.size} to read")
-                      Right(Run(repository, watchFolder, owner, root, files, pipeline))
+                      txManager.withTransaction(remember(watchFolder, found, walkStarted, walked.problem)) match
+                        case None =>
+                          logger.info(s"Watch folder [$id] \"${watchFolder.name}\" was removed during its scan")
+                          Left(ScanResult.Blocked(REMOVED))
+                        case Some(files) =>
+                          logger.debug(
+                            s"Watch folder [$id] \"${watchFolder.name}\": ${found.size} files found, ${files.size} to read")
+                          Right(Run(repository, watchFolder, owner, root, files, pipeline))
     }
 
   // The Watch folder, unless it was removed
@@ -747,10 +764,19 @@ class WatchFolderService(val app: Altitude):
    * modified time makes a new file, whatever became of it before. A remembered file is read when it is to be retried, or when it
    * is seen and has rested: last seen at least `REST` before `walkStarted`, so the two looks are that far apart however long the
    * walks took. A file still in the pipeline is not read again. The status reason becomes `problem`.
+   *
+   * The Watch folder's row is written first, as an edit and a removal of it write it first, so the two take turns instead of each
+   * holding rows the other waits on. None when the Watch folder was removed meanwhile: nothing is remembered.
    */
-  private def remember(watchFolder: WatchFolder, found: List[Found], walkStarted: Instant, problem: Option[String]): List[Found] =
+  private def remember(
+      watchFolder: WatchFolder,
+      found: List[Found],
+      walkStarted: Instant,
+      problem: Option[String]): Option[List[Found]] =
     val id = watchFolder.persistedId
     val now = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
+    if dao.scanned(id, now) == 0 then return None
+
     val stale = now.minus(LAST_SEEN_STEP).toInstant
     val restedBy = walkStarted.minus(REST)
     // In-flight files are read before the rows: a file leaves the pipeline only after its row is written ([[settled]]), so one
@@ -784,9 +810,8 @@ class WatchFolderService(val app: Altitude):
 
     fileDao.addAll(fresh.toList, now)
     fileDao.seenAgain(id, foundAgain.toList, now): Unit
-    dao.scanned(id, now): Unit
     available(watchFolder, problem)
-    toRead.toList
+    Some(toRead.toList)
 
   // Offers the files one after another, each waiting for the queue without holding a thread, then marks the scan's Import
   // complete, if it opened one; it closes once its last file settles

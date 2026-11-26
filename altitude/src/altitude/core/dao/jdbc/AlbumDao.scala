@@ -59,8 +59,11 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
 
   override def addAssets(albumId: String, assetIds: Set[String]): Int =
-    // Selected from the asset table to drop unknown, foreign and recycled IDs, and to skip members rather than trip the unique
-    // index
+    // Selected from `asset` to drop unknown, foreign and recycled IDs. A member is skipped by the unique index rather than by a
+    // test of the table, which cannot see a concurrent add's uncommitted row: that add's row is waited for, then skipped. The
+    // rows are written in ID order, so two adds of the same assets wait on each other's rows in one order whatever each reads
+    // them by. The count is of the rows that were new. The `WHERE` stays ahead of the `ORDER BY`: SQLite reads an upsert after
+    // a `SELECT` with none as a join's `ON`.
     val sql = s"""
       INSERT INTO $membershipTable (${FieldConst.REPO_ID}, ${FieldConst.Album.ALBUM_ID}, ${FieldConst.Album.ASSET_ID})
       SELECT asset.${FieldConst.REPO_ID}, ?, asset.${FieldConst.ID}
@@ -68,15 +71,11 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
        WHERE asset.${FieldConst.REPO_ID} = ?
          AND asset.${FieldConst.ID} $inIdSet
          AND asset.${FieldConst.Asset.IS_RECYCLED} = ?
-         AND NOT EXISTS (
-           SELECT 1
-             FROM $membershipTable aa
-            WHERE aa.${FieldConst.Album.ALBUM_ID} = ?
-              AND aa.${FieldConst.Album.ASSET_ID} = asset.${FieldConst.ID})
+       ORDER BY asset.${FieldConst.ID}
+          ON CONFLICT DO NOTHING
     """
 
-    val values: List[Any] =
-      List(albumId, RequestContext.getRepository.persistedId, idSet(assetIds), nativeBool(false), albumId)
+    val values: List[Any] = List(albumId, RequestContext.getRepository.persistedId, idSet(assetIds), nativeBool(false))
 
     updateByBySql(sql, values)
 

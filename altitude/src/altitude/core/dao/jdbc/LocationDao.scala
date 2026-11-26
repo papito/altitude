@@ -88,8 +88,11 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
 
   override def addAssets(locationId: String, assetIds: Set[String]): Int =
-    // Selecting from `asset` drops unknown, foreign and recycled IDs; existing members are skipped rather than tripping the
-    // unique index
+    // Selected from `asset` to drop unknown, foreign and recycled IDs. A member is skipped by the unique index rather than by a
+    // test of the table, which cannot see a concurrent add's uncommitted row: that add's row is waited for, then skipped. The
+    // rows are written in ID order, so two adds of the same assets wait on each other's rows in one order whatever each reads
+    // them by. The count is of the rows that were new. The `WHERE` stays ahead of the `ORDER BY`: SQLite reads an upsert after
+    // a `SELECT` with none as a join's `ON`.
     val sql = s"""
       INSERT INTO $membershipTable (${FieldConst.REPO_ID}, ${FieldConst.Location.LOCATION_ID}, ${FieldConst.Location.ASSET_ID})
       SELECT asset.${FieldConst.REPO_ID}, ?, asset.${FieldConst.ID}
@@ -97,15 +100,11 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
        WHERE asset.${FieldConst.REPO_ID} = ?
          AND asset.${FieldConst.ID} $inIdSet
          AND asset.${FieldConst.Asset.IS_RECYCLED} = ?
-         AND NOT EXISTS (
-           SELECT 1
-             FROM $membershipTable la
-            WHERE la.${FieldConst.Location.LOCATION_ID} = ?
-              AND la.${FieldConst.Location.ASSET_ID} = asset.${FieldConst.ID})
+       ORDER BY asset.${FieldConst.ID}
+          ON CONFLICT DO NOTHING
     """
 
-    val values: List[Any] =
-      List(locationId, RequestContext.getRepository.persistedId, idSet(assetIds), nativeBool(false), locationId)
+    val values: List[Any] = List(locationId, RequestContext.getRepository.persistedId, idSet(assetIds), nativeBool(false))
 
     updateByBySql(sql, values)
 
