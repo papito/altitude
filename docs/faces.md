@@ -89,13 +89,15 @@ one's own files.
 
 ## Recognition
 
-`FaceRecognitionService.recognizeFace(face): Option[Person]` finds the Person for an unsaved Face:
+`FaceRecognitionService.recognizeAndStore(asset, detected)` finds the Person for each of an asset's unsaved Faces and
+stores them (`recognizeFace` decides it for one detection alone, storing nothing, for the tests):
 
 1. `FaceDao.searchClosestFaceMatches(features, matchCount, distanceThreshold)` returns the `face.recognition.match_count`
-   (5) nearest stored Faces within `face.recognition.cosine_distance_threshold` (0.55), in distance order; the service
-   reads both Settings from one snapshot per face and passes them in, so the DAO holds no Setting. The SQL is hand-written per engine and sees
-   only **enrolled** Faces of people who are **not a bad match**, in the context repository. Hidden people stay
-   matchable: hiding is a display preference.
+   (5) nearest stored Faces within `face.recognition.cosine_distance_threshold` (0.55), in distance order, each as its
+   Person and distance (`FaceMatch`); the service reads both Settings from one snapshot per asset and passes them in, so
+   the DAO holds no Setting. The SQL is hand-written per engine and sees only **enrolled** Faces of people who are **not a
+   bad match** and **not merged away**, in the context repository. Hidden people stay matchable: hiding is a display
+   preference.
    - **PostgreSQL** (`postgres.FaceDao.CLOSEST_MATCHES_SQL`): the candidates come from `face_03`, a partial HNSW index
      over the enrolled Faces' vectors at half precision (`features::halfvec(512)`, `WHERE is_enrolled`). The statement
      asks it for four times `match_count` Faces, ordered by the same cast, then takes their exact `<=>` distances at
@@ -106,12 +108,27 @@ one's own files.
    - **SQLite**: `vector_full_scan` is an exact scan of the `face` table, every repository's rows, filtered
      afterwards. sqlite-vector's quantized scan reads only the rows present when the table was last quantized, so it
      would miss a Face saved a moment ago, such as the first of two Faces of one image.
-2. The matches vote by Person; most votes win and a tie goes to the closest Face.
+2. The matches vote by Person (`FaceRecognitionService.assign` and `vote`, pure functions); most votes win and a tie goes
+   to the closest Face. The asset's own enrolled detections given a Person before it vote too, at their exact distance,
+   as the search would find them once stored, so the second face of an image can match the first (`twins.png`: the same
+   person twice in one image is two Faces of one Person). On PostgreSQL that is a small difference from storing first
+   and searching again: an own Face always competes, where the index might have left it out of its approximate pool.
 3. With no match, an **enrolled** Face starts a new Person (`PersonService.addPerson`, named "Unknown N" from the
-   `person_label` sequence, with a zero-padded sort name). A **match-only** Face is nobody's: `None`, and the caller drops it.
+   `person_label` sequence, with a sort name padded to ten digits). A **match-only** Face is nobody's, and is dropped,
+   as is a Video's later Face of a Person already given one there.
 
-Faces of one image are recognized and stored one at a time inside one transaction, so the second face of an image can
-match the first one just saved (`twins.png`: the same person twice in one image is two Faces of one Person).
+An asset's Faces are recognized and stored inside one transaction (`recognizeAndStore`, `lockedOwners`). Every
+detection is searched and voted first, and only the stored people the vote gives a Face to are locked, all at once and
+in ID order (`PersonService.lockLive`, through `PersonDao.lockAndGetLive`), before the first Face is stored: the order
+every other transaction that locks people takes, so an import does not deadlock with a recycle, a restore, a
+correction, a merge or a purge, as it would by locking each Person as their Face is stored, in detection order. The
+people who lose a vote are not locked, so a correction or a cover change of theirs does not wait for the import's file
+writes. The locks are taken under a savepoint (`TransactionManager.undoingIf`). A Person no longer live once locked was
+merged away, discarded, deleted or marked a bad match while the search ran: the import gives every lock back (PostgreSQL
+releases the row locks taken after a savepoint rolled back to), searches again the detections that matched them, by when
+a merge has given their Faces to the destination, votes again and locks the whole new set in ID order. No Face is stored
+on a Person who is not live, and no lock is taken out of order. The Faces are then stored one at a time in detection
+order, a Person the vote starts created as their first Face is stored.
 
 ### Why two tiers
 
@@ -169,14 +186,22 @@ imported. A person seen twice in one image (`twins.png`) has two Faces there and
 the person had no Face on the asset yet (`FaceDao.hasFaceOfPerson`). Recycling an asset takes it from the counts of its
 people and restoring gives it back, whether it is restored or moved out of the trash into a folder, each asset once
 however many Faces of a person it holds (`PersonDao.addFacesOfAssets`, `COUNT(DISTINCT asset_id)`); only the assets a call
-actually recycles or takes out of the trash are counted, and the people are locked first (`PersonDao.lockAssetPeople`, after
+actually recycles or takes out of the trash are counted, and the people are locked first (`PersonService.lockAssetPeople`, which reads them again once locked and, when a merge gave
+one of the Faces away meanwhile, gives the locks back and takes them again over whoever has the Faces now; after
 the assets and in ID order), so a correction holding one of them (see **Corrections**) ends before the count is read: read
 while it held, from a snapshot in which its Face still existed, the count would take the asset from the Person twice.
 `merge` recounts the destination from a search for its assets.
-The faces themselves go with the asset on purge, and their files with them. Before their rows go, each person whose
-cover is one of them, live or merged away, takes their best Face on another asset not marked for purging
+The faces themselves go with the asset on purge, and their files with them (`LibraryService.deletePurgedAsset`, the
+purge's last step). An unnamed person left with no Face then goes too (`deletePeopleWithoutFaces` with `keepNamed`); a
+named one keeps their row and name with no Face, still holding the name under `person_01` and offered in the Change
+combobox, so a Face can be given to them again. The people of the asset's Faces are locked before the row is deleted,
+which row-locks the Faces (`PersonService.lockAssetPeople`): people, then their Faces, the order a merge or a correction
+takes them in. A Face an import gives one of them meanwhile either has committed, and they keep it, or waits and then
+finds them gone. Before their rows
+go, each person whose cover is one of them, live or merged away, takes their best Face on another asset not marked for
+purging
 (`PersonService.moveCoversOff`, `FaceDao.getBestCoverCandidate`: the highest detection score, then the ID), or no cover
-when none is left, under the people's locks (`PersonDao.lockAssetPeople`). An asset whose covers cannot be moved goes no
+when none is left, under the people's locks (`PersonService.lockAssetPeople`). An asset whose covers cannot be moved goes no
 further down the purge (`DeletePersonFilesFlow`): its row, files and Faces stay, purge-pending, for the startup job to
 queue again, so the cover's key (below) never drops a cover without a repick. An import the pipeline drops, or one a crash
 cut off (pruned at startup), is undone (`LibraryService.discardImport`): a cover on one of its faces moves off it as on
@@ -250,11 +275,14 @@ The tab's actions:
   over the live people, hidden ones included, so a name is unique regardless of case, in any script, and of Unicode form:
   "Weiß" and "WEISS", a Greek name with a final sigma and with a plain one ("σοφος" and "σοφοσ"), or a name with a
   full-width letter and the same name without, are one name. A merged-away or bad-match person holds no name. An unnamed
-  person's `name_for_sort` is `unknown 0042` (the name key of `UNKNOWN_NAME_PREFIX`, then the number), so a name of the
+  person's `name_for_sort` is `unknown 0000000042` (the name key of `UNKNOWN_NAME_PREFIX`, then the number padded to ten
+  digits, so the unnamed sort by number as text for as far as the instance-wide label sequence goes), so a name of the
   form `Unknown N`, in any case and spacing, is reserved and refused with a validation error. The name is held to 2 to 80
   characters once in NFC, with a name key within `NameKey.MAX_KEY_BYTES` (`PersonService.validName`, which every naming
   path, a rename and a move of a Face to a Person by name, goes through; **Names** in `altitude/AGENTS.md`). `isReservedName` tests the name's NFKC form, as the key folds it, so the form's
-  compatibility forms are reserved too: a full-width "Ｕnknown 42", or one with circled digits. A change that keeps the
+  compatibility forms are reserved too: a full-width "Ｕnknown 42", or one with circled digits. `updateName` takes the
+  name's lock first (`PersonDao.lockName`), as a move of a Face to a name does, so such a move creating a Person of the name
+  meanwhile waits, then finds the renamed Person holding it instead of failing on `person_01`. A change that keeps the
   name key, such as one of case alone, is a rename. A name another live person holds is refused, and the form offers to merge into that person
   (**Event Flow** in `views/AGENTS.md`). There are two forms over one rename (`PeopleActionController.renamePerson`, whose
   `RenameOutcome` is `Saved` or `Refused`, each route rendering it its own way): the results title's inline name editor
@@ -281,7 +309,8 @@ The tab's actions:
   The merged name is decided from the two stored rows, not the models passed in: an unnamed destination with a named,
   live source takes the source's `name`, its name key as `name_for_sort`, and `is_named`; otherwise the destination, named
   or not, keeps all three. A source no longer live (merged away or a bad match) gives no name; a merge of one is not
-  refused. The source is soft-deleted first, so `person_01` never sees the name on two live people. One Face per Person
+  refused. A destination no longer live is not found (`NotFoundException`), as a stale modal or a second account may still
+  offer it: its Faces would go to someone no list shows and later imports would vote for. The source is soft-deleted first, so `person_01` never sees the name on two live people. One Face per Person
   per Video holds as at import (**Videos**): on each Video where both had a Face (`FaceDao.getFacesOnSharedVideos`, read
   before the Faces move), the higher-quality Face stays, the destination's own on a tie as for a move, and the other is
   deleted as Remove deletes it (`keepOneFacePerVideo`), after the source is soft-deleted, so a cover of either person that
@@ -328,8 +357,8 @@ does.
   (the target's own on a tie) is deleted as Remove deletes it, and a cover that pointed at it moves to the survivor.
 - **Name** (`nameFacePerson(faceId, personId, name)`): names the Face's Person through `updateName`, as the tab's **Name**
   does, so the same Person, with their ID, cover and count, carries the name on every asset of theirs. It takes the name's
-  lock first (`lockName`), as a move to a name does, so a move creating a Person of that name meanwhile waits for it and
-  then finds the named Person holding the name, instead of failing on `person_01`.
+  lock first (`lockName`), before the people, as a move to a name does, so a move creating a Person of that name meanwhile
+  waits for it and then finds the named Person holding the name, instead of failing on `person_01`.
 - **Merge** (`mergeFacePerson(faceId, personId, destId)`): merges the Face's Person into the named Person `destId` through
   `merge(dest, source)`, as the tab's **Merge** does: every Face of theirs becomes the destination's, whose ID, name and
   Hidden state stay, the source is soft-deleted and one Face per Person per Video holds; the lost Faces' files go once the
@@ -346,13 +375,15 @@ does.
   add no rule of their own: a held name is `updateName`'s refusal, and `merge` keeps the destination's name. Each logs on
   DEBUG.
 - **Last Face**: a Person is deleted only when no Face row of theirs remains. Faces on assets in the trash are rows, so a
-  Person whose every live Face was removed stays, counting zero, until the trash is purged.
+  Person whose every live Face was removed stays, counting zero, until those assets are purged; the purge then deletes them
+  if they have no name, and a named Person stays with no Face (see the purge above).
 - **Locks**: a correction locks the people it touches (`lockAndGetLive`, ID order: the Face's Person and the target or the
   destination), after the name's lock when it gives a name (a move to a name, a Name: the name, then the people), and
   reads its asset without a lock, while a
   recycle or restore locks its assets first (`AssetDao.lockAssets`) and their people after (`lockAssetPeople`): assets, then
   people, in every transaction that locks both, so none waits on another in a cycle, and a recycle counts an asset's people
-  only once a correction holding one of them has ended.
+  only once a correction holding one of them has ended. An import locks the people its detections match before its first
+  Face (**Recognition**), and its asset, still being imported, is in no library operation.
 - **Refusals**: a Face of a recycled asset is an `IllegalOperationException` (the section is read-only in the trash); a
   Face gone, or moved by a request that held the lock first, is a `NotFoundException`; the Face's own Person a
   `ValidationException`, as is a reserved name. A Name or a Merge refuses as well, changing nothing: a Face no longer
@@ -383,14 +414,14 @@ whose Person was named meanwhile comes back as a named Person's, offering no nam
 combobox and what the client does with an answer are
 under **Detail panel** in `altitude/views/AGENTS.md`. `PeopleActionController` serves the Change combobox's options,
 `GET /htmx/people/r/:repoId/assignable` (`getAssignable`: the live people who are not a bad match, named first, then by
-`name_for_sort`, Hidden among them and marked; `htmx/assignable_people`), with the Suggested group below when asked with
+`name_for_sort`, Hidden among them and marked, a named Person whose every Face was purged included; `htmx/assignable_people`), with the Suggested group below when asked with
 `faceId`, and a Person's results title on its own, `GET /htmx/people/r/:repoId/p/:personId/title` (`htmx/person_inner`),
 read again after a correction because the title's Hide and Discard links depend on the count.
 
 - **Suggested people** (`suggestedPeople(faceId)`): the people whose Faces are nearest the Face's own vector, closest first,
   at most `PersonService.SUGGESTED_PEOPLE` (3), so that most wrong matches take one click. The candidates are what
   recognition sees, through the same statement with one more filter, so no new Setting: enrolled Faces of people who are
-  not a bad match, within `face.recognition.cosine_distance_threshold`, in the context repository, read inside
+  neither a bad match nor merged away, within `face.recognition.cosine_distance_threshold`, in the context repository, read inside
   `withFaceVectorReadOnly`, a read since nothing is stored (`FaceDao.searchNearestFacesOfOthers`, beside `searchClosestFaceMatches`: on PostgreSQL
   `CLOSEST_OF_OTHERS_SQL`, the HNSW scan carrying on past the excluded Faces, on SQLite the full scan filtered afterwards).
   Unlike recognition it leaves out the Face's current Person, in the SQL, since a Person with thousands of Faces would
@@ -431,12 +462,15 @@ cross rules (box size ≥ smallest face, `hnsw_ef_search` ≥ 4 × `match_count`
 [FaceDetectionTests](../altitude/test/src/altitude/core/integration/FaceDetectionTests.scala) covers detection on the
 `people/` fixtures and the tiers on blurred copies (`TestVideos.frameStill` at `FRAME_BLUR`, `still` at `HEAVY_BLUR`);
 [FaceRecognitionServiceTests](../altitude/test/src/altitude/core/integration/FaceRecognitionServiceTests.scala) covers
-candidate eligibility, the tie-break and the no-candidate rule on known vectors (`TestContext.addTestFace`,
+candidate eligibility (a Person merged away's Faces left out), the tie-break and the no-candidate rule on known vectors (`TestContext.addTestFace`,
 `TestContext.unitVector` and `between`), a Face's vector read back and the nearest Faces of other people (the Suggested
 group's search: closest first, the Face's Person, bad matches, match-only Faces, those past the threshold and another
-repository's left out), a stored Face's checksum against the SHA-256 of its stored crop, the same crop twice in one asset,
-and the Video rules on clips synthesized by [TestVideos](../altitude/test/src/altitude/test/TestVideos.scala);
-[FaceClusteringTests](../altitude/test/src/altitude/core/unit/FaceClusteringTests.scala) covers the pure clustering;
+repository's left out), a merge of the matched Person while an asset's Faces are recognized, the import's lock order
+against a recycle of an asset two of its people share and its locks taken again after a merge (PostgreSQL), the asset's
+own detections in the vote, a stored Face's checksum against the SHA-256 of its
+stored crop, the same crop twice in one asset, and the Video rules on clips synthesized by [TestVideos](../altitude/test/src/altitude/test/TestVideos.scala);
+[FaceClusteringTests](../altitude/test/src/altitude/core/unit/FaceClusteringTests.scala) covers the pure clustering and
+[FaceVoteTests](../altitude/test/src/altitude/core/unit/FaceVoteTests.scala) the pure vote (`assign`, `vote`);
 [FaceCorrectionTests](../altitude/test/src/altitude/core/integration/FaceCorrectionTests.scala) covers Remove and
 Change on both engines, their four races included (`contend`: two moves of one Person's Faces on an asset, a move of a Face
 a concurrent request removed, two moves to one new name, and a recycle of an asset during a removal of a Face on it), the

@@ -3,6 +3,8 @@ package altitude.core.service
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import scala.annotation.tailrec
+
 import altitude.core.Altitude
 import altitude.core.dao.FaceDao
 import altitude.core.models.Asset
@@ -10,6 +12,7 @@ import altitude.core.models.AssetWithData
 import altitude.core.models.DetectedFaces
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
+import altitude.core.models.FaceMatch
 import altitude.core.models.Person
 import altitude.core.transactions.TransactionManager
 
@@ -55,6 +58,56 @@ object FaceRecognitionService:
           case i => merged.updated(i, merged(i).copy(members = merged(i).members ++ cluster.members))
     }
 
+  /** The Settings one recognition reads: the nearest Faces that vote, and how near a Face must be to vote */
+  case class Recognition(matchCount: Int, distanceThreshold: Double)
+
+  /** Whose a detection is once voted: a stored Person's, or the `n`-th Person the asset's recognition starts */
+  enum Owner:
+    case Known(personId: String)
+    case Started(n: Int)
+
+  /** The owner most of the candidates, nearest first, are of; a tie goes to the owner of the nearest. None without a candidate. */
+  def vote[A](candidates: List[(A, Double)]): Option[A] =
+    Option.when(candidates.nonEmpty) {
+      // The candidates are in distance order, so the first index of a group is its closest
+      val votes = candidates.map(_._1).zipWithIndex.groupBy(_._1)
+      votes.maxBy { case (_, owned) => (owned.size, -owned.head._2) }._1
+    }
+
+  /**
+   * Who each detection goes to, in detection order. Its candidates are its matches among the stored Faces and the asset's own
+   * enrolled detections given an owner before it, which a search would find once stored, so the second face of one person in an
+   * image joins the first; the nearest `matchCount` vote. With no candidate an enrolled detection starts a Person and a
+   * match-only one is nobody's (None); with `oneFacePerPerson` (a Video), a detection voted to an owner already given one is None
+   * too. Detections are L2-normalized, so their distances to each other are exact cosine distances; a PostgreSQL search finds the
+   * stored Faces through an approximate index first.
+   */
+  def assign(
+      detections: List[Face],
+      matches: List[List[FaceMatch]],
+      recognition: Recognition,
+      oneFacePerPerson: Boolean): List[Option[Owner]] =
+    val (_, _, owners) =
+      detections.zip(matches).foldLeft((List.empty[(Face, Owner)], 0, List.empty[Option[Owner]])) {
+        case ((assigned, started, owners), (detection, found)) =>
+          val own = assigned.collect {
+            case (face, owner) if face.isEnrolled => owner -> cosineDistance(face.features, detection.features)
+          }
+          val stored = found.map(m => (Owner.Known(m.personId): Owner) -> m.distance)
+          val candidates = (stored ++ own.filter(_._2 < recognition.distanceThreshold))
+            .sortBy(_._2)
+            .take(recognition.matchCount)
+
+          vote(candidates) match
+            case Some(owner) if oneFacePerPerson && assigned.exists(_._2 == owner) => (assigned, started, owners :+ None)
+            case Some(owner) => (assigned :+ (detection -> owner), started, owners :+ Some(owner))
+            case None if detection.isEnrolled =>
+              val owner = Owner.Started(started)
+              (assigned :+ (detection -> owner), started + 1, owners :+ Some(owner))
+            case None => (assigned, started, owners :+ None)
+      }
+    owners
+
 class FaceRecognitionService(val app: Altitude):
   import FaceRecognitionService.*
 
@@ -72,12 +125,37 @@ class FaceRecognitionService(val app: Altitude):
         DetectedFaces(Nil)
       case _ => detectInImage(dataAsset)
 
-  /** Matches each detected face to a person and stores it, in one transaction; a Video stores one Face per person */
+  /**
+   * Matches each detected face to a person and stores it, in one transaction, in detection order ([[assign]]). The people the
+   * faces go to are locked before the first Face is stored ([[lockedOwners]]). A Person gets one Face per Video: of two faces
+   * resolving to the same Person, the later, lower-quality one is dropped, so a pose change that splits a person in two does not
+   * fail the import.
+   */
   def recognizeAndStore(asset: Asset, detected: DetectedFaces): Unit =
-    asset.assetType.mediaType match
-      case "video" => storeVideoFaces(asset, detected)
-      case _ => storeImageFaces(asset, detected)
+    logger.trace(s"Face rec on asset $asset")
+    val recognition = currentRecognition
+
+    withFaceFiles {
+      store =>
+        val owners = lockedOwners(detected.faces.map(_._1), recognition, oneFacePerPerson = asset.assetType.mediaType == "video")
+        val started = scala.collection.mutable.Map.empty[Int, String]
+
+        detected.faces.zip(owners).foreach {
+          case ((face, faceImages), Some(owner)) =>
+            val personId = owner match
+              case Owner.Known(personId) => personId
+              case Owner.Started(n) => started.getOrElseUpdate(n, startPerson().persistedId)
+            // Read again for each Face: `addFace` reads the count and the cover the Face before it left
+            store(face, faceImages, asset, app.service.person.getPersonById(personId))
+          case ((face, _), None) =>
+            logger.trace(s"$face matches nobody, or a Person already given a Face of Video $asset; dropped")
+        }
+    }
     logger.trace(s"Face rec DONE: $asset")
+
+  private def startPerson(): Person =
+    logger.debug("No match. Adding new person")
+    app.service.person.addPerson(Person())
 
   private def detectInImage(dataAsset: AssetWithData): DetectedFaces =
     val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.bytes, Some(dataAsset.asset.fileName))
@@ -124,40 +202,6 @@ class FaceRecognitionService(val app: Altitude):
         (face, faceImages)
     })
 
-  private def storeImageFaces(asset: Asset, detected: DetectedFaces): Unit =
-    logger.trace(s"Face rec on asset $asset")
-    withFaceFiles {
-      store =>
-        detected.faces.foreach {
-          case (detectedFace: Face, faceImages: FaceImages) =>
-            recognizeFace(detectedFace) match
-              case Some(person) => store(detectedFace, faceImages, asset, person)
-              case None => logger.trace(s"Match-only $detectedFace matches nobody; dropped")
-        }
-    }
-
-  /**
-   * A Person gets one Face per Video: of two faces resolving to the same Person, the later, lower-quality one is dropped, so a
-   * pose change that splits a person in two does not fail the import.
-   */
-  private def storeVideoFaces(asset: Asset, detected: DetectedFaces): Unit =
-    withFaceFiles {
-      store =>
-        detected.faces.foldLeft(Set.empty[String]) {
-          case (peopleWithAFace, (face, faceImages)) =>
-            recognizeFace(face) match
-              case Some(person) if peopleWithAFace.contains(person.persistedId) =>
-                logger.trace(s"Person ${person.persistedId} already has a Face in $asset; dropping $face")
-                peopleWithAFace
-              case Some(person) =>
-                store(face, faceImages, asset, person)
-                peopleWithAFace + person.persistedId
-              case None =>
-                logger.trace(s"Match-only $face matches nobody in $asset; dropped")
-                peopleWithAFace
-        }
-    }
-
   /** Persists a recognized Face and writes its files */
   private type StoreFace = (Face, FaceImages, Asset, Person) => Unit
 
@@ -180,34 +224,54 @@ class FaceRecognitionService(val app: Altitude):
         written.foreach(app.service.fileStore.purgeFaceById)
         throw ex
 
+  /** The recognition Settings, read once per asset */
+  private def currentRecognition: Recognition =
+    val settings = app.settings.current
+    Recognition(settings.faceRecognitionMatchCount, settings.faceRecognitionCosineDistanceThreshold)
+
   /**
-   * The persisted Person for a new Face: the top-K nearest enrolled Faces within the distance threshold vote, a tie going to the
-   * closest. Without a match an enrolled Face starts a new Person, and a match-only Face gets `None` and is not stored.
+   * The Person one detection goes to, as [[recognizeAndStore]] decides it for a detection alone, storing no Face: an enrolled
+   * detection that matches nobody starts a Person, and a match-only one gets `None`. The tests' way to the vote; an import stores
+   * through `recognizeAndStore`.
    */
   def recognizeFace(detectedFace: Face): Option[Person] =
-    require(detectedFace.id.isEmpty, "Face object must not be persisted yet")
-    require(detectedFace.personId.isEmpty, "Face object must not be associated with a person yet")
-
-    // Settings, read per face
-    val settings = app.settings.current
-    val matchCount = settings.faceRecognitionMatchCount
-    val distanceThreshold = settings.faceRecognitionCosineDistanceThreshold
-
     txManager.withFaceVector {
-      val faceMatches: List[Face] = faceDao.searchClosestFaceMatches(detectedFace.features, matchCount, distanceThreshold)
-
-      if faceMatches.nonEmpty then
-        // The matches are in distance order, so the first index of a group is its closest face
-        val personVotes = faceMatches.zipWithIndex.groupBy(_._1.personId.get)
-        val (bestPersonId, votes) = personVotes.maxBy { case (_, votes) => (votes.size, -votes.head._2) }
-
-        logger.trace(
-          s"Face match: ${votes.size}/$matchCount votes for person $bestPersonId " +
-            s"(${personVotes.size} distinct person(s) in top-${faceMatches.size})")
-
-        Some(app.service.person.getPersonById(bestPersonId))
-      else if detectedFace.isEnrolled then
-        logger.debug("No match. Adding new person")
-        Some(app.service.person.addPerson(Person()))
-      else None
+      lockedOwners(List(detectedFace), currentRecognition, oneFacePerPerson = false).head.map {
+        case Owner.Known(personId) => app.service.person.getPersonById(personId)
+        case Owner.Started(_) => startPerson()
+      }
     }
+
+  /**
+   * Each detection's owner ([[assign]]), with the stored people among them locked and live. Every detection is searched first,
+   * and only the people the vote gives a Face to are locked, all at once and in ID order, before the asset's first Face is
+   * stored: an import takes them in the order every other transaction locking people does (a recycle, a restore, a correction, a
+   * merge, a purge) and cannot deadlock with one. The locks are taken under a savepoint. A Person found no longer live once
+   * locked was merged away, discarded, deleted or marked a bad match while the search ran: the locks are given back, the
+   * detections that matched them are searched again, by when a merge has given their Faces to the destination, and the vote and
+   * the locks are taken again, in ID order, over the whole new set.
+   */
+  private def lockedOwners(faces: List[Face], recognition: Recognition, oneFacePerPerson: Boolean): List[Option[Owner]] =
+    faces.foreach {
+      face =>
+        require(face.id.isEmpty, "Face object must not be persisted yet")
+        require(face.personId.isEmpty, "Face object must not be associated with a person yet")
+    }
+
+    def search(face: Face): List[FaceMatch] =
+      faceDao.searchClosestFaceMatches(face.features, recognition.matchCount, recognition.distanceThreshold)
+
+    @tailrec
+    def settled(matches: List[List[FaceMatch]]): List[Option[Owner]] =
+      val owners = assign(faces, matches, recognition, oneFacePerPerson)
+      val winners = owners.flatten.collect { case Owner.Known(personId) => personId }.toSet
+      val gone = txManager.undoingIf(winners -- app.service.person.lockLive(winners))(_.nonEmpty)
+
+      if gone.isEmpty then owners
+      else
+        logger.debug(s"People [${gone.mkString(",")}] voted for are no longer live once locked; searching again")
+        settled(faces.zip(matches).map {
+          case (face, found) => if found.exists(m => gone.contains(m.personId)) then search(face) else found
+        })
+
+    settled(faces.map(search))

@@ -220,21 +220,13 @@ abstract class IntegrationTestCore
 
       val (secondThread, secondFailure) = onAnotherThread {
         testApp.txManager.withTransaction {
-          if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
-            secondBackend.set(Some(query("SELECT pg_backend_pid() AS pid").head("pid")))
-          }
+          if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) secondBackend.set(Some(backendPid()))
           second
         }
       }
 
-      // pg_stat_activity is read once per transaction, so every poll is a transaction of its own
       def secondIsWaiting: Boolean = testApp.dataSourceType match {
-        case Const.DbEngineName.POSTGRES =>
-          secondBackend.get.exists(
-            pid =>
-              testApp.txManager.asReadOnly {
-                query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
-              })
+        case Const.DbEngineName.POSTGRES => secondBackend.get.exists(waitsOnLock)
         case _ => secondThread.getState == Thread.State.TIMED_WAITING || secondThread.getState == Thread.State.WAITING
       }
 
@@ -250,6 +242,73 @@ abstract class IntegrationTestCore
     }
     firstFailure.get.foreach(throw _)
   }
+
+  /**
+   * On PostgreSQL, an interleaving of more writers than [[contend]] takes: runs `first` in a transaction of its own and holds it
+   * open, then starts each of `writers` in order, each on a thread of its own in a transaction of its own, once the one before
+   * waits on a lock or has ended. Then lets `first` commit, waits for every writer and rethrows the first failure.
+   */
+  def whileHolding(first: => Unit)(writers: (() => Unit)*): Unit = {
+    require(testApp.dataSourceType == Const.DbEngineName.POSTGRES, "Row locks to wait on are PostgreSQL's")
+    val holding = new CountDownLatch(1)
+    val release = new CountDownLatch(1)
+
+    val (holder, holderFailure) = onAnotherThread {
+      testApp.txManager.withTransaction {
+        first
+        holding.countDown()
+        release.await(30, TimeUnit.SECONDS): Unit
+      }
+    }
+
+    try {
+      val held = holding.await(30, TimeUnit.SECONDS)
+      holderFailure.get.foreach(throw _)
+      held shouldBe true
+
+      val started = writers.map {
+        writer =>
+          val backend = new AtomicReference[Option[AnyRef]](None)
+          val (thread, failure) = onAnotherThread {
+            testApp.txManager.withTransaction {
+              backend.set(Some(backendPid()))
+              writer()
+            }
+          }
+          Eventually.eventually(Eventually.timeout(Span(30, Seconds)), Eventually.interval(Span(20, Millis))) {
+            (backend.get.exists(waitsOnLock) || !thread.isAlive) shouldBe true
+          }
+          (thread, failure)
+      }
+
+      release.countDown()
+      started.foreach(_._1.join())
+      started.foreach(_._2.get.foreach(throw _))
+    } finally {
+      release.countDown()
+      holder.join()
+    }
+    holderFailure.get.foreach(throw _)
+  }
+
+  /** The context repository's Faces whose Person is merged away: none, as no path leaves a Face on one */
+  def facesOfPeopleMergedAway: List[Map[String, AnyRef]] =
+    testApp.txManager.asReadOnly {
+      query(
+        "SELECT face.id FROM face JOIN person ON person.id = face.person_id WHERE face.repository_id = ? AND person.is_deleted = ?",
+        testContext.repository.persistedId,
+        true
+      )
+    }
+
+  /** The PostgreSQL backend of the calling thread's transaction, for another thread to watch with [[waitsOnLock]] */
+  def backendPid(): AnyRef = query("SELECT pg_backend_pid() AS pid").head("pid")
+
+  /** Whether the PostgreSQL backend waits on a lock. pg_stat_activity is read once per transaction, so each call is one. */
+  def waitsOnLock(pid: AnyRef): Boolean =
+    testApp.txManager.asReadOnly {
+      query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
+    }
 
   /** Has the database refuse `event` (`DELETE`, `UPDATE OF <column>`) on the row of `table` with the ID until the cleanup runs */
   protected def refuse(event: String, table: String, rowId: String): () => Unit = {

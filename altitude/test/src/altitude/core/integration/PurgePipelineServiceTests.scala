@@ -16,10 +16,13 @@ import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 
 import altitude.core.Altitude
+import altitude.core.Const
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.models.Asset
+import altitude.core.models.DetectedFaces
 import altitude.core.models.Face
+import altitude.core.models.FaceImages
 import altitude.core.models.Person
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetWithContext
@@ -214,8 +217,8 @@ import altitude.core.util.Query
      * Setup:
      *
      * A Person with Faces on three assets: the first, their cover, at a detection score of 0.9, the second at 0.5 and the third
-     * at 0.7, its asset marked for purging. A second Person whose only Face, their cover, is on the first asset. The first asset,
-     * marked for purging, goes through the purge pipeline.
+     * at 0.7, its asset marked for purging. A second Person, named, whose only Face, their cover, is on the first asset. The
+     * first asset, marked for purging, goes through the purge pipeline.
      *
      * Assertions:
      *
@@ -237,7 +240,7 @@ import altitude.core.util.Query
           detectionScore = score,
           withFiles = true)
     }
-    val alone = testApp.service.person.addPerson(Person())
+    val alone = testApp.service.person.addPerson(Person(name = Some("Alone")))
     val aloneCover = testContext.addTestFace(alone, assets.head, TestContext.unitVector(9), x1 = 50, withFiles = true)
     testApp.service.person.getById(added.persistedId).coverFaceId shouldBe Some(faces.head.persistedId)
     testApp.service.person.getById(alone.persistedId).coverFaceId shouldBe Some(aloneCover.persistedId)
@@ -252,6 +255,134 @@ import altitude.core.util.Query
         intercept[NotFoundException](testApp.service.person.getFaceById(face.persistedId))
         hasFaceFiles(face) shouldBe false
     }
+  }
+
+  test("A purge deletes an unnamed Person it leaves with no Face, and keeps a named one with their name") {
+
+    /**
+     * Setup:
+     *
+     * Three Persons with a Face on one asset: one unnamed and one named "Nora", each with no other Face, and an unnamed one with
+     * a Face on a second asset too. The first asset is recycled and goes through the purge pipeline.
+     *
+     * Assertions:
+     *
+     * The unnamed Person left with no Face is gone, and is no longer a Person a Face can be given to. Nora stays live, holding
+     * her name, with no cover and a count of zero. The Person with a Face left keeps it as their cover.
+     */
+    val asset = testContext.insertAsset()
+    val unnamed = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(unnamed, asset, TestContext.unitVector(1))
+    val nora = testApp.service.person.addPerson(Person(name = Some("Nora")))
+    testContext.addTestFace(nora, asset, TestContext.unitVector(2), x1 = 30)
+    val elsewhere = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(elsewhere, asset, TestContext.unitVector(3), x1 = 60)
+    val kept = testContext.addTestFace(
+      testApp.service.person.getById(elsewhere.persistedId),
+      testContext.insertAsset(),
+      TestContext.unitVector(4))
+
+    markForPurging(asset)
+    purge(asset)
+
+    intercept[NotFoundException](testApp.service.person.getById(unnamed.persistedId))
+    (testApp.service.person.getAssignable.map(_.persistedId) should not).contain(unnamed.persistedId)
+
+    val noraAfter = testApp.service.person.getLiveInRepository(nora.persistedId)
+    testApp.service.person.getLiveByNameKey("nora").map(_.persistedId) shouldBe Some(nora.persistedId)
+    noraAfter.coverFaceId shouldBe None
+    noraAfter.numOfFaces shouldBe 0
+
+    testApp.service.person.getById(elsewhere.persistedId).coverFaceId shouldBe Some(kept.persistedId)
+  }
+
+  test("A purge of an asset while a merge gives one of its Faces away finishes, and so does the merge") {
+
+    /**
+     * Setup:
+     *
+     * Persons T, S and D, T first in ID order. An asset marked for purging holds a Face of T and one of S; D has a Face on
+     * another asset. A third transaction locks T. The asset's row is deleted, as the purge's last step does, until that waits on
+     * it; then a merge of S into D starts, until it waits or ends; then T is let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither the purge nor the merge fails. The asset is gone with its Faces, and so is T, unnamed and left with none. D, who
+     * had S's Face on it by then, stays live with their other Face; S stays a Person merged away.
+     *
+     * Edge cases:
+     *
+     * Deleting the row before locking its people would hold S's Face and wait on S, while the merge holds S and waits on the
+     * Face: a deadlock. The people locked are those who have the Faces once locked, so D, given S's Face meanwhile, is locked
+     * too.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+
+    val List(t, s, d) = List.fill(3)(testApp.service.person.addPerson(Person())).sortBy(_.persistedId)
+    val asset = testContext.insertAsset()
+    testContext.addTestFace(t, asset, TestContext.unitVector(1))
+    testContext.addTestFace(s, asset, TestContext.unitVector(2), x1 = 50)
+    val dFace = testContext.addTestFace(d, testContext.insertAsset(), TestContext.unitVector(3))
+    markForPurging(asset)
+
+    whileHolding(query("SELECT id FROM person WHERE id = ? FOR UPDATE", t.persistedId): Unit)(
+      () => testApp.service.library.deletePurgedAsset(asset.persistedId),
+      () => testApp.service.person.merge(dest = testApp.service.person.getById(d.persistedId), source = s): Unit
+    )
+
+    intercept[NotFoundException](testApp.service.asset.getById(asset.persistedId))
+    intercept[NotFoundException](testApp.service.person.getById(t.persistedId))
+    testApp.service.person.getLiveInRepository(d.persistedId).persistedId shouldBe d.persistedId
+    testApp.service.person.getPersonFaces(d.persistedId).map(_.persistedId) shouldBe List(dFace.persistedId)
+    testApp.txManager.asReadOnly(query("SELECT is_deleted FROM person WHERE id = ?", s.persistedId)).map(_("is_deleted")) shouldBe
+      List(true)
+  }
+
+  test("A Face recognized while a purge deletes its Person goes to a live Person") {
+
+    /**
+     * Setup:
+     *
+     * An unnamed Person whose only Face is on an asset marked for purging, and a new asset with one detection near that Face. The
+     * purge's last step holds its transaction open, the Person deleted, until the recognition of the new asset waits on it.
+     *
+     * Assertions:
+     *
+     * Both finish: the Person is gone, and the new Face belongs to a live Person, someone else, as nobody's Face is near it now.
+     */
+    val gone = testApp.service.person.addPerson(Person())
+    val purged = testContext.insertAsset()
+    testContext.addTestFace(gone, purged, TestContext.unitVector(1))
+    markForPurging(purged)
+    val asset = testContext.insertAsset()
+    val face = Face(
+      x1 = 0,
+      y1 = 0,
+      width = 10,
+      height = 10,
+      detectionScore = 0.9,
+      checksum = TestContext.randomChecksum,
+      features = TestContext.between(TestContext.unitVector(1), TestContext.unitVector(2), 3),
+      quality = 20.0,
+      isEnrolled = true
+    )
+    val images = FaceImages(
+      image = IntegrationTestUtil.generateRandomImagBytesBgr(),
+      displayImage = IntegrationTestUtil.generateRandomImagBytesBgr(),
+      alignedImage = IntegrationTestUtil.generateRandomImagBytesBgr(),
+      alignedImageGs = IntegrationTestUtil.generateRandomImagBytesGray()
+    )
+
+    contend(
+      first = testApp.service.library.deletePurgedAsset(purged.persistedId),
+      second = testApp.service.faceRecognition.recognizeAndStore(asset, DetectedFaces(List((face, images))))
+    )
+
+    intercept[NotFoundException](testApp.service.person.getById(gone.persistedId))
+    val owner = testApp.service.person.getAllAssetFaces(asset.persistedId).map(_.personId.value)
+    owner should have size 1
+    owner.head should not be gone.persistedId
+    testApp.service.person.getLiveInRepository(owner.head).persistedId shouldBe owner.head
   }
 
   test("A purge of several assets that hold a Person's best Faces repicks their cover onto none of them") {

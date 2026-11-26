@@ -414,6 +414,23 @@ class LibraryService(val app: Altitude):
       logger.info(s"Marked ${assets.size} assets for purging")
     assets
 
+  /**
+   * The purge's last step for an asset: deletes its row, which cascades to its Faces and its Edit, and then the unnamed people it
+   * leaves with no Face. A named person keeps their row and name with no Face, still someone a Face can be given to.
+   *
+   * The people of its Faces are locked first (`PersonService.lockAssetPeople`, whoever has the Faces once locked), before the
+   * delete row-locks the Faces: people, then their Faces, the order a merge or a correction takes them in. A Face an import gives
+   * one of them meanwhile either has committed, and they keep it, or waits and then finds them gone. The asset itself is not
+   * locked: being marked for purging, it is in no other operation. Not found when the row is already gone.
+   */
+  def deletePurgedAsset(assetId: String): Unit =
+    txManager.withTransaction {
+      val people = app.service.person.lockAssetPeople(Set(assetId))
+      app.service.asset.deleteById(assetId): Unit
+      val deleted = app.service.person.deleteUnnamedPeopleWithoutFaces(people)
+      logger.debug(s"Deleted purged asset [$assetId] and ${deleted.size} unnamed people it left with no face")
+    }
+
   /** Hands assets marked for purging to the purge queue, with the context account, if any, as the pipeline's */
   private def queueForPurging(assets: List[Asset], account: Option[User] = RequestContext.account.value): Unit =
     val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = account)

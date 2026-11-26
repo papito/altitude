@@ -3,6 +3,7 @@ package altitude.core.dao
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.Face
+import altitude.core.models.FaceMatch
 import altitude.core.models.Person
 
 trait FaceDao extends BaseDao[Face]:
@@ -26,8 +27,11 @@ trait FaceDao extends BaseDao[Face]:
   /** The cover a person takes when Faces of theirs go: the first of [[getTopFaces]] on none of `excludedAssetIds` */
   def getBestCoverCandidate(personId: String, excludedAssetIds: Set[String]): Option[Face]
 
-  /** Enrolled Faces closest first, under the cosine distance `distanceThreshold`, none of a bad-match person */
-  def searchClosestFaceMatches(features: Array[Float], matchCount: Int, distanceThreshold: Double): List[Face]
+  /**
+   * The enrolled Faces closest first, under the cosine distance `distanceThreshold`, each as its Person and distance; none of a
+   * bad-match or merged-away person
+   */
+  def searchClosestFaceMatches(features: Array[Float], matchCount: Int, distanceThreshold: Double): List[FaceMatch]
 
   /** The Face's vector, from the engine's vector store: the model never carries it */
   def getFeatures(faceId: String): Option[Array[Float]]

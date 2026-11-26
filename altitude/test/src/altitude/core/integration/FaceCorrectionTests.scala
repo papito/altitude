@@ -1165,6 +1165,38 @@ import altitude.core.service.PersonService.FaceTarget
     getPerson(first.persistedId).numOfFaces shouldBe 2
   }
 
+  test("A move to a new name waits for a concurrent rename of a Person to it, and joins them") {
+
+    /**
+     * Setup:
+     *
+     * A Person named "Bogdan" and a Person with no name, each with a Face. Renaming Bogdan "Andreea", as the People tab does,
+     * holds its transaction until a move of the second's Face to "andreea" waits.
+     *
+     * Assertions:
+     *
+     * Neither fails: the move finds the renamed Person holding the name, who then holds both Faces and counts two assets.
+     *
+     * Edge cases:
+     *
+     * Without the name's lock in the rename, the move would create a second Person with the name and fail on `person_01` with a
+     * raw `SQLException`.
+     */
+    val first = person(Some("Bogdan"))
+    face(first, testContext.persistAsset())
+    val second = person()
+    val secondFace = face(second, testContext.persistAsset())
+
+    contend(
+      testApp.service.person.updateName(getPerson(first.persistedId), "Andreea"): Unit,
+      testApp.service.person.moveFace(secondFace.persistedId, FaceTarget.Named("andreea")): Unit
+    )
+
+    testApp.service.person.getLiveByNameKey("andreea").map(_.persistedId) shouldBe Some(first.persistedId)
+    testApp.service.person.getFaceById(secondFace.persistedId).personId shouldBe Some(first.persistedId)
+    getPerson(first.persistedId).numOfFaces shouldBe 2
+  }
+
   test("The Detail panel's Faces of an asset leave out bad matches and come in reading order, or by Frame time") {
 
     /**

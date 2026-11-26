@@ -326,8 +326,8 @@ CREATE TABLE person (
 
 -- The partial person indexes cover the live people, which every person query reads; a merged-away person keeps its name and
 -- cover face, which another person may take.
--- person_01: name_for_sort is a named person's name key (PersonService.nameKey, folded in Scala) or "unknown 0042", so a live
--- name is unique under that fold: case in any script, canonical and compatibility forms
+-- person_01: name_for_sort is a named person's name key (PersonService.nameKey, folded in Scala) or "unknown 0000000042", so a
+-- live name is unique under that fold: case in any script, canonical and compatibility forms
 CREATE UNIQUE INDEX person_01 ON person (repository_id, name_for_sort)
     WHERE is_deleted = FALSE AND is_bad_match = FALSE;
 

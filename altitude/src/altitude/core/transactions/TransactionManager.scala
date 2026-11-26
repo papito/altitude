@@ -235,6 +235,21 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
     if isInTransaction then f else transaction(readOnly = true)(f)
 
   /**
+   * Runs `f` under a savepoint of the thread's transaction and answers what it returns. When `undo` holds of that, the
+   * transaction is rolled back to the savepoint first, undoing what `f` did, the row locks it took on PostgreSQL included, so a
+   * caller that locked the wrong rows can take them again in its order rather than add to what it holds. On SQLite, whose one
+   * write connection serializes the writers, there are no row locks to give back.
+   */
+  def undoingIf[A](f: => A)(undo: A => Boolean): A =
+    require(isInTransaction, "A savepoint needs a transaction")
+    val conn = RequestContext.getConn
+    val savepoint = conn.setSavepoint()
+    val result = f
+    if undo(result) then conn.rollback(savepoint)
+    conn.releaseSavepoint(savepoint)
+    result
+
+  /**
    * Runs `action` once the thread's outermost transaction has committed, with no connection held, or at once outside a
    * transaction; a rollback (as every read transaction ends) drops it. For what must not happen unless the change does, such as a
    * log line. A throwing action is logged and fails neither the transaction nor the actions after it.

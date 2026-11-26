@@ -9,6 +9,7 @@ import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.Face
+import altitude.core.models.FaceMatch
 import altitude.core.models.Person
 import altitude.core.service.FaceDetectionService
 
@@ -32,17 +33,18 @@ object FaceDao:
     val personFilter = if excludingPerson then "AND face.person_id <> ?" else ""
 
     s"""
-      SELECT nearest.*, nearest.features <=> ?::vector AS distance
+      SELECT nearest.*, nearest.features <=> ?::vector AS ${altitude.core.dao.jdbc.FaceDao.DISTANCE}
         FROM (SELECT face.*
                 FROM face JOIN person ON person.id = face.person_id
                WHERE face.repository_id = ?
                  AND face.is_enrolled = TRUE
                  AND person.is_bad_match = FALSE
+                 AND person.is_deleted = FALSE
                  $personFilter
                ORDER BY face.features::halfvec(${FaceDetectionService.EMBEDDING_DIMENSIONS}) <=> ?::halfvec(${FaceDetectionService.EMBEDDING_DIMENSIONS})
                LIMIT ?) AS nearest
        WHERE nearest.features <=> ?::vector < ?
-       ORDER BY distance
+       ORDER BY ${altitude.core.dao.jdbc.FaceDao.DISTANCE}
        LIMIT ?
     """
 
@@ -92,15 +94,15 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
 
     face.copy(id = Some(id), assetId = asset.id, personId = person.id)
 
-  def searchClosestFaceMatches(features: Array[Float], matchCount: Int, distanceThreshold: Double): List[Face] =
-    nearest(FaceDao.CLOSEST_MATCHES_SQL, features, Nil, matchCount, distanceThreshold)
+  def searchClosestFaceMatches(features: Array[Float], matchCount: Int, distanceThreshold: Double): List[FaceMatch] =
+    nearest(FaceDao.CLOSEST_MATCHES_SQL, features, Nil, matchCount, distanceThreshold).map(faceMatchOf)
 
   override def searchNearestFacesOfOthers(
       features: Array[Float],
       excludedPersonId: String,
       limit: Int,
       distanceThreshold: Double): List[Face] =
-    nearest(FaceDao.CLOSEST_OF_OTHERS_SQL, features, List(excludedPersonId), limit, distanceThreshold)
+    nearest(FaceDao.CLOSEST_OF_OTHERS_SQL, features, List(excludedPersonId), limit, distanceThreshold).map(makeModel)
 
   /** Runs one of the two nearest-Faces statements; `filterBinds` are the binds of its filters after the repository's */
   private def nearest(
@@ -108,9 +110,9 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
       features: Array[Float],
       filterBinds: List[Any],
       limit: Int,
-      distanceThreshold: Double): List[Face] =
+      distanceThreshold: Double): List[Map[String, AnyRef]] =
     val vector = PostgresOverrides.vectorLiteral(features)
     val binds = List(vector, RequestContext.getRepository.persistedId) ++ filterBinds ++
       List(vector, limit * FaceDao.CANDIDATES_PER_MATCH, vector, distanceThreshold, limit)
 
-    manyBySqlQuery(sql, binds).map(makeModel)
+    manyBySqlQuery(sql, binds)

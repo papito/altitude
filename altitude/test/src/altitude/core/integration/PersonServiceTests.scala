@@ -829,7 +829,7 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The named row holds the precomposed name and the name key "élodie" as sort name, and the returned model the precomposed
-     * name. The unnamed row's sort name keeps its zero-padded "unknown 0042" form.
+     * name. The unnamed row's sort name keeps its zero-padded "unknown 0000000042" form.
      */
     val named: Person = testApp.service.person.addPerson(Person(name = Some(decomposed("ÉLODIE"))))
     named.name shouldBe Some(precomposed("ÉLODIE"))
@@ -841,7 +841,44 @@ import altitude.core.util.Util
     namedRow("name_for_sort") shouldBe precomposed("élodie")
 
     val unnamedRow = personRow(unnamed.persistedId)
-    withClue(unnamedRow)("unknown \\d{4,}".r.matches(unnamedRow("name_for_sort").toString) shouldBe true)
+    withClue(unnamedRow)("unknown \\d{10}".r.matches(unnamedRow("name_for_sort").toString) shouldBe true)
+  }
+
+  test("Unnamed people sort by their number past 10,000") {
+
+    /**
+     * Setup:
+     *
+     * Two unnamed Persons, numbered after the label sequence is set forward past every number drawn: the first at a 2 followed by
+     * four or more zeros, the second at the next power of ten.
+     *
+     * Assertions:
+     *
+     * Each sort name is "unknown" and the number padded to ten digits, and the assignable people list the first before the
+     * second.
+     */
+    def numberOf(person: Person): Long = person.name.get.stripPrefix(s"${PersonService.UNKNOWN_NAME_PREFIX} ").toLong
+    def drawNext(label: Long): Person = {
+      testApp.txManager.withTransaction {
+        testApp.dataSourceType match {
+          case Const.DbEngineName.POSTGRES => query("SELECT setval('person_label', ?)", label - 1): Unit
+          case _ => update("INSERT INTO person_label (id) VALUES (?)", label - 1)
+        }
+      }
+      testApp.service.person.addPerson(Person())
+    }
+
+    // Past every number drawn so far, so the sequence only moves forward
+    val zeros = math.max(4, numberOf(testApp.service.person.addPerson(Person())).toString.length)
+    val first = drawNext(2 * BigInt(10).pow(zeros).toLong)
+    val second = drawNext(BigInt(10).pow(zeros + 1).toLong)
+    (numberOf(first) < numberOf(second)) shouldBe true
+
+    List(first, second).map(person => personRow(person.persistedId)).foreach {
+      row => withClue(row)("unknown \\d{10}".r.matches(row("name_for_sort").toString) shouldBe true)
+    }
+    testApp.service.person.getAssignable.map(_.persistedId).filter(Set(first.persistedId, second.persistedId)) shouldBe
+      List(first.persistedId, second.persistedId)
   }
 
   test("The name key folds case the same whatever the JVM's default locale") {
@@ -1218,7 +1255,7 @@ import altitude.core.util.Util
 
         val row = personRow(dest.persistedId)
         row("name") shouldBe dest.name.get
-        withClue(row)("unknown \\d{4,}".r.matches(row("name_for_sort").toString) shouldBe true)
+        withClue(row)("unknown \\d{10}".r.matches(row("name_for_sort").toString) shouldBe true)
         testApp.service.person.getById(dest.persistedId).isNamed shouldBe false
     }
   }
@@ -1248,6 +1285,29 @@ import altitude.core.util.Util
 
     testApp.service.person.getById(firstDest.persistedId).name shouldBe Some("Tessa")
     testApp.service.person.getById(secondDest.persistedId).name shouldBe secondDest.name
+  }
+
+  test("A merge into a Person merged away is refused, and leaves no Face on a Person merged away") {
+
+    /**
+     * Setup:
+     *
+     * Three unnamed Persons, X, Y and Z, with a Face each. X is merged into Y.
+     *
+     * Assertions:
+     *
+     * A merge of Z into X, as a stale view or a second account still offers it, is a `NotFoundException` that changes nothing: Z
+     * stays live with their Face and count. No Face of the repository belongs to a Person merged away.
+     */
+    val List(x, y, z) = List.fill(3)(testApp.service.person.addPerson(Person()))
+    List(x, y, z).foreach(testContext.addTestFacesAndAssets(_))
+
+    testApp.service.person.merge(dest = y, source = x)
+    intercept[NotFoundException](testApp.service.person.merge(dest = x, source = z))
+
+    testApp.service.person.getLiveInRepository(z.persistedId).numOfFaces shouldBe 1
+    testApp.service.person.getPersonFaces(z.persistedId).size shouldBe 1
+    facesOfPeopleMergedAway shouldBe Nil
   }
 
   test("Same person can appear in the same image more than once") {
