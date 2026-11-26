@@ -1,7 +1,8 @@
 package altitude.core
 
 import com.typesafe.config.Config
-import java.io.File
+import java.net.URL
+import java.nio.file.Path
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -70,13 +71,27 @@ object Environment:
   var CURRENT: String = resolve(Option(System.getProperty(PROPERTY)), variables)
 
   /**
+   * Where the application's classes are loaded from: its jar, or the classes folder of a start from the build (Mill's `run`, the
+   * tests). None where the class loader names no location.
+   */
+  def codeLocation: Option[Path] =
+    Option(Environment.getClass.getProtectionDomain.getCodeSource).map(source => pathOf(source.getLocation))
+
+  /**
+   * A code source's location as a path, read through its URI: `URL.getPath` keeps a space as `%20` and is `/C:/...` on Windows,
+   * and `java.io.File(URI)` refuses a jar on a Windows share, `file://server/share/...`, for its authority, which `Path.of` takes
+   * as the share's server (`\\server\share\...`).
+   */
+  def pathOf(location: URL): Path = Path.of(location.toURI)
+
+  /**
    * The folder a relative path of the config is under, and where the config file is looked for: the jar's folder in prod, so a
    * start reads the same config and data wherever it is run from; the working directory in dev and test.
    */
   val ROOT_PATH: String = CURRENT match {
     case Name.PROD =>
-      val url = Environment.getClass.getProtectionDomain.getCodeSource.getLocation
-      new File(url.toURI).getParentFile.getAbsolutePath
+      val jar = codeLocation.getOrElse(throw IllegalStateException("The application's jar is unknown: no location is named"))
+      jar.toAbsolutePath.getParent.toString
     case _ => System.getProperty("user.dir")
   }
   logger.debug(s"Root path: $ROOT_PATH")

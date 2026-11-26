@@ -45,8 +45,10 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
 
   def javacOptions: Task.Simple[Seq[String]] = Seq("--release", "21")
 
-  // What Mill starts (run, runBackground, runMain) is a dev run and logs by logback-dev.xml. The flag is in these arguments
-  // alone: the image and the native jars are started by `java` without it, and log by logback.xml, the prod configuration.
+  // What Mill starts (run, runBackground, runMain) is a dev run and logs by logback-dev.xml. Mill also writes these arguments
+  // into the start script of `./mill altitude.assembly`'s jar, which is no supported artifact. The supported jars, the platform
+  // jars (platformJar) and the image's thin jars (dist), carry no start script and no flag: they are started by `java` and log
+  // by logback.xml, the prod configuration.
   def forkArgs: T[Seq[String]] = Task { super.forkArgs() ++ Seq("-Dlogback.configurationFile=logback-dev.xml") }
 
   // ONNX Runtime's official builds send usage telemetry to Microsoft unless this variable is set before the native library
@@ -543,6 +545,10 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
   /**
    * How the platform jar merges entries that several of its inputs hold, the first of a name winning otherwise. Pekko's and the
    * application's `reference.conf` are concatenated, and so are the service files (`java.sql.Driver` names both database drivers).
+   * So are the dependencies' licence and notice files (`META-INF/LICENSE.txt`, `META-INF/NOTICE` and the like, `LICENSE` and
+   * `NOTICE` at the root), each name's from every jar that has one, a line apart: an Apache-licensed jar's `NOTICE` must travel
+   * with its code, and about twenty jars hold one of the same few names. A licence under a name of its own
+   * (`META-INF/licenses/<artifact>/`, bytedeco's `share/licenses/`) is kept as it is.
    * The inputs' manifests, signatures and jar indexes are dropped, since they describe a jar that is not this one: a JVM refuses a
    * jar whose signatures do not match its entries. So are their module descriptors, which differ and mean nothing on a classpath.
    */
@@ -551,6 +557,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     Seq(
       Rule.Append("reference.conf", separator = "\n"),
       Rule.AppendPattern("^META-INF/services/[^/]+$", separator = "\n"),
+      Rule.AppendPattern("^(META-INF/)?(?i:LICENSE|NOTICE)[^/]*$", separator = "\n\n" + "=" * 80 + "\n\n"),
       Rule.Exclude(java.util.jar.JarFile.MANIFEST_NAME),
       Rule.Exclude("META-INF/INDEX.LIST"),
       Rule.ExcludePattern("^META-INF/[^/]+\\.(?i:SF|DSA|RSA|EC)$"),

@@ -52,8 +52,8 @@ object TransactionManager:
    * [[NATIVE_DIR_PROPERTY]]; an empty one counts as unset), which must hold it, since nothing is then taken from the classpath;
    * without a folder, the build on the classpath, which `locate` finds. That one must be a file, as it is in a classes folder
    * (Mill's `run`, the tests): SQLite loads an extension only from a file, and a build inside a jar is refused, naming the jar. A
-   * platform jar's start has unpacked it and set the property; a jar of any other kind (`./mill altitude.assembly`) runs on
-   * SQLite only with the property set.
+   * platform jar's start (`./mill altitude.platformJar`) has unpacked it and set the property; any jar without an
+   * `Altitude-Build` in its manifest runs on SQLite only with the property set.
    */
   def vectorExtensionPath(nativeDir: Option[String], locate: String => URL = getClass.getResource): String =
     val os = sys.props.getOrElse("os.name", "").toLowerCase
@@ -81,9 +81,9 @@ object TransactionManager:
         }
         if url.getProtocol != "file" then
           throw IllegalStateException(
-            s"The sqlite-vector extension is inside $url, and SQLite loads an extension only from a file. A native jar " +
-              s"(./mill altitude.platformJar, whose manifest has ${NativeLibraries.BUILD}) unpacks it; with any other, set " +
-              s"$NATIVE_DIR_PROPERTY to a folder that holds $extName.")
+            s"The sqlite-vector extension is inside $url, and SQLite loads an extension only from a file. This jar's " +
+              s"manifest has no ${NativeLibraries.BUILD}, so nothing unpacked it: start a native jar " +
+              s"(./mill altitude.platformJar), or set $NATIVE_DIR_PROPERTY to a folder that holds $extName.")
         Paths.get(url.toURI).toString
 
 /**

@@ -453,7 +453,9 @@ once more, with the same options and arguments and the variable set, and waits f
 processes, and the second one is the server.
 
 Where `ORT_DISABLE_TELEMETRY=1` is set already, the jar runs in the one process. Set it yourself for a debugger or JMX,
-whose port the second process would otherwise take a second time; the jar says so when it sees one among the options.
+whose port the second process would otherwise take a second time, and for a Java agent (`-javaagent:`, `-agentlib:`,
+`-agentpath:`) or a flight recording (`-XX:StartFlightRecording`), which would otherwise run in both processes; the jar
+says so when it sees one among the options.
 On Linux and macOS:
 
 ```sh

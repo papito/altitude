@@ -5,6 +5,7 @@ import java.lang.management.ManagementFactory;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -32,12 +33,15 @@ import java.util.jar.Manifest;
  */
 public final class Launcher {
 
-    /** The variable that switches ONNX Runtime's telemetry off, and its value */
+    /** The variable that switches ONNX Runtime's telemetry off, and its value: {@code OnnxEnvironment.TELEMETRY_OFF}'s */
     public static final String TELEMETRY_VARIABLE = "ORT_DISABLE_TELEMETRY";
     public static final String TELEMETRY_OFF = "1";
 
-    /** The oldest Java the application runs on: it is compiled for Java 21 */
+    /** The oldest Java the application runs on: it is compiled for Java 21 ({@code -release 21} in {@code build.mill}) */
     public static final int JAVA_FLOOR = 21;
+
+    /** The manifest attribute that names a native jar's platform ({@code NativeLibraries.PLATFORM}, {@code build.mill}'s) */
+    public static final String PLATFORM_ATTRIBUTE = "Altitude-Platform";
 
     /** The application's main class */
     public static final String APP = "altitude.core.App";
@@ -45,8 +49,17 @@ public final class Launcher {
     /** A system property naming another main class than {@link #APP}, which the launcher's tests run in its place */
     public static final String MAIN_PROPERTY = "altitude.launcher.main";
 
-    /** The second JVM, once {@link #relaunch} has started it: the shutdown hook passes a stop on to it */
-    private static volatile Process child;
+    /**
+     * Held by {@link #relaunch} while it starts the second JVM and by the shutdown hook while it reads {@link #child}, so a stop
+     * cannot come between the start and the assignment and miss the second JVM.
+     */
+    private static final Object LOCK = new Object();
+
+    /** The second JVM once {@link #relaunch} has started it, which the shutdown hook passes a stop on to; under {@link #LOCK} */
+    private static Process child;
+
+    /** Whether the shutdown hook has run, after which no second JVM is started; under {@link #LOCK} */
+    private static boolean stopping;
 
     private Launcher() {}
 
@@ -57,8 +70,8 @@ public final class Launcher {
             System.getProperty("java.home"),
             System.getProperty("os.name"),
             System.getProperty("os.arch"),
-            manifest == null ? null : manifest.getValue("Altitude-Platform"),
-            manifest == null ? null : manifest.getValue("Implementation-Version"));
+            manifest == null ? null : manifest.getValue(PLATFORM_ATTRIBUTE),
+            manifest == null ? null : manifest.getValue(Attributes.Name.IMPLEMENTATION_VERSION));
         if (problem != null) {
             System.err.println(problem);
             System.exit(1);
@@ -157,16 +170,20 @@ public final class Launcher {
     }
 
     /**
-     * What to say before the second JVM starts, when the JVM options it takes over open something only one process can hold: a
-     * debugger's port ({@code -agentlib:jdwp}) or a JMX one ({@code com.sun.management.jmxremote.port}), which this JVM holds
-     * already. {@code null} when they open neither.
+     * What to say before the second JVM starts, when the JVM options it takes over start something in each JVM that is meant for
+     * one: an agent ({@code -javaagent:}, {@code -agentlib:}, {@code -agentpath:}), a debugger's port ({@code jdwp}, by
+     * {@code -agentlib} or the older {@code -Xrunjdwp}), a JMX port ({@code com.sun.management.jmxremote.port}) or a flight
+     * recording ({@code -XX:StartFlightRecording}). This JVM runs each of them already: a port is then taken twice, and an agent
+     * or a recording reports on a launcher that runs no application. {@code null} when the options start none.
      */
     public static String relaunchHint(List<String> inputArguments) {
         for (String argument : inputArguments) {
-            if (argument.contains("jdwp") || argument.contains("jmxremote.port")) {
+            if (argument.startsWith("-javaagent:") || argument.startsWith("-agentlib:") || argument.startsWith("-agentpath:")
+                    || argument.contains("jdwp") || argument.contains("jmxremote.port")
+                    || argument.startsWith("-XX:StartFlightRecording")) {
                 return "Altitude starts this JVM once more with " + TELEMETRY_VARIABLE + "=" + TELEMETRY_OFF + " and the same "
-                    + "options, so a debugger's or JMX port is taken twice. Set " + TELEMETRY_VARIABLE + "=" + TELEMETRY_OFF
-                    + " yourself, and Altitude runs in this JVM alone.";
+                    + "options, so an agent, a debugger's or JMX port, or a flight recording among them runs in both. Set "
+                    + TELEMETRY_VARIABLE + "=" + TELEMETRY_OFF + " yourself, and Altitude runs in this JVM alone.";
             }
         }
         return null;
@@ -185,10 +202,13 @@ public final class Launcher {
         }
     }
 
-    /** The jar this class is in; {@code null} when it is loaded from a folder */
+    /**
+     * The jar this class is in; {@code null} when it is loaded from a folder. Read through a {@code Path}, since a jar on a
+     * Windows share is at {@code file://server/share/...}, whose authority {@code new File(URI)} refuses.
+     */
     private static File ownJar() throws Exception {
         URL location = Launcher.class.getProtectionDomain().getCodeSource().getLocation();
-        File file = new File(location.toURI());
+        File file = Paths.get(location.toURI()).toFile();
         return file.isFile() ? file : null;
     }
 
@@ -235,10 +255,15 @@ public final class Launcher {
         environment.remove("JAVA_TOOL_OPTIONS");
         environment.remove("_JAVA_OPTIONS");
 
-        // Before the start, so that no stop comes between the start and the hook. A lambda and not an inner class, so that the
-        // launcher stays the one class file.
+        // Registered before the start, and the start and the hook's read of the second JVM each hold the lock: a stop before the
+        // start starts none, and one during it reaches the second JVM once it has started, never missing one that is starting. A
+        // lambda and not an inner class, so that the launcher stays the one class file.
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            Process running = child;
+            Process running;
+            synchronized (LOCK) {
+                stopping = true;
+                running = child;
+            }
             if (running == null) return;
             // On Linux and macOS `destroy` is a SIGTERM, on which the server drains its queues and closes its database before it
             // exits. On Windows it would kill the server outright; there a console's Ctrl-C reaches both processes by itself, so
@@ -246,8 +271,15 @@ public final class Launcher {
             if (!isWindows()) running.destroy();
             waitFor(running);
         }, "altitude-launcher-stop"));
-        child = builder.start();
-        return waitFor(child);
+
+        Process started;
+        synchronized (LOCK) {
+            // This JVM is stopping already, and exits with the stop's status whatever this answers
+            if (stopping) return 143;
+            child = builder.start();
+            started = child;
+        }
+        return waitFor(started);
     }
 
     /**

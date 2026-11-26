@@ -39,8 +39,8 @@ import altitude.core.util.UserCache
  * runs: `onnxruntime.native.path`, `org.sqlite.lib.path` with `org.sqlite.lib.name`, and `altitude.native.dir`
  * (`TransactionManager.vectorExtensionPath`). A property that is set already is the caller's and is kept: the Docker image sets
  * all of them, with its libraries in `/app/native`, so its start writes nothing (its root filesystem is read-only, and its home
- * folder may not be writable). Started from a classes folder (Mill's `run`, the tests), or from a jar whose manifest names no
- * build (`./mill altitude.assembly`), it does nothing either.
+ * folder may not be writable). Started from a classes folder (Mill's `run`, the tests), or from any jar whose manifest names no
+ * build (none but `./mill altitude.platformJar`'s does), it does nothing either.
  *
  * Each start touches its folder, and so does a running instance every [[TOUCH_EVERY]] ([[touchInUse]], which `Altitude`
  * schedules), whatever its engine: SQLite's pools load sqlite-vector from the folder anew with each connection they replace, and
@@ -166,11 +166,8 @@ object NativeLibraries:
         catch case NonFatal(e) => logger.warn(s"Could not touch the native libraries' folder $folder: $e")
     }
 
-  /** The jar this class is in; None when it is loaded from a folder */
-  private def ownJar: Option[Path] =
-    Option(getClass.getProtectionDomain.getCodeSource)
-      .map(source => Path.of(source.getLocation.toURI))
-      .filter(Files.isRegularFile(_))
+  /** The jar the application is in; None when it is loaded from a folder */
+  private def ownJar: Option[Path] = Environment.codeLocation.filter(Files.isRegularFile(_))
 
   /** The jar opened, with its build and platform, when its manifest names both; else None, with the jar closed */
   private def platformJarOf(jar: Path): Option[(JarFile, String, String)] =

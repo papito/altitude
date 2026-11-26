@@ -337,7 +337,7 @@ import altitude.core.util.LockFile
      * Setup:
      *
      * No jar, as a start from a classes folder has (Mill's `run`, the tests), and a jar with the same libraries whose manifest
-     * names no build or no platform, as one `./mill altitude.assembly` builds.
+     * names no build or no platform, as every jar but a platform jar has.
      *
      * Assertions:
      *

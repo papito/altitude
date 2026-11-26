@@ -56,7 +56,7 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
 | ONNX Runtime | Its native library sends usage data to Microsoft unless `ORT_DISABLE_TELEMETRY=1` is in the process's environment before the library loads; the Java API's `setTelemetry(false)` does not stop it. The image sets the variable, `build.mill` sets it for `run` and the tests, and a start without it logs a WARN. `OnnxEnvironment` owns the one `OrtEnvironment` and holds a second native reference to it, taken by reflection (an ONNX Runtime upgrade that breaks it fails the start, naming the version): ONNX Runtime's own shutdown hook runs beside the drain and would otherwise free the environment under the sessions still embedding. The Scene embedder closes once the images being embedded have their embeddings and refuses every image after it, whose file fails as interrupted by a restart instead of being stored with no embedding. |
 | Errors | cask's `debugMode` is on in dev alone, so prod answers an error without a stack trace. A route that takes a form is `decorators.formPost`, never cask's `postForm`, whose 400 carries the parser's stack trace in every environment: `/login` answers a body that is no form a bare 400. |
 | Bodies without a login | The login's form and the Setup submission are limited to 64 KB (`decorators.formPost`, `decorators.smallBody`), so neither is read whole into memory: a longer declared body is answered 413 unread, and a chunked one loses its connection as it passes the limit. The server sets no limit of its own, since an upload is streamed to a file. |
-| Logging | `logback.xml` is the prod configuration: ISO date and time with zone, no ANSI, no caller data, no request lines. It defines two appenders, `text` and `json`: logback's `JsonEncoder`, one object a line with the timestamp in epoch milliseconds, the formatted message (not the pattern and its arguments), the stack trace and the MDC: the request's ID and, once the request has an account, the account's ID as its user. Each request starts with a cleared MDC, and the text pattern shows both. `ALTITUDE_LOG_FORMAT` (`text` or `json`, default `text`) names the root's appender and `ALTITUDE_LOG_LEVEL` (`TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR` or `OFF`, default `INFO`) its level, each through a logback `PropertyDefiner` that trims the value, ignores its case and takes an empty one for unset: no conditional, so no Janino. logback itself would give an empty or unknown format no appender and an unknown level DEBUG, so the definers answer the default for an unknown value and the start then fails, naming the variable and its accepted values. Both are read from the environment (or a system property of the same name) alone: logback starts before the config file is read, so neither is a config key. Dev runs with `logback-dev.xml`, which Mill's `run`, `runBackground` and `runMain` name and nothing packaged carries; tests keep `logback-test.xml`. |
+| Logging | `logback.xml` is the prod configuration: ISO date and time with zone, no ANSI, no caller data, no request lines. It defines two appenders, `text` and `json`: logback's `JsonEncoder`, one object a line with the timestamp in epoch milliseconds, the formatted message (not the pattern and its arguments), the stack trace and the MDC: the request's ID and, once the request has an account, the account's ID as its user. Each request starts with a cleared MDC, and the text pattern shows both. `ALTITUDE_LOG_FORMAT` (`text` or `json`, default `text`) names the root's appender and `ALTITUDE_LOG_LEVEL` (`TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR` or `OFF`, default `INFO`) its level, each through a logback `PropertyDefiner` that trims the value, ignores its case and takes an empty one for unset: no conditional, so no Janino. logback itself would give an empty or unknown format no appender and an unknown level DEBUG, so the definers answer the default for an unknown value and the start then fails, naming the variable and its accepted values. Both are read from the environment (or a system property of the same name) alone: logback starts before the config file is read, so neither is a config key. Dev runs with `logback-dev.xml`, which Mill's `run`, `runBackground` and `runMain` name, and so does the start script of `./mill altitude.assembly`'s jar, which is no supported artifact; the supported jars, `platformJar`'s and `dist`'s thin jars, carry no flag. Tests keep `logback-test.xml`. |
 | Time zone | Compose sets `TZ: ${TZ:-UTC}`; the README asks for it before the first Import, since Date Imported's day is a day in the server's time zone. The start logs the zone. |
 | Address | The application binds `server.host` (default `localhost`) and `server.port` (default 8080). The image sets `ALTITUDE_HOST=0.0.0.0`; compose publishes `${ALTITUDE_PUBLISH_PORT:-8080}:8080` on every interface (a variable apart from `ALTITUDE_PORT`, which is the server's own and which compose does not pass). While no Admin exists, the start's WARN names the address and says the first visitor runs Setup. |
 | HTTPS | Sign-in over plain HTTP works on `localhost` alone unless `ALTITUDE_SECURE_COOKIES=false`. A README recipe for Caddy, with notes for Traefik and nginx (pass `Host` through, allow the WebSocket upgrade, raise the upload body limit). No proxy service in compose. |
@@ -120,9 +120,10 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
 ### B. Logging
 
 11. `altitude/resources/logback.xml` becomes the prod configuration of the Decisions table; today's file moves to
-    `logback-dev.xml`, which `run` and `runBackground` select with `-Dlogback.configurationFile` in `forkArgs`. The test
-    module's `forkArgs` keep `logback-test.xml`. The image and a plain `java -jar` need no flag to log for prod: `forkArgs`
-    alone carries the dev flag. The MDC's keys are `Const.LogContext`'s:
+    `logback-dev.xml`, which `run`, `runBackground` and `runMain` select with `-Dlogback.configurationFile` in `forkArgs`,
+    as does the start script Mill writes into `altitude.assembly`'s jar, which is no supported artifact. The test module's
+    `forkArgs` keep `logback-test.xml`. The supported jars, `platformJar`'s and the image's thin jars (`dist`), carry no
+    start script and no flag, and log for prod. The MDC's keys are `Const.LogContext`'s:
     `decorators.requestResponseLogger` clears the MDC and sets the request's ID, and `UserService.switchContextToUser`
     sets the account's ID.
 12. A `LogSettings` object resolves the two logging variables to a value or an error; the two `PropertyDefiner`s
@@ -226,13 +227,13 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
 28. `build.mill`: an `altitude.platformJar` task assembling `altitude-<version>-<platform>.jar` from the dist inputs of
     `ALTITUDE_PLATFORM`: the launcher's class, `distLib`'s `altitude.jar` and `lib/`, the platform's bytedeco classifier
     jars, and `platformNatives` (ONNX Runtime's folder of the platform without `.dSYM`, sqlite-jdbc's one library,
-    sqlite-vector's one build, each at its classpath path). `mill.javalib.Assembly` merges them, `reference.conf` and
-    `META-INF/services/` concatenated, signatures, manifests, `INDEX.LIST` and `module-info.class` dropped, and the jar is
-    written again in name order with one entry time, so the same inputs give the same bytes. Its manifest has
-    `Altitude-Platform`, `Altitude-Build` (the first 16 hex digits of a SHA-256 of its native files' names, lengths and
-    bytes), `Implementation-Version`, `Enable-Native-Access: ALL-UNNAMED` and `Multi-Release: true`. A native file of
-    another platform fails the task. `make dist-jars` builds the four and copies each to `out/dist-jars/`. It replaces
-    `make publish`.
+    sqlite-vector's one build, each at its classpath path). `mill.javalib.Assembly` merges them, `reference.conf`,
+    `META-INF/services/` and the licence and notice files of one name (`META-INF/LICENSE*`, `META-INF/NOTICE*`, and
+    `LICENSE*` and `NOTICE*` at the root) concatenated, signatures, manifests, `INDEX.LIST` and `module-info.class`
+    dropped, and the jar is written again in name order with one entry time, so the same inputs give the same bytes. Its
+    manifest has `Altitude-Platform`, `Altitude-Build` (the first 16 hex digits of a SHA-256 of its native files' names,
+    lengths and bytes), `Implementation-Version`, `Enable-Native-Access: ALL-UNNAMED` and `Multi-Release: true`. A native
+    file of another platform fails the task. `make dist-jars` builds the four and copies each to `out/dist-jars/`.
 29. A `launcher` Mill module: one Java class compiled with `--release 8`, the jar's `Main-Class`. It reads
     `java.specification.version` and compares the manifest's platform with `os.name` and `os.arch` before any other
     class loads, and prints the Stage 2 jars row's message and exits with status 1; an Intel Java on Apple Silicon is told
@@ -242,13 +243,17 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
     same JVM once more (`java.home`'s `java`, the runtime's own input arguments, `-jar` and the jar when started from it,
     else `-cp` and `java.class.path`, the same program arguments) with the variable added and `JDK_JAVA_OPTIONS`,
     `JAVA_TOOL_OPTIONS` and `_JAVA_OPTIONS` removed, its input and output inherited, and exits with that process's status,
-    143 on a stop. A debugger agent or a JMX port among the input arguments is met first with a line saying that setting
-    the variable skips the second JVM. A shutdown hook, registered before the second JVM starts, passes a stop on to it
-    (`Process.destroy`, a SIGTERM on Linux and macOS) and waits, so the drain still runs. On Windows, where `destroy`
-    kills, a Ctrl-C in the console reaches both processes by itself. Tests (`LauncherTests`, a stub in place of `App`):
+    143 on a stop. An agent (`-javaagent:`, `-agentlib:`, `-agentpath:`), a debugger's or JMX port or a flight recording
+    (`-XX:StartFlightRecording`) among the input arguments is met first with a line saying that setting the variable skips
+    the second JVM. A shutdown hook, registered before the second JVM starts, passes a stop on to it (`Process.destroy`, a
+    SIGTERM on Linux and macOS) and waits, so the drain still runs. The hook and the start hold one lock, and the hook sets
+    a flag under it: a stop before the start starts no second JVM, and one during the start reaches it once started. On
+    Windows, where `destroy` kills, a Ctrl-C in the console reaches both processes by itself. The launcher's platform
+    attribute, telemetry variable and Java floor are public constants. Tests (`LauncherTests`, a stub in place of `App`):
     the variable present in the second JVM, its exit status passed on, a SIGTERM to the launcher waiting for the second
-    JVM's shutdown work, a jar started with `java -jar` relaunched with `-jar` and another platform's jar refused, and the
-    checks as functions.
+    JVM's shutdown work, a jar started with `java -jar` relaunched with `-jar` and another platform's jar refused, the
+    checks as functions, and the constants equal to `NativeLibraries.PLATFORM`, `OnnxEnvironment.TELEMETRY_OFF` and the
+    class file version of a compiled application class.
 30. `App.scala`: the start loads all of FFmpeg's libraries (`FFmpegFrameGrabber.tryLoad()`) after OpenCV. On Linux, an
     `UnsatisfiedLinkError` from either that names GTK, ALSA or XCB is reported in the failed start's line with the
     Debian and Ubuntu packages to install, under their names before and after the 64-bit time transition
@@ -268,7 +273,7 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
     ERROR line, naming the folder. `Altitude` touches the folder daily on the actor system's scheduler
     (`NativeLibraries.touchInUse`, every `TOUCH_EVERY`) where the start unpacked, and `cleanup()` cancels it.
     `Environment.resolveResourcePath` and its temp folder are gone: a sqlite-vector build on the classpath inside a jar with
-    no `Altitude-Build` (`./mill altitude.assembly`) fails the connection, naming the jar and the property. A start leaves no
+    no `Altitude-Build` (any jar but a platform jar) fails the connection, naming the jar and the property. A start leaves no
     library in the temp folder, only ONNX Runtime's empty `onnxruntime-java*` folder, which the JVM's exit removes.
 32. Tests (`NativeLibrariesTests`, unit, over jars written for each test and a scratch user cache): unpacked once and
     reused with no file written again, a library cut short and a leftover `.part` replaced, a second JVM waiting on the lock

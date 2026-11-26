@@ -45,12 +45,12 @@ require_tools() {
     [ -d "$photos_with_faces" ] && [ -d "$other_photos" ] || fail "the test photos" "not found under $repo_root/altitude/test/resources/import"
 }
 
-# The per-user models cache, as ModelFiles.root has it with models.dir empty: $XDG_CACHE_HOME/altitude/models, else
-# ~/.cache/altitude/models. A relative XDG_CACHE_HOME is ignored.
-default_models_dir() {
+# Altitude's folder of the per-user cache, as UserCache.folder has it: $XDG_CACHE_HOME/altitude, else ~/.cache/altitude. A
+# relative XDG_CACHE_HOME is ignored. Its models/ is the models folder with models.dir empty, and its natives/ a native jar's.
+user_cache_dir() {
     case "${XDG_CACHE_HOME:-}" in
-        /* | [A-Za-z]:[/\\]*) printf '%s' "$XDG_CACHE_HOME/altitude/models" ;;
-        *) printf '%s' "$HOME/.cache/altitude/models" ;;
+        /* | [A-Za-z]:[/\\]*) printf '%s' "$XDG_CACHE_HOME/altitude" ;;
+        *) printf '%s' "$HOME/.cache/altitude" ;;
     esac
 }
 
@@ -95,7 +95,7 @@ run_setup() {
 # Opens an Import of the files listed in a file (one path a line), uploads them and closes it: prints the Import's ID
 import_files() {
     local list="$1" url="$2" token="$3" count status id file file_name
-    count="$(grep -c . "$list")"
+    count="$(grep -c . "$list" || true)"
     status="$(request "$work/body" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
         --data "{\"expectedFiles\":$count}" "$url/import/r/$repo/imports")"
     id="$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$work/body")"
@@ -178,7 +178,7 @@ forbid_failure_lines() {
 # <log>-before-stop.
 require_drain_lines() {
     local log="$1" stopping_at
-    stopping_at="$(grep -n -F 'Stopping: new requests are answered 503' "$log" | tail -n 1 | cut -d: -f1)"
+    stopping_at="$(grep -n -F 'Stopping: new requests are answered 503' "$log" | tail -n 1 | cut -d: -f1 || true)"
     [ -n "$stopping_at" ] || fail "$2" "no line of the log says the shutdown began"
     tail -n "+$stopping_at" "$log" >"$log-stop"
     head -n "$stopping_at" "$log" >"$log-before-stop"
@@ -211,7 +211,7 @@ import_faces_and_video() {
 
     find -H "$photos_with_faces" -type f | sort >"$work/first"
     echo "$work/clip.mp4" >>"$work/first"
-    first_count="$(grep -c . "$work/first")"
+    first_count="$(grep -c . "$work/first" || true)"
     first_import="$(import_files "$work/first" "$url" "$token")"
 
     waited=0

@@ -130,7 +130,7 @@ start_server() {
 require_tools docker curl ffmpeg
 docker image inspect "$IMAGE" >/dev/null 2>&1 || fail "the image" "$IMAGE does not exist: run make docker first"
 
-MODELS_DIR="${MODELS_DIR:-$(default_models_dir)}"
+MODELS_DIR="${MODELS_DIR:-$(user_cache_dir)/models}"
 # Made here, by the caller: a bind mount's missing folder would be made by Docker, as root
 mkdir -p "$MODELS_DIR"
 MODELS_DIR="$(cd "$MODELS_DIR" && pwd)"
@@ -252,7 +252,7 @@ while :; do
         : >"$work/second"
         make_photos "$((extra_photos * 2))" "$work/frames-2" "$work/second" testsrc
     fi
-    second_count="$(grep -c . "$work/second")"
+    second_count="$(grep -c . "$work/second" || true)"
     second_import="$(import_files "$work/second" "$url" "$token")"
     # At once: the files are accepted and their Scene embeddings are under way or still to come
     stop_server "the stop in the middle of an import"

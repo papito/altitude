@@ -14,6 +14,9 @@ import org.scalatest.matchers.should.Matchers.*
 
 import scala.concurrent.duration.DurationInt
 
+import altitude.core.NativeLibraries
+import altitude.core.util.OnnxEnvironment
+
 /**
  * The native jar's launcher (`launcher/src/altitude/launcher/Launcher.java`): its checks of the Java version and the platform,
  * and the second JVM it starts where ONNX Runtime's telemetry variable is missing. The launcher runs from the test classpath,
@@ -50,7 +53,7 @@ import scala.concurrent.duration.DurationInt
     val attributes = manifest.getMainAttributes
     attributes.put(java.util.jar.Attributes.Name.MANIFEST_VERSION, "1.0")
     attributes.put(java.util.jar.Attributes.Name.MAIN_CLASS, classOf[Launcher].getName)
-    attributes.putValue("Altitude-Platform", platform)
+    attributes.putValue(Launcher.PLATFORM_ATTRIBUTE, platform)
     val scalaLibraries = Seq(classOf[scala.Option[?]], classOf[scala.runtime.Scala3RunTime$]).map(
       library => Path.of(library.getProtectionDomain.getCodeSource.getLocation.toURI).toUri.toString)
     attributes.put(java.util.jar.Attributes.Name.CLASS_PATH, scalaLibraries.distinct.mkString(" "))
@@ -255,26 +258,67 @@ import scala.concurrent.duration.DurationInt
     } finally FileUtils.deleteDirectory(folder.toFile)
   }
 
-  test("A debugger's or JMX port among the JVM options is met with how to skip the second JVM") {
+  test("An agent, a debugger's or JMX port or a flight recording among the JVM options is met with how to skip the second JVM") {
 
     /**
      * Setup:
      *
-     * The JVM options the launcher passes on to its second JVM: with a debugger agent, with a JMX port, and with neither.
+     * The JVM options the launcher passes on to its second JVM: with a debugger agent in either of its forms, a JMX port, a Java
+     * agent, a native agent by name and by path, a flight recording, and with none of them.
      *
      * Assertions:
      *
-     * With a debugger agent or a JMX port the launcher has a line to say first, naming the telemetry variable that, set by the
-     * person, runs Altitude in the one JVM; with neither it has none.
+     * With any of them the launcher has a line to say first, naming the telemetry variable that, set by the person, runs Altitude
+     * in the one JVM; with none it has none.
+     *
+     * Edge cases:
+     *
+     * An option that merely mentions an agent's jar or a recording's file as a system property's value gets no line.
      */
-    Seq("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005", "-Dcom.sun.management.jmxremote.port=9010")
-      .foreach {
-        option =>
-          val hint = Option(Launcher.relaunchHint(java.util.List.of("-Xmx2g", option))).value
-          hint should include(s"Set ${Launcher.TELEMETRY_VARIABLE}=${Launcher.TELEMETRY_OFF} yourself")
-      }
+    Seq(
+      "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005",
+      "-Xrunjdwp:transport=dt_socket,server=y,address=5005",
+      "-Dcom.sun.management.jmxremote.port=9010",
+      "-javaagent:/opt/apm/agent.jar=service=altitude",
+      "-agentlib:hprof",
+      "-agentpath:/opt/profiler/libasyncProfiler.so=start",
+      "-XX:StartFlightRecording",
+      "-XX:StartFlightRecording=duration=60s,filename=altitude.jfr"
+    ).foreach {
+      option =>
+        val hint = Option(Launcher.relaunchHint(java.util.List.of("-Xmx2g", option))).value
+        hint should include(s"Set ${Launcher.TELEMETRY_VARIABLE}=${Launcher.TELEMETRY_OFF} yourself")
+    }
     Launcher.relaunchHint(java.util.List.of("-Xmx2g", "-Dfoo=bar")) shouldBe null
+    Launcher.relaunchHint(java.util.List.of("-Dapm.jar=/opt/apm/agent.jar", "-Drecording=-XX:StartFlightRecording")) shouldBe null
     Launcher.relaunchHint(java.util.List.of()) shouldBe null
+  }
+
+  test("The launcher's contracts with the application are the application's own") {
+
+    /**
+     * Setup:
+     *
+     * The launcher's constants, which it cannot take from the application it never links against: the manifest attribute it reads
+     * a jar's platform from, the telemetry variable and its value, and the Java floor. Beside them the application's own, and the
+     * class file of a compiled class of the application, read from the classpath.
+     *
+     * Assertions:
+     *
+     * The attribute is the one `NativeLibraries` reads, the variable and its value are those `OnnxEnvironment` checks, and the
+     * floor is the Java whose class files the build compiles the application to (major version 65 is Java 21).
+     */
+    Launcher.PLATFORM_ATTRIBUTE shouldBe NativeLibraries.PLATFORM
+    (Launcher.TELEMETRY_VARIABLE, Launcher.TELEMETRY_OFF) shouldBe OnnxEnvironment.TELEMETRY_OFF
+
+    val classFile = Option(getClass.getClassLoader.getResourceAsStream("altitude/core/App.class")).value
+    val header =
+      try classFile.readNBytes(8)
+      finally classFile.close()
+    // A class file starts with 0xCAFEBABE, then the minor and the major version, two bytes each
+    java.nio.ByteBuffer.wrap(header).getInt shouldBe 0xcafebabe
+    val major = java.nio.ByteBuffer.wrap(header, 6, 2).getShort.toInt
+    Launcher.JAVA_FLOOR shouldBe major - 44
   }
 
   test("The Java version is read in both of its forms") {

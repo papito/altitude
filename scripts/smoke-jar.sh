@@ -281,22 +281,26 @@ temp_leftovers() {
 }
 
 # What the runs wrote of Altitude's in the caller's own home folder, user cache and temp folders since the script began: there,
-# javacpp's cache and the native libraries' folder, and in a temp folder a library or a spooled file
+# javacpp's cache and the native libraries' folder, and in a temp folder a library or a spooled file. Each temp folder is looked
+# in once, however many of /tmp, TMPDIR, TMP and TEMP name it. It always succeeds, so what it finds is the caller's to judge: a
+# find cut short by head, or one that cannot read a folder, would otherwise fail the assignment that reads it, which set -e and
+# pipefail turn into the script's end with no check's name.
 written_elsewhere() {
-    local real_cache folder
-    case "${XDG_CACHE_HOME:-}" in
-        /* | [A-Za-z]:[/\\]*) real_cache="$(host_path "$XDG_CACHE_HOME")" ;;
-        *) real_cache="$(host_path "$HOME")/.cache" ;;
-    esac
-    for folder in "$(host_path "$HOME")/.javacpp" "$real_cache/altitude/natives"; do
-        [ ! -d "$folder" ] || find -H "$folder" -newer "$work/began" 2>/dev/null | head -n 5
+    local folder seen=""
+    for folder in "$(host_path "$HOME")/.javacpp" "$(host_path "$(user_cache_dir)")/natives"; do
+        [ ! -d "$folder" ] || find -H "$folder" -newer "$work/began" 2>/dev/null | head -n 5 || true
     done
     for folder in /tmp "${caller_tmpdir:-}" "${caller_tmp:-}" "${caller_temp:-}"; do
+        # macOS' TMPDIR ends in a slash
+        [ "$folder" = / ] || folder="${folder%/}"
         [ -n "$folder" ] && [ -d "$folder" ] || continue
+        case "$seen" in *"|$folder|"*) continue ;; esac
+        seen="$seen|$folder|"
         find -H "$folder" -mindepth 1 -maxdepth 1 -newer "$work/began" ! -name 'altitude-smoke*' \( -iname '*onnxruntime*' \
             -o -iname '*sqlite*' -o -iname '*javacpp*' -o -iname '*.so' -o -iname '*.so.*' -o -iname '*.dylib' -o -iname '*.jnilib' \
-            -o -iname '*.dll' -o -iname 'undertow*' -o -iname 'apache-tika*' \) 2>/dev/null | head -n 5
+            -o -iname '*.dll' -o -iname 'undertow*' -o -iname 'apache-tika*' \) 2>/dev/null | head -n 5 || true
     done
+    return 0
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -337,7 +341,7 @@ case "$jar_name" in
 esac
 
 # On Windows the variable may be a D:\like\this path, as a workflow's runner.temp is
-models_dir="$(host_path "${ALTITUDE_MODELS_DIR:-$(default_models_dir)}")"
+models_dir="$(host_path "${ALTITUDE_MODELS_DIR:-$(user_cache_dir)/models}")"
 mkdir -p "$models_dir"
 models_dir="$(host_path "$(cd "$models_dir" && pwd)")"
 

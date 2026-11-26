@@ -2,7 +2,12 @@ package altitude.core.unit
 
 import altitude.test.TestFocus
 import com.typesafe.config.ConfigFactory
+import java.net.URI
+import java.nio.file.Files
+import java.nio.file.FileSystems
+import java.nio.file.Path
 import org.scalatest.DoNotDiscover
+import org.scalatest.OptionValues.*
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.*
 
@@ -151,6 +156,34 @@ import altitude.core.service.UserService
      */
     Environment.variables.keys.foreach(name => name should startWith(Environment.Variable.PREFIX))
     Environment.CURRENT shouldBe Environment.resolve(Option(System.getProperty(Environment.PROPERTY)), Environment.variables)
+  }
+
+  test("The application's own location is read through its URI, a jar on a Windows share's included") {
+
+    /**
+     * Setup:
+     *
+     * The location the test run's classes are loaded from, a classes folder, and `file:` URLs as a class loader gives them: of a
+     * jar in a folder whose name has a space, and, on Windows, of a jar on a share (`file://server/share/...`).
+     *
+     * Assertions:
+     *
+     * The classes' location is the folder they are in. The jar's URL is the jar's path, its space a space and not `%20`. On
+     * Windows the share's URL is the UNC path `\\server\share\...`, where `java.io.File(URI)` would refuse it for its authority.
+     */
+    val classes = Environment.codeLocation.value
+    Files.isDirectory(classes) shouldBe true
+    Files.exists(classes.resolve(Environment.getClass.getName.replace('.', '/') + ".class")) shouldBe true
+
+    val jar = FileSystems.getDefault.getRootDirectories.iterator.next.resolve("a folder").resolve("altitude.jar")
+    val url = jar.toUri.toURL
+    url.toString should include("a%20folder")
+    Environment.pathOf(url) shouldBe jar
+
+    // On another system a URI's authority names no file: there is no share to name
+    if sys.props("os.name").toLowerCase.startsWith("windows") then
+      Environment.pathOf(URI("file://server/share/folder/altitude.jar").toURL) shouldBe
+        Path.of("\\\\server\\share\\folder\\altitude.jar")
   }
 
   test("A development switch is on only when it is true and the environment is dev") {
