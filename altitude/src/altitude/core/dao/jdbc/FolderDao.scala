@@ -76,50 +76,6 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
     addRecord(sql, sqlVals)
     folder.copy(id = Some(id))
 
-  def getChildren(parentId: String): List[Folder] =
-    /**
-     * PostgreSQL does not allow ORDER BY inside the recursion and the final ORDER BY suffices; SQLite needs it there for the
-     * right order. The engines differ in this one line only, so it is switched inline rather than in an engine override.
-     */
-    val recursiveOrderByClause = getDataSourceType match
-      case C.DbEngineName.POSTGRES => ""
-      case C.DbEngineName.SQLITE => s"ORDER BY f.${FieldConst.Folder.NAME_KEY}"
-
-    val sql = s"""
-      WITH RECURSIVE children AS (
-        -- start with the provided folder id
-        SELECT *, 0 AS level
-          FROM folder
-         WHERE id = ?
-           AND repository_id = ?
-
-        UNION ALL
-
-        -- get only immediate children (level = 1)
-        SELECT f.*, c.level + 1
-          FROM folder f, children c
-         WHERE f.parent_id = c.id
-           AND f.repository_id = ?
-           AND f.is_recycled = false
-           AND c.level < 1
-          $recursiveOrderByClause
-      )
-      SELECT f.*,
-        (
-          SELECT COUNT(*)
-            FROM folder sub
-           WHERE sub.parent_id = f.id
-        ) AS num_of_children
-       FROM children f
-      WHERE f.level = 1
-        AND f.id <> f.parent_id
-      ORDER BY f.${FieldConst.Folder.NAME_KEY}
-    """
-
-    val repositoryId = RequestContext.getRepository.persistedId
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId, repositoryId, repositoryId))
-    recs.map(makeModel)
-
   /** Every folder above `folderId` short of the repository root (its own parent), the top-level folder first */
   def getAncestors(folderId: String): List[Folder] = pathFrom(folderId, firstLevel = 1)
 
@@ -128,25 +84,27 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
 
   /** The folders from `folderId` up, short of the root above it, highest first; `firstLevel` 1 skips the folder itself */
   private def pathFrom(folderId: String, firstLevel: Int): List[Folder] =
-    val sql = """
+    val sql = s"""
       WITH RECURSIVE ancestors AS (
-        SELECT *, 0 AS level
+        SELECT *, 0 AS level ${Acyclic.anchorColumn}
           FROM folder
          WHERE id = ?
            AND repository_id = ?
 
         UNION ALL
 
-        SELECT f.*, a.level + 1 AS level
+        SELECT f.*, a.level + 1 AS level ${Acyclic.armColumn("a")}
           FROM folder f
           JOIN ancestors a
             ON f.id = a.parent_id
          WHERE f.repository_id = ?
            AND f.id <> f.parent_id
-      )
+           ${Acyclic.armCondition("a")}
+      ) ${Acyclic.clause}
       SELECT *
         FROM ancestors
        WHERE level >= ?
+         AND ${Acyclic.kept}
        ORDER BY level DESC
     """
 
@@ -171,28 +129,31 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
 
   override def lockTree(): Unit = advisoryLock(s"folder-tree:${RequestContext.getRepository.persistedId}")
 
-  // Does not return the child counts
+  /** Every live folder below `parentId`, never the root; does not return the child counts */
   def getChildrenRecursive(parentId: String): List[Folder] =
-    val sql = """
+    val sql = s"""
       WITH RECURSIVE children AS (
-        SELECT *
+        SELECT * ${Acyclic.anchorColumn}
           FROM folder
          WHERE parent_id = ?
            AND repository_id = ?
            AND is_recycled = ?
+           AND id <> parent_id
 
         UNION ALL
 
-        SELECT f.*
+        SELECT f.* ${Acyclic.armColumn("c")}
           FROM folder f
           JOIN children c
             ON f.parent_id = c.id
          WHERE f.repository_id = ?
            AND f.is_recycled = ?
            AND f.id <> f.parent_id
-      )
+           ${Acyclic.armCondition("c")}
+      ) ${Acyclic.clause}
       SELECT *
         FROM children
+       WHERE ${Acyclic.kept}
   """
 
     val repositoryId = RequestContext.getRepository.persistedId
@@ -200,3 +161,29 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
       manyBySqlQuery(sql, List(parentId, repositoryId, nativeBool(false), repositoryId, nativeBool(false)))
 
     recs.map(makeModel)
+
+  /**
+   * The parts of a recursive statement over `parent_id` that end it at a folder its path has already visited, so a cycle stored
+   * in the tree ends the statement instead of recursing until the read statement timeout, or forever in a write. Moves take the
+   * tree's turn, so none commits a cycle (`FolderService.move`); this guards the reads against one stored before that.
+   * PostgreSQL's `CYCLE` clause marks the row that closes a cycle and stops there, and the outer select drops that row. SQLite
+   * has no such clause, so the statement carries the IDs it visited as `,id,id,` text and the recursive arm refuses a folder
+   * already among them: either way a folder of the path appears once.
+   */
+  private object Acyclic:
+    private val onSqlite = getDataSourceType == C.DbEngineName.SQLITE
+
+    /** Added to the anchor's select list */
+    val anchorColumn: String = if onSqlite then ", ',' || id || ',' AS visited" else ""
+
+    /** Added to the recursive arm's select list, `prior` naming the recursive table in it */
+    def armColumn(prior: String): String = if onSqlite then s", $prior.visited || f.id || ','" else ""
+
+    /** Added to the recursive arm's conditions */
+    def armCondition(prior: String): String = if onSqlite then s"AND instr($prior.visited, ',' || f.id || ',') = 0" else ""
+
+    /** Follows the recursive table's definition */
+    val clause: String = if onSqlite then "" else "CYCLE id SET is_cycle USING visited"
+
+    /** The outer select's condition */
+    val kept: String = if onSqlite then "1 = 1" else "NOT is_cycle"

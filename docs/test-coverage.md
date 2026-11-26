@@ -309,7 +309,10 @@ Sources: [FolderService](../altitude/src/altitude/core/service/FolderService.sca
 
 - ✅ Ensuring a path (`ensurePath`, what an import that keeps its folder structure sorts into) reuses the folders that exist, restores the recycled ones and adds the missing ones; it refuses a name the folder rule refuses and a parent that is no folder of the repository, leaving the folders as they were. Two transactions ensuring one missing folder at once end up with one folder, and a folder renamed or moved into a name while a path through that name is ensured is the folder the path finds (by `contend`).
 - ✅ Reject blank folder names and trim names on creation.
-- ✅ Traverse immediate children, descendants, and ancestors; exclude the root from its own children and return expected child counts/order.
+- ✅ Traverse descendants and ancestors; the root's descendants exclude the root and list each folder once, and every recursive read ends on a cycle stored in the tree (both engines).
+- ✅ Two opposite moves of sibling folders at once: the second waits on the tree's lock and is refused as a move into its own descendant (`contend`; red on PostgreSQL without the lock).
+- ✅ Adding under, or moving into, a folder in the Trash is an illegal operation, also when the delete runs at the same time (`contend`; red on PostgreSQL without the tree lock); renaming or moving a folder in the Trash is too; over HTTP the add dialog says the parent is in the Trash.
+- ✅ Adding a folder under a deleted sibling's name restores that sibling alone, under the name as typed; renaming or moving a folder onto a deleted sibling's name takes it, the sibling keeping its name in the Trash.
 - ✅ Move folders between parents or to root; reject self/descendant moves, sibling-name conflicts including casing, and nonexistent destinations.
 - ✅ Rename folders, change casing, and reject duplicate names or root renaming.
 - ✅ Adding a sibling, or renaming a folder, to a name that differs from a sibling's only by case fold ("STRASSE" for "Straße"), canonical form (a combining accent) or compatibility form (a full-width letter) is a `DuplicateException`, while each of those names is free under another parent and a folder can take another form of its own name; added and renamed names are stored in NFC, a full-width letter kept; a name added under a Turkish default locale collides with the same name added under the root locale.
@@ -403,7 +406,9 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ Restoring an asset marked for purging restores nothing and changes no statistic.
 - ✅ Two requests restoring the same asset at once, the first holding its transaction until the second waits for it, restore it once and move the statistics once.
 - [ ] Restore an already active asset together with a recycled one and verify the active one is ignored. [MEDIUM]
-- [ ] Cover restoration into an ancestor path whose name now conflicts with a live folder, including rollback of already restored ancestors. [MEDIUM]
+- ✅ A folder that gave its name away to a rename comes back from the Trash under its name when free, moving a deleted holder of it aside, and as "name (2)" beside a live holder ([FolderServiceTests](../altitude/test/src/altitude/core/integration/FolderServiceTests.scala)).
+- ✅ Two restores at once of assets in a folder that gave its name away number it once, and a restore under a folder deleted at the same time brings that folder back too (`contend`, both red on PostgreSQL without the tree lock); a numbered name is shortened by whole characters when the number would take its key past the limit.
+- [ ] Cover the rollback of already restored ancestors when a later step of the restore fails. [MEDIUM]
 - ✅ The recycle bin holds every recycled copy of the same content; restoring two copies together brings one back and reports the other as a duplicate, and importing the content while a copy is live is refused.
 
 ## Permanent deletion and purge queue

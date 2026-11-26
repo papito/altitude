@@ -9,6 +9,7 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
 import altitude.core.DuplicateException
+import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
@@ -64,7 +65,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.folders()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-  /** A parent that is no folder of the repository is a form error, as a refused name is, not a 404 */
+  /** A parent that is no folder of the repository, or one in the Trash, is a form error, as a refused name is, not a 404 or 409 */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.post(f"/$prefix/r/:repoId/add")
@@ -111,6 +112,9 @@ class FolderActionController(using logger: Logger) extends BaseController:
       case _: NotFoundException =>
         logger.debug(s"Not adding folder [$folderName]: parent [$parentId] is no folder of the repository")
         return responseWithValidationErrors(Map(Api.Field.Folder.PARENT_ID -> C.Msg.Err.PARENT_FOLDER_NOT_FOUND), parentId)
+      case refused: IllegalOperationException if refused.msg == C.Msg.Err.PARENT_FOLDER_IN_TRASH =>
+        logger.debug(s"Not adding folder [$folderName]: parent [$parentId] is in the Trash")
+        return responseWithValidationErrors(Map(Api.Field.Folder.PARENT_ID -> C.Msg.Err.PARENT_FOLDER_IN_TRASH), parentId)
 
     cask.Response("", 200, Seq(("Content-Type", "text/html")))
 

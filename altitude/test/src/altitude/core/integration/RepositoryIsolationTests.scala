@@ -449,10 +449,10 @@ import altitude.core.util.QueryResult
      *
      * Assertions:
      *
-     * From the first repository, the children, the children all the way down and the ancestors of the second repository's
-     * folders, its root included, read as none. Renaming its folder, moving it, and moving its root folder are
-     * `NotFoundException`; moving the first repository's folder into either of them is refused as a move into a folder that does
-     * not exist (`ValidationException`); deleting its folder is `NotFoundException`. Every row of both repositories is as it was.
+     * From the first repository, the folders all the way down and the ancestors of the second repository's folders, its root
+     * included, read as none. Renaming its folder, moving it, and moving its root folder are `NotFoundException`; moving the
+     * first repository's folder into either of them is refused as a move into a folder that does not exist
+     * (`ValidationException`); deleting its folder is `NotFoundException`. Every row of both repositories is as it was.
      */
     val repos = twoRepositories()
     val theirs = idOf(repos, "folder")
@@ -467,7 +467,6 @@ import altitude.core.util.QueryResult
     List(theirs, theirRoot).foreach {
       folderId =>
         withClue(s"[$folderId]: ") {
-          testApp.service.folder.getChildren(folderId) shouldBe empty
           testApp.service.folder.getChildrenRecursive(folderId) shouldBe empty
         }
     }

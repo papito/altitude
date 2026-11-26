@@ -361,6 +361,8 @@ object Const:
       val ORIGINAL_UNREADABLE = "The original file of this photo cannot be read"
       // A folder added under a parent that is not a folder of the repository
       val PARENT_FOLDER_NOT_FOUND = "The parent folder does not exist"
+      // A folder added under a parent in the Trash, from a dialog opened before the delete
+      val PARENT_FOLDER_IN_TRASH = "The parent folder is in the Trash"
 
     // What a Face correction did, for the snackbar
     object FaceCorrection:

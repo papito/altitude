@@ -1,7 +1,7 @@
 package altitude.core.controller
 
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ include, not, should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ contain, include, not, should, shouldBe }
 
 import altitude.core.Api
 import altitude.core.App
@@ -224,7 +224,7 @@ import altitude.core.models.Repository
         }
 
         testApp.service.folder.getById(folder.persistedId).name shouldBe "to-rename"
-        testApp.service.folder.getChildren(testContext.repository.rootFolderId).map(_.name) shouldBe List("to-rename")
+        testApp.service.folder.getTree.children.map(_.name) shouldBe List("to-rename")
     }
   }
 
@@ -369,6 +369,40 @@ import altitude.core.models.Repository
 
         testContext.rowsOf(repo) shouldBe ownBefore
         testContext.rowsOf(otherRepo) shouldBe othersBefore
+    }
+  }
+
+  test("A folder added under a folder in the Trash answers the add form saying so") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the folder Trips, deleted, as a dialog opened before the delete still offers it.
+     *
+     * Assertions:
+     *
+     * Adding "Summer" under Trips answers the add form saying the parent folder is in the Trash, and adds no folder.
+     */
+    val repo = testContext.persistRepository()
+    login()
+
+    withServer(App) {
+      host =>
+        val trips = testApp.service.folder.add("Trips")
+        testApp.service.library.deleteFolderById(trips.persistedId)
+
+        val response = folderRoute(
+          requests.post,
+          host,
+          repo.persistedId,
+          "add",
+          body = Some(ujson.Obj(Api.Field.Folder.NAME -> "Summer", Api.Field.Folder.PARENT_ID -> trips.persistedId)))
+
+        response.statusCode shouldBe 200
+        response.headers("hx-retarget") shouldBe Seq("this")
+        response.text() should include("""id="addFolder"""")
+        response.text() should include(Const.Msg.Err.PARENT_FOLDER_IN_TRASH)
+        (testApp.service.folder.getAll.map(_.name) should not).contain("Summer")
     }
   }
 }

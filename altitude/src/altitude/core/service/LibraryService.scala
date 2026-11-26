@@ -279,6 +279,9 @@ class LibraryService(val app: Altitude):
     logger.debug(s"Restoring recycled assets [${assetIds.mkString(",")}]")
 
     val result = txManager.withTransaction {
+      // Before the reads and row locks, as a folder delete takes it: a delete under way is seen done, and restores take their
+      // folders' name locks one at a time
+      app.service.folder.lockTree()
       val recycled = app.service.asset.getAssetsToRestore(assetIds)
       requireAssets(assetIds -- recycled.map(_.persistedId))
       AssetRules.requireRecycle(recycled, action = "restore")
@@ -321,12 +324,9 @@ class LibraryService(val app: Altitude):
     if !asset.isTriaged then
       // Its ancestors top-down (from the top-level folder to the parent), then its own folder, so the tree stays consistent
       val ancestors: List[Folder] = app.service.folder.getAncestors(asset.folderId)
-      ancestors.foreach {
-        ancestor => if ancestor.isRecycled then app.service.folder.setRecycledProp(folder = ancestor, isRecycled = false)
-      }
+      ancestors.foreach(ancestor => app.service.folder.restoreRecycled(ancestor): Unit)
 
-      val folder: Folder = app.service.folder.getById(asset.folderId)
-      if folder.isRecycled then app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
+      app.service.folder.restoreRecycled(app.service.folder.getById(asset.folderId)): Unit
 
   /**
    * Moves assets into a folder, which also takes them out of the Trash or Triage. The update clears every moved asset's Sequence:

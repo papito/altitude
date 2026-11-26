@@ -2,9 +2,13 @@ package altitude.core.integration
 
 import java.util.Locale
 import org.scalatest.DoNotDiscover
+import org.scalatest.concurrent.Signaler
+import org.scalatest.concurrent.TimeLimits.failAfter
 import org.scalatest.matchers.must.Matchers.contain
 import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shouldEqual, shouldNot }
 import org.scalatest.tagobjects.Slow
+import org.scalatest.time.Seconds
+import org.scalatest.time.Span
 
 import scala.language.reflectiveCalls
 
@@ -21,6 +25,7 @@ import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.models.Asset
 import altitude.core.models.Folder
 import altitude.core.models.Repository
+import altitude.core.util.NameKey
 
 @DoNotDiscover class FolderServiceTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
 
@@ -178,12 +183,12 @@ import altitude.core.models.Repository
      */
     val f = folderHierarchyFixture
 
-    testApp.app.service.folder.getChildren(rootId = f.folder2.persistedId).length shouldBe 1
-    testApp.app.service.folder.getChildren(rootId = f.folder1_1.persistedId).length shouldBe 1
+    childrenOf(f.folder2.persistedId).length shouldBe 1
+    childrenOf(f.folder1_1.persistedId).length shouldBe 1
 
     testApp.service.folder.move(f.folder1_1_1.persistedId, f.folder2.persistedId)
-    testApp.app.service.folder.getChildren(rootId = f.folder2.persistedId).length shouldBe 2
-    testApp.app.service.folder.getChildren(rootId = f.folder1_1.persistedId).length shouldBe 0
+    childrenOf(f.folder2.persistedId).length shouldBe 2
+    childrenOf(f.folder1_1.persistedId).length shouldBe 0
   }
 
   test("Moving a folder to repository root should work") {
@@ -199,13 +204,13 @@ import altitude.core.models.Repository
      */
     val f = folderHierarchyFixture
 
-    testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 2
+    childrenOf(RequestContext.getRepository.rootFolderId).length shouldBe 2
 
     testApp.service.folder.move(f.folder1_1_1.persistedId, RequestContext.getRepository.rootFolderId)
-    testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 3
+    childrenOf(RequestContext.getRepository.rootFolderId).length shouldBe 3
 
     testApp.service.folder.move(f.folder1_1.persistedId, RequestContext.getRepository.rootFolderId)
-    testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 4
+    childrenOf(RequestContext.getRepository.rootFolderId).length shouldBe 4
   }
 
   test("Can traverse the folder hierarchy") {
@@ -238,15 +243,15 @@ import altitude.core.models.Repository
     val folder3: Folder = testApp.service.folder.add("folder3")
     testApp.service.folder.add("folder3_1", parentId = folder3.id)
 
-    val childrenOfRoot = testApp.service.folder.getChildren(RequestContext.getRepository.rootFolderId)
+    val childrenOfRoot = childrenOf(RequestContext.getRepository.rootFolderId)
     childrenOfRoot.size shouldEqual 3
     childrenOfRoot.map(_.persistedId) shouldNot contain(RequestContext.getRepository.rootFolderId)
 
-    val childrenOf1: List[Folder] = testApp.service.folder.getChildren(folder1.persistedId)
+    val childrenOf1: List[Folder] = childrenOf(folder1.persistedId)
     childrenOf1.size shouldEqual 1
     childrenOf1.head.name shouldEqual folder1_1.name
 
-    val childrenOf2: List[Folder] = testApp.service.folder.getChildren(folder2.persistedId)
+    val childrenOf2: List[Folder] = childrenOf(folder2.persistedId)
     childrenOf2.size shouldEqual 4
 
     childrenOf2.map(_.persistedId) shouldEqual List(
@@ -280,13 +285,13 @@ import altitude.core.models.Repository
      */
     val f = folderHierarchyFixture
 
-    val rootFolderChildren = testApp.service.folder.getChildren(RequestContext.getRepository.rootFolderId)
+    val rootFolderChildren = childrenOf(RequestContext.getRepository.rootFolderId)
     rootFolderChildren.size shouldEqual 2
 
     val rootFolder: Folder = testApp.service.folder.getById(RequestContext.getRepository.rootFolderId)
     rootFolder.numOfChildren shouldEqual 2
 
-    val folder1Children = testApp.service.folder.getChildren(f.folder1.persistedId)
+    val folder1Children = childrenOf(f.folder1.persistedId)
     folder1Children.size shouldEqual 2
     folder1Children.head.numOfChildren shouldEqual 1
     folder1Children.last.numOfChildren shouldEqual 0
@@ -1005,7 +1010,7 @@ import altitude.core.models.Repository
 
     ensured.size shouldBe 2
     ensured.toArray.distinct.length shouldBe 1
-    folders.getChildren(clients.persistedId).map(_.name) shouldBe List("Wedding")
+    childrenOf(clients.persistedId).map(_.name) shouldBe List("Wedding")
   }
 
   test("A folder renamed or moved into a name while a path through that name is ensured is the folder the path finds") {
@@ -1038,6 +1043,416 @@ import altitude.core.models.Repository
     contend(first = folders.move(portraits.persistedId, clients.persistedId): Unit, second = ensure("Portraits"))
 
     ensured.toArray.toList shouldBe List(draft.persistedId, portraits.persistedId)
-    folders.getChildren(clients.persistedId).map(_.name) shouldBe List("Party", "Portraits")
+    childrenOf(clients.persistedId).map(_.name) shouldBe List("Party", "Portraits")
   }
+
+  test("Two opposite moves of sibling folders at once leave no cycle: the second is refused") {
+
+    /**
+     * Setup:
+     *
+     * Two sibling folders, Alpha and Beta. A move of Alpha into Beta is held open until a move of Beta into Alpha waits on the
+     * folder tree's lock.
+     *
+     * Assertions:
+     *
+     * The second move is refused as a move into the folder's own descendant, and the tree is Beta holding Alpha.
+     *
+     * Edge cases:
+     *
+     * Without the turn-taking on PostgreSQL, each move's ancestor check reads the tree before the other's write, both commit, and
+     * the two folders are each other's parent.
+     */
+    val folders = testApp.service.folder
+    val alpha = folders.add("Alpha")
+    val beta = folders.add("Beta")
+
+    contend(
+      first = folders.move(alpha.persistedId, beta.persistedId): Unit,
+      second = intercept[IllegalOperationException](folders.move(beta.persistedId, alpha.persistedId)): Unit
+    )
+
+    folders.getById(alpha.persistedId).parentId shouldBe beta.persistedId
+    folders.getById(beta.persistedId).parentId shouldBe testContext.repository.rootFolderId
+  }
+
+  test("The recursive folder reads end on a cycle stored in the tree") {
+
+    /**
+     * Setup:
+     *
+     * Alpha holding Beta, with Alpha's parent then set to Beta in the database, so the two are each other's parent.
+     *
+     * Assertions:
+     *
+     * Alpha's ancestors are Beta, its path Beta and then Alpha, and its folders all the way down Beta and Alpha, each once: every
+     * read stops where the cycle closes.
+     */
+    val folders = testApp.service.folder
+    val alpha = folders.add("Alpha")
+    val beta = folders.add("Beta", alpha.id)
+    testApp.txManager.withTransaction {
+      update("UPDATE folder SET parent_id = ? WHERE id = ?", beta.persistedId, alpha.persistedId)
+    }
+
+    ending(folders.getAncestors(alpha.persistedId)).map(_.persistedId) shouldBe List(beta.persistedId)
+    ending(folders.getPath(alpha.persistedId)).map(_.persistedId) shouldBe List(beta.persistedId, alpha.persistedId)
+    ending(folders.getChildrenRecursive(alpha.persistedId)).map(_.persistedId).sorted shouldBe
+      List(alpha.persistedId, beta.persistedId).sorted
+  }
+
+  test("A folder is neither added nor moved under a folder in the Trash") {
+
+    /**
+     * Setup:
+     *
+     * A deleted folder Trips, and a live folder Beach at the top level.
+     *
+     * Assertions:
+     *
+     * Adding a folder under Trips and moving Beach into it are both refused as illegal operations, and Beach stays where it was.
+     */
+    val folders = testApp.service.folder
+    val trips = folders.add("Trips")
+    val beach = folders.add("Beach")
+    testApp.service.library.deleteFolderById(trips.persistedId)
+
+    intercept[IllegalOperationException](folders.add("Summer", trips.id))
+    intercept[IllegalOperationException](folders.move(beach.persistedId, trips.persistedId))
+
+    folders.getById(beach.persistedId).parentId shouldBe testContext.repository.rootFolderId
+    folders.getAll.map(_.name) shouldNot contain("Summer")
+  }
+
+  test("The root's folders all the way down are every other folder, each once") {
+
+    /**
+     * Setup:
+     *
+     * The standard folder tree.
+     *
+     * Assertions:
+     *
+     * The root's recursive children are the tree's eight folders, without the root, each listed once.
+     */
+    val f = folderHierarchyFixture
+
+    val all = testApp.service.folder.getChildrenRecursive(testContext.repository.rootFolderId).map(_.persistedId)
+
+    all.sorted shouldBe List(
+      f.folder1,
+      f.folder1_1,
+      f.folder1_1_1,
+      f.folder1_1_1_1,
+      f.folder1_1_1_2,
+      f.folder1_2,
+      f.folder2,
+      f.folder2_1).map(_.persistedId).sorted
+  }
+
+  test("A folder added under the name of a deleted sibling is that sibling, restored") {
+
+    /**
+     * Setup:
+     *
+     * A folder Trips holding Beach, deleted, then a folder TRIPS added at the same level.
+     *
+     * Assertions:
+     *
+     * The add is Trips restored under the name as typed, not a duplicate: one live folder TRIPS at that level, with Trips' ID.
+     *
+     * Edge cases:
+     *
+     * Beach stays in the Trash: the restore is of the folder alone, as an import's is. Adding the name again is a duplicate.
+     */
+    val folders = testApp.service.folder
+    val trips = folders.add("Trips")
+    val beach = folders.add("Beach", trips.id)
+    testApp.service.library.deleteFolderById(trips.persistedId)
+
+    val again = folders.add("TRIPS")
+
+    again.persistedId shouldBe trips.persistedId
+    again.isRecycled shouldBe false
+    folders.getById(trips.persistedId).isRecycled shouldBe false
+    folders.getById(trips.persistedId).name shouldBe "TRIPS"
+    folders.getById(beach.persistedId).isRecycled shouldBe true
+    folders.getTree.children.map(_.name) shouldBe List("TRIPS")
+
+    intercept[DuplicateException](folders.add("Trips"))
+  }
+
+  test("A folder renamed or moved to the name of a deleted sibling takes it, and the sibling keeps its name in the Trash") {
+
+    /**
+     * Setup:
+     *
+     * Two top-level folders, Trips and Summer, both deleted; a live folder Holiday beside them, and Elsewhere holding a folder
+     * SUMMER.
+     *
+     * Assertions:
+     *
+     * Holiday renamed to "trips" and SUMMER moved to the top level both succeed, and the top level shows the two folders with
+     * their own IDs. The deleted Trips and Summer stay in the Trash under their names.
+     *
+     * Edge cases:
+     *
+     * Renaming Elsewhere to "Trips" afterwards is a duplicate: the live folder holds the name.
+     */
+    val folders = testApp.service.folder
+    val trips = folders.add("Trips")
+    val summer = folders.add("Summer")
+    val holiday = folders.add("Holiday")
+    val elsewhere = folders.add("Elsewhere")
+    val summerElsewhere = folders.add("SUMMER", elsewhere.id)
+    testApp.service.library.deleteFolderById(trips.persistedId)
+    testApp.service.library.deleteFolderById(summer.persistedId)
+
+    folders.rename(holiday.persistedId, "trips")
+    folders.move(summerElsewhere.persistedId, testContext.repository.rootFolderId)
+
+    childrenOf(testContext.repository.rootFolderId).map(f => (f.persistedId, f.name)) shouldBe List(
+      elsewhere.persistedId -> "Elsewhere",
+      summerElsewhere.persistedId -> "SUMMER",
+      holiday.persistedId -> "trips")
+    List(trips -> "Trips", summer -> "Summer").foreach {
+      case (deleted, name) =>
+        val stored = folders.getById(deleted.persistedId)
+        stored.isRecycled shouldBe true
+        stored.name shouldBe name
+    }
+
+    intercept[DuplicateException](folders.rename(elsewhere.persistedId, "Trips"))
+  }
+
+  test("A folder that gave its name away comes back from the Trash under it when free, and numbered when not") {
+
+    /**
+     * Setup:
+     *
+     * A top-level folder Trips holding an asset, deleted, and a folder Holiday holding an asset, renamed to "Trips", which moves
+     * the deleted Trips aside.
+     *
+     * Assertions:
+     *
+     * With the live folder renamed back to Holiday, restoring the first asset brings the first Trips back under its name. With
+     * that Trips deleted again, Holiday renamed to "Trips" and deleted too, restoring the first asset brings the first Trips back
+     * under its name once more, moving the deleted holder of the name aside. Restoring the second asset then brings Holiday's
+     * folder back as "Trips (2)" beside the live Trips, with its asset in it. After each restore the restored folder holds its
+     * name: adding the name again is a duplicate.
+     */
+    val folders = testApp.service.folder
+    val library = testApp.service.library
+    val root = testContext.repository.rootFolderId
+
+    val first = folders.add("Trips")
+    val firstAsset = testContext.persistAsset(folder = Some(first))
+    library.deleteFolderById(first.persistedId)
+    val second = folders.add("Holiday")
+    val secondAsset = testContext.persistAsset(folder = Some(second))
+    folders.rename(second.persistedId, "Trips")
+
+    // The name free: the first Trips gets it back
+    folders.rename(second.persistedId, "Holiday")
+    library.restoreRecycledAssets(Set(firstAsset.persistedId))
+    folders.getById(first.persistedId).name shouldBe "Trips"
+    folders.getById(first.persistedId).isRecycled shouldBe false
+    intercept[DuplicateException](folders.add("trips"))
+
+    // The name held by a folder in the Trash: the restored folder takes it, the deleted holder moves aside
+    library.deleteFolderById(first.persistedId)
+    folders.rename(second.persistedId, "Trips")
+    library.deleteFolderById(second.persistedId)
+    library.restoreRecycledAssets(Set(firstAsset.persistedId))
+    folders.getById(first.persistedId).name shouldBe "Trips"
+    intercept[DuplicateException](folders.add("trips"))
+
+    // The name held by a live folder: the restored folder comes back numbered
+    library.restoreRecycledAssets(Set(secondAsset.persistedId))
+    val restored = folders.getById(second.persistedId)
+    restored.name shouldBe "Trips (2)"
+    restored.isRecycled shouldBe false
+    childrenOf(root).map(f => (f.persistedId, f.name)) shouldBe List(
+      first.persistedId -> "Trips",
+      second.persistedId -> "Trips (2)")
+    testApp.service.asset.getById(secondAsset.persistedId).folderId shouldBe second.persistedId
+    intercept[DuplicateException](folders.add("TRIPS (2)"))
+  }
+
+  test("Two restores at once of assets in a folder that gave its name away number it once") {
+
+    /**
+     * Setup:
+     *
+     * A top-level folder Trips holding two assets, deleted, and a folder Holiday renamed to "Trips", taking the name. A restore
+     * of the first asset is held open until a restore of the second waits on it.
+     *
+     * Assertions:
+     *
+     * The deleted Trips comes back once, as "Trips (2)", holding both assets.
+     *
+     * Edge cases:
+     *
+     * Without the second restore waiting its turn and reading the folder again, it would number the folder the first had just
+     * numbered once more, as "Trips (3)".
+     */
+    val folders = testApp.service.folder
+    val library = testApp.service.library
+    val trips = folders.add("Trips")
+    val assets = List.fill(2)(testContext.persistAsset(folder = Some(trips)))
+    library.deleteFolderById(trips.persistedId)
+    val holiday = folders.add("Holiday")
+    folders.rename(holiday.persistedId, "Trips")
+
+    contend(
+      first = library.restoreRecycledAssets(Set(assets.head.persistedId)): Unit,
+      second = library.restoreRecycledAssets(Set(assets.last.persistedId)): Unit)
+
+    childrenOf(testContext.repository.rootFolderId).map(f => (f.persistedId, f.name)) shouldBe List(
+      holiday.persistedId -> "Trips",
+      trips.persistedId -> "Trips (2)")
+    assets.foreach(asset => testApp.service.asset.getById(asset.persistedId).isRecycled shouldBe false)
+  }
+
+  test("A restore under a folder deleted at the same time brings that folder back too") {
+
+    /**
+     * Setup:
+     *
+     * A top-level folder Trips holding a folder Beach, deleted alone with its asset. A delete of Trips is held open until a
+     * restore of the asset waits on it.
+     *
+     * Assertions:
+     *
+     * The restore sees Trips in the Trash and brings it back with Beach and the asset, so no live folder is left under a folder
+     * in the Trash.
+     *
+     * Edge cases:
+     *
+     * Without the restore taking the tree's turn, on PostgreSQL it reads Trips live before the delete commits, and Beach and the
+     * asset come back under a Trips in the Trash.
+     */
+    val folders = testApp.service.folder
+    val library = testApp.service.library
+    val trips = folders.add("Trips")
+    val beach = folders.add("Beach", trips.id)
+    val asset = testContext.persistAsset(folder = Some(beach))
+    library.deleteFolderById(beach.persistedId)
+
+    contend(
+      first = library.deleteFolderById(trips.persistedId),
+      second = library.restoreRecycledAssets(Set(asset.persistedId)): Unit)
+
+    folders.getById(trips.persistedId).isRecycled shouldBe false
+    folders.getById(beach.persistedId).isRecycled shouldBe false
+    testApp.service.asset.getById(asset.persistedId).isRecycled shouldBe false
+  }
+
+  test("A folder in the Trash is neither renamed nor moved") {
+
+    /**
+     * Setup:
+     *
+     * A deleted folder Trips, as a dialog opened before the delete still offers it, and a folder Summer deleted beside it.
+     *
+     * Assertions:
+     *
+     * Renaming Trips to "Summer" and moving it into a live folder are both refused as illegal operations, and Summer keeps its
+     * name in the Trash: adding a folder Summer restores it.
+     */
+    val folders = testApp.service.folder
+    val trips = folders.add("Trips")
+    val summer = folders.add("Summer")
+    val beach = folders.add("Beach")
+    testApp.service.library.deleteFolderById(trips.persistedId)
+    testApp.service.library.deleteFolderById(summer.persistedId)
+
+    intercept[IllegalOperationException](folders.rename(trips.persistedId, "Summer"))
+    intercept[IllegalOperationException](folders.move(trips.persistedId, beach.persistedId))
+
+    folders.getById(trips.persistedId).parentId shouldBe testContext.repository.rootFolderId
+    folders.add("Summer").persistedId shouldBe summer.persistedId
+  }
+
+  test("A folder added or moved under a folder deleted at the same time is refused") {
+
+    /**
+     * Setup:
+     *
+     * Folders Trips and Beach at the top level. Twice, a delete of Trips is held open until an add of Summer under it, then a
+     * move of Beach into it, waits on it; Trips is restored between the two.
+     *
+     * Assertions:
+     *
+     * Both the add and the move are refused as illegal operations, and nothing is left under Trips.
+     *
+     * Edge cases:
+     *
+     * Without the add and the move taking the tree's turn, on PostgreSQL each reads Trips live before the delete commits, and
+     * Summer or Beach is left live under a folder in the Trash.
+     */
+    val folders = testApp.service.folder
+    val library = testApp.service.library
+    val trips = folders.add("Trips")
+    val beach = folders.add("Beach")
+
+    contend(
+      first = library.deleteFolderById(trips.persistedId),
+      second = intercept[IllegalOperationException](folders.add("Summer", trips.id)): Unit)
+    folders.add("Trips").persistedId shouldBe trips.persistedId
+    contend(
+      first = library.deleteFolderById(trips.persistedId),
+      second = intercept[IllegalOperationException](folders.move(beach.persistedId, trips.persistedId)): Unit
+    )
+
+    folders.getAll.filter(_.parentId == trips.persistedId) shouldBe Nil
+  }
+
+  test("A folder that gave its name away comes back numbered even when its name's key is near its limit") {
+
+    /**
+     * Setup:
+     *
+     * A top-level folder named with 60 characters whose keys are 33 bytes each and 18 letters, a key of 1,998 bytes, holding an
+     * asset, deleted; a live folder renamed to the same name then.
+     *
+     * Assertions:
+     *
+     * Restoring the asset brings the folder back numbered, its name shortened by as many letters as the number's key needs: "
+     * (2)" would take the key past `NameKey.MAX_KEY_BYTES`, so two letters go.
+     */
+    val folders = testApp.service.folder
+    val name = longKeyName(60) + "x" * 18
+    NameKey.of(name).getBytes(java.nio.charset.StandardCharsets.UTF_8).length shouldBe 1998
+    val trips = folders.add(name)
+    val asset = testContext.persistAsset(folder = Some(trips))
+    testApp.service.library.deleteFolderById(trips.persistedId)
+    folders.rename(folders.add("Holiday").persistedId, name)
+
+    testApp.service.library.restoreRecycledAssets(Set(asset.persistedId))
+
+    folders.getById(trips.persistedId).name shouldBe longKeyName(60) + "x" * 16 + " (2)"
+  }
+
+  /** The live children of the folder, sorted by name, as the folder tree has them; none for a folder not in it */
+  private def childrenOf(folderId: String): List[Folder] = {
+    def find(node: Folder): Option[Folder] =
+      if (node.persistedId == folderId) Some(node) else node.children.view.flatMap(find).headOption
+    find(testApp.service.folder.getTree).map(_.children).getOrElse(Nil)
+  }
+
+  /**
+   * Runs `read` in a read transaction of its own, cancelling its statement after ten seconds, so a recursion that never ends
+   * fails the test instead of hanging the suite
+   */
+  private def ending[T](read: => T): T =
+    testApp.txManager.asReadOnly {
+      val conn = RequestContext.getConn
+      val cancel: Signaler = (_: Thread) =>
+        testApp.dataSourceType match {
+          case Const.DbEngineName.POSTGRES => conn.unwrap(classOf[org.postgresql.core.BaseConnection]).cancelQuery()
+          case _ => conn.unwrap(classOf[org.sqlite.SQLiteConnection]).getDatabase.interrupt()
+        }
+      failAfter(Span(10, Seconds))(read)(using cancel)
+    }
 }

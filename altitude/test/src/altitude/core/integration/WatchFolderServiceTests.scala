@@ -1051,7 +1051,7 @@ import altitude.core.util.Sha256
     memory(watchFolder) shouldBe Map("a.png" -> (WatchFileState.Seen, 0))
     Files.exists(file) shouldBe true
 
-    testApp.service.folder.setRecycledProp(testApp.service.folder.getById(scans.persistedId), isRecycled = false)
+    testApp.service.folder.restoreRecycled(testApp.service.folder.getById(scans.persistedId)): Unit
     scanAndSettle(watchFolder) shouldBe ScanResult.Scanned(1)
     assetOf(file).map(placeOf) shouldBe Some(List("Scans"))
     (card.status, card.reason) shouldBe (WatchFolderStatus.Watching, None)
