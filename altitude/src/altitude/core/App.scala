@@ -86,6 +86,10 @@ object App extends cask.Main:
     // values, and `main` logs the refusal as it logs any failed start.
     LogSettings.requireValid(sys.props.toMap, sys.env)
 
+    // Before ONNX Runtime or sqlite-jdbc loads, and before a database connection loads sqlite-vector: a native jar's start points
+    // their loaders at its libraries, unpacked once into the per-user cache, instead of the temp folder. Elsewhere it does nothing.
+    NativeLibraries.prepare()
+
     // The code uses the org.opencv API, but its native library is loaded through org.bytedeco: the usual
     // `System.loadLibrary(Core.NATIVE_LIBRARY_NAME)` does not link it. https://stackoverflow.com/a/58064096/53687
     Loader.load(classOf[opencv_java])

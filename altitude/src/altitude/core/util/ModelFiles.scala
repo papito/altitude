@@ -17,11 +17,9 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -155,28 +153,26 @@ object ModelFiles:
 
   /**
    * `models.dir`, with `~` as the home directory and a relative one under the application's root path, as the data directory is.
-   * Empty, the per-user cache: `$XDG_CACHE_HOME/altitude/models`, else `~/.cache/altitude/models`; the XDG spec says an empty or
-   * relative `XDG_CACHE_HOME` is ignored.
+   * Empty, `models/` in the per-user cache (`UserCache.folder`): `$XDG_CACHE_HOME/altitude/models`, else
+   * `~/.cache/altitude/models`.
    *
    * Throws `ModelFilesException` when the root needs the home directory and the JVM has no absolute one (`user.home` is `?` for a
    * user with no passwd entry, as in some containers), rather than resolve under whatever the working directory is.
    */
   def root(configured: String, env: String => Option[String], home: String): Path =
-    def absoluteHome(why: String): Path =
-      Option(home).map(Path.of(_)).filter(_.isAbsolute).getOrElse {
-        throw ModelFilesException(
-          s"The model files' directory is unknown: $why, and the home directory (user.home: $home) is not an absolute path. " +
-            s"Set ${Const.Conf.MODELS_DIR}, or the ALTITUDE_MODELS_DIR environment variable, to the directory to keep them in.")
-      }
+    def unknown(why: String): Nothing =
+      throw ModelFilesException(
+        s"The model files' directory is unknown: $why, and the home directory (user.home: $home) is not an absolute path. " +
+          s"Set ${Const.Conf.MODELS_DIR}, or the ALTITUDE_MODELS_DIR environment variable, to the directory to keep them in.")
 
     if configured == "~" || configured.startsWith("~/") then
-      absoluteHome(s"${Const.Conf.MODELS_DIR} is $configured").resolve(configured.drop(2))
+      UserCache.absolute(home).getOrElse(unknown(s"${Const.Conf.MODELS_DIR} is $configured")).resolve(configured.drop(2))
     else if configured.nonEmpty then Path.of(Environment.ROOT_PATH).resolve(configured)
     else
-      val cache = env("XDG_CACHE_HOME").map(Path.of(_)).filter(_.isAbsolute).getOrElse {
-        absoluteHome(s"${Const.Conf.MODELS_DIR} is empty and XDG_CACHE_HOME is not an absolute path").resolve(".cache")
-      }
-      cache.resolve("altitude").resolve("models")
+      UserCache
+        .folder(env, home)
+        .getOrElse(unknown(s"${Const.Conf.MODELS_DIR} is empty and XDG_CACHE_HOME is not an absolute path"))
+        .resolve("models")
 
 /**
  * Puts a set's files in place, downloading the missing ones. A file is in place when its name holds its pinned size, so a start
@@ -227,7 +223,7 @@ final class ModelDownloader(
       try
         Files.createDirectories(directory)
         Files.createDirectories(models.lockFile.getParent)
-        ModelDownloader.locked(models.lockFile) {
+        LockFile.locked(models.lockFile, "putting the model files in place") {
           // Whoever held the lock before may have put them in place meanwhile
           val missing = files.filterNot(inPlace)
           if missing.isEmpty then logger.info(s"The model files were put in place in $directory while this one waited")
@@ -510,29 +506,3 @@ object ModelDownloader:
         // A check that throws is never run again, and the stream is the reader's to close as well
         try stream.close()
         catch { case e: IOException => logger.debug(s"Closing a stalled body failed: $e") }
-
-  /**
-   * One lock per lock file for the whole JVM. A file lock is held by the process, not the thread: a second thread locking the
-   * same file would get an `OverlappingFileLockException` rather than wait, so the threads of one JVM queue here first.
-   */
-  private val processLocks = ConcurrentHashMap[Path, ReentrantLock]()
-
-  /** Against every other process and thread; a wait for either lock is logged, since a download can take minutes */
-  private def locked[A](lockFile: Path)(body: => A): A =
-    // The same file reached by two spellings is one lock
-    val key = lockFile.getParent.toRealPath().resolve(lockFile.getFileName)
-    val processLock = processLocks.computeIfAbsent(key, _ => ReentrantLock())
-    if !processLock.tryLock() then
-      logger.info(s"Another thread is putting the model files in place: waiting for it to finish ($key)")
-      processLock.lock()
-    try
-      val channel = FileChannel.open(key, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
-      try
-        val fileLock = Option(channel.tryLock()).getOrElse {
-          logger.info(s"Another process is putting the model files in place: waiting for it to finish ($key)")
-          channel.lock()
-        }
-        try body
-        finally fileLock.release()
-      finally channel.close()
-    finally processLock.unlock()

@@ -366,6 +366,14 @@ class Altitude(
   private val importHistoryPruning: Cancellable =
     actorSystem.scheduler.scheduleAtFixedRate(1.day, 1.day)(() => service.imports.pruneOrLog())(actorSystem.executionContext)
 
+  // The folder a native jar's start unpacked its libraries into, touched daily so another build's start never prunes it while
+  // this instance runs, on either engine (`NativeLibraries`). None where the start unpacked nothing.
+  private val nativeLibrariesTouching: Option[Cancellable] = NativeLibraries.inUse.map {
+    _ =>
+      actorSystem.scheduler.scheduleAtFixedRate(NativeLibraries.TOUCH_EVERY, NativeLibraries.TOUCH_EVERY)(
+        () => NativeLibraries.touchInUse())(actorSystem.executionContext)
+  }
+
   /** Built before the services, so a model that fails to open fails the start, never an import. Shared by the import threads. */
   final val sceneEmbedder: SceneEmbedder = newSceneEmbedder(models)
 
@@ -454,6 +462,7 @@ class Altitude(
     describeEmbedder.close()
 
     sqliteOptimizing.foreach(_.cancel())
+    nativeLibrariesTouching.foreach(_.cancel())
     importHistoryPruning.cancel(): Unit
     txManager.optimize()
     txManager.shutdown()

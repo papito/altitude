@@ -512,13 +512,15 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
-  // The native jars: one fat jar per platform, started with `java -jar`, holding the natives of that platform alone. Its loaders
-  // find them on the classpath, as a start from the sources does, and unpack what they load.
+  // The native jars: one fat jar per platform, started with `java -jar`, holding the natives of that platform alone. A start
+  // unpacks ONNX Runtime's, sqlite-jdbc's and sqlite-vector's once into the per-user cache (`NativeLibraries`), and javacpp
+  // bytedeco's into a cache of its own.
 
   /**
    * The target platform's libraries of ONNX Runtime, sqlite-jdbc and sqlite-vector, and no other platform's, each under the path
    * its loader looks for it on the classpath: `ai/onnxruntime/native/<folder>/`, `org/sqlite/native/<OS>/<arch>/` and
-   * `sqlite-vector/<folder>/`. Bytedeco's need no such folder: each platform's are a classifier jar of their own.
+   * `sqlite-vector/<folder>/`. `NativeLibraries` unpacks what is under those three folders. Bytedeco's need no such folder: each
+   * platform's are a classifier jar of their own.
    */
   private def platformNatives: T[PathRef] = Task {
     val target = nativePlatforms.find(_.name == targetPlatform()).get

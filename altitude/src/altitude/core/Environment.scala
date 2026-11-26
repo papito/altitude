@@ -2,10 +2,6 @@ package altitude.core
 
 import com.typesafe.config.Config
 import java.io.File
-import java.io.InputStream
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -103,44 +99,3 @@ object Environment:
       logger.warn(s"$key is for the dev environment only: ignored")
       false
     else true
-
-  /** Where `resolveResourcePath` extracts resources when running from a JAR */
-  private lazy val tempResourceDir: Path =
-    val dir = Files.createTempDirectory("altitude-resources")
-    logger.debug(s"Created temp resource directory: $dir")
-    dir.toFile.deleteOnExit()
-    dir
-
-  /**
-   * A classpath resource as an absolute filesystem path, extracted to a temp directory when inside a JAR: SQLite loads its vector
-   * extension only from a path. Not called when the `altitude.native.dir` property names the folder that holds the extension
-   * (`TransactionManager.vectorExtensionPath`), as in the Docker image, where nothing is extracted.
-   */
-  def resolveResourcePath(classpathPath: String): String =
-    val resourceUrl = getClass.getResource(classpathPath)
-    if resourceUrl == null then throw RuntimeException(s"Classpath resource not found: $classpathPath")
-
-    resourceUrl.getProtocol match {
-      case "file" =>
-        new File(resourceUrl.toURI).getAbsolutePath
-
-      case "jar" =>
-        val destFile = tempResourceDir.resolve(classpathPath.stripPrefix("/")).toFile
-
-        if !destFile.exists() then
-          destFile.getParentFile.mkdirs()
-          val stream: InputStream = getClass.getResourceAsStream(classpathPath)
-          if stream == null then throw RuntimeException(s"Classpath resource not found: $classpathPath")
-          try {
-            Files.copy(stream, destFile.toPath, StandardCopyOption.REPLACE_EXISTING)
-            destFile.deleteOnExit()
-            logger.debug(s"Extracted classpath resource $classpathPath to $destFile")
-          } finally {
-            stream.close()
-          }
-
-        destFile.getAbsolutePath
-
-      case protocol =>
-        throw RuntimeException(s"Unsupported resource URL protocol: $protocol for $classpathPath")
-    }

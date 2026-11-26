@@ -29,6 +29,7 @@ import altitude.core.unit.LauncherTests
 import altitude.core.unit.LogSettingsTests
 import altitude.core.unit.ModelDownloaderTests
 import altitude.core.unit.NameKeyTests
+import altitude.core.unit.NativeLibrariesTests
 import altitude.core.unit.NaturalOrderTests
 import altitude.core.unit.NetPoolTests
 import altitude.core.unit.OnnxEnvironmentTests
@@ -92,6 +93,7 @@ abstract class AllUnitTestSuites
     new TempFolderTests,
     new AppStartTests,
     new LauncherTests,
+    new NativeLibrariesTests,
     new SystemLibrariesTests,
     new LogSettingsTests,
     new Sha256Tests,

@@ -64,7 +64,7 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
 | Image builds | `make docker` builds and loads an image for the machine's architecture (`docker buildx build --load`; the cache mounts need BuildKit, so the `docker-buildx` package, installed once by the owner). `DOCKER_PLATFORM=linux/arm64` cross-builds the other, which needs QEMU binfmt for the runtime stage's `RUN` (`docker run --privileged --rm tonistiigi/binfmt --install arm64`). The arm64 image is run on GitHub's arm runner, not here. |
 | Stage 1 CI | `.github/workflows/docker.yml` (the owner creates it): on `ubuntu-24.04` and `ubuntu-24.04-arm`, each natively, `make docker` and `make smoke-docker`, which needs `curl` and `ffmpeg` on the runner. The models folder (`~/.cache/altitude/models`) is an `actions/cache` entry keyed by the set's tag; the first start fills it from the set's release (`renegade-otter/altitude-models` `v1`, and ArcFace from Hugging Face). |
 | Stage 2 jars | One fat jar per platform, `altitude-<version>-<platform>.jar`, holding that platform's natives alone. Its main class is a launcher compiled for Java 8: on a Java older than 21, or on another platform, it prints a message naming what to install or which jar to download (Docker on an Intel Mac) and exits, instead of an `UnsupportedClassVersionError` or an `UnsatisfiedLinkError`. Started without `ORT_DISABLE_TELEMETRY=1`, it starts the JVM once more with the variable set and waits for it, since ONNX Runtime's telemetry has no switch inside a running process (the ONNX Runtime row): with `-jar` and the jar when it was started from the jar, so the manifest's attributes apply, else with `-cp` and `java.class.path`. |
-| Stage 2 natives | ONNX Runtime and sqlite-vector are unpacked once into `<user cache>/altitude/natives/<build>-<platform>/`, beside the models cache, and loaded from there; javacpp keeps its own cache. `<build>` is a hash of the jar's native files, so a rebuilt jar of the same version never reuses another build's. Each start touches its folder; folders untouched for 30 days are pruned, so no start removes what another running instance loads from. |
+| Stage 2 natives | ONNX Runtime, sqlite-jdbc and sqlite-vector are unpacked once into `<user cache>/altitude/natives/<build>-<platform>/`, beside the models cache whatever `models.dir` says, and loaded from there; javacpp keeps its own cache. sqlite-jdbc is among them because it otherwise copies its library into the temp folder at every start, where a killed run leaves it, and every stop on Windows. `<build>` is the jar's `Altitude-Build`, a hash of its native files, so a rebuilt jar of the same version never reuses another build's. Each start touches its folder, and a running instance touches it daily on either engine (a SQLite pool replaces its connections every half hour, each loading sqlite-vector from the folder anew, and on Windows a prune would leave a partial folder); folders untouched for 30 days are pruned, so no start removes what another running instance loads from. A loader's property that is set already is kept, and with all of them set (the image) nothing is written, touched or pruned. |
 | Stage 2 defaults | The jar's folder holds `application.conf` and `data/`. It binds `localhost` until the owner sets `ALTITUDE_HOST` or `server.host`. |
 | Stage 2 Windows | The x64 jar. The README tells a person whom Smart App Control blocks to turn it off in Windows Security (no reinstall is needed) or to use Docker Desktop. No paid signing. |
 | Stage 2 builds | A GitHub Actions matrix builds each jar on its own system, runs the Unit and SQLite suites and the JS tests there, and smoke-runs the jar. The owner creates the workflow; where the jars are published is decided when stage 2 starts. |
@@ -148,8 +148,8 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
     still holding a native library fails `distLib`. `altitude.dist`: both, in `dist.dest/`. `forkEnv` sets
     `ORT_DISABLE_TELEMETRY=1` for `run` and the tests, and `OnnxEnvironment` (the ONNX Runtime row) is in
     `SceneEmbedder.scala`, with `OnnxEnvironmentTests`.
-15. `TransactionManager.scala`: with `altitude.native.dir` set, sqlite-vector loads from there; unset, it is extracted
-    from the classpath as it is now. `Environment.resolveResourcePath`'s comment says so.
+15. `TransactionManager.scala`: with `altitude.native.dir` set, sqlite-vector loads from there; unset, it is the build on
+    the classpath, which must be a file (item 31).
 16. `altitude/resources/sqlite-vector/macos-x86/` and `windows-x86/vector.lib` are deleted, and
     `TransactionManager.vectorExtensionPath` loses its Intel Mac folder: no supported platform loads them.
 17. `./mill` and `mill.bat`: Mill's bootstrap scripts, reading the version from `build.mill`'s header; the Makefile's
@@ -256,13 +256,26 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
 
 ### G. Natives unpacked once
 
-31. A `NativeLibraries` helper unpacks ONNX Runtime and sqlite-vector into `<user cache>/altitude/natives/<build>-<platform>/`
-    under a lock file, as the model files are, sets `onnxruntime.native.path` and `altitude.native.dir` before either
-    loads (leaving them alone when they are already set, as in the image), touches its folder and prunes the folders
-    untouched for 30 days. `Environment.resolveResourcePath` and its temp folder go. A start no longer leaves about 30 MB
-    in the temp folder.
-32. Tests: unpacked once and reused, a second process waiting on the lock, a stale folder pruned and a fresh one kept,
-    the properties left alone when set.
+31. `NativeLibraries.scala`: in a jar whose manifest has `Altitude-Build` and `Altitude-Platform`, the start, after the
+    logging check and before anything loads ONNX Runtime or opens a database, unpacks ONNX Runtime's, sqlite-jdbc's and
+    sqlite-vector's libraries, flat, into `natives/<build>-<platform>/` of the per-user cache (`UserCache.folder`, which
+    `ModelFiles.root` shares) and sets `onnxruntime.native.path`, `org.sqlite.lib.path` with `org.sqlite.lib.name`, and
+    `altitude.native.dir` to the folder. It holds `natives/.lock` (`LockFile.locked`, which `ModelDownloader` shares), removes
+    the `.part` files a killed unpack left, writes each library whose file is missing or not its entry's length to a `.part`
+    and moves it to its name, touches its folder and removes the folders of other builds untouched for 30 days. A property
+    that is set already is kept; with every one set, as in the image, nothing is written, touched or pruned, and the cache is
+    never looked up. Outside such a jar it does nothing. A folder that cannot be written fails the start through its one
+    ERROR line, naming the folder. `Altitude` touches the folder daily on the actor system's scheduler
+    (`NativeLibraries.touchInUse`, every `TOUCH_EVERY`) where the start unpacked, and `cleanup()` cancels it.
+    `Environment.resolveResourcePath` and its temp folder are gone: a sqlite-vector build on the classpath inside a jar with
+    no `Altitude-Build` (`./mill altitude.assembly`) fails the connection, naming the jar and the property. A start leaves no
+    library in the temp folder, only ONNX Runtime's empty `onnxruntime-java*` folder, which the JVM's exit removes.
+32. Tests (`NativeLibrariesTests`, unit, over jars written for each test and a scratch user cache): unpacked once and
+    reused with no file written again, a library cut short and a leftover `.part` replaced, a second JVM waiting on the lock
+    (`ChildJvm`) and unpacking once it is let go, a stale folder pruned and a fresh one and the own one kept, the
+    properties left alone when set and nothing written then, nothing done outside a platform jar, an unwritable cache
+    failing, naming the folder, and the touch of the folder in use, more often than the pruning age.
+    `TransactionManagerTests`: a build inside a jar refused.
 
 ### H. Builds on each system
 

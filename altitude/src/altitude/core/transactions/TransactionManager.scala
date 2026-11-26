@@ -3,6 +3,7 @@ package altitude.core.transactions
 import com.typesafe.config.Config
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.sql.Connection
@@ -17,7 +18,7 @@ import scala.collection.mutable.ListBuffer
 import scala.util.control.NonFatal
 
 import altitude.core.Const
-import altitude.core.Environment
+import altitude.core.NativeLibraries
 import altitude.core.RequestContext
 import altitude.core.ThreadVariable
 import altitude.core.models.SceneModel
@@ -40,17 +41,21 @@ object TransactionManager:
   private val HNSW_SCAN_MEM_MULTIPLIER = 8
 
   /**
-   * The system property naming a folder that holds this platform's sqlite-vector build. The Docker image sets it: its native
-   * libraries are put in a folder when the image is built, so a start unpacks nothing.
+   * The system property naming a folder that holds this platform's sqlite-vector build. The Docker image sets it to the folder
+   * its native libraries are put in when the image is built, and a native jar's start to the folder it unpacks them into
+   * (`NativeLibraries`).
    */
   val NATIVE_DIR_PROPERTY = "altitude.native.dir"
 
   /**
    * The sqlite-vector build for this platform, as a file SQLite can load: the one in `nativeDir` (the value of
    * [[NATIVE_DIR_PROPERTY]]; an empty one counts as unset), which must hold it, since nothing is then taken from the classpath;
-   * without a folder, the build on the classpath, extracted to a temp folder when it is inside a jar.
+   * without a folder, the build on the classpath, which `locate` finds. That one must be a file, as it is in a classes folder
+   * (Mill's `run`, the tests): SQLite loads an extension only from a file, and a build inside a jar is refused, naming the jar. A
+   * platform jar's start has unpacked it and set the property; a jar of any other kind (`./mill altitude.assembly`) runs on
+   * SQLite only with the property set.
    */
-  def vectorExtensionPath(nativeDir: Option[String]): String =
+  def vectorExtensionPath(nativeDir: Option[String], locate: String => URL = getClass.getResource): String =
     val os = sys.props.getOrElse("os.name", "").toLowerCase
     val arch = sys.props.getOrElse("os.arch", "").toLowerCase
 
@@ -69,7 +74,17 @@ object TransactionManager:
         if !Files.isRegularFile(file) then
           throw IllegalStateException(s"$NATIVE_DIR_PROPERTY names $dir, but the sqlite-vector extension is not there: $file")
         file.toString
-      case None => Environment.resolveResourcePath(s"/sqlite-vector/$platformDir/$extName")
+      case None =>
+        val resource = s"/sqlite-vector/$platformDir/$extName"
+        val url = Option(locate(resource)).getOrElse {
+          throw IllegalStateException(s"The sqlite-vector extension is not on the classpath: $resource")
+        }
+        if url.getProtocol != "file" then
+          throw IllegalStateException(
+            s"The sqlite-vector extension is inside $url, and SQLite loads an extension only from a file. A native jar " +
+              s"(./mill altitude.platformJar, whose manifest has ${NativeLibraries.BUILD}) unpacks it; with any other, set " +
+              s"$NATIVE_DIR_PROPERTY to a folder that holds $extName.")
+        Paths.get(url.toURI).toString
 
 /**
  * Connections and transactions. A transaction runs on a connection borrowed from a HikariCP pool and carried by

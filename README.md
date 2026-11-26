@@ -462,6 +462,10 @@ launcher starts the JVM once more with it set, the image sets it, and so does th
 runs as `prod`: it listens on `localhost:8080`, and its `application.conf`, if any, and its `data/` are in the jar's
 own folder.
 
+The first start of a jar unpacks its ONNX Runtime and SQLite libraries into `~/.cache/altitude/natives/<build>-<platform>/`
+(`$XDG_CACHE_HOME/altitude/natives/` when that is set), and later starts load them from there. Another build's folder
+is removed once no start has used it for 30 days. A start that cannot write the folder fails, naming it.
+
 ## Design decisions and other resources
 
 These are covered in the [WIKI](https://github.com/papito/altitude/wiki)

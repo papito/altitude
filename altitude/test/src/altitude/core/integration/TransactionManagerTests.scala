@@ -16,6 +16,7 @@ import scala.io.Source
 
 import altitude.core.Altitude
 import altitude.core.Const
+import altitude.core.NativeLibraries
 import altitude.core.QueryTimeoutException
 import altitude.core.RequestContext
 import altitude.core.dao.sql.Db
@@ -283,7 +284,8 @@ import altitude.core.transactions.TransactionManager
        *
        * The folder that holds no build fails the connection, naming the property and the missing file: with the property set,
        * nothing is taken from the classpath. An empty property counts as unset, and a relative folder is under the working
-       * directory.
+       * directory. A build on the classpath inside a jar, as in one that is no platform jar, fails naming the jar, the property
+       * and the platform jar: SQLite loads an extension from a file alone, and nothing extracts it.
        */
       val testDir = Paths.get(testApp.config.getString(Const.Conf.TEST_DIR)).toAbsolutePath
       Files.createDirectories(testDir)
@@ -325,6 +327,13 @@ import altitude.core.transactions.TransactionManager
       val reasons = Iterator.iterate[Throwable](refusal)(_.getCause).takeWhile(_ != null).map(_.getMessage).mkString(" / ")
       reasons should include(TransactionManager.NATIVE_DIR_PROPERTY)
       reasons should include(emptyDir.resolve(onClasspath.getFileName).toString)
+
+      val inJar =
+        new java.net.URI(s"jar:file:/opt/altitude/altitude.jar!/sqlite-vector/linux-x86/${onClasspath.getFileName}").toURL
+      val inside = intercept[IllegalStateException](TransactionManager.vectorExtensionPath(None, _ => inJar))
+      inside.getMessage should include("/opt/altitude/altitude.jar")
+      inside.getMessage should include(TransactionManager.NATIVE_DIR_PROPERTY)
+      inside.getMessage should include(NativeLibraries.BUILD)
     }
   } else {
     test(
