@@ -1,5 +1,6 @@
 package altitude.core.util
 
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 
 /**
@@ -15,10 +16,15 @@ object UserCache:
    */
   def folder(env: String => Option[String], home: String): Option[Path] =
     env("XDG_CACHE_HOME")
-      .map(Path.of(_))
-      .filter(_.isAbsolute)
+      .flatMap(absolute)
       .orElse(absolute(home).map(_.resolve(".cache")))
       .map(_.resolve("altitude"))
 
-  /** `home` as a path when it is an absolute one */
-  def absolute(home: String): Option[Path] = Option(home).map(Path.of(_)).filter(_.isAbsolute)
+  /** `path` as a path when it is an absolute one; None for null and for what is no path here, as `?` is none on Windows */
+  def absolute(path: String): Option[Path] =
+    Option(path)
+      .flatMap(
+        value =>
+          try Some(Path.of(value))
+          catch case _: InvalidPathException => None)
+      .filter(_.isAbsolute)

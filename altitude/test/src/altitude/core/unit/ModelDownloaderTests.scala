@@ -1006,7 +1006,7 @@ import altitude.core.util.Sha256
      * Setup:
      *
      * `models.dir` as `~`, `~/models` and empty, with a home directory that is absolute, `?` (the JVM's `user.home` for a user
-     * with no passwd entry), or unset.
+     * with no passwd entry, and no path at all on Windows), one with a NUL (no path on any system), or unset.
      *
      * Assertions:
      *
@@ -1026,7 +1026,7 @@ import altitude.core.util.Sha256
     ModelFiles.root("", Map("XDG_CACHE_HOME" -> abs("/var/cache")).get, "?") shouldEqual Path.of(
       abs("/var/cache/altitude/models"))
 
-    Seq(("", "?"), ("", null), ("~/models", "?"), ("~", null)).foreach {
+    Seq(("", "?"), ("", null), ("~/models", "?"), ("~", null), ("~", "/home/\u0000user")).foreach {
       (configured, home) =>
         val message = intercept[ModelFilesException](ModelFiles.root(configured, noEnv, home)).getMessage
         message should include("models.dir")

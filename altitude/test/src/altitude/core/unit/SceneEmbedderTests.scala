@@ -173,7 +173,8 @@ import altitude.core.util.OnnxSceneEmbedder
      *
      * Each prepared input is 224x224 RGB, byte for byte the image resized so its short side is 224 (`INTER_AREA` shrinking,
      * `INTER_CUBIC` enlarging) and cut to its center square. Each one's SHA-256 is pinned, since DINOv2's threshold is calibrated
-     * to this input. The landscape's bands fall outside the square.
+     * to this input; the enlarged one's per architecture, since OpenCV's bicubic code rounds differently on ARM than on x86. The
+     * landscape's bands fall outside the square.
      */
     val side = SceneModel.Dinov2.inputSize
     side shouldBe 224
@@ -197,7 +198,10 @@ import altitude.core.util.OnnxSceneEmbedder
 
       val ofSmall = OnnxSceneEmbedder.prepare(small, SceneModel.Dinov2)
       ofSmall shouldBe centerSquareRgb(small, 336, 224, side, Imgproc.INTER_CUBIC)
-      sha256(ofSmall) shouldBe "31398e2a0b00a8ffc07789e8090c0bc135adfd2d1174102aa9c936c6b694f0aa"
+      val ofSmallSha256 =
+        if sys.props("os.arch") == "aarch64" then "2ecf4d3ac6b9d26e7b179fc8e77b3f1d5023f71b1ee03e4d5366f72023eeea0d"
+        else "31398e2a0b00a8ffc07789e8090c0bc135adfd2d1174102aa9c936c6b694f0aa"
+      sha256(ofSmall) shouldBe ofSmallSha256
     finally List(landscape, portrait, small).foreach(_.release())
   }
 

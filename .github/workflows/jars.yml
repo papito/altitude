@@ -111,7 +111,7 @@ jobs:
       # runners share theirs.
       - name: Restore the model files
         id: models
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.ALTITUDE_MODELS_DIR }}
           key: ${{ steps.model-set.outputs.key }}
@@ -120,7 +120,7 @@ jobs:
       # architecture (bytedeco's natives differ between them). build.mill's header names the Mill version; mill and mill.bat
       # are the launchers. A missed key starts from the latest entry of the system and saves a new one when the job passes.
       - name: Dependency downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/coursier
@@ -168,13 +168,13 @@ jobs:
 
       - name: Save the model files
         if: always() && steps.models-whole.outputs.whole == 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ env.ALTITUDE_MODELS_DIR }}
           key: ${{ steps.model-set.outputs.key }}
 
       - name: Upload the jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: altitude-${{ matrix.platform }}
           path: out/altitude/platformJar.dest/altitude-*-${{ matrix.platform }}.jar
@@ -185,7 +185,7 @@ jobs:
       # The per-worker logs and the merged report of the suites, for a look at a failure
       - name: Upload the test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports-${{ matrix.platform }}
           path: |
