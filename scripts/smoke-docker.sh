@@ -19,7 +19,8 @@
 #
 # The checks read the server's log for lines of ServerShutdown, QueuedPipeline, ImportService, SceneEmbedder and App by
 # their text: a reworded line fails its check here. That holds for a line that must not be there too: its check first
-# finds the text in the sources, since a text no source logs any more is absent from every log.
+# finds the text in the sources, since a text no source logs any more is absent from every log. What it shares with
+# smoke-jar.sh, the calls through the API and those checks among them, is in smoke-common.sh.
 
 set -euo pipefail
 
@@ -28,9 +29,10 @@ START_TIMEOUT="${START_TIMEOUT:-1200}"
 # compose.yaml's stop_grace_period
 STOP_GRACE=120
 
+SMOKE_NAME=smoke-docker
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-photos_with_faces="$repo_root/altitude/test/resources/import/people"
-other_photos="$repo_root/altitude/test/resources/import/images"
+# shellcheck source=scripts/smoke-common.sh
+. "$repo_root/scripts/smoke-common.sh"
 
 name="altitude-smoke-$$-$(date +%s)"
 data_volume="$name-data"
@@ -45,28 +47,13 @@ url=""
 token=""
 stop_took=0
 
-say() { printf '%s\n' "smoke-docker: $*"; }
-
 # The server's log so far, stdout and stderr together
 server_log() { docker logs "$name" 2>&1; }
-
-fail() {
-    printf '\n%s\n' "smoke-docker: FAILED: $1" >&2
-    shift
-    for detail in "$@"; do printf '%s\n' "$detail" | sed 's/^/    /' >&2; done
-    exit 1
-}
 
 cleanup() {
     status=$?
     trap - EXIT INT TERM
-    if [ "$passed" != 1 ] && [ "$container_made" = 1 ]; then
-        {
-            # The log's own lines, each of which starts with its date: a crash report's hundreds of lines are left out
-            printf '\n%s\n' "smoke-docker: the last lines of the server's log, without DEBUG:"
-            server_log | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T' | grep -v ' DEBUG ' | tail -n 30 | cut -c1-300 || true
-        } >&2
-    fi
+    if [ "$passed" != 1 ] && [ "$container_made" = 1 ]; then server_log | print_log_tail || true; fi
     if [ "${KEEP:-0}" = 1 ]; then
         say "KEEP=1: left container $name and volumes $data_volume and $tmp_volume"
     else
@@ -89,15 +76,6 @@ base_url() {
     published="$(docker port "$name" 8080/tcp | head -n 1)"
     [ -n "$published" ] || fail "the published port" "docker port names none for 8080/tcp"
     printf 'http://%s' "$published"
-}
-
-# request <file for the body> <curl arguments...>: prints the status code, 000 when there was no answer, which the
-# caller's check then fails on by its name
-request() {
-    local body="$1"
-    shift
-    : >"$body"
-    curl --silent --show-error --max-time 120 --output "$body" --write-out '%{http_code}' "$@" || true
 }
 
 # Waits until Docker's health check passes. A container that exits, or that Docker calls unhealthy, fails at once.
@@ -146,110 +124,13 @@ start_server() {
     url="$(base_url)"
 }
 
-# The session token of a response's Set-Cookie header, sent back as a Bearer token: the cookie is Secure, which curl
-# would not send over plain HTTP
-token_of() { sed -n 's/^[Ss]et-[Cc]ookie: auth_token=\([^;]*\);.*/\1/p' "$1" | tr -d '\r' | head -n 1; }
-
-# Signs the Admin in again: sets $token. The session key is made anew at each start, so a restart signs everyone out.
-sign_in() {
-    local status
-    status="$(request "$work/body" --dump-header "$work/headers" --data-urlencode 'login=smoke' \
-        --data-urlencode "password=$password" "$url/login")"
-    token="$(token_of "$work/headers")"
-    if [ "$status" != 302 ] || [ -z "$token" ]; then
-        fail "signing in after a restart" "status $status and no session cookie"
-    fi
-}
-
-# Opens an Import of the files listed in a file (one path a line), uploads them and closes it: prints the Import's ID
-import_files() {
-    local list="$1" url="$2" token="$3" count status id file file_name
-    count="$(grep -c . "$list")"
-    status="$(request "$work/body" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
-        --data "{\"expectedFiles\":$count}" "$url/import/r/$repo/imports")"
-    id="$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$work/body")"
-    if [ "$status" != 200 ] || [ -z "$id" ]; then
-        fail "opening an Import" "status $status: $(head -c 300 "$work/body")"
-    fi
-
-    while IFS= read -r file; do
-        file_name="$(basename "$file")"
-        case "$file_name" in
-            *[!A-Za-z0-9._-]*) fail "uploading $file_name" "the script sends a file's name in the URL as it is: letters, digits, dot, dash and underscore alone" ;;
-        esac
-        status="$(request "$work/body" -H "Authorization: Bearer $token" -H 'Content-Type: application/octet-stream' \
-            --data-binary "@$file" "$url/import/r/$repo/imports/$id/files?relPath=$file_name")"
-        [ "$status" = 200 ] || fail "uploading $file_name" "status $status: $(head -c 300 "$work/body")"
-    done <"$list"
-
-    status="$(request "$work/body" -H "Authorization: Bearer $token" -X POST "$url/import/r/$repo/imports/$id/close")"
-    [ "$status" = 200 ] || fail "closing Import $id" "status $status: $(head -c 300 "$work/body")"
-    printf '%s' "$id"
-}
-
-# The Import history, as the Import page shows it, into $work/history
-read_history() {
-    local status
-    status="$(request "$work/history" -H "Authorization: Bearer $2" "$1/htmx/import/r/$repo/history")"
-    [ "$status" = 200 ] || fail "reading the Import history" "status $status: $(head -c 300 "$work/history")"
-}
-
-# Whether the history last read shows the Import as in progress
-in_progress() { grep -q "class=\"import in-progress\" data-import-id=\"$1\"" "$work/history"; }
-
-# How many files of an Import the history last read counts under an outcome (imported, duplicate, unsupported, failed,
-# pending): the number on that outcome's chip, 0 when there is none
-outcome_count() {
-    local count
-    count="$(sed -n "/id=\"importStatus-$1\"/,/<\/ul>/p" "$work/history" |
-        sed -n "s/.*<li class=\"$2\">\([0-9,]*\) .*/\1/p" | tr -d ',' | head -n 1)"
-    printf '%s' "${count:-0}"
-}
-
-# How many lines of a file hold a fixed text
-lines_with() { grep -c -F -e "$1" "$2" || true; }
-
-require_line() { grep -q -F -e "$2" "$1" || fail "$3" "no line of the log says \"$2\""; }
-
-forbid_line() {
-    if grep -q -F -e "$2" "$1"; then
-        fail "$3" "the log says: $(grep -F -e "$2" "$1" | head -n 3 | cut -c1-300)"
-    fi
-}
-
-# forbid_line for a line of the server's own. Once that line is reworded in the sources, no log holds the old text and
-# the check would pass whatever the server did: so the text must still be in a string of the sources, or this fails.
-forbid_own_line() {
-    grep -r -F -h -e "$2" "$repo_root/altitude/src" | grep -q '"' || fail "the script's own check of \"$3\"" \
-        "no string in altitude/src says \"$2\": the line was reworded, and this check would pass whatever the log held"
-    forbid_line "$@"
-}
-
-# Makes $1 photos in the new folder $2 and adds them to the list $3: frames of the moving lavfi test pattern $4, each a
-# picture of its own, so none is a duplicate of another
-make_photos() {
-    mkdir "$2"
-    ffmpeg -nostdin -loglevel error -y -f lavfi -i "$4=size=640x480:rate=25" -frames:v "$1" -q:v 3 "$2/frame-%03d.jpg" ||
-        fail "making photos" "ffmpeg -f lavfi -i $4 failed"
-    find "$2" -type f | sort >>"$3"
-}
-
 # ---------------------------------------------------------------------------------------------------------------------
 # Before anything is made
 
-for tool in docker curl ffmpeg; do
-    command -v "$tool" >/dev/null 2>&1 || fail "the host's tools" "$tool is not installed"
-done
+require_tools docker curl ffmpeg
 docker image inspect "$IMAGE" >/dev/null 2>&1 || fail "the image" "$IMAGE does not exist: run make docker first"
-[ -d "$photos_with_faces" ] && [ -d "$other_photos" ] || fail "the test photos" "not found under $repo_root/altitude/test/resources/import"
 
-if [ -z "${MODELS_DIR:-}" ]; then
-    # As ModelFiles.root: a relative XDG_CACHE_HOME is ignored
-    case "${XDG_CACHE_HOME:-}" in
-        /*) MODELS_DIR="$XDG_CACHE_HOME/altitude/models" ;;
-        *) MODELS_DIR="$HOME/.cache/altitude/models" ;;
-    esac
-fi
+MODELS_DIR="${MODELS_DIR:-$(default_models_dir)}"
 # Made here, by the caller: a bind mount's missing folder would be made by Docker, as root
 mkdir -p "$MODELS_DIR"
 MODELS_DIR="$(cd "$MODELS_DIR" && pwd)"
@@ -320,68 +201,13 @@ say "   healthy, and $url/api/health answers ok"
 # ---------------------------------------------------------------------------------------------------------------------
 say "3. Setup"
 
-setup='{"repositoryName":"Smoke","adminEmail":"smoke@example.com","adminName":"Smoke Test","adminUsername":"smoke"'
-setup="$setup,\"password\":\"$password\",\"password2\":\"$password\"}"
-status="$(request "$work/body" --dump-header "$work/headers" -H 'Content-Type: application/json' --data "$setup" \
-    "$url/htmx/setup")"
-repo="$(sed -n 's/^[Hh][Xx]-[Rr]edirect: \/r\/\([^[:space:]]*\).*/\1/p' "$work/headers" | tr -d '\r' | head -n 1)"
-token="$(token_of "$work/headers")"
-if [ "$status" != 200 ] || [ -z "$repo" ] || [ -z "$token" ]; then
-    fail "Setup" "status $status, and no Library to go to or no session cookie: $(head -c 300 "$work/body")"
-fi
+run_setup
 say "   the Admin and Library $repo exist"
 
 # ---------------------------------------------------------------------------------------------------------------------
 say "4. an import of photos with faces and a video"
 
-# A few seconds of a test pattern, in whatever codec this ffmpeg writes an .mp4 in: the image's FFmpeg opens, seeks and
-# decodes it
-ffmpeg -nostdin -loglevel error -y -f lavfi -i 'testsrc2=duration=3:size=640x360:rate=25' \
-    -pix_fmt yuv420p "$work/clip.mp4" || fail "making the video" "ffmpeg -f lavfi failed"
-
-find "$photos_with_faces" -type f | sort >"$work/first"
-echo "$work/clip.mp4" >>"$work/first"
-first_count="$(grep -c . "$work/first")"
-first_import="$(import_files "$work/first" "$url" "$token")"
-
-waited=0
-while :; do
-    read_history "$url" "$token"
-    if ! in_progress "$first_import"; then break; fi
-    [ "$waited" -lt 300 ] || fail "the first import" "still in progress after 300 seconds"
-    sleep 1
-    waited=$((waited + 1))
-done
-imported="$(outcome_count "$first_import" imported)"
-[ "$imported" = "$first_count" ] || fail "the first import" \
-    "$imported of $first_count files imported: $(sed -n "/id=\"importStatus-$first_import\"/,/<\/ul>/p" "$work/history" | grep '<li' | tr -s ' \n' ' ')"
-say "   $imported files imported"
-
-status="$(request "$work/body" -H "Authorization: Bearer $token" "$url/htmx/search/r/$repo?triaged=true&rpp=100")"
-[ "$status" = 200 ] || fail "listing the imported assets" "status $status"
-[ "$(lines_with 'data-media-type="video"' "$work/body")" = 1 ] || fail "the video" "the results hold no video asset"
-
-# Faces found: a person for each face not matched to another, and a cover face's image served from /data
-status="$(request "$work/body" -H "Authorization: Bearer $token" "$url/htmx/people/r/$repo/list?buckets=matched,unmatched&triaged=true")"
-people="$(lines_with ' data-person-id="' "$work/body")"
-if [ "$status" != 200 ] || [ "$people" -lt 1 ]; then
-    fail "faces found" "status $status, and the People list holds $people people"
-fi
-face="$(sed -n "s/.*<img src=\"\(\/content\/r\/$repo\/[^\"]*\)\".*/\1/p" "$work/body" | head -n 1)"
-[ -n "$face" ] || fail "faces found" "no person of the People list has a cover face"
-status="$(request "$work/body" -H "Authorization: Bearer $token" "$url$face")"
-if [ "$status" != 200 ] || [ ! -s "$work/body" ]; then
-    fail "a face's image" "$face answered $status"
-fi
-say "   $people people found, and a face's image is served"
-
-# Scene embeddings written: a Describe search ranks the images by their SigLIP 2 embeddings, which the import wrote
-status="$(request "$work/body" -H "Authorization: Bearer $token" "$url/htmx/search/r/$repo?describe=a%20person&triaged=true&rpp=100")"
-described="$(sed -n 's/.*data-results-total="\([0-9]*\)".*/\1/p' "$work/body" | head -n 1)"
-if [ "$status" != 200 ] || [ "${described:-0}" -lt 1 ]; then
-    fail "Scene embeddings written" "a Describe search answered $status with ${described:-no} results"
-fi
-say "   a Describe search finds $described images"
+import_faces_and_video
 
 # ---------------------------------------------------------------------------------------------------------------------
 say "5. a stop with nothing under way, and a second start"
@@ -431,10 +257,7 @@ while :; do
     # At once: the files are accepted and their Scene embeddings are under way or still to come
     stop_server "the stop in the middle of an import"
 
-    stopping_at="$(grep -n -F 'Stopping: new requests are answered 503' "$work/log" | tail -n 1 | cut -d: -f1)"
-    [ -n "$stopping_at" ] || fail "the stop in the middle of an import" "no line of the log says the shutdown began"
-    tail -n "+$stopping_at" "$work/log" >"$work/log-stop"
-    head -n "$stopping_at" "$work/log" >"$work/log-before-stop"
+    require_drain_lines "$work/log" "the stop drained the import"
 
     settled="$(lines_with "of Import [$second_import] is " "$work/log")"
     settled_before="$(lines_with "of Import [$second_import] is " "$work/log-before-stop")"
@@ -448,11 +271,6 @@ while :; do
 done
 [ "$settled" = "$second_count" ] || fail "the stop drained the import" \
     "$settled of $second_count files of the second import were settled when the server stopped"
-require_line "$work/log-stop" 'Draining the import queue' "the stop drained the import"
-require_line "$work/log-stop" 'The import queue has finished' "the stop drained the import"
-forbid_own_line "$work/log-stop" 'did not finish within' "the stop drained the queues"
-require_line "$work/log-stop" 'Cleaned up' "the stop closed the database"
-require_line "$work/log-stop" 'The HTTP server has stopped' "the stop ended in order"
 say "   stopped in ${stop_took}s with exit code 143: the drain settled $((second_count - settled_before)) of $second_count files"
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -479,18 +297,8 @@ say "8. the log of the three runs"
 server_log >"$work/log"
 # A start closes each Import still in progress and fails its pending files, with this WARN
 forbid_own_line "$work/log" 'a restart interrupted' "no Import left in progress"
-# A JVM crash's report goes to stderr in the image, so to this log
-forbid_line "$work/log" 'A fatal error has been detected by the Java Runtime Environment' "no crash report"
-forbid_line "$work/log" 'SIGSEGV' "no crash report"
-forbid_line "$work/log" 'SIGABRT' "no crash report"
-forbid_line "$work/log" 'terminate called' "no crash report"
-forbid_line "$work/log" 'java.lang.OutOfMemoryError' "no OutOfMemoryError"
-# The image sets ORT_DISABLE_TELEMETRY: the start warns when it is not in force, and ONNX Runtime complains on a
-# read-only filesystem when its telemetry is on
-forbid_own_line "$work/log" "ONNX Runtime's telemetry is on" "ONNX Runtime's telemetry is off"
-forbid_line "$work/log" 'Failed to persist telemetry device ID' "ONNX Runtime's telemetry is off"
-forbid_own_line "$work/log" ' could not embed ' "every image was embedded"
-forbid_line "$work/log" ' ERROR ' "no error logged"
+# A JVM crash's report goes to stderr in the image, so to this log. The image sets ORT_DISABLE_TELEMETRY.
+forbid_failure_lines "$work/log"
 say "   no interrupted Import, no crash report, no error, no telemetry"
 
 # ---------------------------------------------------------------------------------------------------------------------

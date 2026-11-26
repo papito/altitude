@@ -11,6 +11,7 @@ import ch.qos.logback.core.ConsoleAppender
 import ch.qos.logback.core.joran.util.ConfigurationWatchListUtil
 import ch.qos.logback.core.status.Status
 import java.nio.charset.StandardCharsets
+import java.util.regex.Pattern
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.*
@@ -262,7 +263,8 @@ import altitude.core.LogSettings
         val line = written(context, eventOf(context))
         (line should fullyMatch).regex(
           """\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(Z|[+-]\d{2}:\d{2}) INFO  \[ab12cd\] \[""" + ACCOUNT_ID +
-            """\] altitude\.core\.service\.Example - Stored 3 of 7 files\nfor "an import"\n""")
+            """\] altitude\.core\.service\.Example - Stored 3 of 7 files\nfor "an import"""" + Pattern.quote(
+              System.lineSeparator))
         (line should not).include("\u001b")
 
         val failed = written(context, eventOf(context, Some(IllegalStateException("No space", RuntimeException("Disk full")))))

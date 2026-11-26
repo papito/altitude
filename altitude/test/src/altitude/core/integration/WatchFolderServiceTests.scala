@@ -3,6 +3,7 @@ package altitude.core.integration
 import altitude.test.IntegrationTestUtil
 import altitude.test.TestContext
 import java.nio.file.Files
+import java.nio.file.FileSystems
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.CountDownLatch
@@ -171,10 +172,17 @@ import altitude.core.util.Sha256
         .iterator()
         .asScala
         .filter(_ != dir)
-        .map(path => dir.relativize(path).toString + (if (Files.isDirectory(path)) "/" else ""))
+        // Joined with "/" as a Watch folder's relative paths are, whatever the system's separator
+        .map(path => dir.relativize(path).iterator.asScala.mkString("/") + (if (Files.isDirectory(path)) "/" else ""))
         .toSet
     finally walk.close()
   }
+
+  /**
+   * Whether the file system takes POSIX permissions, which the tests of an unreadable or unwritable directory set. Windows' does
+   * not, and its read-only attribute means nothing on a folder, so those tests are cancelled there.
+   */
+  private val posixPermissions = FileSystems.getDefault.supportedFileAttributeViews.contains("posix")
 
   /** An import pipeline that runs `before` as the scan offers its first file, then offers to the instance's own queue */
   private def pipelineThat(before: => Unit): ImportPipelineService = new ImportPipelineService(testApp) {
@@ -288,6 +296,7 @@ import altitude.core.util.Sha256
     def add(path: String, name: String = "Watched", destination: Option[String] = None, deletes: Boolean = false) =
       watchFolders.add(WatchFolderSpec(name, path, destination, deletes))
 
+    assume(posixPermissions)
     try {
       Files.setPosixFilePermissions(unreadable, PosixFilePermissions.fromString("---------"))
       Files.setPosixFilePermissions(readOnly, PosixFilePermissions.fromString("r-xr-xr-x"))
@@ -947,6 +956,7 @@ import altitude.core.util.Sha256
     importsOf(watchFolder) should have size 1
 
     watchFolders.update(watchFolder.persistedId, WatchFolderSpec("Phone sync", dir.toString, deletesImported = true)): Unit
+    assume(posixPermissions)
     try {
       Files.setPosixFilePermissions(dir, PosixFilePermissions.fromString("r-xr-xr-x"))
       assume(!Files.isWritable(dir))
@@ -983,6 +993,7 @@ import altitude.core.util.Sha256
 
     def card = watchFolders.cards().head
 
+    assume(posixPermissions)
     try {
       Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("---------"))
       assume(!Files.isReadable(locked))

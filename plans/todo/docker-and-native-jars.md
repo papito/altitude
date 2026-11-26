@@ -67,7 +67,7 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
 | Stage 2 natives | ONNX Runtime, sqlite-jdbc and sqlite-vector are unpacked once into `<user cache>/altitude/natives/<build>-<platform>/`, beside the models cache whatever `models.dir` says, and loaded from there; javacpp keeps its own cache. sqlite-jdbc is among them because it otherwise copies its library into the temp folder at every start, where a killed run leaves it, and every stop on Windows. `<build>` is the jar's `Altitude-Build`, a hash of its native files, so a rebuilt jar of the same version never reuses another build's. Each start touches its folder, and a running instance touches it daily on either engine (a SQLite pool replaces its connections every half hour, each loading sqlite-vector from the folder anew, and on Windows a prune would leave a partial folder); folders untouched for 30 days are pruned, so no start removes what another running instance loads from. A loader's property that is set already is kept, and with all of them set (the image) nothing is written, touched or pruned. |
 | Stage 2 defaults | The jar's folder holds `application.conf` and `data/`. It binds `localhost` until the owner sets `ALTITUDE_HOST` or `server.host`. |
 | Stage 2 Windows | The x64 jar. The README tells a person whom Smart App Control blocks to turn it off in Windows Security (no reinstall is needed) or to use Docker Desktop. No paid signing. |
-| Stage 2 builds | A GitHub Actions matrix builds each jar on its own system, runs the Unit and SQLite suites and the JS tests there, and smoke-runs the jar. The owner creates the workflow; where the jars are published is decided when stage 2 starts. |
+| Stage 2 builds | A GitHub Actions matrix builds each jar on its own system, runs the Unit and SQLite suites and the JS tests there, smoke-runs the jar (`scripts/smoke-jar.sh`) and uploads it as a workflow artifact. The owner creates the workflow; where the jars are published is not decided. Every step runs in bash (Git Bash on Windows) and calls `./mill`, or `./mill.bat` on Windows, with the Makefile targets' arguments and environment: Windows has no `make`, and `./mill`'s launcher has no Windows build. |
 
 ## Stage 1: Docker
 
@@ -280,12 +280,38 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
 ### H. Builds on each system
 
 33. `.github/workflows/jars.yml` (the owner creates it): a matrix on `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-15` and
-    `windows-2025`, each building its jar, running the Unit and SQLite suites and the JS tests, and running
-    `scripts/smoke-jar.sh`. `ALTITUDE_MODELS_DIR` names a folder `actions/cache` keeps, keyed by the set's tag: the
-    first run's download fills it for the suites and the smoke run alike.
-34. `scripts/smoke-jar.sh`: starts the jar from a scratch folder with a scratch user cache and the models folder named,
-    waits for `/api/health`, imports the test photos and a video, stops it, and checks `data/` is beside the jar,
-    nothing is left in the temp folder, and the address is `localhost`.
+    `windows-2025`, `fail-fast` off, the Stage 2 builds row's bash and Mill calls. On Windows `core.autocrlf` is off
+    before the checkout, so the sources keep the LF their multi-line literals are compared with. Each job sets up
+    Temurin 21 and Node 24, and installs GTK 2, ALSA and XCB on Linux and `ffmpeg` where the runner lacks it.
+    `ALTITUDE_MODELS_DIR` names `$RUNNER_TEMP/altitude-models`, the model files for the suites and the smoke run alike, which
+    `actions/cache/restore` restores early and `actions/cache/save` saves after the smoke run whatever the job's outcome,
+    only when the restore missed and every file is in place at its pinned size. The key is `altitude-models-<tag>-<hash>-<os>`,
+    the hash of the string and number literals from `enum ModelFile` to `final class ModelFiles` (the tag, the faceX
+    revision, the URLs' templates, each file's name, size and SHA-256), which a step reads with `grep` and fails on when it
+    finds none: a new tag or pin is a new key, and no other edit of the file is. The path differs between systems, so each
+    keeps its own entry and the two Linux runners share one. Coursier's downloads and the Mill launcher's are an
+    `actions/cache` entry per system and architecture, keyed on `build.mill` (whose header names the Mill version), `mill`
+    and `mill.bat`. The job builds its jar (`altitude.platformJar`, `ALTITUDE_PLATFORM` the runner's), runs the Unit and
+    SQLite bundles with `ALTITUDE_ENV=test` and `-l org.scalatest.tags.Slow`, the JS tests and `scripts/smoke-jar.sh`,
+    uploads the jar as the artifact `altitude-<platform>`, and on a failure the suites' logs and report.
+34. `scripts/smoke-jar.sh` (`make smoke-jar`; it needs Java 21 with a JDK's `jar` tool or `unzip`, `curl`, `ffmpeg`, `ss` or
+    `netstat`, and `pgrep`, or PowerShell and `taskkill` on Windows): copies the jar
+    (this machine's from `platformJar.dest/`, or `JAR`) into a scratch folder and starts it with `java -jar` from another,
+    with a scratch home folder (`HOME` and `-Duser.home`), user cache (`XDG_CACHE_HOME`) and temp folder (`TMPDIR`, `TMP`,
+    `TEMP`, `-Djava.io.tmpdir`), the models folder named, a free port, and no other `ALTITUDE_` variable and no
+    `ORT_DISABLE_TELEMETRY`. It waits for `/api/health`, runs Setup and imports the test photos with faces and a video
+    through the API (shared with `smoke-docker.sh` in `scripts/smoke-common.sh`), checks faces and Scene embeddings, stops
+    the jar, starts it again and stops it once more. It checks that the server listens on loopback addresses alone (the
+    start's line, and the port's sockets by `ss` or `netstat`), that the launcher runs it in a second JVM, that no JVM is
+    left once the launcher ends, that a SIGTERM to the launcher drains the server (its shutdown lines, status 143), that `data/` is
+    beside the jar and nothing else is there or in the folder it was started from, that the temp folder is empty after each
+    stop, that the natives are in `natives/<Altitude-Build>-<platform>/` of the scratch cache and nothing else is there,
+    that the scratch home holds javacpp's cache alone and the caller's home, cache and temp folders gain nothing of
+    Altitude's, that no log holds a crash report, an ERROR or the telemetry WARN, and that the second start writes no
+    library, each start's `Native libraries:` line naming that folder. It finds the jar's JVMs by `pgrep`, and on Windows in
+    the process table through PowerShell. On Windows, where nothing outside the console can ask a JVM to drain, the stop is
+    `taskkill /F /T`, the drain and exit-status checks are skipped, and ONNX Runtime's empty `onnxruntime-java*` folder may
+    stay in the temp folder.
 
 ### I. The docs
 

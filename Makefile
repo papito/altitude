@@ -33,6 +33,11 @@ dist-jars:
 	done
 	ls -l out/dist-jars
 
+# Starts this machine's native jar (./mill altitude.platformJar first) from a scratch folder, imports into it, stops it and starts
+# it again, checking what the jar promises; JAR=<path> tests another. See the script.
+smoke-jar:
+	bash scripts/smoke-jar.sh $(JAR)
+
 # Vendors the tokentweak package (the design tweaks panel) into altitude/static/js/lib; see the README there.
 vendor-tokentweak:
 	sh scripts/vendor-tokentweak.sh $(TOKENTWEAK)
@@ -91,7 +96,7 @@ test-js:
 db:
 	docker compose -f compose.dev.yaml -f compose.test.yaml up
 
-.PHONY: dist-jars docker smoke-docker
+.PHONY: dist-jars smoke-jar docker smoke-docker
 
 # Builds the image and loads it as altitude:local, for this machine's architecture. DOCKER_PLATFORM=linux/arm64 (or
 # linux/amd64) builds the other one's, which needs QEMU for the image's one RUN:

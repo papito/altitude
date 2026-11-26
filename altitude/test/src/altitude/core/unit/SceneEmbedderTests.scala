@@ -2,6 +2,7 @@ package altitude.core.unit
 
 import altitude.test.TestFocus
 import altitude.test.TestModelFiles
+import altitude.test.TestResources
 import java.security.MessageDigest
 import java.util.HexFormat
 import java.util.concurrent.CountDownLatch
@@ -48,7 +49,7 @@ import altitude.core.util.OnnxSceneEmbedder
   override def afterAll(): Unit = embedder.close()
 
   private def fixture(relPath: String): Mat =
-    val image = Imgcodecs.imread(getClass.getResource(s"/import/$relPath").getPath, Imgcodecs.IMREAD_COLOR)
+    val image = Imgcodecs.imread(TestResources.importFile(relPath).toString, Imgcodecs.IMREAD_COLOR)
     if image.empty() then fail(s"Could not read $relPath")
     image
 

@@ -1,6 +1,7 @@
 package altitude.core.unit
 
 import altitude.test.TestFocus
+import altitude.test.TestResources
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 import org.opencv.core.Core
@@ -35,7 +36,7 @@ import altitude.core.util.ImageMeasurement
   private val NEAR = 10
 
   private def fixture(relPath: String): Mat =
-    val image = Imgcodecs.imread(getClass.getResource(s"/import/$relPath").getPath, Imgcodecs.IMREAD_COLOR)
+    val image = Imgcodecs.imread(TestResources.importFile(relPath).toString, Imgcodecs.IMREAD_COLOR)
     if image.empty() then fail(s"Could not read $relPath")
     image
 

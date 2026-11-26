@@ -10,6 +10,8 @@ import org.scalatest.matchers.should.Matchers.*
 
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
+import scala.jdk.CollectionConverters.*
+import scala.util.Try
 
 /** A second JVM with the test JVM's classpath, for what a test cannot do in its own: a crash, an exit, another environment */
 object ChildJvm {
@@ -49,10 +51,18 @@ object ChildJvm {
       process.destroyForcibly(): Unit
     }
 
-    /** Kills what is still running and deletes the output */
-    override def close(): Unit =
+    /**
+     * Kills what is still running and deletes the output, once every process that could hold it open has ended: a kill only
+     * begins the end, and Windows deletes no file a process still has open
+     */
+    override def close(): Unit = {
+      val holders = process.toHandle +: process.descendants().iterator().asScala.toSeq
       try kill()
-      finally Files.deleteIfExists(log): Unit
+      finally {
+        holders.foreach(holder => Try(holder.onExit().get(10, TimeUnit.SECONDS)))
+        Files.deleteIfExists(log): Unit
+      }
+    }
   }
 
   /**

@@ -237,7 +237,8 @@ import scala.concurrent.duration.DurationInt
           exitCode shouldBe 0
           val report = reportIn(output)
           report("parent") shouldBe started.process.pid().toString
-          report("command") shouldBe jar.toAbsolutePath.toString
+          // As real paths: the JVM names the jar it runs by its real path, and a temp folder may be under a link (macOS' /var)
+          Path.of(report("command")).toRealPath() shouldBe jar.toRealPath()
           report("variable") shouldBe Launcher.TELEMETRY_OFF
         }
       } finally started.close()

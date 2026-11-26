@@ -1172,6 +1172,8 @@ import altitude.core.util.Query
      */
     val opened = imports.openUpload()
     val unreadable = Files.createDirectories(testApp.service.staging.dir.resolve(java.util.UUID.randomUUID.toString))
+    // NTFS gives a directory no size, so on Windows it is refused as an empty file before anything reads it
+    assume(Files.size(unreadable) > 0, "a directory has a size on this file system")
 
     val file = imports.upload(opened.persistedId, "photo.jpg", unreadable)
 

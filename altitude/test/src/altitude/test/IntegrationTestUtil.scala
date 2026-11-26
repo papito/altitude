@@ -45,12 +45,7 @@ object IntegrationTestUtil {
     new ImportAsset(fileName = file.getName, path = file.toPath, metadata = UserMetadata())
 
   def getImportAsset(relPath: String): ImportAsset = {
-    val path = getClass.getResource(s"/import/$relPath").getPath
-    val file = new File(path)
-
-    if (!file.exists()) {
-      throw new RuntimeException(s"File not found: $path")
-    }
+    val file = TestResources.importFile(relPath).toFile
 
     val fileImportAsset = fileToImportAsset(file)
     fileImportAsset

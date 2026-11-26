@@ -2,6 +2,7 @@ package altitude.core.unit
 
 import altitude.test.TestFocus
 import java.nio.file.Files
+import java.nio.file.FileSystems
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
 import org.apache.commons.io.FileUtils
@@ -66,8 +67,10 @@ import altitude.core.TempFolder
         TempFolder.prepare(missing, own = true) shouldBe 0
         Files.isDirectory(missing) shouldBe true
 
-        for (dir <- Seq(own, missing))
-          PosixFilePermissions.toString(Files.getPosixFilePermissions(dir)) shouldBe "rwxrwxrwx"
+        // A file system with no POSIX permissions (Windows') has nothing to open up: the start leaves the folder as it is there
+        if (FileSystems.getDefault.supportedFileAttributeViews.contains("posix"))
+          for (dir <- Seq(own, missing))
+            PosixFilePermissions.toString(Files.getPosixFilePermissions(dir)) shouldBe "rwxrwxrwx"
     }
   }
 
