@@ -23,6 +23,18 @@ which a Library can keep its files instead of on the server's own disk.
 _Avoid_: Bucket (a People bucket is something else), S3, Cloud storage, Remote
 storage.
 
+**Data directory**:
+The one directory on the server that holds its database, the files of every
+Library kept on This server, and the files of uploads not yet imported. It is
+what a backup of the server must cover.
+_Avoid_: Data folder, Data dir, App home, Volume.
+
+**Models directory**:
+The directory on the server that holds the model files the server reads to find
+faces and embed scenes and descriptions. Everything in it can be downloaded
+again, so it is never part of a backup.
+_Avoid_: Models folder, Model cache, Data directory.
+
 **Date Taken**:
 The date and time an asset was captured, distinct from when it was added to the
 library. Its calendar day follows the camera's recorded date and does not change
