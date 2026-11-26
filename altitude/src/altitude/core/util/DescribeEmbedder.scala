@@ -201,7 +201,7 @@ class OnnxDescribeEmbedder(models: ModelFiles, cacheSize: Int = OnnxDescribeEmbe
     val started = System.nanoTime()
     val towerPath = models.path(ModelFile.Siglip2Text)
     val tablePath = models.path(ModelFile.Siglip2TokenEmbeddings)
-    val opened = TextTower.open(OrtEnvironment.getEnvironment, towerPath, tablePath)
+    val opened = TextTower.open(OnnxEnvironment.get, towerPath, tablePath)
     logger.info(
       s"Opened SigLIP 2's text tower from $towerPath and mapped its token embeddings from $tablePath in " +
         s"${(System.nanoTime() - started) / 1000000} ms")

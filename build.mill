@@ -9,6 +9,8 @@ import com.goyeau.mill.scalafix.ScalafixModule
 
 import mill._, scalalib._, publish._
 
+import scala.jdk.CollectionConverters._
+
 object altitude extends ScalaModule with ScalafixModule with PublishModule with mill.twirllib.TwirlModule {
   def scalaVersion = "3.6.3"
 
@@ -36,8 +38,25 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     "-unchecked",
     "-rewrite",
     "-source", "3.4-migration",
-    "-Wconf:msg=.*E198.*&src=.*/out/altitude/compileTwirl.dest/.*:s"
+    "-Wconf:msg=.*E198.*&src=.*/out/altitude/compileTwirl.dest/.*:s",
+    // Java 21 is the floor the jar runs on: the compiler refuses an API newer than it, whatever JDK builds
+    "-release", "21"
   )
+
+  def javacOptions: Task.Simple[Seq[String]] = Seq("--release", "21")
+
+  // What Mill starts (run, runBackground, runMain) is a dev run and logs by logback-dev.xml. Mill also writes these arguments
+  // into the start script of `./mill altitude.assembly`'s jar, which is no supported artifact. The supported jars, the platform
+  // jars (platformJar) and the image's thin jars (dist), carry no start script and no flag: they are started by `java` and log
+  // by logback.xml, the prod configuration.
+  def forkArgs: T[Seq[String]] = Task { super.forkArgs() ++ Seq("-Dlogback.configurationFile=logback-dev.xml") }
+
+  // ONNX Runtime's official builds send usage telemetry to Microsoft unless this variable is set before the native library
+  // initializes; nothing in the JVM can switch all of it off afterwards (OnnxEnvironment in SceneEmbedder.scala). Every JVM
+  // Mill forks gets it: run, runBackground and runMain here, and the test workers through the test module's forkEnv.
+  private val onnxRuntimeTelemetryOff = Map("ORT_DISABLE_TELEMETRY" -> "1")
+
+  def forkEnv: T[Map[String, String]] = Task { super.forkEnv() ++ onnxRuntimeTelemetryOff }
 
   def pomSettings: T[PomSettings] = PomSettings(
     description = "Altitude DAM",
@@ -91,6 +110,40 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     mvn"ch.qos.logback:logback-classic:1.5.14",
   )
 
+  /**
+   * A platform the native libraries are packaged for. `name` is bytedeco's classifier and a value of `ALTITUDE_PLATFORM`; the
+   * rest is where that platform's libraries are in ONNX Runtime's jar (`ai/onnxruntime/native/<folder>/`), in sqlite-jdbc's
+   * (`org/sqlite/native/<file>`) and in the sqlite-vector resources (`sqlite-vector/<file>`).
+   */
+  private case class NativePlatform(name: String, onnxRuntime: String, sqliteJdbc: String, sqliteVector: String) {
+    private val family = name.takeWhile(_ != '-')
+
+    /** Whether a file of a bytedeco jar is a shared library, by its name */
+    def isSharedLibrary(file: String): Boolean = family match {
+      case "linux" => file.matches("""lib.+\.so(\.\d+)*""")
+      case "macosx" => file.matches("""lib.+\.dylib""")
+      case _ => file.toLowerCase.endsWith(".dll")
+    }
+
+    /** A versioned library's name without its version (`libavcodec.so.60` is `libavcodec.so`); None for any other, and on Windows */
+    def unversioned(file: String): Option[String] = family match {
+      case "linux" => """(lib.+\.so)(\.\d+)+""".r.unapplySeq(file).map(_.head)
+      case "macosx" => """(lib.+?)(\.\d+)+\.dylib""".r.unapplySeq(file).map(_.head + ".dylib")
+      case _ => None
+    }
+
+    /** Whether a folder of libraries can hold links. One for Windows cannot: javacpp itself copies there */
+    def hasLinks: Boolean = family != "windows"
+  }
+
+  private val nativePlatforms = Seq(
+    NativePlatform("linux-x86_64", "linux-x64", "Linux/x86_64/libsqlitejdbc.so", "linux-x86/vector.so"),
+    NativePlatform("linux-arm64", "linux-aarch64", "Linux/aarch64/libsqlitejdbc.so", "linux-arm64/vector.so"),
+    NativePlatform("macosx-arm64", "osx-aarch64", "Mac/aarch64/libsqlitejdbc.dylib", "macos-arm64/vector.dylib"),
+    NativePlatform("windows-x86_64", "win-x64", "Windows/x86_64/sqlitejdbc.dll", "windows-x86/vector.dll"),
+  )
+
+  /** The build machine's platform. An Intel Mac has none: ONNX Runtime ships no natives for it, so Altitude runs there in Docker */
   private def detectPlatform(): String = {
     val os = sys.props("os.name").toLowerCase
     val arch = sys.props("os.arch").toLowerCase
@@ -99,7 +152,9 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
       case (os, arch) if os.contains("mac") && (arch.contains("aarch64") || arch.contains("arm")) =>
         "macosx-arm64"
       case (os, _) if os.contains("mac") =>
-        "macosx-x86_64"
+        throw new RuntimeException(
+          "Altitude does not build on an Intel Mac, for which ONNX Runtime ships no native libraries. " +
+            "Run it there with Docker: the image is built inside a Linux container (docker compose up).")
       case (os, arch) if os.contains("linux") && (arch.contains("aarch64") || arch.contains("arm")) =>
         "linux-arm64"
       case (os, _) if os.contains("linux") =>
@@ -111,35 +166,42 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     }
   }
 
+  // Compile, run and test take the build machine's natives, whatever ALTITUDE_PLATFORM says
   private val platform: String = detectPlatform()
 
-  // Each bytedeco preset is a Java stub jar plus a classifier jar holding the native libraries of one platform. The
-  // classifier attribute is what selects the natives: appending the platform to the version resolves nothing.
-  private val bytedecoPresetLibs = Seq(
+  private val bytedecoPresets = Seq(
     "opencv" -> "4.9.0",
     "ffmpeg" -> "6.1.1",
     "openblas" -> "0.3.26",
-  ).flatMap {
-    case (lib, ver) => Seq(
-      mvn"org.bytedeco:$lib:$ver-$javacppVersion",
-      mvn"org.bytedeco:$lib:$ver-$javacppVersion;classifier=$platform"
-    )
-  } ++ Seq(
-    mvn"org.bytedeco:javacpp:$javacppVersion;classifier=$platform",
-    // FFmpegFrameGrabber / FFmpegFrameRecorder and the Frame <-> Mat converters over the presets above; its other
-    // presets (cameras, OCR) are stubs we never call
-    mvn"org.bytedeco:javacv:$javacppVersion".exclude(
-      "org.bytedeco" -> "flycapture",
-      "org.bytedeco" -> "libdc1394",
-      "org.bytedeco" -> "libfreenect",
-      "org.bytedeco" -> "libfreenect2",
-      "org.bytedeco" -> "librealsense",
-      "org.bytedeco" -> "librealsense2",
-      "org.bytedeco" -> "videoinput",
-      "org.bytedeco" -> "artoolkitplus",
-      "org.bytedeco" -> "leptonica",
-      "org.bytedeco" -> "tesseract"),
   )
+
+  /** The jars holding one platform's bytedeco native libraries: one per preset, and javacpp's own */
+  private def bytedecoNativeDeps(platform: String): Seq[Dep] =
+    bytedecoPresets.map { case (lib, ver) => mvn"org.bytedeco:$lib:$ver-$javacppVersion;classifier=$platform" } :+
+      mvn"org.bytedeco:javacpp:$javacppVersion;classifier=$platform"
+
+  /** Whether a dependency jar is one of a platform's bytedeco native jars, by the classifier its name ends with */
+  private def isNativeJarOf(platform: String)(jar: os.Path): Boolean = jar.last.endsWith(s"-$platform.jar")
+
+  // Each bytedeco preset is a Java stub jar plus a classifier jar holding the native libraries of one platform. The
+  // classifier attribute is what selects the natives: appending the platform to the version resolves nothing.
+  private val bytedecoPresetLibs =
+    bytedecoPresets.map { case (lib, ver) => mvn"org.bytedeco:$lib:$ver-$javacppVersion" } ++
+      bytedecoNativeDeps(platform) ++ Seq(
+        // FFmpegFrameGrabber / FFmpegFrameRecorder and the Frame <-> Mat converters over the presets above; its other
+        // presets (cameras, OCR) are stubs we never call
+        mvn"org.bytedeco:javacv:$javacppVersion".exclude(
+          "org.bytedeco" -> "flycapture",
+          "org.bytedeco" -> "libdc1394",
+          "org.bytedeco" -> "libfreenect",
+          "org.bytedeco" -> "libfreenect2",
+          "org.bytedeco" -> "librealsense",
+          "org.bytedeco" -> "librealsense2",
+          "org.bytedeco" -> "videoinput",
+          "org.bytedeco" -> "artoolkitplus",
+          "org.bytedeco" -> "leptonica",
+          "org.bytedeco" -> "tesseract"),
+      )
 
   def mvnDeps: Task.Simple[Seq[Dep]] = coreDeps ++ bytedecoPresetLibs
 
@@ -210,7 +272,387 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     super.resources() ++ Seq(PathRef(destDir), cssBundle().root)
   }
 
+  // ---------------------------------------------------------------------------------------------------------------------
+  // The Docker image's contents: thin jars, and the native libraries of one platform in a folder, so a start unpacks nothing
+  // and the image's root filesystem can be read-only. `distLib` is the same for every platform; `distNative` is one platform's.
+
+  /**
+   * The platform the packaging tasks take the native libraries of: `ALTITUDE_PLATFORM`, or the build machine's when it is unset
+   * or empty. An input, so the Mill daemon reads each call's value. Nothing that `compile` depends on reads it.
+   */
+  private def targetPlatform: T[String] = Task.Input {
+    Task.env.get("ALTITUDE_PLATFORM").map(_.trim).filter(_.nonEmpty) match {
+      case None => platform
+      case Some(name) if nativePlatforms.exists(_.name == name) => name
+      case Some(other) =>
+        Task.fail(
+          s"""ALTITUDE_PLATFORM is "$other", which is no platform Altitude is packaged for. Accepted values: """ +
+            s"${nativePlatforms.map(_.name).mkString(", ")}; unset, it is this machine's ($platform)")
+    }
+  }
+
+  /** The bytedeco classifier jars of the target platform, resolved here: the module's own dependencies hold the build machine's */
+  private def targetNativeJars: T[Seq[PathRef]] = Task {
+    val wanted = bytedecoNativeDeps(targetPlatform())
+    val jars = defaultResolver().classpath(wanted).filter(jar => isNativeJarOf(targetPlatform())(jar.path))
+    if (jars.size != wanted.size) Task.fail(s"Expected ${wanted.size} native jars for ${targetPlatform()}, resolved: $jars")
+    jars
+  }
+
+  private def vectorExtensions: T[PathRef] = Task.Source(moduleDir / "resources" / "sqlite-vector")
+
+  // The dependency jars that carry native libraries for every platform: the start of the jar's file name, and the folder
+  // inside it that holds them
+  private val onnxRuntimeNatives = "onnxruntime-" -> "ai/onnxruntime/native/"
+  private val sqliteJdbcNatives = "sqlite-jdbc-" -> "org/sqlite/native/"
+  private val nativesInJars = Seq(onnxRuntimeNatives, sqliteJdbcNatives)
+
+  private def nativesFolderOf(jar: os.Path): Option[String] =
+    nativesInJars.collectFirst { case (jarName, folder) if jar.last.startsWith(jarName) => folder }
+
+  /**
+   * Where the target platform's libraries are among the dependency jars that carry every platform's: each jar, the folder of it
+   * that holds them, and which files directly in that folder they are. ONNX Runtime's are every file of the platform's folder,
+   * two libraries and a third on Windows (its debug symbols are in folders below); sqlite-jdbc's is the one library.
+   */
+  private def dependencyNatives(target: NativePlatform, dependencies: Seq[os.Path])(using
+      mill.api.TaskCtx): Seq[(os.Path, String, String => Boolean)] = {
+    def jarOf(jarName: String): os.Path = {
+      val jars = dependencies.filter(_.last.startsWith(jarName))
+      if (jars.size != 1) Task.fail(s"Expected one $jarName jar among the dependencies, found: $jars")
+      jars.head
+    }
+    val sqliteJdbcFile = os.SubPath(target.sqliteJdbc)
+    Seq(
+      (jarOf(onnxRuntimeNatives._1), s"${onnxRuntimeNatives._2}${target.onnxRuntime}/", _ => true),
+      (jarOf(sqliteJdbcNatives._1), s"${sqliteJdbcNatives._2}${sqliteJdbcFile / os.up}/", _ == sqliteJdbcFile.last)
+    )
+  }
+
+  /** Where the image keeps `distNative`'s `native/`: the Dockerfile copies it there and sets `LD_LIBRARY_PATH` to it */
+  private val imageNativeDir = "/app/native"
+
+  // A zip entry's time is a local time with no zone. One fixed time for every entry gives a jar the same bytes whenever and
+  // wherever it is written, so a rebuilt image reuses the layer of a jar whose content did not change.
+  private val jarEntryTime = java.time.LocalDateTime.of(1980, 2, 1, 0, 0)
+
+  /** Writes a jar of the entries in their order; an entry with no content is a folder, its name ending in a slash */
+  private def writeJar(jar: os.Path, entries: IterableOnce[(String, Option[() => java.io.InputStream])]): Unit = {
+    val out = new java.util.zip.ZipOutputStream(new java.io.BufferedOutputStream(java.nio.file.Files.newOutputStream(jar.toNIO)))
+    try entries.iterator.foreach { case (name, content) =>
+        val entry = new java.util.zip.ZipEntry(name)
+        entry.setTimeLocal(jarEntryTime)
+        if (content.isEmpty) {
+          entry.setMethod(java.util.zip.ZipEntry.STORED)
+          entry.setSize(0)
+          entry.setCrc(0)
+        }
+        out.putNextEntry(entry)
+        content.foreach { open =>
+          val in = open()
+          try in.transferTo(out)
+          finally in.close()
+        }
+        out.closeEntry()
+      }
+    finally out.close()
+  }
+
+  private def entryNamesOf(jar: os.Path): Seq[String] = {
+    val zip = new java.util.zip.ZipFile(jar.toIO)
+    try zip.entries().asScala.map(_.getName).toSeq
+    finally zip.close()
+  }
+
+  /** Copies out of a jar the files directly in a folder of it that `wanted` takes by name; a name already there fails the build */
+  private def extractFrom(jar: os.Path, folder: String, into: os.Path)(wanted: String => Boolean): Seq[String] = {
+    val zip = new java.util.zip.ZipFile(jar.toIO)
+    try
+      zip.entries().asScala.toSeq.flatMap { entry =>
+        val name = entry.getName.stripPrefix(folder)
+        if (entry.isDirectory || !entry.getName.startsWith(folder) || name.contains("/") || !wanted(name)) None
+        else {
+          // os.write refuses a name already there, so of two jars carrying one name neither silently wins
+          os.write(into / name, zip.getInputStream(entry), createFolders = true)
+          Some(name)
+        }
+      }
+    finally zip.close()
+  }
+
+  private val nativeLibraryName = """(?i).+\.(so(\.\d+)*|dylib|jnilib|dll)""".r
+
+  /**
+   * `lib/` and `altitude.jar`, the image's classpath, with no native library in either: the same bytes whatever the target
+   * platform and the build machine, so an image for two architectures compiles and packages them once.
+   *
+   * `lib/` is the dependency jars without bytedeco's classifier jars, and with ONNX Runtime's and sqlite-jdbc's jars rewritten
+   * without their natives (ONNX Runtime's macOS debug symbols among them). `altitude.jar` is the application's classes and
+   * resources without the sqlite-vector builds. `distNative` puts all of those in a folder. A dependency jar still holding a
+   * native library fails the build: it would be unpacked at runtime, for whatever platform the jar happens to carry.
+   */
+  def distLib: T[PathRef] = Task {
+    val lib = Task.dest / "lib"
+    os.makeDir.all(lib)
+    val buildMachineNatives = bytedecoNativeDeps(platform).size
+    val dependencies = resolvedRunMvnDeps().map(_.path)
+    val (classifierJars, jars) = dependencies.partition(isNativeJarOf(platform))
+    if (classifierJars.size != buildMachineNatives)
+      Task.fail(s"Expected $buildMachineNatives bytedeco native jars for $platform among the dependencies, found: $classifierJars")
+
+    jars.foreach { jar =>
+      nativesFolderOf(jar) match {
+        case None => os.copy(jar, lib / jar.last)
+        case Some(folder) =>
+          val zip = new java.util.zip.ZipFile(jar.toIO)
+          try
+            writeJar(
+              lib / jar.last,
+              zip.entries().asScala.filterNot(_.getName.startsWith(folder)).map { entry =>
+                entry.getName -> Option.unless(entry.isDirectory)(() => zip.getInputStream(entry))
+              })
+          finally zip.close()
+      }
+    }
+
+    val natives = os.list(lib).flatMap(jar => entryNamesOf(jar).filter(nativeLibraryName.matches).map(jar.last + ": " + _))
+    if (natives.nonEmpty)
+      Task.fail(
+        "Dependency jars carry native libraries, which distLib must strip and distNative must put in native/ " +
+          s"(see nativesInJars): ${natives.mkString(", ")}")
+
+    // The application's classes and resources, the first of a name winning as on a classpath, in name order
+    val files = scala.collection.mutable.TreeMap.empty[String, Option[os.Path]]
+    for {
+      root <- localClasspath().map(_.path) if os.isDir(root)
+      file <- os.walk(root)
+    } {
+      val name = file.subRelativeTo(root).toString + (if (os.isDir(file)) "/" else "")
+      val isOwn = !name.startsWith("sqlite-vector/") && name != "META-INF/" && name != "META-INF/MANIFEST.MF"
+      if (isOwn && !files.contains(name)) files(name) = Option.when(os.isFile(file))(file)
+    }
+    val manifestBytes = new java.io.ByteArrayOutputStream()
+    manifest().build.write(manifestBytes)
+    writeJar(
+      Task.dest / "altitude.jar",
+      Seq[(String, Option[() => java.io.InputStream])](
+        "META-INF/" -> None,
+        "META-INF/MANIFEST.MF" -> Some(() => new java.io.ByteArrayInputStream(manifestBytes.toByteArray))
+      ) ++ files.iterator.map { case (name, file) => name -> file.map(path => () => os.read.inputStream(path)) }
+    )
+
+    PathRef(Task.dest)
+  }
+
+  /**
+   * `native/`, the target platform's native libraries in one flat folder, and `jvm-options`, the JVM flags that make every
+   * library load from it (`java @jvm-options`), naming the folder as the image has it. The image also sets `LD_LIBRARY_PATH`
+   * to the folder, since bytedeco's libraries name each other with no path of their own.
+   *
+   * The folder holds bytedeco's shared libraries (not its executables, headers or build files), ONNX Runtime's, sqlite-jdbc's
+   * and sqlite-vector's. It also holds what javacpp adds when it unpacks its jars and then loads through: OpenBLAS under the name
+   * its `openblas_nolapack` preset links against, and each versioned library under its name without the version, which is what
+   * `System.loadLibrary` looks for in `java.library.path`. They are links, or copies in a folder for Windows.
+   */
+  def distNative: T[PathRef] = Task {
+    val target = nativePlatforms.find(_.name == targetPlatform()).get
+    val native = Task.dest / "native"
+    os.makeDir.all(native)
+
+    val bytedeco = targetNativeJars().map(_.path).flatMap { jar =>
+      // org/bytedeco/<preset>/<platform>/, the one folder of the jar's that holds libraries
+      val folders = entryNamesOf(jar).filter(_.matches(s"org/bytedeco/[^/]+/${target.name}/"))
+      val libraries = folders.flatMap(extractFrom(jar, _, native)(target.isSharedLibrary))
+      if (libraries.isEmpty) Task.fail(s"No native library for ${target.name} in $jar")
+      libraries
+    }
+
+    def alias(name: String, of: String): Unit =
+      if (target.hasLinks) os.symlink(native / name, os.rel / of) else os.copy(native / of, native / name)
+
+    // javacpp's `openblas@.0#openblas_nolapack@.0`: the JNI library of openblas_nolapack names OpenBLAS by the second name
+    val renamed = bytedeco.filter(_.startsWith("libopenblas.")).map { openblas =>
+      val name = openblas.replaceFirst("libopenblas", "libopenblas_nolapack")
+      alias(name, openblas)
+      name
+    }
+    for {
+      library <- bytedeco ++ renamed
+      name <- target.unversioned(library) if !os.exists(native / name, followLinks = false)
+    } alias(name, library)
+
+    for ((jar, folder, wanted) <- dependencyNatives(target, resolvedRunMvnDeps().map(_.path)))
+      if (extractFrom(jar, folder, native)(wanted).isEmpty) Task.fail(s"No native library in $folder of $jar")
+    val sqliteJdbcFile = os.SubPath(target.sqliteJdbc)
+    os.copy.into(vectorExtensions().path / os.SubPath(target.sqliteVector), native)
+
+    os.write(
+      Task.dest / "jvm-options",
+      Seq(
+        s"-Djava.library.path=$imageNativeDir",
+        // Without it javacpp makes a cache folder in the home or temp folder, copies OpenBLAS there under its second name
+        // and loads the copy as well
+        "-Dorg.bytedeco.javacpp.cacheLibraries=false",
+        // Without it javacpp replaces a library in a writable native/ with a link to the system's copy, where one of the
+        // system folders its presets name holds one (libgcc_s on Linux arm64)
+        "-Dorg.bytedeco.javacpp.canCreateSymbolicLink=false",
+        s"-Donnxruntime.native.path=$imageNativeDir",
+        s"-Dorg.sqlite.lib.path=$imageNativeDir",
+        s"-Dorg.sqlite.lib.name=${sqliteJdbcFile.last}",
+        s"-Daltitude.native.dir=$imageNativeDir",
+      ).mkString("", "\n", "\n")
+    )
+
+    PathRef(Task.dest)
+  }
+
+  /** `distLib` and `distNative` together, as the image's `/app` holds them: `lib/`, `altitude.jar`, `native/`, `jvm-options` */
+  def dist: T[PathRef] = Task {
+    for (part <- Seq(distLib(), distNative()); item <- os.list(part.path))
+      os.copy.into(item, Task.dest, followLinks = false)
+    PathRef(Task.dest)
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // The native jars: one fat jar per platform, started with `java -jar`, holding the natives of that platform alone. A start
+  // unpacks ONNX Runtime's, sqlite-jdbc's and sqlite-vector's once into the per-user cache (`NativeLibraries`), and javacpp
+  // bytedeco's into a cache of its own.
+
+  /**
+   * The target platform's libraries of ONNX Runtime, sqlite-jdbc and sqlite-vector, and no other platform's, each under the path
+   * its loader looks for it on the classpath: `ai/onnxruntime/native/<folder>/`, `org/sqlite/native/<OS>/<arch>/` and
+   * `sqlite-vector/<folder>/`. `NativeLibraries` unpacks what is under those three folders. Bytedeco's need no such folder: each
+   * platform's are a classifier jar of their own.
+   */
+  private def platformNatives: T[PathRef] = Task {
+    val target = nativePlatforms.find(_.name == targetPlatform()).get
+    for ((jar, folder, wanted) <- dependencyNatives(target, resolvedRunMvnDeps().map(_.path)))
+      if (extractFrom(jar, folder, Task.dest / os.SubPath(folder))(wanted).isEmpty)
+        Task.fail(s"No native library in $folder of $jar")
+    val vector = os.SubPath(target.sqliteVector)
+    os.copy(vectorExtensions().path / vector, Task.dest / "sqlite-vector" / vector, createFolders = true)
+    PathRef(Task.dest)
+  }
+
+  /** Whether an entry of a platform jar is one of the platform's native files, which `Altitude-Build` is the hash of */
+  private def isPlatformNative(name: String, platform: String): Boolean =
+    name.matches(s"org/bytedeco/[^/]+/$platform/.+") || name.startsWith(onnxRuntimeNatives._2) ||
+      name.startsWith(sqliteJdbcNatives._2) || name.startsWith("sqlite-vector/")
+
+  // A bytedeco platform folder, `org/bytedeco/<preset>/<os>-<arch>/`: an entry of another platform's fails the platform jar
+  private val bytedecoPlatformEntry = """org/bytedeco/[^/]+/((linux|macosx|windows|android|ios)-[^/]+)/.*""".r
+
+  /**
+   * How the platform jar merges entries that several of its inputs hold, the first of a name winning otherwise. Pekko's and the
+   * application's `reference.conf` are concatenated, and so are the service files (`java.sql.Driver` names both database drivers).
+   * So are the dependencies' licence and notice files (`META-INF/LICENSE.txt`, `META-INF/NOTICE` and the like, `LICENSE` and
+   * `NOTICE` at the root), each name's from every jar that has one, a line apart: an Apache-licensed jar's `NOTICE` must travel
+   * with its code, and about twenty jars hold one of the same few names. A licence under a name of its own
+   * (`META-INF/licenses/<artifact>/`, bytedeco's `share/licenses/`) is kept as it is.
+   * The inputs' manifests, signatures and jar indexes are dropped, since they describe a jar that is not this one: a JVM refuses a
+   * jar whose signatures do not match its entries. So are their module descriptors, which differ and mean nothing on a classpath.
+   */
+  private val platformJarRules: Seq[mill.javalib.Assembly.Rule] = {
+    import mill.javalib.Assembly.Rule
+    Seq(
+      Rule.Append("reference.conf", separator = "\n"),
+      Rule.AppendPattern("^META-INF/services/[^/]+$", separator = "\n"),
+      Rule.AppendPattern("^(META-INF/)?(?i:LICENSE|NOTICE)[^/]*$", separator = "\n\n" + "=" * 80 + "\n\n"),
+      Rule.Exclude(java.util.jar.JarFile.MANIFEST_NAME),
+      Rule.Exclude("META-INF/INDEX.LIST"),
+      Rule.ExcludePattern("^META-INF/[^/]+\\.(?i:SF|DSA|RSA|EC)$"),
+      Rule.ExcludePattern("^(META-INF/versions/\\d+/)?module-info\\.class$")
+    )
+  }
+
+  /**
+   * `altitude-<version>-<platform>.jar`, the native jar of `ALTITUDE_PLATFORM`: the launcher's classes, `distLib`'s application
+   * jar and dependency jars, the platform's bytedeco classifier jars and `platformNatives`, merged by `platformJarRules`. Its
+   * natives are that platform's alone, so a jar runs on its platform only; the launcher, its `Main-Class`, says so on any other.
+   *
+   * Its manifest adds to the application's:
+   *   - `Altitude-Platform`, the platform, which the launcher checks against the machine's.
+   *   - `Altitude-Build`, a hash of the jar's native files (their names and bytes, in name order): the same natives give the same
+   *     hash, so a rebuilt jar of the same version and other natives never reuses what another build unpacked.
+   *   - `Enable-Native-Access: ALL-UNNAMED`, which lets a Java 22 or later load the native libraries without a warning. It applies
+   *     to a `java -jar` start alone, which is why the launcher's second JVM is started with `-jar` too.
+   *   - `Multi-Release: true`, so the classes some dependencies hold for newer Java versions are loaded as from their own jars.
+   *
+   * No start script is prepended: the jar is started with `java -jar`. Every entry has one fixed time and the entries are in name
+   * order, so the same inputs give the same bytes.
+   */
+  def platformJar: T[PathRef] = Task {
+    val target = targetPlatform()
+    val lib = distLib().path
+    // distLib's dependency jars in the classpath's order: of two entries of one name, the earlier jar's wins, as on a classpath
+    val dependencies = resolvedRunMvnDeps().map(_.path).filterNot(isNativeJarOf(platform)).map(jar => lib / "lib" / jar.last)
+    val inputs = build.launcher.localClasspath().map(_.path) ++ Seq(lib / "altitude.jar") ++ dependencies ++
+      targetNativeJars().map(_.path) :+ platformNatives().path
+
+    val assembled = Task.dest / "assembled.jar"
+    mill.javalib.Assembly.create(assembled, inputs, assemblyRules = platformJarRules)
+
+    val jar = Task.dest / s"altitude-${publishVersion()}-$target.jar"
+    val zip = new java.util.zip.ZipFile(assembled.toIO)
+    try {
+      val entries = zip.entries().asScala.toSeq
+        .filterNot(entry => entry.getName == "META-INF/" || entry.getName == java.util.jar.JarFile.MANIFEST_NAME)
+        .sortBy(_.getName)
+      val files = entries.filterNot(_.isDirectory)
+
+      val otherPlatforms = files.map(_.getName).collect {
+        case name @ bytedecoPlatformEntry(folder, _) if folder != target => name
+      }
+      val strayNatives = files.map(_.getName).filter { name =>
+        nativeLibraryName.matches(name.split('/').last) && !isPlatformNative(name, target)
+      }
+      if (otherPlatforms.nonEmpty || strayNatives.nonEmpty)
+        Task.fail(s"The $target jar holds native files of no platform or of another: ${(otherPlatforms ++ strayNatives).mkString(", ")}")
+
+      val natives = files.filter(entry => isPlatformNative(entry.getName, target))
+      if (natives.isEmpty) Task.fail(s"The $target jar holds no native library")
+      val digest = java.security.MessageDigest.getInstance("SHA-256")
+      natives.foreach { entry =>
+        // The name, then the length, then the bytes: no two sets of files hash the same bytes
+        digest.update(entry.getName.getBytes("UTF-8"))
+        digest.update(0.toByte)
+        digest.update(java.nio.ByteBuffer.allocate(java.lang.Long.BYTES).putLong(entry.getSize).array())
+        val in = zip.getInputStream(entry)
+        try in.transferTo(new java.security.DigestOutputStream(java.io.OutputStream.nullOutputStream(), digest))
+        finally in.close()
+      }
+      val nativesHash = digest.digest().map("%02x".format(_)).mkString.take(16)
+
+      val manifestBytes = new java.io.ByteArrayOutputStream()
+      manifest()
+        .add(
+          "Main-Class" -> build.launcher.finalMainClass(),
+          "Altitude-Platform" -> target,
+          "Altitude-Build" -> nativesHash,
+          "Implementation-Title" -> "Altitude",
+          "Implementation-Version" -> publishVersion(),
+          "Enable-Native-Access" -> "ALL-UNNAMED",
+          "Multi-Release" -> "true"
+        )
+        .build
+        .write(manifestBytes)
+      writeJar(
+        jar,
+        Seq[(String, Option[() => java.io.InputStream])](
+          "META-INF/" -> None,
+          "META-INF/MANIFEST.MF" -> Some(() => new java.io.ByteArrayInputStream(manifestBytes.toByteArray))
+        ) ++ entries.map(entry => entry.getName -> Option.unless(entry.isDirectory)(() => zip.getInputStream(entry)))
+      )
+    } finally zip.close()
+    os.remove(assembled)
+
+    PathRef(jar)
+  }
+
   object test extends ScalaTests with TestModule.ScalaTest {
+    // The launcher's tests start it as the native jar does, from a classpath that holds it
+    def moduleDeps: Seq[JavaModule] = super.moduleDeps ++ Seq(build.launcher)
+
     def mvnDeps: Task.Simple[Seq[Dep]] = Seq(
       mvn"org.apache.pekko::pekko-testkit:$pekkoVersion",
       mvn"com.lihaoyi::utest::0.8.4",
@@ -221,9 +663,25 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
       mvn"org.scalameta::scalameta:4.17.4"
     )
 
+    // Named, though logback would find the file first by itself: a test run never logs by the dev or prod configuration
+    def forkArgs: T[Seq[String]] = Task { super.forkArgs() ++ Seq("-Dlogback.configurationFile=logback-test.xml") }
+
     // Tests run in a sandbox directory: the architecture tests find the application's sources through this
     def forkEnv: T[Map[String, String]] = Task {
-      super.forkEnv() ++ Map("ALTITUDE_SOURCE_DIR" -> (moduleDir / os.up / "src").toString)
+      super.forkEnv() ++ onnxRuntimeTelemetryOff ++ Map("ALTITUDE_SOURCE_DIR" -> (moduleDir / os.up / "src").toString)
     }
   }
+}
+
+/**
+ * The native jar's `Main-Class`: one Java class, compiled for Java 8 and with nothing on its classpath, so that an older Java
+ * than the application's runs it and reads its message instead of an `UnsupportedClassVersionError`. It checks the Java version
+ * and the jar's platform against the machine's, starts the JVM once more with ONNX Runtime's telemetry off where the variable is
+ * missing, and then calls `altitude.core.App` by reflection, never linking against it (`Launcher.java`).
+ */
+object launcher extends JavaModule {
+  def mainClass: T[Option[String]] = Some("altitude.launcher.Launcher")
+
+  // Java 8 is deprecated as a target from JDK 21 on: the warning says nothing the launcher does not mean
+  def javacOptions: Task.Simple[Seq[String]] = Seq("--release", "8", "-Xlint:-options")
 }

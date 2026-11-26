@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 
+import altitude.core.SceneEmbedderClosedException
 import altitude.core.models.SceneEmbeddings
 import altitude.core.util.ModelFiles
 import altitude.core.util.OnnxSceneEmbedder
@@ -29,6 +30,9 @@ class SwitchableSceneEmbedder(models: ModelFiles) extends SceneEmbedder with Mod
   // Opened by the first turnOn, set before the switch so an embed that sees it on sees the models
   @volatile private var onnx: Option[OnnxSceneEmbedder] = None
 
+  // Read on the import dispatcher's threads, set on the test's (`closedWhile`)
+  @volatile private var refusing = false
+
   // By `pixelKey`
   private val embedded = new ConcurrentHashMap[String, SceneEmbeddings]()
 
@@ -43,7 +47,15 @@ class SwitchableSceneEmbedder(models: ModelFiles) extends SceneEmbedder with Mod
   /** Switches the real models off, leaving them open until `close` */
   override def turnOff(): Unit = switchedOn = false
 
+  /** Runs `f` with every embed refused as a closed embedder refuses it, on or off, and reopens afterwards */
+  def closedWhile[T](f: => T): T = {
+    refusing = true
+    try f
+    finally refusing = false
+  }
+
   override def embed(image: Mat, name: String): SceneEmbeddings = onnx match {
+    case _ if refusing => throw SceneEmbedderClosedException()
     case Some(models) if switchedOn =>
       pixelKey(image).fold(models.embed(image, name)) {
         key =>

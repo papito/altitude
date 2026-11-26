@@ -2,8 +2,12 @@ package altitude.core.unit
 
 import altitude.test.TestFocus
 import altitude.test.TestModelFiles
+import altitude.test.TestResources
 import java.security.MessageDigest
 import java.util.HexFormat
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 import org.opencv.core.Core
@@ -21,7 +25,9 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers.*
 
 import scala.compiletime.uninitialized
+import scala.util.Try
 
+import altitude.core.SceneEmbedderClosedException
 import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneEmbeddings
 import altitude.core.models.SceneModel
@@ -43,7 +49,7 @@ import altitude.core.util.OnnxSceneEmbedder
   override def afterAll(): Unit = embedder.close()
 
   private def fixture(relPath: String): Mat =
-    val image = Imgcodecs.imread(getClass.getResource(s"/import/$relPath").getPath, Imgcodecs.IMREAD_COLOR)
+    val image = Imgcodecs.imread(TestResources.importFile(relPath).toString, Imgcodecs.IMREAD_COLOR)
     if image.empty() then fail(s"Could not read $relPath")
     image
 
@@ -167,7 +173,8 @@ import altitude.core.util.OnnxSceneEmbedder
      *
      * Each prepared input is 224x224 RGB, byte for byte the image resized so its short side is 224 (`INTER_AREA` shrinking,
      * `INTER_CUBIC` enlarging) and cut to its center square. Each one's SHA-256 is pinned, since DINOv2's threshold is calibrated
-     * to this input. The landscape's bands fall outside the square.
+     * to this input; the enlarged one's per architecture, since OpenCV's bicubic code rounds differently on ARM than on x86. The
+     * landscape's bands fall outside the square.
      */
     val side = SceneModel.Dinov2.inputSize
     side shouldBe 224
@@ -191,7 +198,10 @@ import altitude.core.util.OnnxSceneEmbedder
 
       val ofSmall = OnnxSceneEmbedder.prepare(small, SceneModel.Dinov2)
       ofSmall shouldBe centerSquareRgb(small, 336, 224, side, Imgproc.INTER_CUBIC)
-      sha256(ofSmall) shouldBe "31398e2a0b00a8ffc07789e8090c0bc135adfd2d1174102aa9c936c6b694f0aa"
+      val ofSmallSha256 =
+        if sys.props("os.arch") == "aarch64" then "2ecf4d3ac6b9d26e7b179fc8e77b3f1d5023f71b1ee03e4d5366f72023eeea0d"
+        else "31398e2a0b00a8ffc07789e8090c0bc135adfd2d1174102aa9c936c6b694f0aa"
+      sha256(ofSmall) shouldBe ofSmallSha256
     finally List(landscape, portrait, small).foreach(_.release())
   }
 
@@ -314,5 +324,58 @@ import altitude.core.util.OnnxSceneEmbedder
     val image = new Mat(120, 160, CvType.CV_8UC2, new Scalar(128, 128))
     try embeddings(image) shouldBe SceneEmbeddings()
     finally image.release()
+  }
+
+  test("Closing waits for the images being embedded, and a closed embedder refuses") {
+
+    /**
+     * Setup:
+     *
+     * An embedder of the test's own with both sessions open, and four threads each embedding an image of its own in a loop, as
+     * the import's threads do. Once each thread has embedded its image, the embedder is closed under them.
+     *
+     * Assertions:
+     *
+     * Every thread stops on the closed embedder's `SceneEmbedderClosedException` and on nothing else, and every answer before it
+     * carried both models' embeddings: an image under way at the close is embedded whole, and the next finds the embedder closed.
+     * No session is closed under a pass, which would then run on freed memory. Afterwards the embedder refuses the same way,
+     * where a pass that merely failed would answer no embedding.
+     *
+     * Edge cases:
+     *
+     * A second close does nothing.
+     */
+    val threads = 4
+    val pool = Executors.newFixedThreadPool(threads)
+    val closing = OnnxSceneEmbedder(TestModelFiles.models)
+    val images = (1 to threads).map(thread => pattern(640 + 32 * thread, 480))
+
+    try
+      val started = CountDownLatch(threads)
+      val embedding = images.map {
+        image =>
+          pool.submit {
+            () =>
+              Try(Iterator.continually(closing.embed(image, "fixture")).foreach {
+                embeddings =>
+                  // A pass on a session closed under it, or just before it, fails: the embedder answers no embedding
+                  if SceneModel.values.exists(embeddings.of(_).isEmpty) then
+                    throw IllegalStateException("An image came back without an embedding")
+                  started.countDown()
+              })
+          }
+      }
+      started.await(2, TimeUnit.MINUTES) shouldBe true
+
+      closing.close()
+
+      embedding.foreach(ended => ended.get(2, TimeUnit.MINUTES).failed.get shouldBe a[SceneEmbedderClosedException])
+      a[SceneEmbedderClosedException] should be thrownBy closing.embed(images.head, "fixture")
+
+      closing.close()
+    finally
+      pool.shutdownNow()
+      closing.close()
+      images.foreach(_.release())
   }
 }

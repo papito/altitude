@@ -2,11 +2,13 @@ package altitude.core.integration
 
 import com.typesafe.config.ConfigValueFactory
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ empty, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ be, empty, include, not, should, shouldBe }
 import org.sqlite.SQLiteConfig
 import scalasql.core.SqlStr.SqlStringSyntax
 
@@ -14,6 +16,7 @@ import scala.io.Source
 
 import altitude.core.Altitude
 import altitude.core.Const
+import altitude.core.NativeLibraries
 import altitude.core.QueryTimeoutException
 import altitude.core.RequestContext
 import altitude.core.dao.sql.Db
@@ -261,6 +264,76 @@ import altitude.core.transactions.TransactionManager
         manager.asReadOnly(searchCount) shouldBe 0
         manager.withTransaction(searchCount) shouldBe 0
       } finally manager.shutdown()
+    }
+
+    test("sqlite-vector loads from the folder altitude.native.dir names, and from the classpath when it names none") {
+
+      /**
+       * Setup:
+       *
+       * A folder holding a copy of this platform's sqlite-vector build, and an empty folder. A transaction manager of its own
+       * over a new database file is built three times: with the `altitude.native.dir` property unset, naming the first folder,
+       * and naming the empty one.
+       *
+       * Assertions:
+       *
+       * Unset, the extension is the build on the classpath; set, it is the file in the folder. A connection of either manager
+       * answers with the extension's version.
+       *
+       * Edge cases:
+       *
+       * The folder that holds no build fails the connection, naming the property and the missing file: with the property set,
+       * nothing is taken from the classpath. An empty property counts as unset, and a relative folder is under the working
+       * directory. A build on the classpath inside a jar, as in one that is no platform jar, fails naming the jar, the property
+       * and the platform jar: SQLite loads an extension from a file alone, and nothing extracts it.
+       */
+      val testDir = Paths.get(testApp.config.getString(Const.Conf.TEST_DIR)).toAbsolutePath
+      Files.createDirectories(testDir)
+      val onClasspath = Paths.get(TransactionManager.vectorExtensionPath(None))
+      val nativeDir = Files.createTempDirectory(testDir, "native")
+      val emptyDir = Files.createTempDirectory(testDir, "native-empty")
+      val inFolder = nativeDir.resolve(onClasspath.getFileName)
+      Files.copy(onClasspath, inFolder)
+
+      // The version a connection of a new manager answers with, built while the property has the value
+      def versionWith(nativeDir: Option[String]): String = {
+        val property = TransactionManager.NATIVE_DIR_PROPERTY
+        // Put back afterwards, should the test run itself have been started with one
+        val before = Option(System.getProperty(property))
+        nativeDir.fold(System.clearProperty(property))(System.setProperty(property, _))
+        val dbFile = Files.createTempFile(testDir, "native", ".sqlite.db")
+        val config = testApp.config.withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(s"jdbc:sqlite:$dbFile"))
+        val manager = new TransactionManager(config, None, () => None)
+        try manager.asReadOnly(query("SELECT vector_version() AS version").head("version").toString)
+        finally {
+          manager.shutdown()
+          before.fold(System.clearProperty(property))(System.setProperty(property, _))
+        }
+      }
+
+      // The classpath holds a folder per platform under sqlite-vector/
+      onClasspath.getParent.getParent.getFileName.toString shouldBe "sqlite-vector"
+      Files.isRegularFile(onClasspath) shouldBe true
+      TransactionManager.vectorExtensionPath(Some(nativeDir.toString)) shouldBe inFolder.toString
+      val relativeDir = Paths.get("").toAbsolutePath.relativize(nativeDir)
+      TransactionManager.vectorExtensionPath(Some(relativeDir.toString)) shouldBe inFolder.toString
+      TransactionManager.vectorExtensionPath(Some("")) shouldBe onClasspath.toString
+
+      val version = versionWith(None)
+      version should not be empty
+      versionWith(Some(nativeDir.toString)) shouldBe version
+
+      val refusal = intercept[Exception](versionWith(Some(emptyDir.toString)))
+      val reasons = Iterator.iterate[Throwable](refusal)(_.getCause).takeWhile(_ != null).map(_.getMessage).mkString(" / ")
+      reasons should include(TransactionManager.NATIVE_DIR_PROPERTY)
+      reasons should include(emptyDir.resolve(onClasspath.getFileName).toString)
+
+      val inJar =
+        new java.net.URI(s"jar:file:/opt/altitude/altitude.jar!/sqlite-vector/linux-x86/${onClasspath.getFileName}").toURL
+      val inside = intercept[IllegalStateException](TransactionManager.vectorExtensionPath(None, _ => inJar))
+      inside.getMessage should include("/opt/altitude/altitude.jar")
+      inside.getMessage should include(TransactionManager.NATIVE_DIR_PROPERTY)
+      inside.getMessage should include(NativeLibraries.BUILD)
     }
   } else {
     test(

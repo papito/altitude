@@ -3,8 +3,10 @@ package altitude.core.suites
 import org.scalatest.Suites
 
 import altitude.core.unit.ApiValidatorTests
+import altitude.core.unit.AppStartTests
 import altitude.core.unit.BaseControllerTests
 import altitude.core.unit.CaptureDateResolverTests
+import altitude.core.unit.ClearDbTests
 import altitude.core.unit.ContentSignerTests
 import altitude.core.unit.CoreModelTests
 import altitude.core.unit.CurationRuleTests
@@ -23,10 +25,14 @@ import altitude.core.unit.ImageUtilTests
 import altitude.core.unit.ImportParallelismTests
 import altitude.core.unit.ImportStatusTests
 import altitude.core.unit.ImportStatusWsActorTests
+import altitude.core.unit.LauncherTests
+import altitude.core.unit.LogSettingsTests
 import altitude.core.unit.ModelDownloaderTests
 import altitude.core.unit.NameKeyTests
+import altitude.core.unit.NativeLibrariesTests
 import altitude.core.unit.NaturalOrderTests
 import altitude.core.unit.NetPoolTests
+import altitude.core.unit.OnnxEnvironmentTests
 import altitude.core.unit.PermissionsTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.PipelineUtilsTests
@@ -45,7 +51,10 @@ import altitude.core.unit.Siglip2TokenizerTests
 import altitude.core.unit.SqlDialectTests
 import altitude.core.unit.SqlExplainerTests
 import altitude.core.unit.SqliteOverridesTests
+import altitude.core.unit.StartupConfigTests
 import altitude.core.unit.StyleGuideScanTests
+import altitude.core.unit.SystemLibrariesTests
+import altitude.core.unit.TempFolderTests
 import altitude.core.unit.TransactionBoundaryTests
 import altitude.core.unit.UrlServiceTests
 import altitude.core.unit.UtilTests
@@ -79,6 +88,14 @@ abstract class AllUnitTestSuites
     new PermissionsTests,
     new PipelineUtilsTests,
     new EnvironmentTests,
+    new StartupConfigTests,
+    new ClearDbTests,
+    new TempFolderTests,
+    new AppStartTests,
+    new LauncherTests,
+    new NativeLibrariesTests,
+    new SystemLibrariesTests,
+    new LogSettingsTests,
     new Sha256Tests,
     new ModelDownloaderTests,
     new NetPoolTests,
@@ -88,6 +105,7 @@ abstract class AllUnitTestSuites
     new VideoServiceTests,
     new ImageUtilTests,
     new ImageMeasurementTests,
+    new OnnxEnvironmentTests,
     new SceneEmbedderTests,
     new Siglip2TokenizerTests,
     new DescribeEmbedderTests,

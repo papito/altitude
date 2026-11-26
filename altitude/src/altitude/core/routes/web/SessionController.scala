@@ -8,20 +8,25 @@ import org.slf4j.Logger
 
 import altitude.core.App
 import altitude.core.routes.BaseController
+import altitude.core.routes.decorators.formPost
 import altitude.core.util.Util
 
 object SessionController:
   val AUTH_COOKIE_NAME = "auth_token"
 
-  /** The session cookie of `token`, kept until `expiresAt`; every session cookie is built here so all share its attributes */
-  def authCookie(token: String, expiresAt: Instant): Cookie =
+  /**
+   * The session cookie of `token`, kept until `expiresAt`; every session cookie is built here so all share its attributes.
+   * `Secure` follows `server.secure_cookies`, as does the cookie that clears it: over plain HTTP a browser keeps a `Secure`
+   * cookie on localhost alone, and takes none that would replace or clear it.
+   */
+  def authCookie(token: String, expiresAt: Instant, secure: Boolean = App.altitude.secureCookies): Cookie =
     Cookie(
       name = AUTH_COOKIE_NAME,
       value = token,
       path = "/",
       maxAge = math.max(0L, Duration.between(Instant.now, expiresAt).getSeconds).toInt,
       httpOnly = true,
-      secure = true,
+      secure = secure,
       sameSite = "Strict"
     )
 
@@ -41,8 +46,11 @@ class SessionController(using logger: Logger) extends cask.Routes:
     val payload = "<!doctype html>" + html.login(redirect)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-  /** The login is a username or an email address */
-  @cask.postForm("/login")
+  /**
+   * The login is a username or an email address. A body that is no form is a bare 400, and one larger than a form may be is
+   * refused before it is read into memory (`decorators.formPost`).
+   */
+  @formPost("/login")
   def doLogin(login: String, password: String, redirect: Option[String] = None)(using request: Request): cask.Response[String] =
     logger.trace(s"Login attempt for [${Util.printable(login, 64)}]")
     val clientIp = BaseController.clientIpOf(request)

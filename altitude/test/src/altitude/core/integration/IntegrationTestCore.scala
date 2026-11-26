@@ -118,6 +118,9 @@ abstract class IntegrationTestCore
   /** Runs `f` with the real Scene models on, for one test of a suite that leaves them off, and puts the switch back as it was */
   def withSceneModels[T](f: => T): T = withSwitchOn(sceneModels)(f)
 
+  /** Runs `f` with the Scene embedder refusing every image as a closed one does, as during a stop whose drain ran out */
+  def withSceneEmbedderClosed[T](f: => T): T = sceneModels.closedWhile(f)
+
   /** Runs `f` with the real Describe model on, for one test of a suite that leaves it off, and puts the switch back as it was */
   def withDescribeModel[T](f: => T): T = withSwitchOn(describeModel)(f)
 

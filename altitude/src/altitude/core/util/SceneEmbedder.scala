@@ -2,11 +2,12 @@ package altitude.core.util
 
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtLoggingLevel
 import ai.onnxruntime.OrtSession
 import java.nio.FloatBuffer
 import java.nio.file.Path
 import java.util.Collections
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import org.opencv.core.Mat
 import org.opencv.core.Rect
 import org.opencv.core.Size
@@ -18,16 +19,103 @@ import scala.collection.mutable
 import scala.util.control.NonFatal
 
 import altitude.core.ImageException
+import altitude.core.SceneEmbedderClosedException
 import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneEmbeddings
 import altitude.core.models.SceneFit
 import altitude.core.models.SceneModel
 
-/** Embeds a still image with every [[altitude.core.models.SceneModel]]; a model that cannot embed it gives none */
+/**
+ * Embeds a still image with every [[altitude.core.models.SceneModel]]; a model that cannot embed it gives none. Closing it
+ * releases the models.
+ */
 trait SceneEmbedder extends AutoCloseable:
 
-  /** `image` as `ImageUtil.matFromBytes` decodes it, upright; `name` is for the log */
+  /**
+   * `image` as `ImageUtil.matFromBytes` decodes it, upright; `name` is for the log. A closed embedder throws
+   * `SceneEmbedderClosedException`, which is no failed pass: the image is not one the models could not embed.
+   */
   def embed(image: Mat, name: String): SceneEmbeddings
+
+/**
+ * The process's one ONNX Runtime environment, which every session and tensor of the embedders is made in.
+ *
+ * ONNX Runtime's official builds send usage telemetry to Microsoft unless told not to (`Privacy.md` in its jar). Altitude runs
+ * with it off. The one switch that turns all of it off is the `ORT_DISABLE_TELEMETRY=1` environment variable, which the native
+ * library reads as it initializes: with it, no device ID and no event store are written under the home folder's cache
+ * (`Microsoft/DeveloperTools/.onnxruntime`), and the process makes no connection to the collector. `forkEnv` in `build.mill` sets
+ * it for every JVM Mill forks; a jar started any other way needs it in its environment.
+ *
+ * The Java API's switch is called here too, but it comes too late to stand in for the variable: by the time an environment
+ * exists, its creation has written the device ID, stored an event describing the machine and started the uploader, which goes on
+ * trying to reach the collector. What the call still stops is, by `Privacy.md`, the events that are not essential. So a start
+ * without the variable is logged at WARN.
+ */
+private[core] object OnnxEnvironment:
+  private val logger: Logger = LoggerFactory.getLogger(getClass)
+
+  /** The variable ONNX Runtime's native library reads as it initializes, and the value that switches its telemetry off */
+  val TELEMETRY_OFF: (String, String) = "ORT_DISABLE_TELEMETRY" -> "1"
+
+  lazy val get: OrtEnvironment =
+    val environment = withoutTelemetry(OrtEnvironment.getEnvironment, sys.env.get(TELEMETRY_OFF._1))
+    retain(environment)
+    environment
+
+  /**
+   * Takes a second reference to the native environment, which is never given back.
+   *
+   * ONNX Runtime's Java API registers a JVM shutdown hook of its own (`OrtEnvironment.OrtEnvCloser`) that releases the
+   * environment. The JVM starts every hook at once, so on a SIGTERM this one runs beside Pekko's coordinated shutdown, whose
+   * `Altitude.cleanup()` is still embedding what the import queue accepted. A pass on a released environment fails: a session's
+   * first pass reaches for ONNX Runtime's default logger, which is gone, and with several threads embedding the JVM dies of a
+   * SIGSEGV in ONNX Runtime's library, the Import's files left pending. The native environment is one per process and counts its
+   * references (the C API's `CreateEnv` takes one, `ReleaseEnv` gives one back), so with a second reference the hook's release
+   * leaves the environment alive under every session opened in it, and the end of the process frees it.
+   *
+   * The API offers no way to take a reference, nor to drop its hook. So this calls `OrtEnvironment`'s private native
+   * `createHandle`, its `CreateEnv`, by reflection, with the API handle in the package-private `OnnxRuntime.ortApiHandle`, and
+   * checks that the handle it is answered is the environment's own. An ONNX Runtime upgrade that renames one of those members, or
+   * answers another environment, fails the start here, naming the version (the actor system exists by then, and `App.main` ends
+   * the process): the other choice is a server that crashes at its next stop under load. One that stops counting references is
+   * caught by the test alone. The guard is `OnnxEnvironmentTests`' shutdown hook test, which releases the environment as the hook
+   * does and then runs a session's first pass.
+   */
+  private def retain(environment: OrtEnvironment): Unit =
+    def broken(why: String, cause: Throwable | Null): IllegalStateException =
+      IllegalStateException(
+        s"ONNX Runtime ${environment.getVersion} gives no second reference to its environment ($why), so its shutdown hook " +
+          "would release the environment under the sessions a stop is still draining. OnnxEnvironment.retain needs adapting " +
+          "to this version",
+        cause
+      )
+
+    val handle =
+      try
+        val api = Class.forName("ai.onnxruntime.OnnxRuntime").getDeclaredField("ortApiHandle")
+        api.setAccessible(true)
+        val own = classOf[OrtEnvironment].getDeclaredField("nativeHandle")
+        own.setAccessible(true)
+        val createHandle =
+          classOf[OrtEnvironment].getDeclaredMethod("createHandle", java.lang.Long.TYPE, Integer.TYPE, classOf[String])
+        createHandle.setAccessible(true)
+        // An environment that exists keeps its own level and name; these are the Java API's defaults
+        val level = Integer.valueOf(OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING.getValue)
+        createHandle.invoke(null, api.get(null), level, OrtEnvironment.DEFAULT_NAME) -> own.get(environment)
+      catch case e: ReflectiveOperationException => throw broken(e.toString, e)
+
+    if handle._1 != handle._2 then throw broken(s"createHandle answered environment ${handle._1}, not ${handle._2}", null)
+    logger.debug("Holding a second reference to ONNX Runtime's environment, which its shutdown hook's release leaves alive")
+
+  /** `environment` with the API's telemetry switch off, after a WARN when `variable`, the process's own, left the rest on */
+  def withoutTelemetry(environment: OrtEnvironment, variable: Option[String]): OrtEnvironment =
+    if !variable.contains(TELEMETRY_OFF._2) then
+      logger.warn(
+        s"ONNX Runtime's telemetry is on: ${TELEMETRY_OFF._1} is not ${TELEMETRY_OFF._2} in this process's environment, so it " +
+          "keeps a device ID under the home folder's cache and sends usage events to Microsoft. " +
+          s"Set ${TELEMETRY_OFF._1}=${TELEMETRY_OFF._2} before the start to switch it off")
+    environment.setTelemetry(false)
+    environment
 
 private[util] object OnnxSessions:
 
@@ -155,13 +243,22 @@ class OnnxSceneEmbedder(models: ModelFiles) extends SceneEmbedder:
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  private val environment: OrtEnvironment = OrtEnvironment.getEnvironment
+  private val environment: OrtEnvironment = OnnxEnvironment.get
 
   private val sessions: Map[SceneModel, OrtSession] = openSessions()
 
   private val inputs: Map[SceneModel, ModelInput] = SceneModel.values.map(model => model -> ModelInput(model)).toMap
 
-  private val closed = AtomicBoolean(false)
+  /**
+   * Guards the sessions' life: an image's passes hold the read lock, so images embed together, and closing holds the write lock,
+   * so no session is closed under a pass. `OrtSession.close` releases the native session at once, with no lock of its own, and a
+   * pass still running on it then reads freed memory: the JVM dies of a SIGSEGV in ONNX Runtime's library. The import's threads
+   * are still embedding when a stop's drain runs out and `Altitude.cleanup` closes the embedder.
+   */
+  private val lifecycle = ReentrantReadWriteLock()
+
+  // Written under the write lock, read under the read lock
+  private var closed = false
 
   /** When a later session fails to open, the ones open already are closed first */
   private def openSessions(): Map[SceneModel, OrtSession] =
@@ -184,9 +281,17 @@ class OnnxSceneEmbedder(models: ModelFiles) extends SceneEmbedder:
     logger.info(s"Opened the ONNX session of Scene model ${model.name} from $path")
     session
 
-  /** A model that cannot prepare the image or whose pass fails gives no embedding (WARN), and the other model's stands */
+  /**
+   * A model that cannot prepare the image or whose pass fails gives no embedding (WARN), and the other model's stands. A closed
+   * embedder refuses instead: it embeds an image with both models or with neither.
+   */
   override def embed(image: Mat, name: String): SceneEmbeddings =
-    SceneEmbeddings(dinov2 = embed(image, SceneModel.Dinov2, name), siglip2 = embed(image, SceneModel.Siglip2, name))
+    val reading = lifecycle.readLock()
+    reading.lock()
+    try
+      if closed then throw SceneEmbedderClosedException()
+      SceneEmbeddings(dinov2 = embed(image, SceneModel.Dinov2, name), siglip2 = embed(image, SceneModel.Siglip2, name))
+    finally reading.unlock()
 
   private def embed(image: Mat, model: SceneModel, name: String): Option[SceneEmbedding] =
     try Some(run(prepare(image, model), model))
@@ -216,5 +321,15 @@ class OnnxSceneEmbedder(models: ModelFiles) extends SceneEmbedder:
       channel += 1
     values
 
-  /** Once, since ONNX Runtime warns on a second close of a session; the environment is the process's and stays */
-  override def close(): Unit = if closed.compareAndSet(false, true) then sessions.values.foreach(_.close())
+  /**
+   * Closes the sessions once the images being embedded have their embeddings; every image after it is refused. Once, since ONNX
+   * Runtime warns on a second close of a session; the environment is the process's and stays.
+   */
+  override def close(): Unit =
+    val writing = lifecycle.writeLock()
+    writing.lock()
+    try
+      if !closed then
+        closed = true
+        sessions.values.foreach(_.close())
+    finally writing.unlock()

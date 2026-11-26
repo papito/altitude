@@ -962,6 +962,12 @@ import altitude.core.util.Sha256
     }
   }
 
+  /**
+   * An absolute path on this system, written as one on Linux: `/srv/models` is `D:\srv\models` on Windows, where a path from `/`
+   * is no absolute one
+   */
+  private def abs(posix: String): String = Path.of("").toAbsolutePath.getRoot.resolve(posix.stripPrefix("/")).toString
+
   test("The set lives in models.dir, else in the per-user cache, in a directory named by its tag") {
 
     /**
@@ -982,16 +988,16 @@ import altitude.core.util.Sha256
     val noEnv: String => Option[String] = _ => None
     def xdg(value: String): String => Option[String] = Map("XDG_CACHE_HOME" -> value).get
 
-    ModelFiles.root("/srv/models", xdg("/var/cache"), "/home/user") shouldEqual Path.of("/srv/models")
-    ModelFiles.root("models", noEnv, "/home/user") shouldEqual Path.of(Environment.ROOT_PATH, "models")
-    ModelFiles.root("", xdg("/var/cache"), "/home/user") shouldEqual Path.of("/var/cache/altitude/models")
-    ModelFiles.root("", noEnv, "/home/user") shouldEqual Path.of("/home/user/.cache/altitude/models")
-    ModelFiles.root("", xdg(""), "/home/user") shouldEqual Path.of("/home/user/.cache/altitude/models")
-    ModelFiles.root("", xdg("cache"), "/home/user") shouldEqual Path.of("/home/user/.cache/altitude/models")
+    ModelFiles.root(abs("/srv/models"), xdg(abs("/var/cache")), abs("/home/user")) shouldEqual Path.of(abs("/srv/models"))
+    ModelFiles.root("models", noEnv, abs("/home/user")) shouldEqual Path.of(Environment.ROOT_PATH, "models")
+    ModelFiles.root("", xdg(abs("/var/cache")), abs("/home/user")) shouldEqual Path.of(abs("/var/cache/altitude/models"))
+    ModelFiles.root("", noEnv, abs("/home/user")) shouldEqual Path.of(abs("/home/user/.cache/altitude/models"))
+    ModelFiles.root("", xdg(""), abs("/home/user")) shouldEqual Path.of(abs("/home/user/.cache/altitude/models"))
+    ModelFiles.root("", xdg("cache"), abs("/home/user")) shouldEqual Path.of(abs("/home/user/.cache/altitude/models"))
 
-    val models = ModelFiles(Path.of("/srv/models"))
-    models.directory shouldEqual Path.of("/srv/models/v1")
-    models.path(ModelFile.Dinov2) shouldEqual Path.of("/srv/models/v1/dinov2_vitb14.onnx")
+    val models = ModelFiles(Path.of(abs("/srv/models")))
+    models.directory shouldEqual Path.of(abs("/srv/models/v1"))
+    models.path(ModelFile.Dinov2) shouldEqual Path.of(abs("/srv/models/v1/dinov2_vitb14.onnx"))
   }
 
   test("A models.dir under ~ is under the home, and no absolute home fails asking for models.dir") {
@@ -1000,7 +1006,7 @@ import altitude.core.util.Sha256
      * Setup:
      *
      * `models.dir` as `~`, `~/models` and empty, with a home directory that is absolute, `?` (the JVM's `user.home` for a user
-     * with no passwd entry), or unset.
+     * with no passwd entry, and no path at all on Windows), one with a NUL (no path on any system), or unset.
      *
      * Assertions:
      *
@@ -1014,12 +1020,13 @@ import altitude.core.util.Sha256
      */
     val noEnv: String => Option[String] = _ => None
 
-    ModelFiles.root("~", noEnv, "/home/user") shouldEqual Path.of("/home/user")
-    ModelFiles.root("~/models", noEnv, "/home/user") shouldEqual Path.of("/home/user/models")
-    ModelFiles.root("~user", noEnv, "/home/user") shouldEqual Path.of(Environment.ROOT_PATH, "~user")
-    ModelFiles.root("", Map("XDG_CACHE_HOME" -> "/var/cache").get, "?") shouldEqual Path.of("/var/cache/altitude/models")
+    ModelFiles.root("~", noEnv, abs("/home/user")) shouldEqual Path.of(abs("/home/user"))
+    ModelFiles.root("~/models", noEnv, abs("/home/user")) shouldEqual Path.of(abs("/home/user/models"))
+    ModelFiles.root("~user", noEnv, abs("/home/user")) shouldEqual Path.of(Environment.ROOT_PATH, "~user")
+    ModelFiles.root("", Map("XDG_CACHE_HOME" -> abs("/var/cache")).get, "?") shouldEqual Path.of(
+      abs("/var/cache/altitude/models"))
 
-    Seq(("", "?"), ("", null), ("~/models", "?"), ("~", null)).foreach {
+    Seq(("", "?"), ("", null), ("~/models", "?"), ("~", null), ("~", "/home/\u0000user")).foreach {
       (configured, home) =>
         val message = intercept[ModelFilesException](ModelFiles.root(configured, noEnv, home)).getMessage
         message should include("models.dir")

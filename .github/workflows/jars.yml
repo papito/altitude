@@ -1,0 +1,194 @@
+# The native jars, each built and tested on its own system: the Unit and SQLite suites and the JS tests run there, and
+# scripts/smoke-jar.sh starts the jar as a person would and imports into it. Each job uploads its jar as a workflow artifact;
+# where the jars are published is not decided yet.
+#
+# Every step runs in bash (Git Bash on Windows) and calls Mill itself with the arguments and environment of the Makefile's
+# targets, since Windows has no make and the Makefile calls ./mill, whose launcher has no Windows build: matrix.mill is ./mill
+# on Linux and macOS and ./mill.bat on Windows.
+
+name: Native jars
+
+on:
+  push:
+    branches: [trunk]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jar:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      # Each system's result is worth having when another fails
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux-x86_64
+            mill: ./mill
+          - runner: ubuntu-24.04-arm
+            platform: linux-arm64
+            mill: ./mill
+          - runner: macos-15
+            platform: macosx-arm64
+            mill: ./mill
+          - runner: windows-2025
+            platform: windows-x86_64
+            mill: ./mill.bat
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Builds the jar of the machine's own platform; set here so that nothing in the runner's environment picks another
+      ALTITUDE_PLATFORM: ${{ matrix.platform }}
+
+    steps:
+      # Git for Windows checks text out with CRLF (core.autocrlf), and tests compare multi-line literals of the sources with what
+      # the code writes, \n alone. .gitattributes pins mill.bat to CRLF and the scripts to LF whatever this says.
+      - name: Line endings as committed
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v5
+
+      # The model files' folder, for the suites and the smoke run alike, which the cache keeps (in a step: a job's env cannot read
+      # the runner context), and the model set's cache key. The key is a hash of the set's pins as ModelFiles.scala holds them:
+      # every string and number literal from `enum ModelFile` to `final class ModelFiles`, that is the tag, the faceX revision,
+      # the URLs' templates and each file's name, size and SHA-256, and none of the comments. A new tag or pin is a new key, and
+      # an edit elsewhere in the file keeps the 1.6 GB entry. Each file's name and size go to model-files, for the check before
+      # the save. Read by grep rather than by compiling ModelFiles: it runs before the build, and fails when it finds no pins.
+      - name: Models folder and the model set's key
+        id: model-set
+        run: |
+          echo "ALTITUDE_MODELS_DIR=$RUNNER_TEMP/altitude-models" >>"$GITHUB_ENV"
+          source=altitude/src/altitude/core/util/ModelFiles.scala
+          sed -n '/^enum ModelFile(/,/^final class ModelFiles(/p' "$source" | tr -d '\r' |
+            grep -oE '"[^"]*"|[0-9]+L' >"$RUNNER_TEMP/model-pins"
+          # A file's name is the string before its size
+          awk '/^"/ { name = $0; next } /^[0-9]+L$/ { gsub(/"/, "", name); sub(/L$/, ""); print name, $0 }' \
+            "$RUNNER_TEMP/model-pins" >"$RUNNER_TEMP/model-files"
+          tag="$(tr -d '\r' <"$source" | sed -n 's/^ *inline val TAG = "\([^"]*\)".*/\1/p')"
+          files="$(grep -c . "$RUNNER_TEMP/model-files" || true)"
+          hashes="$(grep -c -E '^"[0-9a-f]{64}"$' "$RUNNER_TEMP/model-pins" || true)"
+          if [ -z "$tag" ] || [ "$files" = 0 ] || [ "$files" != "$hashes" ]; then
+            echo "::error file=$source::The model set's pins were not found as this step reads them: tag '$tag', $files files, $hashes SHA-256s"
+            exit 1
+          fi
+          if command -v sha256sum >/dev/null; then digest=sha256sum; else digest="shasum -a 256"; fi
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "key=altitude-models-$tag-$($digest <"$RUNNER_TEMP/model-pins" | cut -c1-16)-$RUNNER_OS" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # The JS tests run under Node's built-in runner with no dependency installed
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      # OpenCV and FFmpeg's libraries link GTK 2, ALSA and XCB on Linux, as in the image; ffmpeg makes the smoke run's video
+      - name: System packages
+        run: |
+          case "$RUNNER_OS" in
+            Linux)
+              sudo apt-get update -q
+              sudo apt-get install -y -q --no-install-recommends libgtk2.0-0t64 libasound2t64 libxcb1 libxcb-shm0
+              command -v ffmpeg >/dev/null || sudo apt-get install -y -q --no-install-recommends ffmpeg
+              ;;
+            macOS) command -v ffmpeg >/dev/null || brew install ffmpeg ;;
+            Windows) command -v ffmpeg >/dev/null || choco install ffmpeg -y --no-progress ;;
+          esac
+          ffmpeg -version | head -n 1
+
+      # Restored here and saved after the smoke run, whatever the job's outcome, so a download that a failing test followed is
+      # kept. The files are the same on every system, but the path differs, so each system keeps its own entry; the two Linux
+      # runners share theirs.
+      - name: Restore the model files
+        id: models
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.ALTITUDE_MODELS_DIR }}
+          key: ${{ steps.model-set.outputs.key }}
+
+      # Coursier's downloads, which Mill resolves the dependencies and its own jars into, and the Mill launcher's, per system and
+      # architecture (bytedeco's natives differ between them). build.mill's header names the Mill version; mill and mill.bat
+      # are the launchers. A missed key starts from the latest entry of the system and saves a new one when the job passes.
+      - name: Dependency downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/coursier
+            ~/Library/Caches/Coursier
+            ~/AppData/Local/Coursier/cache
+            ~/.cache/mill/download
+            ~/.mill/download
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build.mill', 'mill', 'mill.bat') }}
+          restore-keys: deps-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build the jar
+        run: ${{ matrix.mill }} altitude.platformJar
+
+      # make test-unit and make test-sqlite, at once
+      - name: Unit and SQLite suites
+        env:
+          ALTITUDE_ENV: test
+        run: ${{ matrix.mill }} -j2 altitude.test.testOnly '*UnitSuiteBundle' '*SqliteSuiteBundle' -- -l org.scalatest.tags.Slow
+
+      # make test-js
+      - name: JS tests
+        run: node --test 'scripts/test-js/*.test.mjs'
+
+      # make smoke-jar: the jar the build step wrote, started from a scratch folder
+      - name: Smoke run
+        run: bash scripts/smoke-jar.sh
+
+      # Whether every file of the set is in the folder at its pinned size. A folder a download left short is not saved: the key
+      # would then be an exact hit, which restores it and never saves it again.
+      - name: Whether the model files are whole
+        id: models-whole
+        if: always() && steps.model-set.outcome == 'success' && steps.models.outputs.cache-hit != 'true'
+        env:
+          TAG: ${{ steps.model-set.outputs.tag }}
+        run: |
+          whole=true
+          while read -r name size; do
+            file="$ALTITUDE_MODELS_DIR/$TAG/$name"
+            if [ ! -f "$file" ] || [ "$(wc -c <"$file" | tr -d ' ')" != "$size" ]; then
+              echo "$name is not in place"
+              whole=false
+            fi
+          done <"$RUNNER_TEMP/model-files"
+          echo "whole=$whole" >>"$GITHUB_OUTPUT"
+
+      - name: Save the model files
+        if: always() && steps.models-whole.outputs.whole == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.ALTITUDE_MODELS_DIR }}
+          key: ${{ steps.model-set.outputs.key }}
+
+      - name: Upload the jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: altitude-${{ matrix.platform }}
+          path: out/altitude/platformJar.dest/altitude-*-${{ matrix.platform }}.jar
+          if-no-files-found: error
+          # Already compressed
+          compression-level: 0
+
+      # The per-worker logs and the merged report of the suites, for a look at a failure
+      - name: Upload the test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-${{ matrix.platform }}
+          path: |
+            out/altitude/test/testOnly.dest/*.log
+            out/altitude/test/testOnly.dest/test-report.xml
+          if-no-files-found: ignore

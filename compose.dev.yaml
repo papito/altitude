@@ -1,0 +1,24 @@
+# The dev database, for a server run from the sources (make run). `make db` starts it with compose.test.yaml's.
+# Running Altitude itself under Docker is compose.yaml's.
+
+# The project these containers were made under, and so the one compose finds them by: under any other name it would
+# try to create a second container of the same container_name. It is named here, and not left to the folder's name,
+# so `make db` finds them from a worktree in another folder too, and compose.yaml's project (altitude-app) never
+# takes them for its orphans.
+name: altitude
+
+services:
+  altitude_core_postgres_dev_db:
+    image: pgvector/pgvector:0.8.2-pg18-trixie
+    ports:
+      - "5432:5432"
+    networks:
+      - db
+    environment:
+      - POSTGRES_NAME=altitude
+      - POSTGRES_USER=altitude
+      - POSTGRES_PASSWORD=dba
+    container_name: altitude-core-postgres-dev
+networks:
+  db:
+    driver: bridge

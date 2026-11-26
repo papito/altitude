@@ -3,6 +3,8 @@
 
 application.conf
 application-dev.conf
+# compose.yaml's settings, the PostgreSQL password among them; .env.example is the committed template
+.env
 
 node_modules
 out

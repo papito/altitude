@@ -2,10 +2,15 @@ package altitude.core
 
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import com.typesafe.config.ConfigParseOptions
+import com.typesafe.config.ConfigResolveOptions
+import com.typesafe.config.ConfigUtil
 import com.typesafe.config.ConfigValueFactory
 import java.io.File
 import java.lang.management.ManagementFactory
+import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Locale
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
 import org.apache.pekko.actor.Cancellable
@@ -16,6 +21,8 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration.DurationInt
+import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
 
 import altitude.core.actors.ImportStatusWsActor
 import altitude.core.dao.jdbc.PersonDao
@@ -79,38 +86,23 @@ class Altitude(
   logger.debug(s"Initializing Altitude Server application. Instance ID [$id]")
 
   /**
-   * The config before the SQLite URL is added. `application-dev.conf` or `application.conf` in the root (the JAR's folder in a
-   * release) overrides `reference.conf`; only tests take `CONFIG_FORCE_` environment overrides.
+   * The config before the SQLite URL is added. Dev and prod read theirs through [[Altitude.loadConfig]]: the `ALTITUDE_`
+   * variables over the environment's config file over `reference.conf`. Tests read [[Altitude.testConfig]], which takes no config
+   * file and none of those variables but `ALTITUDE_MODELS_DIR`; only tests take `CONFIG_FORCE_` environment overrides.
    */
   private val preConfig: Config = Environment.CURRENT match {
-    case Environment.Name.DEV =>
-      ConfigFactory
-        .parseFile(new File("application-dev.conf"))
-        .withFallback(ConfigFactory.defaultReference())
-
-    case Environment.Name.PROD =>
-      ConfigFactory
-        .parseFile(new File("application.conf"))
-        .withFallback(ConfigFactory.defaultReference())
-
-    case Environment.Name.TEST =>
-      Altitude.testConfig(dbEngineOverride)
-
-    case _ =>
-      throw RuntimeException("Unknown environment")
-
+    case Environment.Name.TEST => Altitude.testConfig(dbEngineOverride)
+    case _ => Altitude.loadConfig()
   }
 
-  final def dataPath: String =
-    val dataDir: String = app.config.getString(Const.Conf.FS_DATA_DIR)
-    FilenameUtils.concat(Environment.ROOT_PATH, dataDir)
+  /** The Data directory */
+  final def dataPath: String = Altitude.dataPathOf(app.config)
 
   private val SQLITE_URL_PREFIX = "jdbc:sqlite:"
 
   final private val sqliteRelDbPath = preConfig.getString(Const.Conf.REL_SQLITE_DB_PATH)
 
-  // The SQLite file sits under the test directory in tests, otherwise under the data directory resolved against the root (the
-  // JAR's folder in production)
+  // The SQLite file sits under the test directory in tests, otherwise under the Data directory
   final val config: Config = Environment.CURRENT match {
 
     case Environment.Name.TEST =>
@@ -118,8 +110,7 @@ class Altitude(
       val sqliteTestUrl = s"$SQLITE_URL_PREFIX$testDir${File.separator}$sqliteRelDbPath"
       preConfig.withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(sqliteTestUrl))
     case _ =>
-      val dataDir = FilenameUtils.concat(Environment.ROOT_PATH, preConfig.getString(Const.Conf.FS_DATA_DIR))
-      val sqliteUrl = s"$SQLITE_URL_PREFIX$dataDir${File.separator}$sqliteRelDbPath"
+      val sqliteUrl = s"$SQLITE_URL_PREFIX${Altitude.dataPathOf(preConfig)}${File.separator}$sqliteRelDbPath"
       preConfig.withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(sqliteUrl))
   }
 
@@ -130,6 +121,16 @@ class Altitude(
 
   final val dataSourceType: String = config.getString(Const.Conf.DB_ENGINE)
   logger.debug(s"Datasource type: $dataSourceType")
+
+  // Before anything connects: an empty password is a start that was never given one, not one to try the database with
+  Altitude.requirePostgresPassword(config)
+
+  /** The address the HTTP server binds: `server.host` and `server.port`, both checked here, before anything is opened */
+  final val serverHost: String = Altitude.serverHostOf(config)
+  final val serverPort: Int = Altitude.serverPortOf(config)
+
+  /** Whether the session cookie is `Secure` (`server.secure_cookies`); off only for plain HTTP on a LAN or VPN address */
+  final val secureCookies: Boolean = config.getBoolean(Const.Conf.SERVER_SECURE_COOKIES)
 
   final val fileStoreType: String = config.getString(Const.Conf.DEFAULT_STORAGE_ENGINE)
   logger.debug(s"File store type: $fileStoreType")
@@ -164,6 +165,10 @@ class Altitude(
     dir =>
       logger.debug(s"Ensuring the SQLite database folder: $dir")
       FileUtils.forceMkdir(dir.toFile)
+
+      // The check only warns, so a file system that will not tell its type does not fail the start
+      try Altitude.sqliteDiskWarning(dir, Files.getFileStore(dir).`type`()).foreach(logger.warn(_))
+      catch case NonFatal(e) => logger.debug(s"The file system of the SQLite database folder $dir is unknown", e)
   }
 
   object DAO {
@@ -325,7 +330,9 @@ class Altitude(
   final val editRenderParallelism: Int = Math.max(1, Runtime.getRuntime.availableProcessors / 4)
 
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
-    val importDispatcherConfig = ConfigFactory.parseString(s"""
+    // The phase timeouts of the server's stop (`ServerShutdown`) are set here and not in reference.conf, whose order against
+    // Pekko's own reference.conf, which sets the phases, is not fixed: this overlay wins over both.
+    val overlay = ConfigFactory.parseString(s"""
       altitude.import-dispatcher {
         type = Dispatcher
         executor = "thread-pool-executor"
@@ -336,11 +343,12 @@ class Altitude(
         executor = "thread-pool-executor"
         thread-pool-executor.fixed-pool-size = $editRenderParallelism
       }
+      pekko.coordinated-shutdown.phases {
+        service-requests-done.timeout = ${ServerShutdown.REQUESTS_PHASE_TIMEOUT.toSeconds} s
+        service-stop.timeout = ${ServerShutdown.STOP_PHASE_TIMEOUT.toSeconds} s
+      }
     """)
-    ActorSystem[AltitudeActorSystem.Command](
-      AltitudeActorSystem(),
-      "altitude-actor-system",
-      importDispatcherConfig.withFallback(config))
+    ActorSystem[AltitudeActorSystem.Command](AltitudeActorSystem(), "altitude-actor-system", overlay.withFallback(config))
 
   /** Runs the import's stage work, so the stream actors on the shared default dispatcher only route */
   final val importDispatcher: ExecutionContextExecutor =
@@ -357,6 +365,14 @@ class Altitude(
   // Also run at startup. It logs a failure rather than throwing: a scheduled task that throws is not run again
   private val importHistoryPruning: Cancellable =
     actorSystem.scheduler.scheduleAtFixedRate(1.day, 1.day)(() => service.imports.pruneOrLog())(actorSystem.executionContext)
+
+  // The folder a native jar's start unpacked its libraries into, touched daily so another build's start never prunes it while
+  // this instance runs, on either engine (`NativeLibraries`). None where the start unpacked nothing.
+  private val nativeLibrariesTouching: Option[Cancellable] = NativeLibraries.inUse.map {
+    _ =>
+      actorSystem.scheduler.scheduleAtFixedRate(NativeLibraries.TOUCH_EVERY, NativeLibraries.TOUCH_EVERY)(
+        () => NativeLibraries.touchInUse())(actorSystem.executionContext)
+  }
 
   /** Built before the services, so a model that fails to open fails the start, never an import. Shared by the import threads. */
   final val sceneEmbedder: SceneEmbedder = newSceneEmbedder(models)
@@ -424,10 +440,14 @@ class Altitude(
 
   def setIsInitializedState(): Unit =
     this.isInitialized = service.system.readMetadata.isInitialized
-    if !this.isInitialized then logger.warn("Instance NOT YET INITIALIZED!")
 
+  /**
+   * Stops the instance: no more Watch folder scans, then each queue finishes what it accepted, each within the Pipeline shutdown
+   * timeout Setting as it reads now, then the embedders and the database close. In a running server it is a task of the
+   * coordinated shutdown (`ServerShutdown`), run before the HTTP server stops and the actor system terminates.
+   */
   def cleanup(): Unit =
-    logger.debug("Cleaning up resources")
+    logger.info("Cleaning up: draining the queues, then closing the embedders and the database")
     // Before the import queue closes, so no Watch folder scan feeds it
     service.watchFolder.stop()
     // Before the pools close: each queue finishes what it has accepted, up to a limit
@@ -435,19 +455,20 @@ class Altitude(
     service.purgePipeline.shutdown()
     // A render cut off, or not yet queued, is queued again at the next startup
     service.editRender.shutdown()
-    // After the import has stopped: its threads run the Scene models
+    // After the import's drain, whose threads run the Scene models. Where the drain ran out they are still embedding: the close
+    // waits for the images under way, and the next is refused, so its file fails instead of being stored with no embedding
     sceneEmbedder.close()
     // Waits for a description being embedded; one that arrives later is refused
     describeEmbedder.close()
 
     sqliteOptimizing.foreach(_.cancel())
+    nativeLibrariesTouching.foreach(_.cancel())
     importHistoryPruning.cancel(): Unit
     txManager.optimize()
     txManager.shutdown()
     sqlExplainer.foreach(_.close())
-
-    // This is already done by default and will cause a warning
-    // actorSystem.terminate()
+    logger.info("Cleaned up")
+    // The actor system is not terminated here: the coordinated shutdown terminates it in its last phase
 
   var repositoriesById: Map[String, Repository] = Map[String, Repository]()
 
@@ -457,6 +478,147 @@ class Altitude(
   logger.debug("Altitude Server instance initialized")
 
 object Altitude:
+  private val logger: Logger = LoggerFactory.getLogger(getClass)
+
+  /**
+   * The config file of a dev or prod start, when it has one. Dev reads `application-dev.conf` in the root path. Prod reads the
+   * file `ALTITUDE_CONFIG` names, a relative one under the root path, and fails when that file does not exist; with the variable
+   * unset or empty it reads `application.conf` in the root path, the jar's folder, and a missing file there means the defaults.
+   */
+  def configFile(environment: String, variables: Map[String, String], rootPath: String): Option[File] =
+    def inRoot(name: String): File = Path.of(rootPath).resolve(name).toFile
+
+    environment match {
+      case Environment.Name.DEV => Some(inRoot("application-dev.conf")).filter(_.isFile)
+      case Environment.Name.PROD =>
+        variables.get(Environment.Variable.CONFIG).filter(_.nonEmpty) match {
+          case Some(named) =>
+            val file = inRoot(named)
+            if !file.isFile then
+              throw IllegalStateException(s"${Environment.Variable.CONFIG} names a config file that does not exist: $file")
+            Some(file)
+          case None => Some(inRoot("application.conf")).filter(_.isFile)
+        }
+      case other => throw IllegalArgumentException(s"The $other environment reads no config file")
+    }
+
+  /**
+   * The config of a dev or prod start, before the SQLite URL is added: `environment.conf`, which gives a key the value of its
+   * `ALTITUDE_` variable, over the environment's config file ([[configFile]]) over `reference.conf`, the whole resolved together.
+   * So a variable wins over the file, which wins over the defaults, and a container is configured by its environment alone.
+   *
+   * The variables are a parameter, the process's own by default, so the loader reads no other environment: a substitution in the
+   * config file resolves against the config's keys and these variables, never the rest of the process environment. A variable set
+   * to an empty value sets an empty value, as in any HOCON file, and where that would pass for a setting the start refuses it by
+   * name ([[serverHostOf]], [[serverPortOf]], [[dataPathOf]], [[requirePostgresPassword]]). `clearDb` passes no variables: it
+   * clears what the dev config file names.
+   */
+  def loadConfig(
+      environment: String = Environment.CURRENT,
+      variables: Map[String, String] = Environment.variables,
+      rootPath: String = Environment.ROOT_PATH): Config =
+    val file = configFile(environment, variables, rootPath)
+    file match {
+      case Some(found) => logger.info(s"Config file: $found")
+      case None => logger.info(s"No config file in $rootPath: the defaults and the environment variables apply")
+    }
+
+    val mustExist = ConfigParseOptions.defaults.setAllowMissing(false)
+    val ofVariablesAlone = ConfigResolveOptions.defaults.setUseSystemEnvironment(false)
+    // Keys of the root, not paths: a variable's name is taken as it is
+    val variablesConfig = ConfigValueFactory.fromMap(variables.asJava, "the ALTITUDE_ environment variables").toConfig
+
+    // Only the keys whose variable is set. Layered unresolved, a key with no variable would still put an empty object on its
+    // path, and so hide a leftover number at `import.parallelism` in the file from `ImportParallelism.configuredCap`.
+    val fromVariables = ConfigFactory
+      .parseResources(classOf[Altitude].getClassLoader, "environment.conf", mustExist)
+      .resolveWith(variablesConfig, ofVariablesAlone)
+      .entrySet
+      .asScala
+      .foldLeft(ConfigFactory.empty)((config, entry) => config.withValue(entry.getKey, entry.getValue))
+
+    val layered = fromVariables
+      .withFallback(file.fold(ConfigFactory.empty)(ConfigFactory.parseFile(_, mustExist)))
+      .withFallback(ConfigFactory.defaultReference())
+
+    // The variables are the last fallback while the file's substitutions resolve, then leave the config: they are no keys of it
+    val resolved = layered.withFallback(variablesConfig).resolve(ofVariablesAlone)
+    variables.keys.foldLeft(resolved)((config, name) => config.withoutPath(ConfigUtil.joinPath(name)))
+
+  /**
+   * The Data directory: an absolute `fs.data.dir` as it is, a relative one under the root path (the jar's folder in prod). An
+   * empty or blank one is refused, naming its variable: it would make the root path itself the Data directory, the image's `/app`
+   * or the folder `clearDb` empties.
+   */
+  def dataPathOf(config: Config, rootPath: String = Environment.ROOT_PATH): String =
+    val dir = config.getString(Const.Conf.FS_DATA_DIR)
+    if dir.isBlank then
+      throw IllegalStateException(
+        s"${Const.Conf.FS_DATA_DIR} is empty: set the ALTITUDE_DATA_DIR environment variable, or ${Const.Conf.FS_DATA_DIR} in " +
+          "the config file, to the folder that holds the data, or leave it unset for the default")
+    FilenameUtils.concat(rootPath, dir)
+
+  /**
+   * Fails the start on PostgreSQL with an empty password, naming the variable to set: a container whose `.env` sets none is
+   * passed an empty one, and the driver's own refusal names neither the variable nor the key.
+   */
+  def requirePostgresPassword(config: Config): Unit =
+    val onPostgres = config.getString(Const.Conf.DB_ENGINE) == Const.DbEngineName.POSTGRES
+    if onPostgres && config.getString(Const.Conf.POSTGRES_PASSWORD).isEmpty then
+      throw IllegalStateException(
+        s"${Const.Conf.DB_ENGINE} is ${Const.DbEngineName.POSTGRES} and the database password is empty: set the " +
+          s"ALTITUDE_DB_POSTGRES_PASSWORD environment variable, or ${Const.Conf.POSTGRES_PASSWORD} in the config file")
+
+  /**
+   * `server.port`, refused when it is no port number (a word, an empty value, a number outside 1 to 65535), naming its variable.
+   * Read as the instance is built, so such a start fails before a database is opened, a model downloaded or the actor system
+   * built, and not when the HTTP server is, last of all.
+   */
+  /**
+   * `server.host`, refused when it is empty or blank, naming its variable. To the JDK an empty host is the loopback address
+   * (`InetAddress.getByName`), so a container given `ALTITUDE_HOST=""` (a compose substitution that names nothing) would answer
+   * its own health check and no request from outside it.
+   */
+  def serverHostOf(config: Config): String =
+    val host = config.getString(Const.Conf.SERVER_HOST)
+    if host.isBlank then
+      throw IllegalStateException(
+        s"${Const.Conf.SERVER_HOST} is empty: set the ALTITUDE_HOST environment variable, or ${Const.Conf.SERVER_HOST} in the " +
+          "config file, to the address to listen on (0.0.0.0 for every network interface), or leave it unset for localhost")
+    host
+
+  def serverPortOf(config: Config): Int =
+    // As text, so a fraction is refused, where `getInt` would drop what follows the point
+    val value = config.getString(Const.Conf.SERVER_PORT)
+    value.toIntOption.filter(port => port >= 1 && port <= 65535).getOrElse {
+      throw IllegalStateException(
+        s"""${Const.Conf.SERVER_PORT} is "$value", which is no port number: set """ +
+          s"the ALTITUDE_PORT environment variable, or ${Const.Conf.SERVER_PORT} in the config file, to a whole number from 1 " +
+          "to 65535")
+    }
+
+  // The file store types that are not a local disk's own, as `java.nio.file.FileStore.type` names them: network shares, and a
+  // host folder shared into a container's virtual machine. `fakeowner` is what Docker Desktop for Mac is known to mount a host
+  // folder as over VirtioFS; it is listed without having been seen on a Mac, since a false warning costs a line and a missed
+  // one risks the database. A `fuse` type is matched by prefix.
+  private val NON_LOCAL_FILE_STORES = Set("nfs", "nfs4", "cifs", "smb3", "9p", "virtiofs", "fakeowner")
+
+  /**
+   * What to warn of when the SQLite database's folder is on a file store of this type, if anything. SQLite runs in WAL mode,
+   * whose shared-memory file and locks need a local disk's own file system: on a network share (NFS, SMB, 9p), a host folder
+   * shared into a container's virtual machine (virtiofs, `fakeowner`, FUSE) or any other mount through FUSE (`fuseblk`, a local
+   * NTFS or exFAT disk through ntfs-3g, included) the database can be corrupted or fail to open. The warning names all three, so
+   * it is true of every type it is given for.
+   */
+  def sqliteDiskWarning(dir: Path, fileStoreType: String): Option[String] =
+    // The root locale: under a Turkish one, CIFS would not lowercase to cifs
+    val kind = fileStoreType.toLowerCase(Locale.ROOT)
+    Option.when(NON_LOCAL_FILE_STORES.contains(kind) || kind.startsWith("fuse")) {
+      s"The SQLite database folder $dir is on a file system of type $fileStoreType, which is not a local disk's own: a " +
+        "network share, a host folder shared into a container, or a mount through FUSE. SQLite's write-ahead log needs a " +
+        "local disk's own file system, and the database can be corrupted there. Keep the folder on a local disk or in a " +
+        "named volume, or use PostgreSQL."
+    }
 
   /** The test config before the SQLite URL is added; a test that needs config without an instance reads it here. */
   def testConfig(dbEngineOverride: Option[String] = None): Config =

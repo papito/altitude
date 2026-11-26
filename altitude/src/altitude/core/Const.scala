@@ -5,6 +5,10 @@ object Const:
   /** CONFIGURATION */
   object Conf:
     val TEST_DIR = "test.dir"
+    // The address the server binds, and whether the session cookie is `Secure`
+    val SERVER_HOST = "server.host"
+    val SERVER_PORT = "server.port"
+    val SERVER_SECURE_COOKIES = "server.secure_cookies"
     val FS_DATA_DIR = "fs.data.dir"
     val DEFAULT_STORAGE_ENGINE = "storage.engine.default"
     val DB_ENGINE = "db.engine"
@@ -180,6 +184,17 @@ object Const:
     val SETTINGS = "settings"
     val USERS = "users"
     val STYLE_GUIDE = "style-guide"
+
+  /**
+   * The MDC keys of a request's log lines. The logback patterns read them (`%X{REQUEST_ID}`, `%X{USER}`) and the JSON format
+   * writes them in its `mdc` object.
+   */
+  object LogContext:
+    /** A random ID per request, which `decorators.requestResponseLogger` sets */
+    val REQUEST_ID = "REQUEST_ID"
+
+    /** The ID of the request's account, never its name, username or email address: `UserService.switchContextToUser` sets it */
+    val USER = "USER"
 
   object Security:
     val MEMBER_ME_COOKIE_EXPIRATION_DAYS = 7

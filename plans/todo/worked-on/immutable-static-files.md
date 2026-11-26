@@ -114,7 +114,8 @@ Each group starts with its tests, red first.
 
 - `make test-unit`, `make test-controllers`, `make test-js` and `make lint` pass.
 - Dev (`make watch`, port 8080): a page's sources link `/static/js/...` as now, and an edited module shows on the next reload.
-- An assembled jar on another port (`make publish`): the Import page's first load fetches each static file once under
-  `/static/v-<version>/`; a second load sends no request for any of them. After a change to any static file and a rebuild, the
-  version in the page's links differs and the changed file is served.
+- A platform jar (`./mill altitude.platformJar`) started with `java -jar` on another port (`ALTITUDE_PORT`): the Import
+  page's first load fetches each static file once under `/static/v-<version>/`; a second load sends no request for any of
+  them. After a change to any static file and a rebuild, the version in the page's links differs and the changed file is
+  served.
 - With a page left open on the old version, opening the map still loads Leaflet.

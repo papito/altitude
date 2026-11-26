@@ -1,26 +1,27 @@
 package altitude.tools
 
-import com.typesafe.config.ConfigFactory
 import java.io.File
 import java.sql.DriverManager
 import java.util.Properties
 import org.apache.commons.io.FileUtils
 
+import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.Environment
 
 @main def clearDb(): Unit =
   if !Environment.isDev then
     System.err.println(
-      s"ERROR: clear-db is only allowed in DEV (current ENV=${Environment.CURRENT}). Aborting."
+      s"ERROR: clear-db is only allowed in dev (the current environment is ${Environment.CURRENT}; " +
+        s"${Environment.Variable.ENV} sets it). Aborting."
     )
     sys.exit(1)
 
-  val config = ConfigFactory
-    .parseFile(new File("application-dev.conf"))
-    .withFallback(ConfigFactory.defaultReference())
-
-  val dataDir = config.getString(Const.Conf.FS_DATA_DIR)
+  // `application-dev.conf` over the defaults, and no `ALTITUDE_` variable: what is dropped here is never steered by a shell
+  // left pointing at another instance (its database URL, its Data directory). A dev server started with such variables keeps
+  // its data elsewhere, and this does not clear it.
+  val config = Altitude.loadConfig(variables = Map.empty)
+  val dataDir = Altitude.dataPathOf(config)
   val dbEngine = config.getString(Const.Conf.DB_ENGINE)
 
   dbEngine match

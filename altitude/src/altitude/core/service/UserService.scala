@@ -6,6 +6,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.AtomicReference
+import org.slf4j.MDC
 
 import altitude.core._
 import altitude.core.dao.RepositoryGrantDao
@@ -92,8 +93,15 @@ class UserService(val app: Altitude) extends BaseService[User]:
 
   private def versions: AccountVersions = app.service.accountVersions
 
+  /**
+   * Makes `user` the account of the thread's request, and its ID the user of the lines the thread logs from here on (the MDC's
+   * `USER`): the ID alone, never a name, username or email address. Every way a request gets its account ends here: a session
+   * cookie's or a Bearer header's token ([[checkToken]]), the dev login, a login ([[loginAndSetUser]]) and Setup. The request
+   * logger clears the MDC as the thread's next request starts.
+   */
   def switchContextToUser(user: User): Unit =
     RequestContext.account.value = Some(user)
+    MDC.put(Const.LogContext.USER, user.persistedId)
 
   /**
    * Logs an account in by username or email address in any case or Unicode form: the folded login is compared to `email_key` when

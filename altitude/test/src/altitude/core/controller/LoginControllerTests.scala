@@ -5,7 +5,7 @@ import java.net.HttpCookie
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.include
 import org.scalatest.matchers.must.Matchers.not
-import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ be, contain, should, shouldBe }
 
 import scala.jdk.CollectionConverters.*
 
@@ -14,6 +14,7 @@ import altitude.core.Const as C
 import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.User
+import altitude.core.routes.decorators
 import altitude.core.routes.web.SessionController
 import altitude.core.util.Util
 
@@ -55,6 +56,180 @@ import altitude.core.util.Util
 
         indexResponse.statusCode shouldBe 200
         indexResponse.text() should include(s"<title>\u2068${testContext.repository.name}\u2069 · Altitude</title>")
+    }
+  }
+
+  test("A login's session cookie is Secure, as the server's config says by default") {
+
+    /**
+     * Setup:
+     *
+     * The test server, whose config leaves `server.secure_cookies` at its default, and a User with a repository to land in.
+     *
+     * Assertions:
+     *
+     * The server's instance reads the flag as true, and the `Set-Cookie` header of a login carries `Secure` beside `HttpOnly` and
+     * `SameSite=Strict`.
+     *
+     * Edge cases:
+     *
+     * The cookie a logout clears the session with is `Secure` too.
+     */
+    testContext.persistRepository()
+    testContext.grant(testContext.user, testContext.repository)
+
+    App.altitude.secureCookies shouldBe true
+
+    withServer(App) {
+      host =>
+        def sessionCookieOf(response: requests.Response): String =
+          response.headers("set-cookie").find(_.startsWith(s"${SessionController.AUTH_COOKIE_NAME}=")).get
+
+        val login = requests.post(
+          s"$host/login",
+          maxRedirects = 0,
+          check = false,
+          data = Map("login" -> testContext.user.email, "password" -> TestContext.USER_PASSWORD))
+        login.statusCode shouldBe 302
+
+        val attributes = sessionCookieOf(login).split("; ").toSet
+        attributes should contain("Secure")
+        attributes should contain("HttpOnly")
+        attributes should contain("SameSite=Strict")
+
+        val logout = requests.post(s"$host/logout", maxRedirects = 0, check = false, cookies = login.cookies)
+        sessionCookieOf(logout).split("; ").toSet should contain("Secure")
+    }
+  }
+
+  test("A login whose body is no form is a bare 400, and a form still logs in") {
+
+    /**
+     * Setup:
+     *
+     * An initialized instance with a User who can see a repository. The login route is posted a request with no body and no
+     * content type, a body with no content type, a JSON body, a multipart body with no boundary and a multipart body that is not
+     * multipart; then the User's login as a URL-encoded form and as a multipart form. The same posts go to the server as dev runs
+     * it, in cask's debug mode.
+     *
+     * Assertions:
+     *
+     * Each body that is no form is answered 400 with the status line alone as its body, as any request the server cannot bind is:
+     * no exception's name, no message, no stack frame. Both forms log the User in, with the redirect to the repository and the
+     * session cookie.
+     *
+     * Edge cases:
+     *
+     * Debug mode changes none of it: the bare 400 does not depend on the environment. A form that parses but lacks the login's
+     * fields is left to cask's own answer, bare outside dev.
+     */
+    testContext.persistRepository()
+    testContext.grant(testContext.user, testContext.repository)
+    val credentials = Map("login" -> testContext.user.email, "password" -> TestContext.USER_PASSWORD)
+
+    def notForms(host: String): Seq[(String, requests.Response)] = {
+      def post(data: String, contentType: Option[String]) =
+        requests.post(s"$host/login", data = data, headers = contentType.map("Content-Type" -> _).toMap, check = false)
+
+      Seq(
+        "no body and no content type" -> requests.post(s"$host/login", check = false),
+        "a body and no content type" -> post("login=someone&password=something", None),
+        "JSON" -> post(ujson.write(ujson.Obj.from(credentials.view.mapValues(ujson.Str(_)))), Some("application/json")),
+        "multipart with no boundary" -> post("login=someone", Some("multipart/form-data")),
+        "multipart that is not" -> post("not a part", Some("multipart/form-data; boundary=frontier"))
+      )
+    }
+
+    def assertLogsIn(response: requests.Response): Unit = {
+      response.statusCode shouldBe 302
+      response.headers("location").head shouldBe s"/r/${testContext.repository.persistedId}"
+      response.cookies.contains(SessionController.AUTH_COOKIE_NAME) shouldBe true
+    }
+
+    for (app <- Seq(App, DevApp))
+      withServer(app) {
+        host =>
+          for ((what, response) <- notForms(host))
+            withClue(s"[${app.getClass.getSimpleName} $what]: ") {
+              response.statusCode shouldBe 400
+              response.text() shouldBe "Error 400: Bad Request"
+            }
+
+          assertLogsIn(requests.post(s"$host/login", data = credentials, maxRedirects = 0, check = false))
+          assertLogsIn(
+            requests.post(
+              s"$host/login",
+              data = requests.MultiPart(credentials.toSeq.map((name, value) => requests.MultiItem(name, value))*),
+              maxRedirects = 0,
+              check = false))
+      }
+
+    DevApp.debugMode shouldBe true
+    withServer(App) {
+      host =>
+        val fieldless = requests.post(s"$host/login", data = Map("unknown" -> "field"), check = false)
+        fieldless.statusCode shouldBe 400
+        fieldless.text() shouldBe "Error 400: Bad Request"
+    }
+  }
+
+  test("A login whose body is larger than a form's is refused, unread when it declares its length and cut off when chunked") {
+
+    /**
+     * Setup:
+     *
+     * An initialized instance with a User who can see a repository. The login route is posted, by nobody signed in, the User's
+     * own login with a field of padding that makes the body three times the size a form may have: as a URL-encoded form and as a
+     * multipart form, each with its length declared and each chunked. Then a request that declares ten megabytes and sends no
+     * byte of them, and the User's login with a redirect of some thousand characters.
+     *
+     * Assertions:
+     *
+     * A body that declares its length is answered 413, and the one that only declares it is answered without its body: the
+     * refusal reads none of it. A chunked body has no length to judge, so the server reads it up to the limit and then closes the
+     * connection with no answer. None of them logs the User in, as each would if the server read it whole: a body is never read
+     * into memory beyond the limit, so nobody who can reach the port can exhaust the heap with one. The long login is within the
+     * limit and logs the User in.
+     */
+    testContext.persistRepository()
+    testContext.grant(testContext.user, testContext.repository)
+
+    val padding = "A" * Math.toIntExact(decorators.SMALL_BODY_BYTES * 3)
+    val fields = Seq("login" -> testContext.user.email, "password" -> TestContext.USER_PASSWORD, "padding" -> padding)
+    val urlEncoded = fields.map((name, value) => s"$name=${java.net.URLEncoder.encode(value, "UTF-8")}").mkString("&").getBytes
+    val boundary = "frontier"
+    val multipart = (fields
+      .map((name, value) => s"--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n")
+      .mkString + s"--$boundary--\r\n").getBytes
+
+    withServer(App) {
+      host =>
+        val forms = Seq(
+          "URL-encoded" -> ("application/x-www-form-urlencoded", urlEncoded),
+          "multipart" -> (s"multipart/form-data; boundary=$boundary", multipart))
+        for ((form, (contentType, body)) <- forms) {
+          withClue(s"[$form, its length declared]: ") {
+            rawPostStatus(host, "/login", contentType, body, Some(body.length.toLong)) shouldBe Some(413)
+          }
+          withClue(s"[$form, chunked]: ") {
+            rawPostStatus(host, "/login", contentType, body, declaredLength = None) shouldBe None
+          }
+        }
+
+        val unsent = rawPostStatus(host, "/login", "application/x-www-form-urlencoded", Array.emptyByteArray, Some(10000000L))
+        unsent shouldBe Some(413)
+
+        val long = requests.post(
+          s"$host/login",
+          data = Map(
+            "login" -> testContext.user.email,
+            "password" -> TestContext.USER_PASSWORD,
+            "redirect" -> s"/r/${testContext.repository.persistedId}?text=${"a" * 4000}"),
+          maxRedirects = 0,
+          check = false
+        )
+        long.statusCode shouldBe 302
+        long.cookies.contains(SessionController.AUTH_COOKIE_NAME) shouldBe true
     }
   }
 

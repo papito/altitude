@@ -56,8 +56,8 @@ object ImportService:
   // Where the asset a duplicate matches is, when it is in no folder below the root
   private val TRIAGE = "Triage"
   private val TOP_LEVEL = "Top level"
-  // Why a file still pending when the server starts is failed
-  private val INTERRUPTED = "Interrupted by a restart"
+  // Why a file still pending when the server starts is failed, and one a stop cut off in the pipeline (`PipelineUtils.dropReason`)
+  val INTERRUPTED = "Interrupted by a restart"
   // Why a file the page could not send is failed
   private val UPLOAD_FAILED = "Upload failed"
   private val MAX_LOGGED_PATH_LENGTH = 512

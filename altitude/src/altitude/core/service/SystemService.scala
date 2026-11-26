@@ -77,7 +77,8 @@ class SystemService(val app: Altitude):
 
       app.setIsInitializedState()
 
-      RequestContext.account.value = Some(admin)
+      // Setup signs the new Admin in: the request is the Admin's from here on
+      app.service.user.switchContextToUser(admin)
 
       (admin, repo)
     }

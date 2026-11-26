@@ -1,0 +1,43 @@
+# What `docker build` never sends to the builder. The Dockerfile copies the build's sources by name (mill, build.mill,
+# altitude/), so this file keeps three things true: no local config, secret or database can reach an image, a change to
+# a document or a test rebuilds nothing, and the context stays small.
+#
+# A pattern with no `**/` matches at the context's root alone. The Dockerfile copies altitude/ whole, and what lies under
+# altitude/resources or altitude/static ends up in altitude.jar, so every pattern for local data, config and secrets
+# starts with `**/`: a server run from inside altitude/ leaves its config file and Data directory there.
+
+# Build output and tools' folders. Mill's out/ wherever it was run from: one inside altitude/ would be copied with
+# the sources.
+**/out/
+**/node_modules/
+.git/
+.idea/
+.bsp/
+.claude/
+
+# Local data: the dev Data directory, databases (SQLite's -wal, -shm and -journal files beside them) and debug dumps
+**/data/
+**/debug/
+**/*.db
+**/*.db-*
+**/*.sqlite
+**/*.sqlite-*
+
+# Local config and secrets: the dev and prod config files, and compose's .env with the database password
+**/application*.conf*
+**/.env*
+
+# Documents and plans, the guides inside altitude/ included (a bare *.md would match the root's alone)
+docs/
+plans/
+requests/
+**/*.md
+
+# The tests: the image's build compiles none
+altitude/test/
+
+# Logs and JVM crash reports
+**/*.log
+**/log/
+**/logs/
+hs_err_pid*.log

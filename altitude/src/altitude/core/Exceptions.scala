@@ -59,6 +59,13 @@ case class VideoException(msg: String) extends Exception(msg)
 case class ImageException(msg: String) extends Exception(msg)
 
 /**
+ * The Scene embedder is closed: the server is stopping, and an import still under way once its drain ran out asked for a pass. It
+ * is no failed pass. The image is not one the models could not embed, so nothing of it may be kept as if it were: the file fails,
+ * as the files the stop left pending do at the next start.
+ */
+case class SceneEmbedderClosedException() extends Exception("The Scene embedder is closed")
+
+/**
  * The model files could not be put in place: too little free space, a failed download, or a size or SHA-256 off its pin. The
  * message names the missing files, their URLs and the directory to put them in by hand; the cause is the download's I/O error.
  */

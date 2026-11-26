@@ -1,6 +1,5 @@
 package altitude.test
 
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import org.bytedeco.ffmpeg.global.avcodec
@@ -47,7 +46,7 @@ object TestVideos {
   def blackFrame(): Mat = Mat.zeros(HEIGHT, WIDTH, org.opencv.core.CvType.CV_8UC3)
 
   def personFrame(image: String, blurSigma: Double = 0): Mat = {
-    val path = getClass.getResource(s"/import/people/$image").getPath
+    val path = TestResources.importFile(s"people/$image").toString
     val still = Imgcodecs.imread(path, Imgcodecs.IMREAD_COLOR)
     if (still.empty()) throw new RuntimeException(s"Could not read $path")
 
@@ -128,7 +127,7 @@ object TestVideos {
 
   /** A `people/` image at its own size as a PNG on disk, Gaussian-blurred at `blurSigma` pixels when not zero */
   def still(image: String, blurSigma: Double = 0): Path = {
-    val path = getClass.getResource(s"/import/people/$image").getPath
+    val path = TestResources.importFile(s"people/$image").toString
     val mat = Imgcodecs.imread(path, Imgcodecs.IMREAD_COLOR)
     if (mat.empty()) throw new RuntimeException(s"Could not read $path")
     if (blurSigma > 0) Imgproc.GaussianBlur(mat, mat, new Size(0, 0), blurSigma)
@@ -147,7 +146,7 @@ object TestVideos {
   }
 
   /** An audio file, for a container FFmpeg opens but that has no video stream */
-  def audio(name: String): Path = new File(getClass.getResource(s"/import/audio/$name").getPath).toPath
+  def audio(name: String): Path = TestResources.importFile(s"audio/$name")
 
   private lazy val directory: Path = {
     val dir = Files.createTempDirectory("altitude-test-videos")
