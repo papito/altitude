@@ -28,38 +28,35 @@ choose it before running the app for the first time in setup mode: under Docker 
 
 ## Install
 
-* [README-DOCKER.md](README-DOCKER.md): installing and configuring Altitude under Docker. Setup, signing in from
-  another machine, the time zone, memory, the volumes and what to back up, a folder of the host as the Data directory,
-  Watch folders, PostgreSQL, files of another user, stopping, the model files without a route to the internet, and
-  HTTPS through a reverse proxy.
-* [README-NATIVE.md](README-NATIVE.md): running Altitude without Docker, as one jar on Java 21. Which jar each system
-  takes and what it needs, Linux, macOS and Windows, where the jar keeps its files, reaching it from another machine,
-  ONNX Runtime's telemetry, stopping the jar, and building the jars.
+* [README-DOCKER.md](README-DOCKER.md): Installing and configuring Altitude under Docker. 
+* [README-NATIVE.md](README-NATIVE.md): Running Altitude natively without Docker, as one jar, closer to the metal. 
 
 ## Development setup
 
 You will need:
 
 * Java 21 or later (a JDK: the build compiles for Java 21)
-* Docker (for the Postgres containers, and to build the image)
+* Docker (for the Postgres/S3 containers, and to build the image)
 
-Mill needs no install: `./mill` (`mill.bat` on Windows) downloads the version `build.mill` names, and the Makefile
-calls it. The build does not run on an Intel Mac, for which ONNX Runtime ships no native libraries; Altitude runs
+> [!NOTE]
+> Mill needs no install. 
+
+> [!WARNING]
+> The build does not run on an Intel Mac, for which ONNX Runtime ships no native libraries; Altitude runs
 there in Docker.
 
 ### Environment
 
 `ALTITUDE_ENV` names the environment: `dev`, `test` or `prod`. The Makefile sets it (`dev` for `make run` and
 `make watch`, `test` for the test targets), so a start by hand needs it too: unset, the environment is `prod`. A
-value that names no environment stops the start. The `altitude.env` system property, when set, wins over the
-variable. `ENV` is not read.
+value that names no environment will force an abort. The `altitude.env` system property, when set, wins over the
+variable.
 
 ### Models
 
-The model files, about 1.6 GB, are in neither git nor the build. The first start downloads them into the Models
+The model files are in neither this git nor the build. The first start downloads them into the Models
 directory, and a file in place there is never downloaded again. Each file is pinned in code by its URL, its size and its
-SHA-256 (`ModelFile` in `altitude/src/altitude/core/util/ModelFiles.scala`) and checked against its pins before it gets
-its name; the start waits for the downloads and logs their progress, and a download cut off resumes at the next start.
+SHA-256 (`ModelFile` in `altitude/src/altitude/core/util/ModelFiles.scala`).
 
 The files of the pinned set are in `<Models directory>/v1/`. The Models directory is `models.dir`:
 
@@ -72,12 +69,6 @@ The files of the pinned set are in `<Models directory>/v1/`. The Models director
 The Docker image sets `ALTITUDE_MODELS_DIR=/models`, and `compose.yaml` mounts a volume there, so the files outlive
 the container.
 
-An instance with no route to the internet takes the files by hand: download each from its URL into
-`<Models directory>/v1/` under its name. A start that cannot download them fails with the same list: the files
-missing, their sizes, SHA-256 and URLs, and the directory to put them in. A start takes a file as in place by its
-size alone, so check the files placed by hand against their SHA-256 (`sha256sum -c SHA256SUMS` with the release's
-file, for the first six).
-
 | File | Size | What it is |
 |---|---|---|
 | `dinov2_vitb14.onnx` | 346 MB | DINOv2 ViT-B/14, a Scene model |
@@ -88,11 +79,10 @@ file, for the first six).
 | `face_detection_yunet_2023mar.onnx` | 233 kB | YuNet, the face detector |
 | `w600k_r50.onnx` | 174 MB | ArcFace (InsightFace `w600k_r50`), the face embedding net |
 
-The first six are the assets of release `v1` of
-[renegade-otter/altitude-models](https://github.com/renegade-otter/altitude-models), at
-`https://github.com/renegade-otter/altitude-models/releases/download/v1/<file>`; that repository's README has each
-file's source checkpoint and licence.
-ArcFace is under InsightFace's non-commercial research licence, so it is not re-hosted: it comes from a pinned revision
+The models live on [renegade-otter/altitude-models](https://github.com/renegade-otter/altitude-models), at
+`https://github.com/renegade-otter/altitude-models/releases/download/v1/<file>`.
+
+ArcFace is under InsightFace's non-commercial research license, so it is not re-hosted: it comes from a pinned revision
 of [maze/faceX](https://huggingface.co/maze/faceX/resolve/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx).
 
 ### Developer settings
@@ -109,7 +99,7 @@ To enable, copy or rename the file as `application-dev.conf`
 ```sh
 # Bring up the Postgres database (dev and test at once)
 make db
-# Run the tests
+# Run the tests (README-TESTING.md has the rest)
 make test
 # With hot reload
 make watch
@@ -138,37 +128,11 @@ Linting configurations are in:
 * `eslint.config.js`
 * `.prettierignore`
  
-### Running a tagged test(s):
-Update your test as such:
+### Testing
 
-```
-test("work in progress", Focused) {
-}
-```
+[README-TESTING.md](README-TESTING.md): how the tests are organized, how to run all of them or one, and what to know
+before writing one.
 
-Then:
-
-    make test-focused
-
-For integration tests, **this will run more than once, against all database types**.
-
-To run with better accuracy, use one of the following Make targets:
-
-    make test-focused-sqlite
-    make test-focused-psql
-    make test-focused-controllers
-    make test-focused-unit
-
-### Running all tests against a particular database:
-
-    make test-sqlite
-    make test-psql
-    
-### Running controller and unit tests separately
-
-    make test-controllers
-    make test-unit
-    
 ### Packaging
 
 The Docker image:
