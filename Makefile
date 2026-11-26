@@ -20,9 +20,18 @@ clear-db:
 restore-db:
 	cp data/db/altitude.db.bak data/db/altitude.db
 
-publish:
-	./mill altitude.assembly
-	./mill show altitude.assembly
+# The native jars, one per platform, all built on this machine: each altitude.platformJar run takes its natives from
+# ALTITUDE_PLATFORM, and each jar is copied out of the task's folder, which the next run replaces, into out/dist-jars/.
+DIST_PLATFORMS = linux-x86_64 linux-arm64 macosx-arm64 windows-x86_64
+
+dist-jars:
+	rm -rf out/dist-jars
+	mkdir -p out/dist-jars
+	for platform in $(DIST_PLATFORMS); do \
+		ALTITUDE_PLATFORM=$$platform ./mill altitude.platformJar && \
+		cp out/altitude/platformJar.dest/altitude-*-$$platform.jar out/dist-jars/ || exit 1; \
+	done
+	ls -l out/dist-jars
 
 # Vendors the tokentweak package (the design tweaks panel) into altitude/static/js/lib; see the README there.
 vendor-tokentweak:
@@ -82,7 +91,7 @@ test-js:
 db:
 	docker compose -f compose.dev.yaml -f compose.test.yaml up
 
-.PHONY: docker smoke-docker
+.PHONY: dist-jars docker smoke-docker
 
 # Builds the image and loads it as altitude:local, for this machine's architecture. DOCKER_PLATFORM=linux/arm64 (or
 # linux/amd64) builds the other one's, which needs QEMU for the image's one RUN:

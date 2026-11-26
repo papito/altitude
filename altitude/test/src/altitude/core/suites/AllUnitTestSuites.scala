@@ -25,6 +25,7 @@ import altitude.core.unit.ImageUtilTests
 import altitude.core.unit.ImportParallelismTests
 import altitude.core.unit.ImportStatusTests
 import altitude.core.unit.ImportStatusWsActorTests
+import altitude.core.unit.LauncherTests
 import altitude.core.unit.LogSettingsTests
 import altitude.core.unit.ModelDownloaderTests
 import altitude.core.unit.NameKeyTests
@@ -51,6 +52,7 @@ import altitude.core.unit.SqlExplainerTests
 import altitude.core.unit.SqliteOverridesTests
 import altitude.core.unit.StartupConfigTests
 import altitude.core.unit.StyleGuideScanTests
+import altitude.core.unit.SystemLibrariesTests
 import altitude.core.unit.TempFolderTests
 import altitude.core.unit.TransactionBoundaryTests
 import altitude.core.unit.UrlServiceTests
@@ -89,6 +91,8 @@ abstract class AllUnitTestSuites
     new ClearDbTests,
     new TempFolderTests,
     new AppStartTests,
+    new LauncherTests,
+    new SystemLibrariesTests,
     new LogSettingsTests,
     new Sha256Tests,
     new ModelDownloaderTests,

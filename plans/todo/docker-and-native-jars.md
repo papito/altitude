@@ -63,7 +63,7 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
 | Files | `Dockerfile`, `.dockerignore`, `compose.yaml` (compose project `altitude-app`, so its volumes are `altitude-app_data` and `altitude-app_models` wherever the folder is) and `.env.example` at the root, `.env` git-ignored; the dev databases' files are `compose.dev.yaml` and `compose.test.yaml`, project `altitude`. Mill's `./mill` and `mill.bat` wrappers are committed, and the Makefile calls `./mill`. `.gitattributes` pins line endings (`mill` and `*.sh` LF, `mill.bat` CRLF, the sqlite-vector builds binary), so a Git for Windows clone builds the image. |
 | Image builds | `make docker` builds and loads an image for the machine's architecture (`docker buildx build --load`; the cache mounts need BuildKit, so the `docker-buildx` package, installed once by the owner). `DOCKER_PLATFORM=linux/arm64` cross-builds the other, which needs QEMU binfmt for the runtime stage's `RUN` (`docker run --privileged --rm tonistiigi/binfmt --install arm64`). The arm64 image is run on GitHub's arm runner, not here. |
 | Stage 1 CI | `.github/workflows/docker.yml` (the owner creates it): on `ubuntu-24.04` and `ubuntu-24.04-arm`, each natively, `make docker` and `make smoke-docker`, which needs `curl` and `ffmpeg` on the runner. The models folder (`~/.cache/altitude/models`) is an `actions/cache` entry keyed by the set's tag; the first start fills it from the set's release (`renegade-otter/altitude-models` `v1`, and ArcFace from Hugging Face). |
-| Stage 2 jars | One fat jar per platform, `altitude-<version>-<platform>.jar`, holding that platform's natives alone. Its main class is a launcher compiled for Java 8: on a Java older than 21, or on another platform, it prints a message naming what to install or which jar to download (Docker on an Intel Mac) and exits, instead of an `UnsupportedClassVersionError` or an `UnsatisfiedLinkError`. Started without `ORT_DISABLE_TELEMETRY=1`, it starts the JVM once more with the variable set and waits for it, since ONNX Runtime's telemetry has no switch inside a running process (the ONNX Runtime row). |
+| Stage 2 jars | One fat jar per platform, `altitude-<version>-<platform>.jar`, holding that platform's natives alone. Its main class is a launcher compiled for Java 8: on a Java older than 21, or on another platform, it prints a message naming what to install or which jar to download (Docker on an Intel Mac) and exits, instead of an `UnsupportedClassVersionError` or an `UnsatisfiedLinkError`. Started without `ORT_DISABLE_TELEMETRY=1`, it starts the JVM once more with the variable set and waits for it, since ONNX Runtime's telemetry has no switch inside a running process (the ONNX Runtime row): with `-jar` and the jar when it was started from the jar, so the manifest's attributes apply, else with `-cp` and `java.class.path`. |
 | Stage 2 natives | ONNX Runtime and sqlite-vector are unpacked once into `<user cache>/altitude/natives/<build>-<platform>/`, beside the models cache, and loaded from there; javacpp keeps its own cache. `<build>` is a hash of the jar's native files, so a rebuilt jar of the same version never reuses another build's. Each start touches its folder; folders untouched for 30 days are pruned, so no start removes what another running instance loads from. |
 | Stage 2 defaults | The jar's folder holds `application.conf` and `data/`. It binds `localhost` until the owner sets `ALTITUDE_HOST` or `server.host`. |
 | Stage 2 Windows | The x64 jar. The README tells a person whom Smart App Control blocks to turn it off in Windows Security (no reinstall is needed) or to use Docker Desktop. No paid signing. |
@@ -121,8 +121,8 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
 
 11. `altitude/resources/logback.xml` becomes the prod configuration of the Decisions table; today's file moves to
     `logback-dev.xml`, which `run` and `runBackground` select with `-Dlogback.configurationFile` in `forkArgs`. The test
-    module's `forkArgs` keep `logback-test.xml`. The image and a plain `java -jar` need no flag to log for prod: the fat
-    jar's start script (`prependShellScript`) leaves the dev flag out. The MDC's keys are `Const.LogContext`'s:
+    module's `forkArgs` keep `logback-test.xml`. The image and a plain `java -jar` need no flag to log for prod: `forkArgs`
+    alone carries the dev flag. The MDC's keys are `Const.LogContext`'s:
     `decorators.requestResponseLogger` clears the MDC and sets the request's ID, and `UserService.switchContextToUser`
     sets the account's ID.
 12. A `LogSettings` object resolves the two logging variables to a value or an error; the two `PropertyDefiner`s
@@ -224,20 +224,35 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
 ### F. One jar per platform
 
 28. `build.mill`: an `altitude.platformJar` task assembling `altitude-<version>-<platform>.jar` from the dist inputs of
-    `ALTITUDE_PLATFORM` (that platform's natives only, ONNX Runtime and sqlite-jdbc trimmed to it, sqlite-vector's one
-    build), with `Altitude-Platform`, `Altitude-Build` (the hash of its native files) and `Enable-Native-Access:
-    ALL-UNNAMED` in its manifest; `make dist-jars` builds the four. It replaces `make publish`.
+    `ALTITUDE_PLATFORM`: the launcher's class, `distLib`'s `altitude.jar` and `lib/`, the platform's bytedeco classifier
+    jars, and `platformNatives` (ONNX Runtime's folder of the platform without `.dSYM`, sqlite-jdbc's one library,
+    sqlite-vector's one build, each at its classpath path). `mill.javalib.Assembly` merges them, `reference.conf` and
+    `META-INF/services/` concatenated, signatures, manifests, `INDEX.LIST` and `module-info.class` dropped, and the jar is
+    written again in name order with one entry time, so the same inputs give the same bytes. Its manifest has
+    `Altitude-Platform`, `Altitude-Build` (the first 16 hex digits of a SHA-256 of its native files' names, lengths and
+    bytes), `Implementation-Version`, `Enable-Native-Access: ALL-UNNAMED` and `Multi-Release: true`. A native file of
+    another platform fails the task. `make dist-jars` builds the four and copies each to `out/dist-jars/`. It replaces
+    `make publish`.
 29. A `launcher` Mill module: one Java class compiled with `--release 8`, the jar's `Main-Class`. It reads
     `java.specification.version` and compares the manifest's platform with `os.name` and `os.arch` before any other
-    class loads, and prints the Stage 2 jars row's message and exits. With `ORT_DISABLE_TELEMETRY=1` in its environment
-    it then calls `altitude.core.App.main`. Without it, it starts the same JVM once more (`java.home`'s `java`, the
-    runtime's own input arguments, `java.class.path`, the same program arguments) with the variable added, its input
-    and output inherited, and exits with that process's status; a shutdown hook passes a stop on to it
+    class loads, and prints the Stage 2 jars row's message and exits with status 1; an Intel Java on Apple Silicon is told
+    to install an arm64 one and a 32-bit Java a 64-bit one. With no `Altitude-Platform`, as from a classes folder, it
+    checks the Java alone. With `ORT_DISABLE_TELEMETRY=1` in its environment it then calls `altitude.core.App.main` by
+    reflection, or the class the `altitude.launcher.main` property names, which its tests set. Without it, it starts the
+    same JVM once more (`java.home`'s `java`, the runtime's own input arguments, `-jar` and the jar when started from it,
+    else `-cp` and `java.class.path`, the same program arguments) with the variable added and `JDK_JAVA_OPTIONS`,
+    `JAVA_TOOL_OPTIONS` and `_JAVA_OPTIONS` removed, its input and output inherited, and exits with that process's status,
+    143 on a stop. A debugger agent or a JMX port among the input arguments is met first with a line saying that setting
+    the variable skips the second JVM. A shutdown hook, registered before the second JVM starts, passes a stop on to it
     (`Process.destroy`, a SIGTERM on Linux and macOS) and waits, so the drain still runs. On Windows, where `destroy`
-    kills, a Ctrl-C in the console reaches both processes by itself. Tests: the variable present in the second JVM, its
-    exit status passed on, a SIGTERM to the launcher draining the server.
-30. `App.scala`: on Linux, an `UnsatisfiedLinkError` from loading OpenCV or FFmpeg that names GTK, ALSA or XCB is
-    reported with the packages to install.
+    kills, a Ctrl-C in the console reaches both processes by itself. Tests (`LauncherTests`, a stub in place of `App`):
+    the variable present in the second JVM, its exit status passed on, a SIGTERM to the launcher waiting for the second
+    JVM's shutdown work, a jar started with `java -jar` relaunched with `-jar` and another platform's jar refused, and the
+    checks as functions.
+30. `App.scala`: the start loads all of FFmpeg's libraries (`FFmpegFrameGrabber.tryLoad()`) after OpenCV. On Linux, an
+    `UnsatisfiedLinkError` from either that names GTK, ALSA or XCB is reported in the failed start's line with the
+    Debian and Ubuntu packages to install, under their names before and after the 64-bit time transition
+    (`SystemLibraries`, `SystemLibrariesTests`).
 
 ### G. Natives unpacked once
 

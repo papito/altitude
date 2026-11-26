@@ -448,18 +448,19 @@ It writes `out/altitude/dist.dest/`: `lib/` (the dependency jars, without their 
 folder's place in the image). `ALTITUDE_PLATFORM` (`linux-x86_64`, `linux-arm64`, `macosx-arm64` or `windows-x86_64`)
 names the platform whose libraries `native/` holds; unset, it is the build machine's.
 
-A fat jar:
+A native jar for each platform:
 
-    make publish
+    make dist-jars
 
-The jar is `out/altitude/assembly.dest/out.jar`. It runs on the platform it was built on alone, the only one whose
-OpenCV and FFmpeg libraries it holds, with:
+The jars are `out/dist-jars/altitude-<version>-<platform>.jar`, each holding one platform's native libraries alone.
+One runs on its own platform with:
 
-    ORT_DISABLE_TELEMETRY=1 java -jar out.jar
+    java -jar altitude-<version>-<platform>.jar
 
-Without that variable ONNX Runtime, which runs the Scene models, sends usage data to Microsoft; the image sets it,
-and so does the build for a dev or test run. The jar runs as `prod`: it listens on `localhost:8080`, and its
-`application.conf`, if any, and its `data/` are in the jar's own folder.
+Without `ORT_DISABLE_TELEMETRY=1` ONNX Runtime, which runs the Scene models, sends usage data to Microsoft; the jar's
+launcher starts the JVM once more with it set, the image sets it, and so does the build for a dev or test run. The jar
+runs as `prod`: it listens on `localhost:8080`, and its `application.conf`, if any, and its `data/` are in the jar's
+own folder.
 
 ## Design decisions and other resources
 

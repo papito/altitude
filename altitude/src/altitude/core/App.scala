@@ -5,6 +5,7 @@ import io.undertow.UndertowOptions
 import io.undertow.server.handlers.GracefulShutdownHandler
 import java.time.ZoneId
 import org.bytedeco.javacpp.Loader
+import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.opencv.opencv_java
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -88,6 +89,9 @@ object App extends cask.Main:
     // The code uses the org.opencv API, but its native library is loaded through org.bytedeco: the usual
     // `System.loadLibrary(Core.NATIVE_LIBRARY_NAME)` does not link it. https://stackoverflow.com/a/58064096/53687
     Loader.load(classOf[opencv_java])
+    // FFmpeg's libraries, all of them, now rather than at the first Video: on Linux `avdevice` links ALSA and XCB, and without
+    // them the start fails naming the packages to install (`SystemLibraries`), where a Video's import would fail on its own
+    FFmpegFrameGrabber.tryLoad()
 
     val instance = new Altitude()
     built = Some(instance)
@@ -139,13 +143,18 @@ object App extends cask.Main:
         logger.error(s"Altitude could not start: ${reasonOf(failure)}", failure)
         System.exit(1)
 
-  /** What a start failed with, in a line: the message of the refusal itself, where an initializer's error wraps it */
+  /**
+   * What a start failed with, in a line: the message of the refusal itself, where an initializer's error wraps it, or, for a
+   * system library that OpenCV or FFmpeg could not load, its name and the packages to install
+   */
   private def reasonOf(failure: Throwable): String =
-    val refusal = failure match
-      // What an object throws as it initializes (`Environment`, of a value that names no environment) arrives as the cause
-      case wrapped: ExceptionInInitializerError if wrapped.getCause != null => wrapped.getCause
-      case other => other
-    Option(refusal.getMessage).getOrElse(refusal.toString)
+    SystemLibraries.missingFrom(failure, sys.props.getOrElse("os.name", "")).getOrElse {
+      val refusal = failure match
+        // What an object throws as it initializes (`Environment`, of a value that names no environment) arrives as the cause
+        case wrapped: ExceptionInInitializerError if wrapped.getCause != null => wrapped.getCause
+        case other => other
+      Option(refusal.getMessage).getOrElse(refusal.toString)
+    }
 
   /**
    * Builds and starts the HTTP server itself rather than through cask's `main`, which registers a shutdown hook that stops the

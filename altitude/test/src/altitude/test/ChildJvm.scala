@@ -6,7 +6,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
-import org.scalatest.Assertions.withClue
 import org.scalatest.matchers.should.Matchers.*
 
 import scala.concurrent.duration.DurationInt
@@ -14,6 +13,47 @@ import scala.concurrent.duration.FiniteDuration
 
 /** A second JVM with the test JVM's classpath, for what a test cannot do in its own: a crash, an exit, another environment */
 object ChildJvm {
+
+  /**
+   * A second JVM that [[start]] started, and its output, stdout and stderr together, in a file. The output goes to a file, not a
+   * pipe: reading a pipe to its end returns only when the JVM exits, so one that hangs would never reach a timeout.
+   */
+  final class Started private[ChildJvm] (val process: Process, log: Path) extends AutoCloseable {
+
+    /** What the JVM has written so far */
+    def output: String = new String(Files.readAllBytes(log))
+
+    /**
+     * Waits for the JVM to exit and answers its exit code and its output. A JVM still running at `timeout` is killed, with every
+     * process it started, and fails the test.
+     */
+    def await(timeout: FiniteDuration): (Int, String) = {
+      val exited = process.waitFor(timeout.toMillis, TimeUnit.MILLISECONDS)
+      if (!exited) {
+        kill()
+        // The kill is asynchronous: what the JVM wrote is read once it is gone
+        process.waitFor(10, TimeUnit.SECONDS)
+      }
+      val written = output
+      withClue(s"The second JVM exited within $timeout: ") {
+        withClue(written) {
+          exited shouldBe true
+        }
+      }
+      (process.exitValue(), written)
+    }
+
+    /** Kills the JVM and every process it started, which a JVM that relaunches itself would otherwise leave running */
+    def kill(): Unit = {
+      process.descendants().forEach(descendant => descendant.destroyForcibly(): Unit)
+      process.destroyForcibly(): Unit
+    }
+
+    /** Kills what is still running and deletes the output */
+    override def close(): Unit =
+      try kill()
+      finally Files.deleteIfExists(log): Unit
+  }
 
   /**
    * Runs a main class in a second JVM with this one's classpath and environment, the environment changed by `environment`, and
@@ -34,37 +74,57 @@ object ChildJvm {
       timeout: FiniteDuration = 120.seconds,
       directory: Option[Path] = None,
       jvmOptions: Seq[String] = Seq.empty): (Int, String) = {
+    val started = start(mainClass, arguments, environment, directory, jvmOptions)
+    try started.await(timeout)
+    finally started.close()
+  }
+
+  /**
+   * Starts a main class in a second JVM as [[run]] does, and leaves it running: the caller waits for it, or stops it, and closes
+   * it, which kills what is still running.
+   */
+  def start(
+      mainClass: String,
+      arguments: Seq[String],
+      environment: java.util.Map[String, String] => Unit = _ => (),
+      directory: Option[Path] = None,
+      jvmOptions: Seq[String] = Seq.empty): Started = {
     val classpath = getClass.getClassLoader match {
       // The test runner loads the tests through a class loader of its own
       case loader: URLClassLoader => loader.getURLs.map(url => Paths.get(url.toURI).toString).mkString(File.pathSeparator)
       case _ => System.getProperty("java.class.path")
     }
-    val java = Paths.get(System.getProperty("java.home"), "bin", "java").toString
-    val command = Seq(java, "-XX:+ErrorFileToStderr", "-XX:-CreateCoredumpOnCrash") ++ jvmOptions ++
-      Seq("-cp", classpath, mainClass) ++ arguments
+    startWith(Seq("-cp", classpath, mainClass), arguments, environment, directory, jvmOptions)
+  }
 
-    // The output goes to a file, not a pipe: reading a pipe to its end returns only when the JVM exits, so one that hangs would
-    // never reach the timeout
+  /** Starts a jar in a second JVM with `java -jar`, which reads its manifest, as [[start]] starts a main class */
+  def startJar(
+      jar: Path,
+      arguments: Seq[String],
+      environment: java.util.Map[String, String] => Unit = _ => (),
+      jvmOptions: Seq[String] = Seq.empty): Started =
+    startWith(Seq("-jar", jar.toString), arguments, environment, None, jvmOptions)
+
+  /** Starts `java` with what it runs (a main class on a classpath, or a jar) after the JVM's options, and then the arguments */
+  private def startWith(
+      runs: Seq[String],
+      arguments: Seq[String],
+      environment: java.util.Map[String, String] => Unit,
+      directory: Option[Path],
+      jvmOptions: Seq[String]): Started = {
+    val java = Paths.get(System.getProperty("java.home"), "bin", "java").toString
+    val command = Seq(java, "-XX:+ErrorFileToStderr", "-XX:-CreateCoredumpOnCrash") ++ jvmOptions ++ runs ++ arguments
+
     val log = Files.createTempFile("child-jvm", ".log")
     try {
       val builder = new ProcessBuilder(command*).redirectErrorStream(true).redirectOutput(log.toFile)
       directory.foreach(dir => builder.directory(dir.toFile))
       environment(builder.environment())
-
-      val process = builder.start()
-      val exited = process.waitFor(timeout.toMillis, TimeUnit.MILLISECONDS)
-      if (!exited) {
-        process.destroyForcibly()
-        // The kill is asynchronous: what the JVM wrote is read once it is gone
-        process.waitFor(10, TimeUnit.SECONDS)
-      }
-      val output = new String(Files.readAllBytes(log))
-      withClue(s"The second JVM exited within $timeout: ") {
-        withClue(output) {
-          exited shouldBe true
-        }
-      }
-      (process.exitValue(), output)
-    } finally Files.deleteIfExists(log): Unit
+      new Started(builder.start(), log)
+    } catch {
+      case failure: Throwable =>
+        Files.deleteIfExists(log)
+        throw failure
+    }
   }
 }
