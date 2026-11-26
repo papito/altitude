@@ -315,10 +315,16 @@ bytedeco's `opencv_highgui` and `avdevice` link them, and a headless server has 
 
 ### I. The docs
 
-35. `README.md`: an Install natively section with the Platforms table, `java -jar` per system, the Linux packages, the
-    Smart App Control step, the unverified Windows on ARM route, Docker for Intel Macs, and opening the server to the
-    LAN with `ALTITUDE_HOST` and `ALTITUDE_SECURE_COOKIES`.
-36. `docs/READINESS.md`: the install item for the native jars.
+35. `README.md`: an Install natively section, linked from the README's opening, with the Platforms table, Java 21
+    (Temurin) and `java -jar` per system, the Linux packages, the Smart App Control step, the unverified Windows on ARM
+    route, Docker for Intel Macs, where the files go (`application.conf` and `data/` beside the jar, the per-user cache's
+    `models/` and `natives/`, javacpp's cache), opening the server to the LAN with `ALTITUDE_HOST` and
+    `ALTITUDE_SECURE_COOKIES` or HTTPS through the Docker section's proxy recipe, the launcher's second JVM and
+    `ORT_DISABLE_TELEMETRY=1` for one, the stop, and `make dist-jars`, since no jar is published. The Packaging section
+    names `make dist-jars`, `./mill altitude.platformJar` and `make smoke-jar`.
+36. `docs/READINESS.md`: the install item for the native jars (the jars, the launcher's checks and second JVM, the
+    natives unpacked once, the README section, `make smoke-jar`), and the gap they leave: no publishing, no signing or
+    notarization, the jars workflow the owner adds, and no run yet on macOS, Windows or Linux arm64.
 
 ## Verification
 
