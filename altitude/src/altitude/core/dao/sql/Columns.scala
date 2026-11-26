@@ -58,26 +58,27 @@ object Columns:
   def equalTo(column: Expr[?], value: Any, dialect: Dialect): Expr[Boolean] =
     Expr[Boolean](implicit ctx => sql"$column = ${literal(value, dialect)}")
 
-  /** `column IN (?, ?, ...)`, every value bound */
+  /** `column IN (?, ?, ...)`, every value bound: for a small set of values that are not strings, which [[isInSet]] binds */
   def isIn(column: Expr[?], values: Iterable[Any], dialect: Dialect): Expr[Boolean] =
     val bound = SqlStr.join(values.toList.map(literal(_, dialect)), SqlStr.commaSep)
     Expr[Boolean](implicit ctx => sql"$column IN ($bound)")
 
   /**
-   * The column is one of the IDs, the set bound as one parameter (an array on PostgreSQL, a JSON array through `json_each` on
-   * SQLite), so thousands of IDs neither grow the statement nor hit an engine's parameter limit. An empty set matches nothing.
+   * A character column (an ID, in every caller) is one of the values, the set bound as one parameter (an array on PostgreSQL, a
+   * JSON array through `json_each` on SQLite), so thousands of values neither grow the statement nor hit an engine's parameter
+   * limit. An empty set matches nothing.
    */
-  def isInSet(column: Expr[?], ids: Set[String], dialect: Dialect): Expr[Boolean] =
+  def isInSet(column: Expr[?], values: Set[String], dialect: Dialect): Expr[Boolean] =
     import dialect.*
 
     dialect match
       case _: PostgresDialect =>
         given TypeMapper[Set[String]] = varcharArrayMapper
-        Expr[Boolean](implicit ctx => sql"$column = ANY($ids)")
+        Expr[Boolean](implicit ctx => sql"$column = ANY($values)")
       case _: SqliteDialect =>
-        val json = ujson.write(ids)
+        val json = ujson.write(values)
         Expr[Boolean](implicit ctx => sql"$column IN (SELECT value FROM json_each($json))")
-      case other => throw IllegalArgumentException(s"No ID set binding for dialect $other")
+      case other => throw IllegalArgumentException(s"No string set binding for dialect $other")
 
   /**
    * `varchar[]`, not `text[]`: against a `CHAR(36)` ID column the array is cast to the column's type and its index is used, where
@@ -86,7 +87,7 @@ object Columns:
   private val varcharArrayMapper: TypeMapper[Set[String]] = new TypeMapper[Set[String]]:
     def jdbcType: JDBCType = JDBCType.ARRAY
 
-    def get(r: ResultSet, idx: Int): Set[String] = throw UnsupportedOperationException("An ID set is only ever bound")
+    def get(r: ResultSet, idx: Int): Set[String] = throw UnsupportedOperationException("A set of strings is only ever bound")
 
     def put(r: PreparedStatement, idx: Int, v: Set[String]): Unit =
       r.setArray(idx, r.getConnection.createArrayOf("varchar", v.toArray[AnyRef]))

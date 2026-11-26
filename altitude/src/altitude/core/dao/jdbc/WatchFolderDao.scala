@@ -108,11 +108,11 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
       SELECT *
         FROM $tableName
        WHERE ${FieldConst.REPO_ID} = ?
-         AND ${F.DEST_FOLDER_ID} IN (${folderIds.toList.map(_ => "?").mkString(", ")})
+         AND ${F.DEST_FOLDER_ID} $inIdSet
        ORDER BY ${F.NAME}, ${FieldConst.ID}
     """
 
-    manyBySqlQuery(sql, repositoryId :: folderIds.toList).map(makeModel)
+    manyBySqlQuery(sql, List(repositoryId, idSet(folderIds))).map(makeModel)
 
   override def update(watchFolder: WatchFolder): Int =
     val sql = s"""

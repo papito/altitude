@@ -294,6 +294,31 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   override def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset] =
     lockAssets(assetIds, isRecycled = Some(true))
 
+  override def getIdsInFolders(folderIds: Set[String]): Set[String] =
+    if folderIds.isEmpty then return Set.empty
+
+    val sql = s"""
+      SELECT ${FieldConst.ID}
+        FROM asset
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.FOLDER_ID} $inIdSet
+    """
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(folderIds)))
+      .map(_(FieldConst.ID).asInstanceOf[String])
+      .toSet
+
+  // Only a recycled asset is ever marked for purging, so the recycled flag adds nothing to the match, but it narrows the read to
+  // the Trash through the indexes led by (repository_id, is_recycled)
+  override def getPurgePending: List[Asset] =
+    val sql = s"""
+      SELECT $assetWithoutBulkyMetadata
+        FROM asset
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.IS_RECYCLED} = TRUE
+         AND ${FieldConst.Asset.IS_PURGED} = TRUE
+    """
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
+
   override def lockUnpurged(assetId: String): Boolean =
     val sql = s"""
       SELECT id

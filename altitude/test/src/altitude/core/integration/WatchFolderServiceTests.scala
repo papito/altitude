@@ -14,6 +14,7 @@ import org.apache.pekko.actor.Cancellable
 import org.scalatest.DoNotDiscover
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatest.tagobjects.Slow
 import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
@@ -1760,5 +1761,27 @@ import altitude.core.util.Sha256
     withSetting(Settings.IMPORT_HISTORY_DAYS, "0")(imports.prune())
 
     memory(watchFolder).keySet shouldBe Set("present.png", "newer.png")
+  }
+
+  test("The Watch folders targeting a set of more folders than a statement takes parameters are found", Slow) {
+
+    /**
+     * Setup:
+     *
+     * Two Watch folders, one sorting into a folder and one into Triage. The Watch folders targeting the folder are read by its ID
+     * among 70,000 unknown IDs, more parameters than a PostgreSQL statement takes, as a Delete of a folder with that many folders
+     * below it reads them.
+     *
+     * Assertions:
+     *
+     * The read finds the Watch folder sorting into the folder alone.
+     */
+    val folder = testApp.service.folder.add("Scans")
+    val sorting = watch(directory(), name = "Scanner", destination = Some(folder))
+    watch(directory())
+
+    val folderIds = amongManyUnknownIds(Set(folder.persistedId))
+    testApp.txManager.asReadOnly(testApp.DAO.watchFolder.targeting(folderIds)).map(_.persistedId) shouldBe
+      List(sorting.persistedId)
   }
 }

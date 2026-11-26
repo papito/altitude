@@ -10,6 +10,7 @@ import scalasql.dialects.Dialect
 import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.DynamicFilter
+import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.util.Query
@@ -19,7 +20,8 @@ import altitude.core.util.SortDirection
 
 /**
  * The string-keyed `Query` turned into a typed predicate. The assertions are structural rather than exact SQL: values are bound,
- * one placeholder per value, and a parameter the layer cannot honor is an error rather than a quietly different query.
+ * a set of strings as one placeholder and any other value one per value, and a parameter the layer cannot honor is an error
+ * rather than a quietly different query.
  */
 @DoNotDiscover class DynamicFilterTests extends funsuite.AnyFunSuite with TestFocus {
 
@@ -43,22 +45,46 @@ import altitude.core.util.SortDirection
     placeholders(sql) shouldBe 2
   }
 
-  test("An IN parameter binds every value") {
+  test("An IN parameter of strings binds its set as one value") {
 
     /**
      * Setup:
      *
-     * A query with an IN parameter of three IDs.
+     * A query with an IN parameter of three IDs, rendered for each engine.
      *
      * Assertions:
      *
-     * The parameter renders as an IN list with one placeholder per value.
+     * The parameter renders as the column tested against one bound set: an array on PostgreSQL, a JSON array read through
+     * `json_each` on SQLite. Each statement has a single placeholder.
      */
     val query = new Query(params = Map("id" -> Query.IN(Set[Any]("a", "b", "c"))))
-    val sql = render(query)
+    val sqlite = render(query)
+    val postgres = render(query, AltitudePostgresDialect)
 
-    sql.contains("asset0.id IN (?, ?, ?)") shouldBe true
-    placeholders(sql) shouldBe 3
+    sqlite.contains("asset0.id IN (SELECT value FROM json_each(?))") shouldBe true
+    placeholders(sqlite) shouldBe 1
+    postgres.contains("asset0.id = ANY(?)") shouldBe true
+    placeholders(postgres) shouldBe 1
+  }
+
+  test("An IN parameter of other values binds every value") {
+
+    /**
+     * Setup:
+     *
+     * A query with an IN parameter of three widths, and one of a string and a number.
+     *
+     * Assertions:
+     *
+     * Each renders as an IN list with one placeholder per value.
+     */
+    val widths = render(new Query(params = Map("width" -> Query.IN(Set[Any](10, 20, 30)))))
+    widths.contains("asset0.width IN (?, ?, ?)") shouldBe true
+    placeholders(widths) shouldBe 3
+
+    val mixed = render(new Query(params = Map("filename" -> Query.IN(Set[Any]("a.jpg", 1)))))
+    mixed.contains("asset0.filename IN (?, ?)") shouldBe true
+    placeholders(mixed) shouldBe 2
   }
 
   test("A single-value IN collapses to an equality, as the query model defines it") {
@@ -183,10 +209,8 @@ import altitude.core.util.SortDirection
     intercept[IllegalArgumentException](render(new Query(params = Map("folder_id" -> BigInt(1)))))
   }
 
-  private def render(query: Query): String = {
-    import dialect._
-    DbApi.renderSql(matching(query), Db.config, dialect)
-  }
+  private def render(query: Query, engine: Dialect = dialect): String =
+    DbApi.renderSql(matching(query, engine), Db.config, engine)
 
   private def renderPage(query: Query): String = {
     import dialect._
@@ -201,13 +225,13 @@ import altitude.core.util.SortDirection
     DbApi.renderSql(sorted.drop((query.page - 1) * query.rpp).take(query.rpp), Db.config, dialect)
   }
 
-  private def matching(query: Query) = {
-    import dialect._
-    AssetRow.select.filter(row => DynamicFilter(AssetRow, columns(row), query, dialect))
+  private def matching(query: Query, engine: Dialect = dialect) = {
+    import engine._
+    AssetRow.select.filter(row => DynamicFilter(AssetRow, columns(row, engine), query, engine))
   }
 
-  private def columns(row: AssetRow[scalasql.core.Expr]) =
-    Columns.byName(AssetRow, AssetRow.containerQr(using dialect).walkExprs(row))
+  private def columns(row: AssetRow[scalasql.core.Expr], engine: Dialect = dialect) =
+    Columns.byName(AssetRow, AssetRow.containerQr(using engine).walkExprs(row))
 
   private def placeholders(sql: String): Int = sql.count(_ == '?')
 }

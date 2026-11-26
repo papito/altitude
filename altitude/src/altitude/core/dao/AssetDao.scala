@@ -43,6 +43,15 @@ trait AssetDao extends BaseDao[Asset]:
   /** The recycled assets among the IDs, or the whole recycle bin */
   def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset]
 
+  /** The IDs of the assets in any of the folders, recycled or not, not locked */
+  def getIdsInFolders(folderIds: Set[String]): Set[String]
+
+  /**
+   * The assets marked for purging, not locked and without the bulky metadata: the purge queue reads an asset's ID alone, and a
+   * Trash emptied of thousands of assets would otherwise be read whole
+   */
+  def getPurgePending: List[Asset]
+
   /**
    * Locks the asset's row unless it is marked for purging; whether it is there and unmarked. `FOR NO KEY UPDATE` on PostgreSQL: a
    * purge mark or a delete waits for it, but a referencing row (its Edit's) is written without waiting. An Edit write takes it

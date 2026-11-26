@@ -99,6 +99,18 @@ trait SearchPlans { self: IntegrationTestCore =>
   }
 
   /**
+   * Deletes the context repository's rows [[seedCopies]] added (the copies, whose IDs have no dash, then the folders), for a test
+   * that commits its seed: the copies' and folders' IDs are the same in every test, so a row left behind fails a later seed.
+   */
+  protected def removeCopies(): Unit = {
+    val repositoryId = RequestContext.getRepository.persistedId
+    testApp.txManager.withTransaction {
+      update("DELETE FROM asset WHERE repository_id = ? AND id NOT LIKE '%-%'", repositoryId)
+      update("DELETE FROM folder WHERE repository_id = ? AND id LIKE 'seeded-folder-%'", repositoryId)
+    }
+  }
+
+  /**
    * The plan of a statement an index alone should answer, read inside [[atScale]]. PostgreSQL is told each table's pages are
    * all-visible, as vacuuming would leave them, since an index-only scan of unvacuumed rows is costed as a table read too. It is
    * also told to scan or bitmap only when nothing else answers, since over narrow seeded rows a full read costs less. SQLite

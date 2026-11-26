@@ -258,16 +258,13 @@ class LibraryService(val app: Altitude):
       logger.debug(s"Deleting folder $folder")
 
       val children = app.service.folder.getChildrenRecursive(id)
-      val allFoldersToDeleteIds = (children.map(_.persistedId) :+ folder.persistedId).toSet[Any]
+      val allFoldersToDeleteIds = (children.map(_.persistedId) :+ folder.persistedId).toSet
 
-      val folderQuery = new Query().add(FieldConst.ID -> Query.IN(allFoldersToDeleteIds))
+      val folderQuery = new Query().add(FieldConst.ID -> Query.IN(allFoldersToDeleteIds.toSet[Any]))
       app.service.folder.updateByQuery(folderQuery, Map(FieldConst.Folder.IS_RECYCLED -> true))
 
-      val assetQuery = new Query().add(FieldConst.Asset.FOLDER_ID -> Query.IN(allFoldersToDeleteIds))
-      val assetsToRecycle = app.service.asset.queryAll(assetQuery)
-
-      val assetIdsToRecycle = assetsToRecycle.records.map(r => r: Asset).map(_.persistedId).toSet
-      recycleAssets(assetIdsToRecycle)
+      // IDs alone: recycling reads and locks the rows it changes
+      recycleAssets(app.service.asset.getIdsInFolders(allFoldersToDeleteIds))
     }
 
   /**
@@ -429,7 +426,7 @@ class LibraryService(val app: Altitude):
   def requeuePurgePending(): Unit =
     forEachRepository {
       repository =>
-        val pending = app.service.asset.queryRecycled(new Query().add(FieldConst.Asset.IS_PURGED -> true)).records
+        val pending = app.service.asset.getPurgePending
 
         if pending.nonEmpty then
           logger.info(s"Queueing ${pending.size} assets marked for purging again. Repo: ${repository.name}")

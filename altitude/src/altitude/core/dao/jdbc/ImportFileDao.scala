@@ -80,12 +80,12 @@ abstract class ImportFileDao(override val config: Config) extends BaseDao[Import
       SELECT DISTINCT ${FieldConst.ImportFile.IMPORT_ID}
         FROM $tableName
        WHERE ${FieldConst.REPO_ID} = ?
-         AND ${FieldConst.ImportFile.IMPORT_ID} IN (${importIds.toList.map(_ => "?").mkString(", ")})
+         AND ${FieldConst.ImportFile.IMPORT_ID} $inIdSet
          AND ${FieldConst.ImportFile.OUTCOME} = ?
          AND ${FieldConst.ImportFile.REASON} = ?
     """
 
-    manyBySqlQuery(sql, (repositoryId :: importIds.toList) ++ List(outcome.dbValue, reason))
+    manyBySqlQuery(sql, List(repositoryId, idSet(importIds), outcome.dbValue, reason))
       .map(_(FieldConst.ImportFile.IMPORT_ID).asInstanceOf[String])
       .toSet
 

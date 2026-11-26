@@ -252,3 +252,13 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
     txManager.withTransaction {
       dao.getAssetsToPurge(assetIds)
     }
+
+  def getIdsInFolders(folderIds: Set[String]): Set[String] =
+    txManager.asReadOnly {
+      dao.getIdsInFolders(folderIds)
+    }
+
+  def getPurgePending: List[Asset] =
+    txManager.asReadOnly {
+      dao.getPurgePending
+    }
