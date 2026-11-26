@@ -34,7 +34,6 @@ services:
     volumes:
       # The Data directory: the database, every Library's files, the uploads not yet imported. What a backup covers.
       - data:/data
-      # The Models directory: about 1.6 GB the first start downloads. Never part of a backup.
       - models:/models
       # An anonymous volume, the one place besides the two above that the server can write. On disk, not in memory
       # (a tmpfs): Tika and ImageIO spool large files there, in /tmp/altitude, which every start empties: compose keeps
