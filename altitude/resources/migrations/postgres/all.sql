@@ -185,8 +185,8 @@ CREATE TABLE asset (
   mime_type VARCHAR(64) NOT NULL,
   width INT NOT NULL DEFAULT 0,
   height INT NOT NULL DEFAULT 0,
-  -- area size of the image in pixels (width * height)
-  area_size INT NOT NULL,
+  -- area size of the image in pixels (width * height), past 2^31 for an image over 46,341 × 46,341
+  area_size BIGINT NOT NULL,
   user_metadata jsonb,
   public_metadata jsonb,
   extracted_metadata jsonb,

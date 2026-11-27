@@ -23,6 +23,7 @@ import altitude.core.{ Altitude, App, RequestContext }
 import altitude.core.Const as C
 import altitude.core.models.{ AccountType, Permissions, Repository, User }
 import altitude.core.suites.SqliteSuiteBundle
+import altitude.core.util.Util
 
 class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll with BeforeAndAfterEach with TestFocus {
 
@@ -109,33 +110,41 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
   def lastActiveRepoIdOf(user: User): Option[String] =
     testApp.service.user.getById(user.persistedId).lastActiveRepoId
 
-  /** Clears the account's update time, which every write of its last active Library stamps, so a write after it shows */
-  def clearAccountUpdatedAt(user: User): Unit =
-    testApp.txManager.withTransaction {
-      testApp.DAO.user.updateByBySql("UPDATE account SET updated_at = NULL WHERE id = ?", List(user.persistedId))
-    }
+  /**
+   * Whether `f` updates the account's row. While it runs, a trigger stamps the row's `updated_at`, cleared beforehand, on any
+   * update of it, whatever the update sets. The trigger is SQLite's, the engine of this suite, and named for the call alone.
+   */
+  def writesAccount(user: User)(f: => Unit): Boolean = {
+    assume(testApp.dataSourceType == C.DbEngineName.SQLITE, "The trigger is SQLite's")
+    def run(sql: String, values: List[Any] = Nil): Unit =
+      testApp.txManager.withTransaction(testApp.DAO.user.updateByBySql(sql, values): Unit)
+    val trigger = s"account_written_${Util.randomStr().toLowerCase}"
 
-  /** Whether the account was written since [[clearAccountUpdatedAt]] */
-  def accountWritten(user: User): Boolean =
+    run("UPDATE account SET updated_at = NULL WHERE id = ?", List(user.persistedId))
+    run(
+      s"CREATE TRIGGER $trigger AFTER UPDATE ON account BEGIN " +
+        "UPDATE account SET updated_at = datetime('now') WHERE id = NEW.id; END")
+    try f
+    finally run(s"DROP TRIGGER $trigger")
+
     testApp.txManager.asReadOnly {
       testApp.DAO.user.manyBySqlQuery("SELECT updated_at FROM account WHERE id = ?", List(user.persistedId)).head("updated_at")
     } != null
+  }
 
   /**
    * Loads `path`, a full page of `repo`, with `other` recorded as the user's last active Library beforehand: the page answers 200
-   * and records `repo`, and a reload of it writes nothing
+   * and records `repo`, a write of the account, and a reload of it writes nothing
    */
   def assertPageRecords(host: String, user: User, path: String, repo: Repository, other: Repository): Unit =
     withClue(s"[$path]: ") {
       def load(): Unit = requests.get(s"$host/$path", cookies = testContext.cookies, check = false).statusCode shouldBe 200
 
       testApp.service.user.rememberLastActiveRepository(user, other.persistedId)
-      load()
+      writesAccount(user)(load()) shouldBe true
       lastActiveRepoIdOf(user) shouldBe Some(repo.persistedId)
 
-      clearAccountUpdatedAt(user)
-      load()
-      accountWritten(user) shouldBe false
+      writesAccount(user)(load()) shouldBe false
       lastActiveRepoIdOf(user) shouldBe Some(repo.persistedId)
     }
 

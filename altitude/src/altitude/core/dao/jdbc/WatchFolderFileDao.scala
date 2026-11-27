@@ -48,8 +48,7 @@ abstract class WatchFolderFileDao(override val config: Config)
       state = WatchFileState.fromDbValue(row.state),
       attempts = row.attempts,
       lastSeenAt = Some(toLocalDateTime(row.lastSeenAt)),
-      createdAt = row.createdAt.map(toLocalDateTime),
-      updatedAt = row.updatedAt.map(toLocalDateTime)
+      createdAt = row.createdAt.map(toLocalDateTime)
     )
 
   override protected def makeModel(rec: Map[String, AnyRef]): WatchFolderFile =
@@ -62,8 +61,7 @@ abstract class WatchFolderFileDao(override val config: Config)
       state = WatchFileState.fromDbValue(rec(F.STATE).asInstanceOf[String]),
       attempts = getIntField(rec(F.ATTEMPTS)),
       lastSeenAt = getDateTimeField(rec.get(F.LAST_SEEN_AT)),
-      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
-      updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
+      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT))
     )
 
   override def ofWatchFolder(watchFolderId: String): List[WatchFolderFile] =

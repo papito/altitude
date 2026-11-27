@@ -67,8 +67,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       perceptualHash = row.perceptualHash.map(PerceptualHash(_)),
       sequenceId = row.sequenceId,
       editRev = row.editRev,
-      createdAt = row.createdAt.map(toLocalDateTime),
-      updatedAt = row.updatedAt.map(toLocalDateTime)
+      createdAt = row.createdAt.map(toLocalDateTime)
     )
 
   override protected def makeModel(rec: Map[String, AnyRef]): Asset =
@@ -117,8 +116,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
         siglip2 = rec.get(SceneModel.Siglip2.column).flatMap(getVectorField)),
       sequenceId = Option(rec(FieldConst.Asset.SEQUENCE_ID)).map(_.toString),
       editRev = getIntField(rec(FieldConst.Asset.EDIT_REV)),
-      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
-      updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
+      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT))
     )
 
   override def queryNotRecycled(q: Query): QueryResult[Asset] =
@@ -190,7 +188,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)),
       asset.width,
       asset.height,
-      asset.width * asset.height,
+      // In 64 bits: an image over 2^31 pixels (46,341 × 46,341) overflows an Int
+      asset.width.toLong * asset.height,
       durationMs,
       UserMetadata.withIds(asset.userMetadata).toJson.toString,
       asset.extractedMetadata.toJson.toString,

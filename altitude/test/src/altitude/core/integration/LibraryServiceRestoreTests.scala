@@ -320,7 +320,7 @@ import altitude.core.util.Query
             first = testContext.insertAsset(testContext.makeAsset().copy(checksum = recycled.checksum)): Unit,
             second = operation(recycled): Unit)
         }
-        refused.getMessage should include("try again")
+        refused.getMessage shouldBe Const.Msg.Err.CONTENT_IMPORTED_MEANWHILE
         isRecycled(recycled) shouldBe true
       }
 

@@ -67,8 +67,7 @@ case class Asset(
     // The revision of the asset's edited images (the edited Preview and Display image), their URLs' cache key; 0 when it has
     // none, so the original's are shown
     editRev: Int = 0,
-    createdAt: Option[LocalDateTime] = None,
-    updatedAt: Option[LocalDateTime] = None)
+    createdAt: Option[LocalDateTime] = None)
   extends BaseModel:
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]

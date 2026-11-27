@@ -14,8 +14,11 @@ import java.time.OffsetDateTime
 import java.util.UUID
 import org.apache.commons.dbutils.BasicRowProcessor
 import org.apache.commons.dbutils.RowProcessor
+import org.postgresql.util.PSQLException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
 import scalasql.Column
 import scalasql.Sc
 import scalasql.Table
@@ -28,6 +31,7 @@ import scala.reflect.ClassTag
 
 import altitude.core.{ Const => C }
 import altitude.core.ConstraintException
+import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
@@ -82,6 +86,59 @@ object BaseDao:
       case batch: BatchUpdateException => Option(batch.getNextException).getOrElse(batch)
       case other => other
     new SQLException(s"${driver.getMessage} Statement: $sql", driver.getSQLState, driver.getErrorCode, driver)
+
+  /**
+   * A unique index, as each engine names the one a write broke: PostgreSQL by its `name`, SQLite by its `columns` (`table.column,
+   * …`), or by its name (`index '<name>'`) for an index on an expression. Each is defined beside the DAO of its table;
+   * `BaseDaoTests` checks every one against both schemas.
+   */
+  final case class UniqueIndex(name: String, columns: String)
+
+  // The text sqlite-jdbc wraps SQLite's own message in ends with the unique index a write broke: its columns, or for an index on
+  // an expression its name
+  private val SqliteUniqueColumns = """\(UNIQUE constraint failed: (.+)\)$""".r.unanchored
+  private val SqliteUniqueIndexName = """index '(.+)'""".r
+
+  /** The driver's exception behind `e`: `e` itself, or its cause ([[statementFailed]]) */
+  private def driverException(e: SQLException): Option[SQLException] =
+    Iterator.iterate[Throwable](e)(_.getCause).takeWhile(_ != null).collectFirst {
+      case postgres: PSQLException => postgres
+      case sqlite: SQLiteException => sqlite
+    }
+
+  /**
+   * Whether `e` is a unique violation, of a unique index or a primary key. SQLite gives every constraint failure the one error
+   * code 19, so its extended result code tells a unique one from a NOT NULL, CHECK, foreign key or trigger failure.
+   */
+  def isUniqueViolation(e: SQLException): Boolean =
+    driverException(e) match
+      case Some(sqlite: SQLiteException) =>
+        sqlite.getResultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE ||
+        sqlite.getResultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_PRIMARYKEY
+      case Some(postgres) => postgres.getSQLState == /* unique_violation */ "23505"
+      case None => e.getSQLState == "23505"
+
+  /**
+   * Whether `e` is a unique violation of `index`. Read from the driver's exception: on PostgreSQL the server's constraint field,
+   * on SQLite the index's columns exactly, or its name for an index on an expression. Never a search of the message, which on
+   * PostgreSQL quotes the refused value: an email address may hold any index's name.
+   */
+  def violates(e: SQLException, index: UniqueIndex): Boolean =
+    driverException(e).exists {
+      case postgres: PSQLException =>
+        postgres.getSQLState == /* unique_violation */ "23505" &&
+        Option(postgres.getServerErrorMessage).flatMap(error => Option(error.getConstraint)).contains(index.name)
+      case sqlite: SQLiteException =>
+        sqlite.getResultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE && (sqlite.getMessage match
+          case SqliteUniqueColumns(SqliteUniqueIndexName(name)) => name == index.name
+          case SqliteUniqueColumns(violated) => violated == index.columns
+          case _ => false)
+      case _ => false
+    }
+
+  /** A unique violation as a `DuplicateException` of `message`; any other failure as it is */
+  def newDuplicateExceptionOrRethrow(e: SQLException, message: Option[String] = None): Exception =
+    if isUniqueViolation(e) then DuplicateException(message = message) else e
 
   /** The failure of a statement given another number of values than it has placeholders, as `QueryRunner` reported it */
   private def wrongValueCount(expected: Int, bound: Int): SQLException =

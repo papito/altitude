@@ -11,13 +11,21 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.tagobjects.Slow
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
 
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
+import altitude.core.dao.AssetDao
+import altitude.core.dao.RepositoryDao
+import altitude.core.dao.UserDao
+import altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.jdbc.BaseDao.UniqueIndex
 import altitude.core.util.Query
+import altitude.core.util.Util
 
 /** The reads and writes of `BaseDao` that every DAO shares, on both engines */
 @DoNotDiscover class BaseDaoTests(override val testApp: Altitude) extends IntegrationTestCore {
@@ -279,7 +287,7 @@ import altitude.core.util.Query
      *
      * The `NotFoundException` names the table and the field read by, and not the address.
      */
-    val email = s"nobody.${altitude.core.util.Util.randomStr(8)}@example.com"
+    val email = s"nobody.${Util.randomStr(8)}@example.com"
     val error = intercept[NotFoundException] {
       testApp.txManager.asReadOnly(testApp.DAO.user.getOneByQuery(new Query().add(FieldConst.User.EMAIL -> email)))
     }
@@ -287,5 +295,135 @@ import altitude.core.util.Query
     error.getMessage should include("account")
     error.getMessage should include(FieldConst.User.EMAIL)
     (error.getMessage should not).include(email)
+  }
+
+  test("A unique violation is told apart by the index it breaks, as the failed statement or the driver reports it") {
+
+    /**
+     * Setup:
+     *
+     * A live asset, and a second asset of the same content added to the same repository, which `asset_01` refuses.
+     *
+     * Assertions:
+     *
+     * The failure is a violation of `asset_01` on its columns, whether read from the failed statement's exception or from the
+     * driver's own, its cause. It is no violation of another index, nor of `asset_01` named with its columns in another order or
+     * one of them alone.
+     */
+    val first = testContext.makeAsset()
+    testApp.txManager.withTransaction(testApp.DAO.asset.add(first))
+    val failed = intercept[SQLException] {
+      testApp.txManager.withTransaction(testApp.DAO.asset.add(testContext.makeAsset().copy(checksum = first.checksum)))
+    }
+    val driver = failed.getCause.asInstanceOf[SQLException]
+
+    for (e <- List(failed, driver)) {
+      BaseDao.violates(e, AssetDao.LIVE_CHECKSUM_INDEX) shouldBe true
+      BaseDao.isUniqueViolation(e) shouldBe true
+      BaseDao.violates(e, UserDao.USERNAME_KEY_INDEX) shouldBe false
+      BaseDao.violates(e, UniqueIndex("asset_01x", "asset.checksum, asset.repository_id")) shouldBe false
+      BaseDao.violates(e, UniqueIndex("asset_0", "asset.checksum")) shouldBe false
+    }
+  }
+
+  test("A unique index on an expression is told apart by its name, which SQLite reports in place of its columns") {
+
+    /**
+     * Setup:
+     *
+     * SQLite's failure of a unique index on an expression, as sqlite-jdbc reports it (`index '<name>'` in place of the columns),
+     * alone and as the cause of a failed statement's exception.
+     *
+     * Assertions:
+     *
+     * Each is a unique violation of the index of that name, whatever columns the index is said to have, and of no other.
+     *
+     * Edge cases:
+     *
+     * Built rather than caused: no schema of the suite has such an index, and a table created for the test would change the
+     * schema under every pooled connection of the suite's shared database.
+     */
+    val driver = new SQLiteException(
+      "[SQLITE_CONSTRAINT_UNIQUE] A UNIQUE constraint failed (UNIQUE constraint failed: index 'scratch_01')",
+      SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE)
+    val failed = BaseDao.statementFailed("INSERT INTO scratch (value) VALUES (?)", driver)
+
+    for (e <- List(driver, failed)) {
+      BaseDao.violates(e, UniqueIndex("scratch_01", "not used")) shouldBe true
+      BaseDao.isUniqueViolation(e) shouldBe true
+      BaseDao.violates(e, UniqueIndex("scratch_02", "scratch.value")) shouldBe false
+    }
+  }
+
+  test("A failure that breaks no unique index is no unique violation") {
+
+    /**
+     * Setup:
+     *
+     * An asset added with no checksum, which the column's NOT NULL refuses.
+     *
+     * Assertions:
+     *
+     * The failure is no unique violation, so no write reports it as a duplicate.
+     *
+     * Edge cases:
+     *
+     * SQLite gives every constraint failure the error code of a unique one (19); only its extended code tells them apart.
+     */
+    val failed = intercept[SQLException] {
+      testApp.txManager.withTransaction(testApp.DAO.asset.add(testContext.makeAsset().copy(checksum = null)))
+    }
+
+    BaseDao.isUniqueViolation(failed) shouldBe false
+    BaseDao.newDuplicateExceptionOrRethrow(failed) shouldBe failed
+  }
+
+  test("Each unique index a violation is told apart by is a unique index of the schema, on the columns it names") {
+
+    /**
+     * Setup:
+     *
+     * Every `UniqueIndex` the DAOs define.
+     *
+     * Assertions:
+     *
+     * Each names a unique index of the schema, on its table's columns in the order it lists them, as the engine's catalog reads
+     * them: `pragma_index_info` on SQLite, `pg_index` on PostgreSQL.
+     */
+    val defined =
+      List(UserDao.EMAIL_KEY_INDEX, UserDao.USERNAME_KEY_INDEX, AssetDao.LIVE_CHECKSUM_INDEX, RepositoryDao.NAME_KEY_INDEX)
+    val isPostgres = testApp.dataSourceType == Const.DbEngineName.POSTGRES
+
+    for (index <- defined) {
+      withClue(s"[${index.name}]: ") {
+        val (columns, isUnique) = testApp.txManager.asReadOnly {
+          if (isPostgres) {
+            val rows = query(
+              """SELECT t.relname || '.' || a.attname AS column_name, i.indisunique AS is_unique
+                |  FROM pg_class ic
+                |  JOIN pg_index i ON i.indexrelid = ic.oid
+                |  JOIN pg_class t ON t.oid = i.indrelid
+                | CROSS JOIN LATERAL unnest(i.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord)
+                |  JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+                | WHERE ic.relname = ? AND ic.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = current_schema())
+                | ORDER BY k.ord""".stripMargin,
+              index.name
+            )
+            (rows.map(_("column_name").toString), rows.forall(_("is_unique") == java.lang.Boolean.TRUE) && rows.nonEmpty)
+          } else {
+            val table = query("SELECT tbl_name FROM sqlite_master WHERE type = 'index' AND name = ?", index.name)
+              .map(_("tbl_name").toString)
+            val columns = query("SELECT name FROM pragma_index_info(?) ORDER BY seqno", index.name)
+              .flatMap(row => table.map(t => s"$t.${row("name")}"))
+            val unique =
+              table.flatMap(t => query("SELECT \"unique\" AS is_unique FROM pragma_index_list(?) WHERE name = ?", t, index.name))
+            (columns, unique.map(_("is_unique").toString) == List("1"))
+          }
+        }
+
+        columns.mkString(", ") shouldBe index.columns
+        isUnique shouldBe true
+      }
+    }
   }
 }

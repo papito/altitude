@@ -35,8 +35,6 @@ final case class AuditEvent(
     createdAt: Option[LocalDateTime] = None)
   extends BaseModel:
 
-  val updatedAt: Option[LocalDateTime] = None
-
   override def toString: String =
     val who = actor.fold("nobody")(a => s"[${a.id}] @${a.username}")
     val whom = target.fold("")(t => s" on [${t.id}] @${t.username}")

@@ -28,8 +28,7 @@ abstract class ImportFileDao(override val config: Config) extends BaseDao[Import
       reason = row.reason,
       assetId = row.assetId,
       sizeBytes = row.sizeBytes,
-      createdAt = row.createdAt.map(toLocalDateTime),
-      updatedAt = row.updatedAt.map(toLocalDateTime)
+      createdAt = row.createdAt.map(toLocalDateTime)
     )
 
   override protected def makeModel(rec: Map[String, AnyRef]): ImportFile =
@@ -43,8 +42,7 @@ abstract class ImportFileDao(override val config: Config) extends BaseDao[Import
       reason = text(FieldConst.ImportFile.REASON),
       assetId = text(FieldConst.ImportFile.ASSET_ID),
       sizeBytes = getLongField(rec(FieldConst.ImportFile.SIZE_BYTES)).get,
-      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
-      updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
+      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT))
     )
 
   // A new file is pending, by the column's default

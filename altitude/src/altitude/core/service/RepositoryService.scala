@@ -4,13 +4,16 @@ import java.sql.SQLException
 
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
+import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
+import altitude.core.Validators
 import altitude.core.dao.RepositoryDao
 import altitude.core.dao.RepositoryGrantDao
 import altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.jdbc.BaseDao.newDuplicateExceptionOrRethrow
 import altitude.core.models.AccountType
 import altitude.core.models.AuditEventType
 import altitude.core.models.Folder
@@ -20,7 +23,7 @@ import altitude.core.models.Stats
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.NaturalOrder
-import altitude.core.util.Util.newDuplicateExceptionOrRethrow
+import altitude.core.util.Util
 
 object RepositoryService:
 
@@ -70,7 +73,9 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
         catch
           case e: SQLException =>
             logger.debug(s"Adding repository [${repoToSave.name}] failed: ${e.getMessage}")
-            throw newDuplicateExceptionOrRethrow(e, Some(C.Msg.Err.LIBRARY_NAME_TAKEN.format(repoToSave.name)))
+            if BaseDao.violates(e, RepositoryDao.NAME_KEY_INDEX) then
+              throw DuplicateException(Some(C.Msg.Err.LIBRARY_NAME_TAKEN.format(repoToSave.name)))
+            throw newDuplicateExceptionOrRethrow(e)
 
       // The folder and stats writes below act in the context Library
       switchContextToRepository(repo)
@@ -238,9 +243,17 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
     logger.trace(s"Switching the repository context to [${repo.persistedId}]")
     RequestContext.repository.value = Some(repo)
 
+  /**
+   * Sets the Library a request's path names as the repository context, or none for an unknown one. An ID that is no UUID is
+   * refused before any read: PostgreSQL compares a text parameter with a `CHAR(36)` ID as `bpchar`, ignoring trailing spaces, so
+   * an ID padded with them would find its Library, and each such spelling would cost a read and a place in the cache.
+   */
   def setContextFromRequest(repoId: Option[String]): Unit =
-    if repoId.isDefined then
-      try
-        val repo: Repository = getById(repoId.get)
-        RequestContext.repository.value = Some(repo)
-      catch case _: NotFoundException => logger.debug(s"Repository [${repoId.get}] from the request not found; no context set")
+    repoId.foreach {
+      id =>
+        if !Validators.isUuid(id) then
+          logger.debug(s"Repository [${Util.printable(id, 64)}] from the request is no ID; no context set")
+        else
+          try RequestContext.repository.value = Some(getById(id))
+          catch case _: NotFoundException => logger.debug(s"Repository [$id] from the request not found; no context set")
+    }

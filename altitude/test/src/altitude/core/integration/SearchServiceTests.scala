@@ -669,6 +669,47 @@ import altitude.core.util.*
     intercept[IllegalArgumentException](search(new SearchQuery()))
   }
 
+  test("An image of more than 2^31 pixels is stored with its whole area and sorts by it, paged through a cursor") {
+
+    /**
+     * Setup:
+     *
+     * Three completed assets written through the DAO: 50,000 × 50,000 pixels (2.5 gigapixels), 46,341 × 46,341 (just over 2^31)
+     * and 100 × 100.
+     *
+     * Assertions:
+     *
+     * The `area_size` column holds each product whole, and a search sorted by area, largest first, pages through them one at a
+     * time in that order.
+     *
+     * Edge cases:
+     *
+     * Both large areas are past the 32-bit range, so a product or column of 32 bits would store them negative and sort them last.
+     */
+    val sizes = List(50_000 -> 50_000, 46_341 -> 46_341, 100 -> 100)
+    val ids = testApp.txManager.withTransaction {
+      sizes.map {
+        (width, height) =>
+          val asset = testContext.makeAsset().copy(width = width, height = height)
+          testApp.service.asset.markAsCompleted(testApp.DAO.asset.add(asset)).persistedId
+      }
+    }
+
+    val areas = testApp.txManager.asReadOnly {
+      ids.map(id => query("SELECT area_size FROM asset WHERE id = ?", id).head("area_size").asInstanceOf[Number].longValue)
+    }
+    areas shouldBe sizes.map((width, height) => width.toLong * height)
+
+    val byArea = List(SearchSort(FieldConst.Asset.AREA_SIZE, SortDirection.DESC))
+    val pages = Iterator
+      .iterate(search(new SearchQuery(rpp = 1, searchSort = byArea)))(
+        page => search(new SearchQuery(rpp = 1, searchSort = byArea, cursor = page.nextCursor)))
+      .take(ids.length)
+      .toList
+    pages.flatMap(_.records.map(_.persistedId)) shouldBe ids
+    pages.last.nextCursor shouldBe None
+  }
+
   test("A total counts up to its cap and reads one past it when there are more; an exact count does not stop") {
 
     /**

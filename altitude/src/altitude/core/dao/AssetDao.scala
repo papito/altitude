@@ -10,6 +10,10 @@ import altitude.core.models.UserMetadata
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 
+object AssetDao:
+  /** One live copy of a content per repository */
+  val LIVE_CHECKSUM_INDEX: BaseDao.UniqueIndex = BaseDao.UniqueIndex("asset_01", "asset.repository_id, asset.checksum")
+
 trait AssetDao extends BaseDao[Asset]:
   /** Empty when the asset has none */
   def getUserMetadata(assetId: String): UserMetadata

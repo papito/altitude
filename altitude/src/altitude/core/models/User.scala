@@ -94,8 +94,6 @@ case class User(
     createdAt: Option[LocalDateTime] = None)
   extends BaseModel:
 
-  val updatedAt: Option[LocalDateTime] = None
-
   /** The name key `account_01` keeps unique, and a login by email compares */
   lazy val emailKey: String = NameKey.of(email)
 

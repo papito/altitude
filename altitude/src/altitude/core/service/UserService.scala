@@ -11,6 +11,8 @@ import org.slf4j.MDC
 import altitude.core._
 import altitude.core.dao.RepositoryGrantDao
 import altitude.core.dao.UserDao
+import altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.jdbc.BaseDao.newDuplicateExceptionOrRethrow
 import altitude.core.models.AccountSnapshot
 import altitude.core.models.AccountType
 import altitude.core.models.AuditEventType
@@ -23,7 +25,6 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.NameKey
 import altitude.core.util.NaturalOrder
 import altitude.core.util.Util
-import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
 object UserService:
 
@@ -658,20 +659,15 @@ class UserService(val app: Altitude) extends BaseService[User]:
 
   /**
    * Runs an insert or update of an account, turning a unique violation of its email address's or its username's name key
-   * (`account_01`, `account_02`) into a `ValidationException` on that field
+   * (`account_01`, `account_02`) into a `ValidationException` on that field. Any other failure is rethrown as it is.
    */
   private def whileKeysFree[A](write: => A): A =
     try write
     catch
-      case e: SQLException =>
-        newDuplicateExceptionOrRethrow(e) match
-          case _: DuplicateException =>
-            // A raw statement's failure carries the driver's exception as its cause (`BaseDao.statementFailed`)
-            val message = Option(e.getCause).collect { case driver: SQLException => driver }.getOrElse(e).getMessage
-            if message.contains("username_key") || message.contains("account_02") then
-              throw fieldError(FieldConst.User.USERNAME, Const.Msg.Err.USERNAME_TAKEN)
-            else throw fieldError(FieldConst.User.EMAIL, Const.Msg.Err.EMAIL_TAKEN)
-          case other => throw other
+      case e: SQLException if BaseDao.violates(e, UserDao.EMAIL_KEY_INDEX) =>
+        throw fieldError(FieldConst.User.EMAIL, Const.Msg.Err.EMAIL_TAKEN)
+      case e: SQLException if BaseDao.violates(e, UserDao.USERNAME_KEY_INDEX) =>
+        throw fieldError(FieldConst.User.USERNAME, Const.Msg.Err.USERNAME_TAKEN)
 
   private def grantsJson(grants: Map[String, Permissions]): ujson.Obj =
     ujson.Obj.from(grants.toSeq.sortBy(_._1).map((repositoryId, permissions) => repositoryId -> permissionsJson(permissions)))

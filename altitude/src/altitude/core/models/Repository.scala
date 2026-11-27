@@ -64,8 +64,7 @@ case class Repository(
     rootFolderId: String,
     fileStoreType: String,
     fileStoreConfig: Map[String, String] = Map(),
-    createdAt: Option[LocalDateTime] = None,
-    updatedAt: Option[LocalDateTime] = None)
+    createdAt: Option[LocalDateTime] = None)
   extends BaseModel:
 
   /** The name key `repository_01` keeps unique instance-wide (see [[NameKey]]) */

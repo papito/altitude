@@ -154,7 +154,7 @@ CREATE TABLE asset (
   mime_type VARCHAR(64) NOT NULL,
   width INT NOT NULL DEFAULT 0,
   height INT NOT NULL DEFAULT 0,
-  -- area size of the image in pixels (width * height)
+  -- area size of the image in pixels (width * height), past 2^31 for an image over 46,341 × 46,341: an INT is 64 bits here
   area_size INT NOT NULL,
   -- NULL for an asset in no folder: a triaged one
   folder_id CHAR(36),

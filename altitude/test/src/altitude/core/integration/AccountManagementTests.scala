@@ -199,6 +199,34 @@ import altitude.core.util.Util
     users.getById(other.persistedId).username shouldBe other.username
   }
 
+  test("A taken email address that holds the username key's name is refused on the email address") {
+
+    /**
+     * Setup:
+     *
+     * An Admin, a Library and a User whose email address holds the text of the username's key column and index (`username_key`,
+     * `account_02`).
+     *
+     * Assertions:
+     *
+     * A create under that email address is refused as a taken email address, not a taken username.
+     *
+     * Edge cases:
+     *
+     * PostgreSQL's message quotes the email address it refuses, so the field comes from the violated index's name, never from the
+     * message's text.
+     */
+    val admin = persistAdmin()
+    val grants = Map(addLibrary().persistedId -> Permissions.none)
+    val email = s"username_key.account_02.${Util.randomStr()}@example.com"
+    users.create(admin.persistedId, model().copy(email = email), "password 1", grants)
+
+    val refused = intercept[ValidationException] {
+      users.create(admin.persistedId, model().copy(email = email), "password 1", grants)
+    }
+    refused.errors shouldBe Map(FieldConst.User.EMAIL -> C.Msg.Err.EMAIL_TAKEN)
+  }
+
   test("A creator who is no Admin gives only the Libraries and Permissions it may pass on") {
 
     /**

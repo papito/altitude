@@ -2,7 +2,6 @@ package altitude.core.util
 
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.sql.SQLException
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -14,7 +13,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import altitude.core.Const
-import altitude.core.DuplicateException
 import altitude.core.RequestContext
 import altitude.core.models.Asset
 
@@ -137,7 +135,3 @@ object Util:
 
   def checkPassword(password: String, hashedPassword: String): Boolean =
     BCrypt.checkpw(password, hashedPassword)
-
-  def newDuplicateExceptionOrRethrow(e: SQLException, message: Option[String] = None): Exception =
-    if e.getErrorCode == /* SQLITE */ 19 || e.getSQLState == /* POSTGRES */ "23505" then DuplicateException(message = message)
-    else e

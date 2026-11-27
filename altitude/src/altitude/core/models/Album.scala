@@ -15,12 +15,7 @@ object Album:
  * A flat, named collection of pointers to assets. Membership lives in `album_asset`, and an asset can be in any number of albums.
  * `numOfAssets` is computed on read and never stored; `createdAt` is set by the database.
  */
-case class Album(
-    id: Option[String] = None,
-    name: String,
-    numOfAssets: Int = 0,
-    createdAt: Option[LocalDateTime] = None,
-    updatedAt: Option[LocalDateTime] = None)
+case class Album(id: Option[String] = None, name: String, numOfAssets: Int = 0, createdAt: Option[LocalDateTime] = None)
   extends BaseModel:
 
   if name.isEmpty then throw ValidationException("Album name cannot be empty")

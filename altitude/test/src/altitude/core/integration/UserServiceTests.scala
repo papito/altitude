@@ -77,17 +77,17 @@ import altitude.core.util.Util
     keys("username_key") shouldBe NameKey.of(model.username)
   }
 
-  test("Remembering a Library writes the account only when it is not the one recorded") {
+  test("Remembering a Library writes the account only when it is not the one recorded, and never stamps its update time") {
 
     /**
      * Setup:
      *
-     * A new User with no last active Library, the common setup's Library and a second one.
+     * A new User with no last active Library and no update time, the common setup's Library and a second one.
      *
      * Assertions:
      *
-     * Remembering the first Library records it, reports a write and stamps the update time. Remembering it again reports no write
-     * and leaves the update time, cleared beforehand, empty. Remembering the second Library records it and reports a write.
+     * Remembering the first Library records it and reports a write; remembering it again reports no write; remembering the second
+     * Library records it and reports a write. The account's update time, the stamp of an account change, stays empty throughout.
      */
     val user: User = testContext.persistUser()
     val first = testContext.repository.persistedId
@@ -98,17 +98,18 @@ import altitude.core.util.Util
     }
     def lastActive: Option[String] = testApp.service.user.getById(user.persistedId).lastActiveRepoId
 
-    testApp.service.user.rememberLastActiveRepository(user, first) shouldBe true
-    lastActive shouldBe Some(first)
-    updatedAt should not be empty
+    updatedAt shouldBe None
 
-    testApp.txManager.withTransaction(update("UPDATE account SET updated_at = NULL WHERE id = ?", user.persistedId))
-    testApp.service.user.rememberLastActiveRepository(user, first) shouldBe false
+    testApp.service.user.rememberLastActiveRepository(user, first) shouldBe true
     lastActive shouldBe Some(first)
     updatedAt shouldBe None
 
+    testApp.service.user.rememberLastActiveRepository(user, first) shouldBe false
+    lastActive shouldBe Some(first)
+
     testApp.service.user.rememberLastActiveRepository(user, second) shouldBe true
     lastActive shouldBe Some(second)
+    updatedAt shouldBe None
   }
 
   test("Check valid user password") {

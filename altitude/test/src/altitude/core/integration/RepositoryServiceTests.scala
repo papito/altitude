@@ -59,14 +59,13 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The repository reads back with its name and a creation time, and no update time yet.
+     * The repository reads back with its name and a creation time.
      */
     val repo: Repository = addLibrary(Util.randomStr())
 
     val storedRepo: Repository = testApp.service.repository.getById(repo.persistedId)
     storedRepo.name shouldEqual repo.name
     storedRepo.createdAt should not be None
-    storedRepo.updatedAt should be(None)
   }
 
   test("A Library's name is stored trimmed, with its whitespace collapsed and in NFC, beside its name key") {
@@ -195,6 +194,29 @@ import altitude.core.util.Util
     }
 
     librariesKeyed(original.nameKey).map(_.persistedId) shouldBe List(original.persistedId)
+  }
+
+  test("A Library the database refuses for another reason than its name is no taken name") {
+
+    /**
+     * Setup:
+     *
+     * A Library of a new name with no file store type, which the column's NOT NULL refuses.
+     *
+     * Assertions:
+     *
+     * The add fails with the database's own `SQLException`, not a `DuplicateException` saying the name is taken, and adds no
+     * Library.
+     *
+     * Edge cases:
+     *
+     * SQLite gives every constraint failure the error code of a unique one (19); only its extended code tells them apart.
+     */
+    val name = Util.randomStr()
+    val refused = intercept[Exception](testApp.service.repository.addRepository(name = name, fileStoreType = null))
+    refused shouldBe an[SQLException]
+
+    librariesKeyed(NameKey.of(name)) shouldBe empty
   }
 
   test("A second Library whose name differs only by case fold or compatibility form is a duplicate") {
@@ -441,6 +463,43 @@ import altitude.core.util.Util
 
     testApp.service.repository.landingRepositoryOf(user).map(_.persistedId) shouldBe Some(lastActive.persistedId)
     testApp.service.user.getById(user.persistedId).lastActiveRepoId shouldBe Some(lastActive.persistedId)
+  }
+
+  test("A Library ID from a request that is no UUID sets no repository context and reads nothing") {
+
+    /**
+     * Setup:
+     *
+     * A Library, and its ID as a request would send it: padded with a space on either side, followed by a NUL, and as it is.
+     *
+     * Assertions:
+     *
+     * Each form that is not a UUID sets no repository context, reads nothing from the database and caches nothing; the ID as it
+     * is sets the Library as the context.
+     *
+     * Edge cases:
+     *
+     * PostgreSQL compares a text parameter with a `CHAR(36)` ID as `bpchar`, which ignores trailing spaces, so the padded ID
+     * would otherwise find the Library there, and it refuses a NUL in a text parameter.
+     */
+    val library = addLibrary(Util.randomStr())
+    val id = library.persistedId
+    val service = testApp.service.repository
+
+    for (malformed <- List(s"$id ", s" $id", s"$id\u0000")) {
+      RequestContext.repository.withValue(None) {
+        val before = RequestContext.readQueryCount.value
+        service.setContextFromRequest(Some(malformed))
+        RequestContext.readQueryCount.value shouldBe before
+        RequestContext.repository.value shouldBe None
+      }
+      testApp.repositoriesById.contains(malformed) shouldBe false
+    }
+
+    RequestContext.repository.withValue(None) {
+      service.setContextFromRequest(Some(id))
+      RequestContext.repository.value.map(_.persistedId) shouldBe Some(id)
+    }
   }
 
   test("A last active Library that is unset, missing or one the user cannot see falls back to the first it can see by name") {

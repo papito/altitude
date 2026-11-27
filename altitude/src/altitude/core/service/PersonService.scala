@@ -15,6 +15,7 @@ import altitude.core.ValidationException
 import altitude.core.Validators
 import altitude.core.dao.FaceDao
 import altitude.core.dao.PersonDao
+import altitude.core.dao.jdbc.BaseDao.newDuplicateExceptionOrRethrow
 import altitude.core.models.Asset
 import altitude.core.models.CountedAssets
 import altitude.core.models.Face
@@ -25,7 +26,6 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.NameKey
 import altitude.core.util.Query
 import altitude.core.util.SearchQuery
-import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
 object PersonService:
   val UNKNOWN_NAME_PREFIX = "Unknown"

@@ -38,7 +38,7 @@ case class AssetRow[T[_]](
     mimeType: T[String],
     width: T[Int],
     height: T[Int],
-    areaSize: T[Int],
+    areaSize: T[Long],
     userMetadata: T[Option[String]],
     publicMetadata: T[Option[String]],
     extractedMetadata: T[Option[String]],

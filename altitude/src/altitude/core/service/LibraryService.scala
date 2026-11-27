@@ -13,6 +13,8 @@ import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 
 import altitude.core.{ Const => _, _ }
+import altitude.core.dao.AssetDao
+import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models._
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
@@ -329,7 +331,7 @@ class LibraryService(val app: Altitude):
   private def refusingAContentImportedMeanwhile[T](write: => T): T =
     try write
     catch
-      case ex: SQLException if ex.getSQLState == "23505" && Option(ex.getMessage).exists(_.contains("asset_01")) =>
+      case ex: SQLException if BaseDao.violates(ex, AssetDao.LIVE_CHECKSUM_INDEX) =>
         logger.info(s"An asset with the content of one leaving the trash was imported meanwhile: ${ex.getMessage}")
         throw IllegalOperationException(altitude.core.Const.Msg.Err.CONTENT_IMPORTED_MEANWHILE)
 

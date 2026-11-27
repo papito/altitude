@@ -47,8 +47,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
       duplicate = row.duplicate,
       unsupported = row.unsupported,
       failed = row.failed,
-      createdAt = row.createdAt.map(toLocalDateTime),
-      updatedAt = row.updatedAt.map(toLocalDateTime)
+      createdAt = row.createdAt.map(toLocalDateTime)
     )
 
   override protected def makeModel(rec: Map[String, AnyRef]): Import =
@@ -70,8 +69,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
       duplicate = counter(ImportOutcome.Duplicate),
       unsupported = counter(ImportOutcome.Unsupported),
       failed = counter(ImportOutcome.Failed),
-      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
-      updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
+      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT))
     )
 
   override def add(model: Import): Import =

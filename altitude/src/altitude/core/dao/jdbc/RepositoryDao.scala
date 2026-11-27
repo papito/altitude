@@ -25,8 +25,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao[Reposi
       rootFolderId = row.rootFolderId,
       fileStoreType = row.fileStoreType,
       fileStoreConfig = fileStoreConfigOf(row.fileStoreConfig.orNull),
-      createdAt = row.createdAt.map(toLocalDateTime),
-      updatedAt = row.updatedAt.map(toLocalDateTime)
+      createdAt = row.createdAt.map(toLocalDateTime)
     )
 
   private def fileStoreConfigOf(column: AnyRef): Map[String, String] =
@@ -42,8 +41,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao[Reposi
       rootFolderId = rec(FieldConst.Repository.ROOT_FOLDER_ID).asInstanceOf[String],
       fileStoreType = rec(FieldConst.Repository.FILE_STORE_TYPE).asInstanceOf[String],
       fileStoreConfig = fileStoreConfig,
-      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
-      updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
+      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT))
     )
 
   /** A name key `repository_01` already holds fails with the engine's unique violation, which the service reports */

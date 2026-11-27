@@ -81,6 +81,5 @@ case class WatchFolderFile(
     state: WatchFileState = WatchFileState.Seen,
     attempts: Int = 0,
     lastSeenAt: Option[LocalDateTime] = None,
-    createdAt: Option[LocalDateTime] = None,
-    updatedAt: Option[LocalDateTime] = None)
+    createdAt: Option[LocalDateTime] = None)
   extends BaseModel

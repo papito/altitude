@@ -3,6 +3,11 @@ package altitude.core.dao
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.User
 
+object UserDao:
+  /** The name keys that keep one account per email address and per username */
+  val EMAIL_KEY_INDEX: BaseDao.UniqueIndex = BaseDao.UniqueIndex("account_01", "account.email_key")
+  val USERNAME_KEY_INDEX: BaseDao.UniqueIndex = BaseDao.UniqueIndex("account_02", "account.username_key")
+
 trait UserDao extends BaseDao[User]:
   def addUser(user: User, passwordHash: String): User
 
@@ -64,5 +69,5 @@ trait UserDao extends BaseDao[User]:
   /** Not an account change, so `updated_at` stays */
   def recordLogin(id: String): Unit
 
-  /** Writes nothing when `repoId` is already the one recorded; whether it wrote */
+  /** Writes nothing when `repoId` is already the one recorded; whether it wrote. Not an account change, so `updated_at` stays. */
   def rememberLastActiveRepository(userId: String, repoId: String): Boolean

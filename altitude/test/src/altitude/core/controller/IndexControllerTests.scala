@@ -314,6 +314,41 @@ import altitude.core.models.Permissions
     }
   }
 
+  test("A Library ID padded with a space is a Library not found, though the Library is the user's") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in User's Library, and its ID padded with a space (`%20`) in the path of its main page and of an API request.
+     *
+     * Assertions:
+     *
+     * Both answer the 404 of an unknown Library, plain text for the page and JSON for the API, while the ID as it is opens the
+     * page.
+     *
+     * Edge cases:
+     *
+     * This suite runs on SQLite, which never matched a padded ID, so it checks only the 404's shape. `RepositoryServiceTests`
+     * proves on both engines that a padded ID is refused before any read, where PostgreSQL would otherwise match it.
+     */
+    val library = testContext.persistRepository()
+    login()
+
+    withServer(App) {
+      host =>
+        requests.get(s"$host/r/${library.persistedId}/", cookies = testContext.cookies, check = false).statusCode shouldBe 200
+
+        val page = requests.get(s"$host/r/${library.persistedId}%20/", cookies = testContext.cookies, check = false)
+        page.statusCode shouldBe 404
+        page.contentType.head should startWith("text/plain")
+        page.text() shouldBe Const.Msg.Err.LIBRARY_NOT_FOUND
+
+        val api = requests.get(s"$host/api/album/r/${library.persistedId}%20/list", cookies = testContext.cookies, check = false)
+        api.statusCode shouldBe 404
+        api.contentType.head should startWith("application/json")
+    }
+  }
+
   test("An Admin opens every Library; a User and a Guest only one they hold a grant in") {
 
     /**
@@ -613,13 +648,13 @@ import altitude.core.models.Permissions
         }
 
         testApp.service.user.rememberLastActiveRepository(admin, b.persistedId)
-        clearAccountUpdatedAt(admin)
         val unrecorded =
           List(s"htmx/nav/r/$aId" -> 200, s"api/folder/r/$aId/tree" -> 200, s"r/$aId/asset/${java.util.UUID.randomUUID()}" -> 404)
-        for ((path, status) <- unrecorded) {
-          requests.get(s"$host/$path", cookies = testContext.cookies, check = false).statusCode shouldBe status
-        }
-        accountWritten(admin) shouldBe false
+        writesAccount(admin) {
+          for ((path, status) <- unrecorded) {
+            requests.get(s"$host/$path", cookies = testContext.cookies, check = false).statusCode shouldBe status
+          }
+        } shouldBe false
         lastActiveRepoIdOf(admin) shouldBe Some(b.persistedId)
     }
   }

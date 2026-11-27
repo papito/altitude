@@ -18,19 +18,14 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
 
   // `numOfAssets` is counted only by `getAll`'s hand-written query
   override protected def toModel(row: AlbumRow[Sc]): Album =
-    Album(
-      id = Option(row.id),
-      name = row.name,
-      createdAt = row.createdAt.map(toLocalDateTime),
-      updatedAt = row.updatedAt.map(toLocalDateTime))
+    Album(id = Option(row.id), name = row.name, createdAt = row.createdAt.map(toLocalDateTime))
 
   override protected def makeModel(rec: Map[String, AnyRef]): Album =
     Album(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       name = rec(FieldConst.Album.NAME).asInstanceOf[String],
       numOfAssets = rec.get(FieldConst.Album.NUM_OF_ASSETS).map(getIntField).getOrElse(0),
-      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
-      updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
+      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT))
     )
 
   override def add(album: Album): Album =

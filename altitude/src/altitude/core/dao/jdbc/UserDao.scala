@@ -173,8 +173,8 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
   override def rememberLastActiveRepository(userId: String, repoId: String): Boolean =
     val sql = s"""
         UPDATE account
-           SET ${FieldConst.User.LAST_ACTIVE_REPO_ID} = ?, ${FieldConst.UPDATED_AT} = ?
+           SET ${FieldConst.User.LAST_ACTIVE_REPO_ID} = ?
          WHERE ${FieldConst.ID} = ? AND ${FieldConst.User.LAST_ACTIVE_REPO_ID} IS DISTINCT FROM ?
     """
 
-    updateByBySql(sql, List(repoId, now, userId, repoId)) > 0
+    updateByBySql(sql, List(repoId, userId, repoId)) > 0
