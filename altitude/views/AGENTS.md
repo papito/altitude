@@ -66,7 +66,8 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
     filtered results title), a rectangular box with `--radius`; `--radius-xl` for the advanced search panel. Only a
     circle, a switch's knob or an avatar writes a radius in a rule, as a percentage.
   - The only literals: 0 and auto; centering offsets (`50%`, a negative half size); offsets beyond the scale (the 100 px
-    of the general modal host and the unanchored popover dialog, the snackbar's top); `.visually-hidden`'s 1 px; and
+    of the general modal host and the unanchored popover dialog, the snackbar's top); `.visually-hidden`'s 1 px, and the
+    nav's, which repeats it for the brand's name and the entries' labels in a narrow window; and
     the em offsets and padding of a Locations category's +/− badge, which belong to its glyph.
 - Type:
   - A font size is a step of `core.css`'s type scale (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`,
@@ -2104,6 +2105,16 @@ Style Guide), the account cell, and the theme switch, always last. An entry with
 its label and not a link. Which entries show follows the Permissions (**Controls follow Permissions**); Users shows for
 an Admin and the holder of Create Users or Create Guests in any Library (`RequestContext.createsAccounts`, **Users
 page**).
+
+- **Spacing and separators.** Cells stand `--nav-cell-gap` apart. Each cell from the quick search through the account
+  cell stretches to the nav's height and draws, as its `::before`, a hairline centered in the gap before it,
+  `--nav-separator-length` of that height in `--nav-separator-color`. An entry's label never wraps.
+- **Narrow windows.** An entry's label is a `.label` of its own, apart from its `.count`, and the entry carries a
+  `title` with the label. Two `@media` steps drop text where the nav stops fitting, measured for an Admin's nav with the
+  dev-only Style Guide entry and rounded up to a rem: below 98rem the brand shows its chevron alone and the account cell
+  its icon alone; below 82rem each entry shows its icon and count alone. A hidden brand name or label is hidden the
+  `.visually-hidden` way, so it stays in the link's name with its count; the account trigger's `aria-label` keeps the
+  username. An entry added to the nav moves both breakpoints: measure again.
 
 - **Current entry.** `aria-current="page"` is rendered by the server from the include's `current` parameter, a
   `Const.NavEntry` key: the main page's view (`IndexController` passes the `view` query parameter, `repository` by

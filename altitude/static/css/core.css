@@ -26,6 +26,8 @@
     --border-dashed: var(--border-heavy-width) dashed;
     --panel-border-color: hsl(from var(--shadow-color) h s l / 0.18);
     --popover-border-color: hsl(from var(--theme-neutral-3) h s l / 0.3);
+    /* The hairline between two nav cells */
+    --nav-separator-color: hsl(from var(--theme-neutral-3) h s l / 0.35);
     --dashed-border-color: hsl(from var(--theme-neutral-3) h s l / 0.45);
 
     --radius: 0.3125rem;
@@ -104,14 +106,17 @@
     --edit-slider-field-width: 4.5rem;
     /* The band naming the view along the results' left edge, and the gutter the results leave for it */
     --view-band-width: var(--space-9);
-    --nav-brand-width: 12.5rem;
+    --nav-brand-width: 11rem;
+    /* The gap between two nav cells, which holds the hairline between them, and the hairline's share of the nav's height */
+    --nav-cell-gap: var(--space-5);
+    --nav-separator-length: 30%;
     --nav-search-width: 11.5rem;
     --nav-search-focus-width: 15.5rem;
     /* The longest a Library's name runs in the nav's Library menu, its trigger and its entries, before an ellipsis */
     --library-name-max-width: 16rem;
     /* The Browse entry's least width, wide enough for some of the Library's name on a laptop; capped by the viewport,
        so the nav still fits a narrow window */
-    --nav-browse-min-width: min(16rem, 18vw);
+    --nav-browse-min-width: min(18.5rem, 18vw);
 
     --snackbar-width: 31.25rem;
     /* A snackbar message's entry and dismiss fade; the script reads it, in ms, to remove the message after the fade */
@@ -335,7 +340,7 @@ body {
 
 nav {
     display: flex;
-    column-gap: var(--space-5);
+    column-gap: var(--nav-cell-gap);
     background: hsl(from var(--theme-primary) h s l / 0.1);
     color: var(--theme-neutral-4);
     align-items: center;
@@ -386,7 +391,7 @@ nav > div {
 nav .menu, nav .menu > a {
     display: flex;
     align-items: center;
-    gap: var(--space-6);
+    gap: var(--space-2);
 }
 
 nav .menu > a, nav .nav-menu-trigger, nav .theme-switch {
@@ -405,11 +410,30 @@ nav .menu {
     font-weight: var(--font-weight-medium);
     text-transform: lowercase;
     color: var(--theme-neutral-3);
+    white-space: nowrap;
     cursor: pointer;
 }
 
+/* A hairline between two cells, centered in the gap before each cell from the quick search through the account cell.
+   Each such cell stretches to the nav's height, so the hairline's length is a share of that height */
+nav > :is(.search, .menu:not(.repository, .theme-switch)) {
+    position: relative;
+    align-self: stretch;
+
+    &::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: calc(var(--nav-cell-gap) / -2);
+        height: var(--nav-separator-length);
+        translate: 0 -50%;
+        border-left: var(--border-hairline) var(--nav-separator-color);
+        pointer-events: none;
+    }
+}
+
 nav .menu .count {
-    margin-left: var(--space-3);
+    margin-left: var(--space-2);
     padding: var(--chip-padding);
     border-radius: var(--chip-border-radius);
     background-color: var(--theme-secondary);
@@ -553,6 +577,7 @@ nav .context-menu {
     font-size: var(--font-size-base);
     font-weight: normal;
     text-transform: none;
+    white-space: normal;
 }
 
 /* A Library's name in the Library menu's panel */
@@ -666,6 +691,46 @@ nav .search > form .filters span {
 
 nav .search > form .filters span:empty {
     display: none;
+}
+
+/* Narrower windows. Each breakpoint is the width the nav needs before the step (an Admin's, with the dev-only Style
+   Guide entry), rounded up to a rem. Below the first, the brand shows its chevron alone, at its content width, its name
+   hidden as `.visually-hidden` hides it, so the link keeps it; the account cell shows its icon alone, whose trigger's
+   name and title keep the username */
+@media (width < 98rem) {
+    nav .brand {
+        flex-basis: auto;
+        padding-left: var(--space-3);
+    }
+
+    nav .brand span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    nav .menu.account .username {
+        display: none;
+    }
+}
+
+/* Below the second, an entry shows its icon and its count alone. The label stays in the entry's name, hidden as
+   `.visually-hidden` hides it, and the entry's title shows it on hover */
+@media (width < 82rem) {
+    nav .menu .label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+
+    nav .menu .count {
+        margin-left: 0;
+    }
 }
 
 /*         */

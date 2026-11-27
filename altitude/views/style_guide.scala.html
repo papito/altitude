@@ -787,10 +787,18 @@
           <p>The nav above is the live one. The brand is the chevron and the name on a primary-to-accent gradient, in
              <code>--font-nav</code> at <code>--font-size-xl</code>; the login page shows it above its form at
              <code>--font-size-display</code>. A nav entry is <code>.menu</code>, at
-             <code>--font-size-medium</code>; the server marks the entry of the page shown with
+             <code>--font-size-medium</code>, its icon <code>--space-2</code> from its label, which never wraps; the
+             server marks the entry of the page shown with
              <code>aria-current="page"</code> (the include's <code>current</code>, which a nav reload passes again), a
-             count is a <code>.count</code> pill inside the label, and an entry with nothing behind it is
-             <code>empty</code> and not a link. The <code>.search</code> cell between Browse and Triage is as wide as an
+             count is a <code>.count</code> pill <code>--space-2</code> after the label, the label itself a
+             <code>.label</code> of its own, and an entry with nothing behind it is
+             <code>empty</code> and not a link. Cells stand <code>--nav-cell-gap</code> apart, and a hairline in
+             <code>--nav-separator-color</code>, <code>--nav-separator-length</code> of the nav's height, is centered in
+             each gap from the quick search through the account cell (none after the brand or before the theme switch).
+             A narrower window drops text in two steps, each where the nav (an Admin's, in dev) stops fitting: below
+             98rem the brand shows its chevron alone and the account cell its icon alone; below 82rem each entry shows
+             its icon and count alone, its label hidden the <code>.visually-hidden</code> way and its title naming it on
+             hover. The <code>.search</code> cell between Browse and Triage is as wide as an
              entry and holds the quick search form at its own width: no border, a magnifier, a clear control while
              there is text, and an accent glow for focus; its last control is the filter button (<code>.filters</code>),
              the sliders icon in a circle of the accent at 0.2, which opens the advanced search panel (Menus &amp;
@@ -818,8 +826,8 @@
              Library name rule and creates nothing.</p>
           <nav aria-label="Navigation specimen">
             <div class="brand"><a href="#navigation-tabs"><i class="fas fa-chevron-up"></i><span>Altitude</span></a></div>
-            <div class="menu"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu</span></a></div>
-            <div class="menu" aria-current="page"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>aria-current</span></a></div>
+            <div class="menu"><a href="#navigation-tabs" title=".menu"><i class="fas fa-database"></i><span class="label">.menu</span></a></div>
+            <div class="menu" aria-current="page"><a href="#navigation-tabs" title="aria-current"><i class="fas fa-database"></i><span class="label">aria-current</span></a></div>
             @* The Library menu over a long-named Library and another; its links lead here, and New library opens a sample
                dialog that creates nothing *@
             @defining(RequestContext.getRepository) { library =>
@@ -843,8 +851,8 @@
                 <button type="button" class="filters" title="Advanced search specimen" aria-label="Advanced search specimen: 3 filters in force"><i class="fas fa-sliders-h" aria-hidden="true"></i><span aria-hidden="true">3</span></button>
               </form>
             </div>
-            <div class="menu triage"><a href="#navigation-tabs"><i class="fas fa-medkit"></i><span>.count<span class="count">37</span></span></a></div>
-            <div class="menu triage empty"><i class="fas fa-medkit"></i><span>.menu.empty</span></div>
+            <div class="menu triage"><a href="#navigation-tabs" title=".count"><i class="fas fa-medkit"></i><span><span class="label">.count</span><span class="count">37</span></span></a></div>
+            <div class="menu triage empty" title=".menu.empty"><i class="fas fa-medkit"></i><span class="label">.menu.empty</span></div>
             @includes.html.account_menu("styleGuideAccountMenuBtn", s"/htmx/account/r/${RequestContext.getRepository.persistedId}/dialogs/info")(play.twirl.api.HtmlFormat.empty)
             <button type="button" class="menu theme-switch" data-app-theme-switch title="Toggle light and dark theme" aria-label="Toggle light and dark theme"><i class="fas fa-sun" aria-hidden="true"></i><i class="fas fa-moon" aria-hidden="true"></i></button>
           </nav>
