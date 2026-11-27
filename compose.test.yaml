@@ -1,5 +1,5 @@
-# The test database, which the PostgreSQL suites reach on port 5433 (make test-psql). `make db` starts it with
-# compose.dev.yaml's.
+# The test database, which the PostgreSQL suites reach on port 5433. Every make target that runs them starts it
+# (`make test-db`); `make db` starts it with compose.dev.yaml's.
 
 # The same project as compose.dev.yaml: see the comment there.
 name: altitude
@@ -16,6 +16,13 @@ services:
       - POSTGRES_USER=altitude-test
       - POSTGRES_PASSWORD=testdba
     container_name: altitude-core-postgres-test
+    # What `make test-db`'s --wait waits for. Over TCP, since the image's first-start setup runs a server on the
+    # socket alone, which would pass a socket check before the real server starts.
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "altitude-test"]
+      interval: 10s
+      start_period: 30s
+      start_interval: 1s
 networks:
   db:
     driver: bridge

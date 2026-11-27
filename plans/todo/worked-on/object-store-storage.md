@@ -89,7 +89,7 @@ In the nav's Library menu (`includes/library_menu`), the name of a Library on an
 
 One Garage service in `../../../docker-compose.yml`, single node, with a one-shot bootstrap that creates a dev bucket and a test bucket with fixed keys. The image tag is pinned to the current stable release when the task is done (a release with the single-node bootstrap flag, if available, removes the manual layout step).
 
-`S3SuiteBundle` runs on SQLite with its test Libraries on the Object store, and holds the suites that touch files: the store contract, import, purge, prune and content serving. It empties its key prefix at setup. `make test` picks it up through `*SuiteBundle`; `make test-local` leaves it out and stays docker-free.
+`S3SuiteBundle` runs on SQLite with its test Libraries on the Object store, and holds the suites that touch files: the store contract, import, purge, prune and content serving. It empties its key prefix at setup. `make test` picks it up through `*SuiteBundle`.
 
 ## Not covered
 
