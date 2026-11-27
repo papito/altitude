@@ -49,8 +49,8 @@ import altitude.core.models.Settings
 import altitude.core.models.Stats
 import altitude.core.service.ImportPipelineService
 import altitude.core.service.ImportService
-import altitude.core.util.NaturalOrder
 import altitude.core.util.Query
+import altitude.core.util.SortKey
 
 /** The Import record: an Import and its Import files, their outcomes, the Import's counters and its closing */
 @DoNotDiscover class ImportServiceTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
@@ -172,14 +172,14 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The Import's files are listed in natural order of their paths on both engines, the order `NaturalOrder` sorts them in
-     * memory: the folders by their numbers, and each folder's files in the order of the names.
+     * The Import's files are listed in natural order of their paths on both engines, the order `SortKey.of` sorts them in memory:
+     * the folders by their numbers, and each folder's files in the order of the names.
      */
     val paths = for (folder <- List("Trip 9", "trip 10"); name <- TestContext.NATURAL_NAMES) yield s"$folder/$name"
     val (opened, _) = importOf(Random.shuffle(paths)*)
 
     testContext.importFiles(opened.persistedId).map(_.relPath) shouldBe paths
-    Random.shuffle(paths).sorted(using NaturalOrder) shouldBe paths
+    Random.shuffle(paths).sortBy(SortKey.of) shouldBe paths
   }
 
   test("A file added to an Import is pending, and the Import counts it") {
@@ -497,7 +497,7 @@ import altitude.core.util.Query
      *
      * Once its account is deleted, the folder upload names nobody. Asked for two, the history still counts three.
      */
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val uploader = testContext.persistUser()
     val clients = testApp.service.folder.add("Clients")
     val wedding = testApp.service.folder.add("Wedding", parentId = clients.id)
@@ -892,7 +892,7 @@ import altitude.core.util.Query
      *
      * The Import names its account until the account is deleted, and none after; it stays, its file pending and counted.
      */
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val uploader = testContext.persistUser()
     switchContextUser(uploader)
     val (opened, List(file)) = importOf("photo.jpg"): @unchecked

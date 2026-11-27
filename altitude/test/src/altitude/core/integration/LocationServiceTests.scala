@@ -149,7 +149,7 @@ import altitude.core.models.Repository
      *
      * Assertions:
      *
-     * The path order lists them in the order of the names on both engines, the order `NaturalOrder` sorts them in memory, the
+     * The path order lists them in the order of the names on both engines, the order `SortKey.of` sorts them in memory, the
      * category directly followed by its Location.
      */
     val names = TestContext.NATURAL_NAMES

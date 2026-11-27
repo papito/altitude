@@ -10,6 +10,7 @@ import altitude.core.FieldConst
 import altitude.core.ForbiddenException
 import altitude.core.IllegalOperationException
 import altitude.core.ValidationException
+import altitude.core.dao.jdbc.AssetDao
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.AccountSnapshot
 import altitude.core.models.AccountType
@@ -28,11 +29,9 @@ import altitude.core.util.Util
  * Account management, `UserService`'s writes behind the Users page: the ceiling of a creator who is no Admin, the guards on
  * Admins, and the statements that reach an account's assets in every Library at once
  */
-@DoNotDiscover class AccountManagementTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class AccountManagementTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
 
   private val users = testApp.service.user
-
-  private def persistAdmin(): User = testContext.persistUser(Some(testContext.makeAdminUser()))
 
   private def addLibrary(): Repository =
     testApp.service.repository.addRepository(name = TestContext.nextRepositoryName(), fileStoreType = C.StorageEngineName.FS)
@@ -102,7 +101,7 @@ import altitude.core.util.Util
      * The account is stored active, created by the Admin, with its flag, new-Library grant and exactly the two grants. It logs in
      * with its password, and its creation is recorded.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val (first, second) = (addLibrary(), addLibrary())
     val grants =
       Map(first.persistedId -> Permissions.of(Permission.Import, Permission.Organize), second.persistedId -> Permissions.none)
@@ -143,7 +142,7 @@ import altitude.core.util.Util
      *
      * An Admin needs no Library, and a User given exactly as many Libraries as the bound is created holding each of them.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val library = addLibrary()
     val bad = model().copy(username = "a b", name = "x", email = "nope")
 
@@ -181,7 +180,7 @@ import altitude.core.util.Util
      *
      * Each is refused as taken on its field, and the second User keeps its username.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val grants = Map(addLibrary().persistedId -> Permissions.none)
     val user = users.create(admin.persistedId, model(), "password 1", grants)
 
@@ -216,7 +215,7 @@ import altitude.core.util.Util
      * PostgreSQL's message quotes the email address it refuses, so the field comes from the violated index's name, never from the
      * message's text.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val grants = Map(addLibrary().persistedId -> Permissions.none)
     val email = s"username_key.account_02.${Util.randomStr()}@example.com"
     users.create(admin.persistedId, model().copy(email = email), "password 1", grants)
@@ -281,7 +280,7 @@ import altitude.core.util.Util
      * The new Admin holds no grant, flag or new-Library grant. The Guest holds access with no Permission, no flag, and a
      * new-Library grant of access alone.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val library = addLibrary()
     val flags = (account: User) =>
       account.copy(
@@ -318,7 +317,7 @@ import altitude.core.util.Util
      * stay. The second User's asset keeps its record. The account is stored changed, its version is bumped, and the edit and the
      * Permissions change are recorded.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val (first, second) = (addLibrary(), addLibrary())
     val all = Map(first.persistedId -> Permissions.all, second.persistedId -> Permissions.all)
     val user = users.create(admin.persistedId, model(), "password 1", all)
@@ -362,7 +361,7 @@ import altitude.core.util.Util
      * As a Guest it keeps both Libraries with no Permission; as an Admin it holds no grant; as a User it holds the one grant
      * given. Each change of type is recorded.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val (first, second) = (addLibrary(), addLibrary())
     val held =
       Map(first.persistedId -> Permissions.of(Permission.Import), second.persistedId -> Permissions.of(Permission.Organize))
@@ -397,8 +396,8 @@ import altitude.core.util.Util
      * Each of the User's attempts is a `ForbiddenException` and changes nothing. The Admin's own demotion is refused on the
      * account type, and it stays an Admin.
      */
-    val admin = persistAdmin()
-    val otherAdmin = persistAdmin()
+    val admin = testContext.persistAdmin()
+    val otherAdmin = testContext.persistAdmin()
     val library = addLibrary()
     val user = users.create(admin.persistedId, model(), "password 1", Map(library.persistedId -> Permissions.all))
 
@@ -441,7 +440,7 @@ import altitude.core.util.Util
      * The User's token from before the deactivation stays refused after the reactivation, since a deactivation revokes the
      * account's tokens.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val user = users.create(admin.persistedId, model(), "password 1", Map(addLibrary().persistedId -> Permissions.none))
     val token = users.loginAndSetUser(user.username, "password 1").get._2
     val before = version(user)
@@ -477,7 +476,7 @@ import altitude.core.util.Util
      * still naming the User; the second User's asset stays its own. The account and its grants are gone, the account it created
      * has no creator, its version is bumped, and the delete is recorded with the number of assets moved.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val (first, second) = (addLibrary(), addLibrary())
     val all = Map(first.persistedId -> Permissions.all, second.persistedId -> Permissions.all)
     val user = users.create(admin.persistedId, model(), "password 1", all)
@@ -521,7 +520,7 @@ import altitude.core.util.Util
     // A removal locks the active Admins' rows before it reads the actor among them: on PostgreSQL, without the lock both would
     // read two active Admins and both would commit
     testApp.txManager.withTransaction(update("UPDATE account SET is_active = ? WHERE account_type = 'Admin'", Boolean.box(false)))
-    val (admin, otherAdmin) = (persistAdmin(), persistAdmin())
+    val (admin, otherAdmin) = (testContext.persistAdmin(), testContext.persistAdmin())
 
     intercept[ForbiddenException] {
       contend(
@@ -546,7 +545,7 @@ import altitude.core.util.Util
      * After each change, the asset's importer record names the account as it is now. Each of the four edits bumps the account's
      * version, the flag's included, though it changes no importer record.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val library = addLibrary()
     val grants = Map(library.persistedId -> Permissions.of(Permission.Import))
     var account = users.create(admin.persistedId, model(), "password 1", grants)
@@ -584,7 +583,7 @@ import altitude.core.util.Util
      * left.
      */
     testApp.txManager.withTransaction(update("UPDATE account SET is_active = ? WHERE account_type = 'Admin'", Boolean.box(false)))
-    val (admin, otherAdmin) = (persistAdmin(), persistAdmin())
+    val (admin, otherAdmin) = (testContext.persistAdmin(), testContext.persistAdmin())
     val grants = Map(addLibrary().persistedId -> Permissions.none)
     val (adminState, otherState) = (stateOf(admin), stateOf(otherAdmin))
 
@@ -611,7 +610,7 @@ import altitude.core.util.Util
      * The second is refused once the first commits, its actor gone, and the first Admin is the one active Admin left.
      */
     testApp.txManager.withTransaction(update("UPDATE account SET is_active = ? WHERE account_type = 'Admin'", Boolean.box(false)))
-    val (admin, otherAdmin) = (persistAdmin(), persistAdmin())
+    val (admin, otherAdmin) = (testContext.persistAdmin(), testContext.persistAdmin())
 
     intercept[ForbiddenException] {
       contend(
@@ -636,7 +635,7 @@ import altitude.core.util.Util
      * left.
      */
     testApp.txManager.withTransaction(update("UPDATE account SET is_active = ? WHERE account_type = 'Admin'", Boolean.box(false)))
-    val (admin, otherAdmin) = (persistAdmin(), persistAdmin())
+    val (admin, otherAdmin) = (testContext.persistAdmin(), testContext.persistAdmin())
     val grants = Map(addLibrary().persistedId -> Permissions.none)
     val otherState = stateOf(otherAdmin)
 
@@ -668,7 +667,7 @@ import altitude.core.util.Util
      * through would keep every Admin's imports, Edits and Watch folder edits waiting on any Admin's account write.
      */
     assume(testApp.dataSourceType == C.DbEngineName.POSTGRES)
-    val (admin, importer) = (persistAdmin(), persistAdmin())
+    val (admin, importer) = (testContext.persistAdmin(), testContext.persistAdmin())
     val account =
       users.create(admin.persistedId, model(), "password 1", Map(testContext.repository.persistedId -> Permissions.none))
     val holding = new java.util.concurrent.CountDownLatch(1)
@@ -678,24 +677,50 @@ import altitude.core.util.Util
       testApp.txManager.withTransaction {
         users.deactivate(admin.persistedId, account.persistedId)
         holding.countDown()
-        release.await(60, java.util.concurrent.TimeUnit.SECONDS): Unit
+        holdUntil(release)
       }
     }
+    var importing: Option[Thread] = None
 
     try {
       holding.await(30, java.util.concurrent.TimeUnit.SECONDS) shouldBe true
-      val (importing, importFailure) = onAnotherThread(imported.set(Some(testContext.persistAsset(user = Some(importer)))))
-      importing.join(20000)
-      withClue("The import still waits: ")(importing.isAlive shouldBe false)
+      val (thread, importFailure) = onAnotherThread(imported.set(Some(testContext.persistAsset(user = Some(importer)))))
+      importing = Some(thread)
+      thread.join(20000)
+      withClue("The import still waits: ")(thread.isAlive shouldBe false)
       importFailure.get shouldBe None
     } finally {
       release.countDown()
-      holder.join()
+      importing.foreach(_.join(THREAD_WAIT_SECONDS * 1000L))
+      holder.join(THREAD_WAIT_SECONDS * 1000L)
     }
     holderFailure.get shouldBe None
 
     imported.get.map(_.ownerUserId) shouldBe Some(importer.persistedId)
     users.getById(account.persistedId).isActive shouldBe false
+  }
+
+  test("A rewrite of an account's importer records finds its assets through the importer index") {
+
+    /**
+     * Setup:
+     *
+     * The statement that rewrites an account's importer records (`AssetDao.rewriteImporterRecordsStatement`), for an account that
+     * imported an asset.
+     *
+     * Assertions:
+     *
+     * Its plan reads `asset_importer` on both engines, so a rename seeks the account's assets in every Library rather than scan
+     * them all under the account's lock: on PostgreSQL the statement compares the importer ID under the index's own collation.
+     */
+    val account = testContext.persistUser()
+    testContext.persistAsset(user = Some(account))
+    val (sql, values) =
+      testApp.DAO.asset.asInstanceOf[AssetDao].rewriteImporterRecordsStatement(AccountSnapshot.of(account))
+
+    val plan = lookupPlanOf(sql, values)
+
+    withClue(plan)(plan should include("asset_importer"))
   }
 
   test("A rename rewriting the importer records and a recycle of the assets at once both commit") {
@@ -704,8 +729,8 @@ import altitude.core.util.Util
      * Setup:
      *
      * An Admin, and a User who imported ten images. A third transaction holds the image of the lowest ID; then a recycle of all
-     * ten starts and waits on it; then the Admin's rename of the User starts, which rewrites the ten importer records, and waits
-     * or ends; then the image is let go (`whileHolding`).
+     * ten starts and waits on it; then the Admin's rename of the User starts, which rewrites the ten importer records, and waits;
+     * then the image is let go (`whileHolding`).
      *
      * Assertions:
      *
@@ -718,7 +743,7 @@ import altitude.core.util.Util
      * them. Unless the scan happens to reach the lowest first, which ten images make unlikely.
      */
     assume(testApp.dataSourceType == C.DbEngineName.POSTGRES)
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val grants = Map(testContext.repository.persistedId -> Permissions.all)
     val account = users.create(admin.persistedId, model(), "password 1", grants)
     val assets = List.fill(10)(testContext.persistAsset(user = Some(account)))
@@ -747,8 +772,8 @@ import altitude.core.util.Util
      * The first Admin's save is refused as changed meanwhile and writes nothing: the User keeps its name and the second Admin's
      * grant. Saved from a form opened afterwards, the rename goes through.
      */
-    val admin = persistAdmin()
-    val otherAdmin = persistAdmin()
+    val admin = testContext.persistAdmin()
+    val otherAdmin = testContext.persistAdmin()
     val library = addLibrary()
     val user =
       users.create(admin.persistedId, model(), "password 1", Map(library.persistedId -> Permissions.of(Permission.Import)))
@@ -779,7 +804,7 @@ import altitude.core.util.Util
      *
      * The save is refused as changed meanwhile, and the User keeps the new Library's grant.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val library = addLibrary()
     val shown = Map(library.persistedId -> Permissions.of(Permission.Import))
     val user = users.create(
@@ -808,7 +833,7 @@ import altitude.core.util.Util
      *
      * The User's create is a `ForbiddenException` and writes no account.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val library = addLibrary()
     val creator =
       users.create(admin.persistedId, model(), "password 1", Map(library.persistedId -> Permissions.of(Permission.CreateUsers)))
@@ -836,7 +861,7 @@ import altitude.core.util.Util
      * The User's create is a `ForbiddenException` and writes no account. The Admin's account with the switch off is stored with
      * no new-Library Permissions; the one with it on keeps Import.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val library = addLibrary()
     val grants = Map(library.persistedId -> Permissions.none)
     val creator = users.create(
@@ -872,7 +897,7 @@ import altitude.core.util.Util
      * The short one is refused on the password and changes nothing. After the valid one, only the new password logs in, the
      * earlier token is refused, and the change is recorded.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val user = users.create(admin.persistedId, model(), "password 1", Map(addLibrary().persistedId -> Permissions.none))
     val token = users.loginAndSetUser(user.username, "password 1").get._2
 
@@ -901,7 +926,7 @@ import altitude.core.util.Util
      * refused on the new field; neither changes the password. After the valid change only the new password logs in, the earlier
      * token is refused, and a token minted from claims built now, as the changing session's is, holds.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val user = users.create(admin.persistedId, model(), "password 1", Map(addLibrary().persistedId -> Permissions.none))
     val token = users.loginAndSetUser(user.username, "password 1").get._2
 
@@ -947,7 +972,7 @@ import altitude.core.util.Util
      *
      * Once the Admin makes that account an Admin, the User no longer sees it, and the Admin still does.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val (first, second) = (addLibrary(), addLibrary())
     val creator =
       users.create(admin.persistedId, model(), "password 1", Map(first.persistedId -> Permissions.of(Permission.CreateUsers)))

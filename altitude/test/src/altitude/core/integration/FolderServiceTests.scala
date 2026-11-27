@@ -1087,7 +1087,8 @@ import altitude.core.util.NameKey
     /**
      * Setup:
      *
-     * Alpha holding Beta, with Alpha's parent then set to Beta in the database, so the two are each other's parent.
+     * Alpha holding Beta, with Alpha's parent then set to Beta in the database, so the two are each other's parent; Alpha's
+     * parent is put back afterwards, as the bundle's database outlives the test.
      *
      * Assertions:
      *
@@ -1097,14 +1098,16 @@ import altitude.core.util.NameKey
     val folders = testApp.service.folder
     val alpha = folders.add("Alpha")
     val beta = folders.add("Beta", alpha.id)
-    testApp.txManager.withTransaction {
-      update("UPDATE folder SET parent_id = ? WHERE id = ?", beta.persistedId, alpha.persistedId)
-    }
+    def parentOfAlpha(parentId: String): Unit =
+      testApp.txManager.withTransaction(update("UPDATE folder SET parent_id = ? WHERE id = ?", parentId, alpha.persistedId))
+    parentOfAlpha(beta.persistedId)
 
-    ending(folders.getAncestors(alpha.persistedId)).map(_.persistedId) shouldBe List(beta.persistedId)
-    ending(folders.getPath(alpha.persistedId)).map(_.persistedId) shouldBe List(beta.persistedId, alpha.persistedId)
-    ending(folders.getChildrenRecursive(alpha.persistedId)).map(_.persistedId).sorted shouldBe
-      List(alpha.persistedId, beta.persistedId).sorted
+    try {
+      ending(folders.getAncestors(alpha.persistedId)).map(_.persistedId) shouldBe List(beta.persistedId)
+      ending(folders.getPath(alpha.persistedId)).map(_.persistedId) shouldBe List(beta.persistedId, alpha.persistedId)
+      ending(folders.getChildrenRecursive(alpha.persistedId)).map(_.persistedId).sorted shouldBe
+        List(alpha.persistedId, beta.persistedId).sorted
+    } finally parentOfAlpha(alpha.parentId)
   }
 
   test("A folder is neither added nor moved under a folder in the Trash") {
@@ -1412,6 +1415,47 @@ import altitude.core.util.NameKey
     )
 
     folders.getAll.filter(_.parentId == trips.persistedId) shouldBe Nil
+  }
+
+  test("A folder renamed while a move or a delete changes it is renamed as the change left it") {
+
+    /**
+     * Setup:
+     *
+     * Folders Clients and Archive at the top level, Draft under Clients, and under Archive a folder named Final, deleted. A move
+     * of Draft into Archive is held open until a rename of Draft to Final waits on it; then a delete of Archive is held open
+     * until a rename of Draft to Kept waits on it.
+     *
+     * Assertions:
+     *
+     * The first rename takes the name Final under Archive from the deleted sibling, which keeps its name in the Trash; the second
+     * is refused as an illegal operation, and Draft keeps the name Final in the Trash.
+     *
+     * Edge cases:
+     *
+     * Without the rename taking the tree's turn, on PostgreSQL it reads Draft under Clients before the move commits, frees no
+     * name under Archive and fails on `folder_02`; and it reads Draft live before the delete commits, and renames a folder in the
+     * Trash.
+     */
+    val folders = testApp.service.folder
+    val library = testApp.service.library
+    val (clients, archive) = (folders.add("Clients"), folders.add("Archive"))
+    val draft = folders.add("Draft", clients.id)
+    val deleted = folders.add("Final", archive.id)
+    library.deleteFolderById(deleted.persistedId)
+
+    contend(
+      first = folders.move(draft.persistedId, archive.persistedId): Unit,
+      second = folders.rename(draft.persistedId, "Final"): Unit)
+    val renamed = folders.getById(draft.persistedId)
+    (renamed.parentId, renamed.name) shouldBe (archive.persistedId, "Final")
+    folders.getById(deleted.persistedId).name shouldBe "Final"
+
+    contend(
+      first = library.deleteFolderById(archive.persistedId),
+      second = intercept[IllegalOperationException](folders.rename(draft.persistedId, "Kept")): Unit)
+    val inTrash = folders.getById(draft.persistedId)
+    (inTrash.isRecycled, inTrash.name) shouldBe (true, "Final")
   }
 
   test("A folder that gave its name away comes back numbered even when its name's key is near its limit") {

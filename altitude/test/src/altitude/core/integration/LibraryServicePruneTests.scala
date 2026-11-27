@@ -11,6 +11,7 @@ import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.*
 import altitude.core.util.Query
 import altitude.core.util.SearchQuery
+import altitude.core.util.Util
 
 @DoNotDiscover class LibraryServicePruneTests(override val testApp: Altitude) extends IntegrationTestCore {
   test("Prune should remove all assets in undefined state") {
@@ -165,6 +166,55 @@ import altitude.core.util.SearchQuery
     person.coverFaceId shouldBe Some(kept.persistedId)
     intercept[NotFoundException](testApp.service.person.getFaceById(cover.persistedId))
     intercept[NotFoundException](testApp.service.fileStore.getDisplayFaceById(cover.persistedId))
+  }
+
+  test("A discard, a rename of the importer and a recycle of an asset sharing a Person with it at once all commit") {
+
+    /**
+     * Setup:
+     *
+     * A User who imported two assets, the one of the lower ID cut off before its completion, and a Person with a Face on each. A
+     * third transaction holds the Library's stat rows; then a recycle of the completed asset starts and waits on them; then an
+     * Admin's rename of the User, which rewrites both importer records in ID order, starts and waits on the recycle; then the
+     * discard of the cut-off import starts and waits; then the stat rows are let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * None fails. The cut-off asset is gone; the other is recycled, its importer record naming the User as renamed; the Person,
+     * who still has a Face, stays.
+     *
+     * Edge cases:
+     *
+     * A discard that locks the Person before the cut-off asset would hold the Person while waiting on the rename, which holds the
+     * cut-off asset and waits on the recycle, which waits on the Person to take the recycled asset from its count: a deadlock of
+     * three.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val users = testApp.service.user
+    val admin = testContext.persistAdmin()
+    val grants = Map(testContext.repository.persistedId -> Permissions.all)
+    val importer = users.create(admin.persistedId, testContext.makeUser(), "password 1", grants)
+    val List(lowerId, higherId) = List.fill(2)(BaseDao.genId).sorted
+    val cutOff =
+      testApp.service.library.persistAndIndex(testContext.makeAsset(user = Some(importer)).copy(id = Some(lowerId)))
+    val other = testContext.insertAsset(testContext.makeAsset(user = Some(importer)).copy(id = Some(higherId)))
+    val person = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(person, cutOff, TestContext.unitVector(1))
+    testContext.addTestFace(testApp.service.person.getById(person.persistedId), other, TestContext.unitVector(2))
+    val renamed = importer.copy(name = s"Renamed ${Util.randomStr(6)}")
+    val opened = users.openForEdit(importer.persistedId).state
+
+    whileHolding(
+      query("SELECT dimension FROM stats WHERE repository_id = ? FOR UPDATE", testContext.repository.persistedId): Unit)(
+      () => testApp.service.library.recycleAssets(Set(other.persistedId)),
+      () => users.update(admin.persistedId, renamed, grants, opened): Unit,
+      () => testApp.service.library.discardImport(cutOff)
+    )
+
+    intercept[NotFoundException](testApp.service.asset.getById(cutOff.persistedId))
+    val kept = testApp.service.asset.getById(other.persistedId)
+    (kept.isRecycled, kept.originalOwner.name) shouldBe (true, renamed.name)
+    testApp.service.person.getById(person.persistedId).persistedId shouldBe person.persistedId
   }
 
   /** An import cut off before it completed: persisted and indexed, its file stored, its preview made, its faces recognized */

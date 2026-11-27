@@ -8,6 +8,7 @@ import altitude.core.Validators
 import altitude.core.dao.LocationDao
 import altitude.core.models.Location
 import altitude.core.models.LocationKind
+import altitude.core.util.Util
 
 /**
  * Categories and Locations, one table and one name pool per repository. Nothing here touches an asset, only membership rows; a
@@ -116,7 +117,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
 
     txManager.withTransaction {
       val removed = dao.removeAssetsFromAllLocations(assetIds)
-      logger.trace(s"Removed $removed location membership(s) for assets [${assetIds.mkString(",")}]")
+      logger.trace(s"Removed $removed location membership(s) for assets: ${Util.inBrief(assetIds)}")
       removed
     }
 

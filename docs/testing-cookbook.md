@@ -196,6 +196,13 @@ A recognition test that needs control over how alike two faces are gives them kn
 val face = testContext.addTestFace(person, asset, TestContext.unitVector(1), sharpness = Some(123.5))
 ```
 
+A Face not yet stored, as detection hands it to recognition, is `TestContext.detection(features)` (the Face with random
+crops; `TestContext.detectedFace(features)` the Face alone):
+
+```scala
+testApp.service.faceRecognition.recognizeAndStore(asset, DetectedFaces(List(TestContext.detection(TestContext.unitVector(1)))))
+```
+
 ### Scene embeddings at a chosen similarity
 
 `TestContext.atCosine(embedding, cosine, seed)` is a Scene embedding at exactly `cosine` to another. With it, a search
@@ -233,8 +240,8 @@ Media made at test time, so no binary lives in git:
 
 ### A second account or Library
 
-An integration test starts with one account and one Library, the context's (a controller test makes its own). More are made with `persistUser` and
-`persistRepository`; a Library grants nobody until `grant` does. The services act as the context account in the
+An integration test starts with one account and one Library, the context's (a controller test makes its own). More are made with `persistUser`
+(`persistAdmin()` for an Admin) and `persistRepository`; a Library grants nobody until `grant` does. The services act as the context account in the
 context Library, so a test switches them to act as another:
 
 ```scala
@@ -360,12 +367,49 @@ wraps it in `underThisContext(f)`. It answers the thread and what `f` threw, to 
 
 ```scala
 val (thread, failure) = onAnotherThread(testApp.service.library.recycleAssets(Set(asset.persistedId)))
-thread.join()
+joined(thread)
 failure.get.foreach(throw _)
 ```
 
+`joined(thread)` waits at most `THREAD_WAIT_SECONDS` and fails the test when the thread still runs: the test database's
+`lock_timeout` is 0, so a thread stuck on a lock would otherwise hang the bundle. A holder of a transaction of its own
+waits for its release with `holdUntil(release)`, which fails the holder when the release never comes, rather than let it
+commit on its own and the test pass without the interleaving it names.
+
 SQLite has one write connection, so writers never truly overlap there. A concurrency test is proven to fail on Postgres
 first (`make test-focused-psql`).
+
+### Lock-order tests
+
+A deadlock needs three writers or a writer stopped mid-statement, which `contend` cannot set up. These helpers are
+PostgreSQL's (each test `assume`s it); its suite is the one whose service locks (**Lock order** in `altitude/AGENTS.md`).
+
+- `whileHolding(first)(writers*)` runs `first` in a transaction it holds open, then starts each writer in turn on a thread
+  and in a transaction of its own, the next once the one before waits on a lock (seen by its backend PID). A writer that
+  ends without waiting fails the test, so the interleaving is the one the Scaladoc names. Wrap a writer that the fix lets
+  through in `ends(…)`: it must end, waiting on nothing, before the holder lets go, where without the fix it would wait. The
+  first writer always waits. Then the holder commits, every writer is joined (bounded) and the first failure rethrown:
+
+  ```scala
+  whileHolding(query("SELECT id FROM person WHERE id = ? FOR UPDATE", t.persistedId): Unit)(
+    () => testApp.service.library.deletePurgedAsset(asset.persistedId),
+    ends(testApp.service.person.merge(dest = d, source = s): Unit)
+  )
+  ```
+
+- `pausingInserts(table)` adds a trigger (until its cleanup runs) that stops an insert into `table` before the row whose
+  `asset_id` the inserting transaction names in `SET LOCAL test.pause_on`, until it gets a shared hold of
+  `INSERT_PAUSE_KEY`. A holder of that key (`whileHolding(query(s"SELECT pg_advisory_xact_lock($INSERT_PAUSE_KEY)"): Unit)`)
+  then stops two multi-row inserts each between its rows (`AlbumServiceTests`, `LocationServiceTests`).
+- `assetsOutOfIdOrder()` imports assets until two are in the table's physical order against both their ID order and their
+  checksum order, so a sequential scan reaches them in the opposite order of any index the planner may read them by. Each
+  writer then forces its read with `SET LOCAL enable_<scan> = off`.
+- `backendsWaitingOn(holderPid)` counts the backends waiting on a lock the holder's backend holds, for work on threads the
+  test does not start (a Watch folder scan, a pipeline stage): never every waiting backend of the database, which another
+  test's leftovers can include. A holder records its PID with `backendPid()`.
+
+To prove a lock-order test, revert the fix and run it on PostgreSQL: it must fail, with a deadlock or a writer that waited
+where it must not. A test that still passes with the fix reverted proves nothing; rework its interleaving.
 
 ## Making things fail
 
@@ -425,7 +469,7 @@ output should include("which names no environment")
 ## Logs
 
 The tests log nothing of the application's, so a test that checks a log line captures it. `LoggedLine.during` runs a
-block and answers the lines written meanwhile, on any thread, with each one's thread, request ID and user:
+block and answers the lines written meanwhile, on any thread, with each one's thread, request ID, user and level:
 
 ```scala
 val lines = LoggedLine.during(importStatusHandshake(host, guestCookies, guestPath) shouldBe Left(403))
@@ -439,8 +483,11 @@ refusal.head.user shouldBe Some(guest.persistedId)
 
 `LoggedLine.capturing { lines => ... }` reads the lines as they come, for a test that waits on one.
 
-Both capture DEBUG and above. `LoggedLine.tracedDuring` captures the TRACE lines too, for a test of what
-`ALTITUDE_LOG_LEVEL=TRACE` would write (`UserServiceTests`: no password hash in a failed insert's lines).
+Both capture DEBUG and above, from every logger under `altitude.core`, those `logback-test.xml` pins to a level of their
+own included (the transaction manager's, the actors'), which each capture raises and sets back. `LoggedLine.tracedDuring`
+captures the TRACE lines too, for a test of what `ALTITUDE_LOG_LEVEL=TRACE` would write (`UserServiceTests`: no password
+hash in a failed insert's lines, the transaction manager's included). Filter by `level` for the WARN lines alone
+(`WatchFolderServiceTests`), never by a logger set up by hand.
 
 ## JS tests
 

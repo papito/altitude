@@ -33,7 +33,6 @@ import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
 import altitude.core.models.DetectedFaces
 import altitude.core.models.Face
-import altitude.core.models.FaceImages
 import altitude.core.models.Person
 import altitude.core.models.Settings
 import altitude.core.service.FaceRecognitionService
@@ -94,11 +93,11 @@ import altitude.core.service.FaceRecognitionService
     testApp.service.person.markAsBadMatch(badMatch)
 
     testApp.service.faceRecognition
-      .recognizeFace(query(vector, isEnrolled = true))
+      .recognizeFace(TestContext.detectedFace(vector, isEnrolled = true))
       .value
       .persistedId shouldBe enrolled.persistedId
     testApp.service.faceRecognition
-      .recognizeFace(query(vector, isEnrolled = false))
+      .recognizeFace(TestContext.detectedFace(vector, isEnrolled = false))
       .value
       .persistedId shouldBe enrolled.persistedId
   }
@@ -122,7 +121,7 @@ import altitude.core.service.FaceRecognitionService
       update("UPDATE person SET is_deleted = ? WHERE id = ?", true, mergedAway.persistedId)
     }
 
-    val recognized = testApp.service.faceRecognition.recognizeFace(query(vector, isEnrolled = true)).value
+    val recognized = testApp.service.faceRecognition.recognizeFace(TestContext.detectedFace(vector, isEnrolled = true)).value
 
     recognized.persistedId should not be mergedAway.persistedId
   }
@@ -166,7 +165,7 @@ import altitude.core.service.FaceRecognitionService
      *
      * Persons A, B and C, in ID order. A and B have a Face on a shared asset, C one on another. A new asset's detections are near
      * B's Face, then C's, then A's. A third transaction locks C. The asset's Faces are recognized and stored until they wait on
-     * it; then a recycle of the shared asset starts, until it waits or ends; then C is let go (`whileHolding`).
+     * it; then a recycle of the shared asset starts and waits; then C is let go (`whileHolding`).
      *
      * Assertions:
      *
@@ -186,7 +185,8 @@ import altitude.core.service.FaceRecognitionService
     testContext.addTestFace(b, shared, unitVector(2), x1 = 50)
     testContext.addTestFace(c, testContext.insertAsset(), unitVector(3))
     val asset = testContext.insertAsset()
-    val detections = DetectedFaces(List(2, 3, 1).map(seed => detection(TestContext.between(unitVector(seed), unitVector(9), 3))))
+    val detections =
+      DetectedFaces(List(2, 3, 1).map(seed => TestContext.detection(TestContext.between(unitVector(seed), unitVector(9), 3))))
 
     whileHolding(query("SELECT id FROM person WHERE id = ? FOR UPDATE", c.persistedId): Unit)(
       () => testApp.service.faceRecognition.recognizeAndStore(asset, detections),
@@ -226,7 +226,8 @@ import altitude.core.service.FaceRecognitionService
     testContext.addTestFace(a, shared, unitVector(2), x1 = 50)
     testContext.addTestFace(x, testContext.insertAsset(), unitVector(3))
     val asset = testContext.insertAsset()
-    val detections = DetectedFaces(List(2, 3).map(seed => detection(TestContext.between(unitVector(seed), unitVector(9), 3))))
+    val detections =
+      DetectedFaces(List(2, 3).map(seed => TestContext.detection(TestContext.between(unitVector(seed), unitVector(9), 3))))
 
     whileHolding(testApp.service.person.merge(dest = d, source = x): Unit)(
       () => testApp.service.faceRecognition.recognizeAndStore(asset, detections),
@@ -256,8 +257,8 @@ import altitude.core.service.FaceRecognitionService
     val p = testApp.service.person.addPerson(Person())
     testContext.addTestFace(p, testContext.insertAsset(), unitVector(1))
     val asset = testContext.insertAsset()
-    val first = detection(TestContext.between(unitVector(1), unitVector(2), 1), isEnrolled = false)
-    val second = detection(TestContext.between(unitVector(2), unitVector(3), 4))
+    val first = TestContext.detection(TestContext.between(unitVector(1), unitVector(2), 1), isEnrolled = false)
+    val second = TestContext.detection(TestContext.between(unitVector(2), unitVector(3), 4))
 
     testApp.service.faceRecognition.recognizeAndStore(asset, DetectedFaces(List(first, second)))
 
@@ -290,8 +291,8 @@ import altitude.core.service.FaceRecognitionService
       List((unitVector(6), true), (unitVector(7), false)).foreach {
         case (alone, nearerQ) =>
           val asset = testContext.insertAsset()
-          val first = detection(alone)
-          val second = detection(if (nearerQ) mix(unitVector(5), alone) else mix(alone, unitVector(5)))
+          val first = TestContext.detection(alone)
+          val second = TestContext.detection(if (nearerQ) mix(unitVector(5), alone) else mix(alone, unitVector(5)))
 
           testApp.service.faceRecognition.recognizeAndStore(asset, DetectedFaces(List(first, second)))
 
@@ -346,7 +347,7 @@ import altitude.core.service.FaceRecognitionService
     testContext.addTestFace(elsewhere, testContext.persistAsset(repository = Some(secondRepo)), vector)
 
     switchContextRepo(firstRepo)
-    val recognized = testApp.service.faceRecognition.recognizeFace(query(vector, isEnrolled = true)).value
+    val recognized = testApp.service.faceRecognition.recognizeFace(TestContext.detectedFace(vector, isEnrolled = true)).value
 
     recognized.persistedId should not be elsewhere.persistedId
   }
@@ -460,37 +461,37 @@ import altitude.core.service.FaceRecognitionService
     nearest.map(_.persistedId) shouldBe List(nearbyFace.persistedId)
   }
 
-  if (testApp.dataSourceType == Const.DbEngineName.POSTGRES)
-    test("On PostgreSQL the nearest Faces are found through the vector index of the enrolled Faces") {
+  test("On PostgreSQL the nearest Faces are found through the vector index of the enrolled Faces") {
 
-      /**
-       * Setup:
-       *
-       * The nearest-Faces statements explained with the table scan and the sort ruled out, since over a handful of Faces the
-       * planner would otherwise scan and sort them all.
-       *
-       * Assertions:
-       *
-       * Both the recognition statement and the Suggested one, which leaves a Person out, read the partial HNSW index `face_03`,
-       * so their order and predicates match the index's declaration.
-       */
-      val vector = PostgresOverrides.vectorLiteral(unitVector(1))
+    /**
+     * Setup:
+     *
+     * The nearest-Faces statements explained with the table scan and the sort ruled out, since over a handful of Faces the
+     * planner would otherwise scan and sort them all.
+     *
+     * Assertions:
+     *
+     * Both the recognition statement and the Suggested one, which leaves a Person out, read the partial HNSW index `face_03`, so
+     * their order and predicates match the index's declaration.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val vector = PostgresOverrides.vectorLiteral(unitVector(1))
 
-      def plan(sql: String, filterBinds: Any*): String =
-        testApp.txManager.withTransaction {
-          List("seqscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
-          query(
-            s"EXPLAIN $sql",
-            (List(vector, testContext.repository.persistedId) ++ filterBinds ++ List(vector, 20, vector, 0.55, 5))*)
-            .map(_.values.head.toString)
-            .mkString("\n")
-        }
+    def plan(sql: String, filterBinds: Any*): String =
+      testApp.txManager.withTransaction {
+        List("seqscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
+        query(
+          s"EXPLAIN $sql",
+          (List(vector, testContext.repository.persistedId) ++ filterBinds ++ List(vector, 20, vector, 0.55, 5))*)
+          .map(_.values.head.toString)
+          .mkString("\n")
+      }
 
-      val matchesPlan = plan(PostgresFaceDao.CLOSEST_MATCHES_SQL)
-      withClue(matchesPlan)(matchesPlan should include("Index Scan using face_03"))
-      val othersPlan = plan(PostgresFaceDao.CLOSEST_OF_OTHERS_SQL, "no-such-person")
-      withClue(othersPlan)(othersPlan should include("Index Scan using face_03"))
-    }
+    val matchesPlan = plan(PostgresFaceDao.CLOSEST_MATCHES_SQL)
+    withClue(matchesPlan)(matchesPlan should include("Index Scan using face_03"))
+    val othersPlan = plan(PostgresFaceDao.CLOSEST_OF_OTHERS_SQL, "no-such-person")
+    withClue(othersPlan)(othersPlan should include("Index Scan using face_03"))
+  }
 
   test("With no candidate, an enrolled Face starts a Person and a match-only Face is nobody's") {
 
@@ -508,8 +509,8 @@ import altitude.core.service.FaceRecognitionService
     val matchOnly = testApp.service.person.addPerson(Person())
     testContext.addTestFace(matchOnly, asset, vector, isEnrolled = false)
 
-    testApp.service.faceRecognition.recognizeFace(query(vector, isEnrolled = false)) shouldBe None
-    val started = testApp.service.faceRecognition.recognizeFace(query(vector, isEnrolled = true)).value
+    testApp.service.faceRecognition.recognizeFace(TestContext.detectedFace(vector, isEnrolled = false)) shouldBe None
+    val started = testApp.service.faceRecognition.recognizeFace(TestContext.detectedFace(vector, isEnrolled = true)).value
     started.persistedId should not be matchOnly.persistedId
   }
 
@@ -533,11 +534,11 @@ import altitude.core.service.FaceRecognitionService
     testContext.addTestFace(personNearby, asset, nearby)
 
     testApp.service.faceRecognition
-      .recognizeFace(query(vector, isEnrolled = true))
+      .recognizeFace(TestContext.detectedFace(vector, isEnrolled = true))
       .value
       .persistedId shouldBe personAtVector.persistedId
     testApp.service.faceRecognition
-      .recognizeFace(query(nearby, isEnrolled = true))
+      .recognizeFace(TestContext.detectedFace(nearby, isEnrolled = true))
       .value
       .persistedId shouldBe personNearby.persistedId
   }
@@ -784,30 +785,6 @@ import altitude.core.service.FaceRecognitionService
 
   private def unitVector(seed: Int): Array[Float] = TestContext.unitVector(seed)
 
-  /** A detection with the given embedding and random crops, as detection hands it to recognition */
-  private def detection(features: Array[Float], isEnrolled: Boolean = true): (Face, FaceImages) =
-    (
-      query(features, isEnrolled),
-      FaceImages(
-        image = IntegrationTestUtil.generateRandomImagBytesBgr(),
-        displayImage = IntegrationTestUtil.generateRandomImagBytesBgr(),
-        alignedImage = IntegrationTestUtil.generateRandomImagBytesBgr(),
-        alignedImageGs = IntegrationTestUtil.generateRandomImagBytesGray()
-      ))
-
   /** An image's one detection */
-  private def detected(features: Array[Float]): DetectedFaces = DetectedFaces(List(detection(features)))
-
-  /** An unsaved detection with the given embedding, as recognition receives it */
-  private def query(features: Array[Float], isEnrolled: Boolean): Face =
-    Face(
-      x1 = 0,
-      y1 = 0,
-      width = 10,
-      height = 10,
-      detectionScore = 0.9,
-      checksum = TestContext.randomChecksum,
-      features = features,
-      quality = 20.0,
-      isEnrolled = isEnrolled)
+  private def detected(features: Array[Float]): DetectedFaces = DetectedFaces(List(TestContext.detection(features)))
 }

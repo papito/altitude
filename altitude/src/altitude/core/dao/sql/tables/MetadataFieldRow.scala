@@ -10,8 +10,7 @@ case class MetadataFieldRow[T[_]](
     name: T[String],
     nameKey: T[String],
     fieldType: T[String],
-    createdAt: T[Option[OffsetDateTime]],
-    updatedAt: T[Option[OffsetDateTime]])
+    createdAt: T[Option[OffsetDateTime]])
 
 object MetadataFieldRow extends Table[MetadataFieldRow]:
   override def tableName: String = "metadata_field"

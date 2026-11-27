@@ -269,6 +269,45 @@ import altitude.core.util.Sha256
     }
   }
 
+  test("A fresh database whose schema seeds no system row fails its version stamp and is left empty") {
+
+    /**
+     * Setup:
+     *
+     * A SQLite database of its own, in a new file with a transaction manager of its own, migrated with a schema script whose
+     * `system` table holds no row, so the version stamp writes none.
+     *
+     * Assertions:
+     *
+     * The migration fails, and the database holds none of the script's tables: a schema stamped with no version would be taken
+     * for a fresh database at the next start, and the schema script run over it.
+     *
+     * Edge cases:
+     *
+     * On a database of its own, since the bundle's is shared by every suite after this one; one engine shows it, the stamp's
+     * check being the same on both.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.SQLITE)
+    val testDir = Files.createDirectories(java.nio.file.Paths.get(testApp.config.getString(Const.Conf.TEST_DIR)).toAbsolutePath)
+    val dbFile = Files.createTempFile(testDir, "unrowed", ".sqlite.db")
+    val manager = new TransactionManager(
+      testApp.config.withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(s"jdbc:sqlite:$dbFile")),
+      None,
+      () => None)
+
+    try {
+      val unrowed = MigrationService(testApp, manager, 1, "/schema-scripts/unrowed/sqlite")
+      intercept[IllegalStateException](unrowed.migrate())
+
+      manager.asReadOnly {
+        query("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('system', 'note')")
+      } shouldBe empty
+    } finally {
+      manager.shutdown()
+      List("", "-wal", "-shm").foreach(suffix => Files.deleteIfExists(java.nio.file.Paths.get(s"$dbFile$suffix")))
+    }
+  }
+
   test("A database behind the code's version with no script to bring it forward stops the migration, naming the script") {
 
     /**

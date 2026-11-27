@@ -31,7 +31,9 @@ abstract class SystemMetadataDao(override val config: Config)
   def updateVersion(toVersion: Int): Unit =
     val sql = s"UPDATE system SET ${FieldConst.SystemMetadata.VERSION} = ? WHERE id = ?"
     logger.trace(s"Setting the schema version to $toVersion")
-    updateByBySql(sql, List(toVersion, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)): Unit
+    val stamped = updateByBySql(sql, List(toVersion, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID))
+    // A schema with no row stamped would read as a fresh database at the next start, and get the schema script run over it
+    if stamped != 1 then throw IllegalStateException(s"No system row was stamped with schema version $toVersion")
 
   // Only while the instance is not set up, so of two setups at once the second waits on the row (PostgreSQL) and then matches
   // nothing; SQLite runs writers one at a time

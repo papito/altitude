@@ -77,6 +77,13 @@ trait AssetDao extends BaseDao[Asset]:
    */
   def lockPurged(assetId: String): Boolean
 
+  /**
+   * Locks the asset's row while its import is unfinished (`FOR UPDATE` on PostgreSQL); whether it is there and unfinished. A
+   * discard takes it before the people of its Faces, as a purge's delete takes its marked row: an account write may hold the row,
+   * rewriting the importer records or the owner of the account's assets, unfinished ones included.
+   */
+  def lockUnfinished(assetId: String): Boolean
+
   /** Merges the metadata into the asset's, dropping `deletedFields`; how many rows changed */
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Int
 

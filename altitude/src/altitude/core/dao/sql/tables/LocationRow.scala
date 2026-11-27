@@ -15,8 +15,7 @@ case class LocationRow[T[_]](
     nameSort: T[Bytes],
     latitude: T[Option[Double]],
     longitude: T[Option[Double]],
-    createdAt: T[Option[OffsetDateTime]],
-    updatedAt: T[Option[OffsetDateTime]])
+    createdAt: T[Option[OffsetDateTime]])
 
 object LocationRow extends Table[LocationRow]:
   override def tableName: String = "location"

@@ -41,6 +41,36 @@ import altitude.core.util.Query
       .length shouldBe 1
   }
 
+  test("A move into a folder in the Trash is refused and moves nothing") {
+
+    /**
+     * Setup:
+     *
+     * A folder deleted into the Trash, a triaged asset and a recycled one; both are then moved into the deleted folder, as a
+     * stale folder picker or a direct API call would.
+     *
+     * Assertions:
+     *
+     * The move is refused (`IllegalOperationException`, `DESTINATION_IN_TRASH`): the triaged asset stays in Triage, the recycled
+     * one in the Trash, and the folder stays in the Trash.
+     */
+    val folder: Folder = testApp.service.folder.add("Deleted")
+    testApp.service.library.deleteFolderById(folder.persistedId)
+    val triaged: Asset = testContext.persistAsset(isTriaged = true)
+    val recycled: Asset = testContext.persistAsset()
+    testApp.service.library.recycleAssets(Set(recycled.persistedId))
+
+    val refused = intercept[IllegalOperationException] {
+      testApp.service.library.moveAssetsToFolder(Set(triaged.persistedId, recycled.persistedId), folder.persistedId)
+    }
+
+    refused.getMessage shouldBe Const.Msg.Err.DESTINATION_IN_TRASH
+    val List(stillTriaged, stillRecycled) = List(triaged, recycled).map(asset => testApp.service.asset.getById(asset.persistedId))
+    (stillTriaged.isTriaged, stillTriaged.isRecycled) shouldBe (true, false)
+    (stillRecycled.isRecycled, stillRecycled.folderId) shouldBe (true, recycled.folderId)
+    testApp.service.folder.getById(folder.persistedId).isRecycled shouldBe true
+  }
+
   test("Restore recycled assets") {
 
     /**
@@ -295,38 +325,36 @@ import altitude.core.util.Query
     isRecycled(movedFirst) shouldBe false
   }
 
-  if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
-    test("A copy imported while a move or a restore takes its content out of the trash refuses that operation") {
+  test("A copy imported while a move or a restore takes its content out of the trash refuses that operation") {
 
-      /**
-       * Setup:
-       *
-       * A recycled asset, and an import of the same content whose transaction holds its new row uncommitted while a move of the
-       * recycled asset into the root folder waits on it; then the same with a restore.
-       *
-       * Assertions:
-       *
-       * Neither saw the import's row when it read the live copies, so PostgreSQL refuses its write on `asset_01`: the move and
-       * the restore each fail with an `IllegalOperationException` that says to try again, and the recycled asset stays in the
-       * Trash.
-       */
-      val root = RequestContext.getRepository.rootFolderId
+    /**
+     * Setup:
+     *
+     * A recycled asset, and an import of the same content whose transaction holds its new row uncommitted while a move of the
+     * recycled asset into the root folder waits on it; then the same with a restore.
+     *
+     * Assertions:
+     *
+     * Neither saw the import's row when it read the live copies, so PostgreSQL refuses its write on `asset_01`: the move and the
+     * restore each fail with an `IllegalOperationException` that says to try again, and the recycled asset stays in the Trash.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val root = RequestContext.getRepository.rootFolderId
 
-      def importedDuring(operation: Asset => Any): Unit = {
-        val recycled = testContext.insertAsset()
-        testApp.service.library.recycleAssets(Set(recycled.persistedId))
-        val refused = intercept[IllegalOperationException] {
-          contend(
-            first = testContext.insertAsset(testContext.makeAsset().copy(checksum = recycled.checksum)): Unit,
-            second = operation(recycled): Unit)
-        }
-        refused.getMessage shouldBe Const.Msg.Err.CONTENT_IMPORTED_MEANWHILE
-        isRecycled(recycled) shouldBe true
+    def importedDuring(operation: Asset => Any): Unit = {
+      val recycled = testContext.insertAsset()
+      testApp.service.library.recycleAssets(Set(recycled.persistedId))
+      val refused = intercept[IllegalOperationException] {
+        contend(
+          first = testContext.insertAsset(testContext.makeAsset().copy(checksum = recycled.checksum)): Unit,
+          second = operation(recycled): Unit)
       }
-
-      importedDuring(asset => testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), root))
-      importedDuring(asset => testApp.service.library.restoreRecycledAssets(Set(asset.persistedId)))
+      refused.getMessage shouldBe Const.Msg.Err.CONTENT_IMPORTED_MEANWHILE
+      isRecycled(recycled) shouldBe true
     }
+
+    importedDuring(asset => testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), root))
+    importedDuring(asset => testApp.service.library.restoreRecycledAssets(Set(asset.persistedId)))
   }
 
   test("A restore that fails restores nothing") {

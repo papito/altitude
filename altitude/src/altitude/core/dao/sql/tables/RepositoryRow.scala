@@ -16,8 +16,7 @@ case class RepositoryRow[T[_]](
     rootFolderId: T[String],
     fileStoreType: T[String],
     fileStoreConfig: T[String],
-    createdAt: T[Option[OffsetDateTime]],
-    updatedAt: T[Option[OffsetDateTime]])
+    createdAt: T[Option[OffsetDateTime]])
 
 object RepositoryRow extends Table[RepositoryRow]:
   override def tableName: String = "repository"

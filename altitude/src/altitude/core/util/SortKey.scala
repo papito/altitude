@@ -7,9 +7,9 @@ import java.nio.ByteBuffer
 import java.util.Arrays
 
 /**
- * A name's place in the order a person reads names, as bytes that order by `memcmp`: the one definition of [[NaturalOrder]], and
- * what a `*_sort` column stores (`bytea` on PostgreSQL, `BLOB` on SQLite, both compared byte by byte), so a list sorted in memory
- * and one sorted by either database come in one order.
+ * A name's place in the order a person reads names, as bytes that order by `memcmp`: the one definition of the natural order
+ * (**Natural order** in `altitude/AGENTS.md`), and what a `*_sort` column stores (`bytea` on PostgreSQL, `BLOB` on SQLite, both
+ * compared byte by byte), so a list sorted in memory and one sorted by either database come in one order.
  *
  * The key is ICU's sort key of the name under the root locale's collation (the Unicode Collation Algorithm's order for every
  * script) with numeric collation on, then a tie-break:
@@ -33,7 +33,8 @@ import java.util.Arrays
  * unique or looked up by.
  *
  * Computing a key costs a collation pass over the name, so a sort of many names computes each name's key once (`sortBy` on
- * `SortKey.of`), not per comparison as [[NaturalOrder]] does.
+ * `SortKey.of`), never once per comparison. Each thread computes keys with a collator of its own, so threads keying names at once
+ * never wait on each other.
  */
 final class SortKey private (private val key: Array[Byte]):
 
@@ -48,8 +49,8 @@ final class SortKey private (private val key: Array[Byte]):
 
 object SortKey:
 
-  // A frozen collator is immutable, so every thread shares the one
-  private val collator: Collator =
+  // The settings, once, in a frozen collator: immutable, so it is safe to clone from any thread
+  private val frozen: Collator =
     val root = Collator.getInstance(ULocale.ROOT).asInstanceOf[RuleBasedCollator]
     root.setStrength(Collator.TERTIARY)
     root.setNumericCollation(true)
@@ -57,8 +58,12 @@ object SortKey:
     root.setDecomposition(Collator.CANONICAL_DECOMPOSITION)
     root.freeze()
 
+  // A frozen ICU collator computes a key under a lock of its own (`frozenLock`), so every thread sharing it would take turns:
+  // each thread keys with a thawed clone of its own instead, which holds the same settings and is never shared
+  private val collator: ThreadLocal[Collator] = ThreadLocal.withInitial(() => frozen.cloneAsThawed())
+
   def of(name: String): SortKey =
-    val collated = collator.getCollationKey(name).toByteArray
+    val collated = collator.get.getCollationKey(name).toByteArray
     // The code units themselves, not an encoding of them, which would replace a lone surrogate
     val key =
       ByteBuffer.allocate(collated.length + Integer.BYTES + name.length * Character.BYTES).put(collated).putInt(name.length)

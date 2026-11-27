@@ -64,9 +64,10 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
     }
 
   /**
-   * Takes the caller's turn, until its transaction ends, among imports sorting a file into the folder tree, folder deletes, and
-   * folder adds and moves. Each takes it before reading, so the second sees what the first committed: a completion, an add or a
-   * move finds its destination in the Trash, a delete recycles what the first put there, and a move sees another's new parent.
+   * Takes the caller's turn, until its transaction ends, among imports sorting a file into the folder tree, folder deletes,
+   * restores, folder adds, moves and renames, and moves of assets into folders. Each takes it before reading, so the second sees
+   * what the first committed: a completion, an add, a move or an asset move finds its destination in the Trash, a rename its
+   * folder there or under its new parent, a delete recycles what the first put there, and a move sees another's new parent.
    */
   def lockTree(): Unit =
     txManager.withTransaction {
@@ -171,7 +172,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       .next()
 
   /** The folder, or `IllegalOperationException` with `refusal` when it is in the Trash */
-  private def requireLive(folder: Folder, refusal: String): Folder =
+  def requireLive(folder: Folder, refusal: String): Folder =
     if folder.isRecycled then throw IllegalOperationException(refusal)
     folder
 
@@ -207,7 +208,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       // The root folder is its own parent - keep it out of the index so it does not become its own child
       val childrenByParentId = folders.filter(f => f.persistedId != f.parentId).groupBy(_.parentId)
 
-      // Assets in recycled folders never surface here: deleting a folder recycles its assets in the same transaction
+      // Assets in recycled folders never surface here: deleting a folder recycles its assets in the same transaction, and no move
+      // or import puts a live asset under a folder in the Trash (each takes the tree's turn and refuses such a destination)
       val directCounts = app.service.search.countByFolder()
 
       assembleTree(rootFolder, childrenByParentId, directCounts)
@@ -297,10 +299,16 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       Tuple2(folderBeingMoved, destFolder)
     }
 
+  /**
+   * Renames the folder, refusing the root and a folder in the Trash. It takes the tree's turn ([[lockTree]]) before any read, so
+   * a move of the folder at the same time is seen done, and the name is freed beside it where it now is, and a delete of it is
+   * seen done and refused.
+   */
   def rename(folderId: String, newName: String): Folder =
     if isRootFolder(folderId) then throw IllegalOperationException("Cannot rename the root folder")
 
     txManager.withTransaction {
+      dao.lockTree()
       val folder: Folder = requireLive(getById(folderId), "Cannot rename a folder in the Trash")
       logger.debug(s"Renaming folder [${folder.name}] to [$newName]")
 

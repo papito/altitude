@@ -335,7 +335,7 @@ class WatchFolderService(val app: Altitude):
   def resume(id: String): Unit =
     txManager.withTransaction {
       lockEditor()
-      val stored = dao.lock(id).getOrElse(throw NotFoundException(s"Cannot find record in '${dao.tableName}' with ID [$id]"))
+      val stored = locked(id)
       if !owns(app.DAO.user.getById(stored.accountId)) then
         val owner = RequestContext.getAccount
         dao.setOwner(id, owner.persistedId): Unit
@@ -354,10 +354,20 @@ class WatchFolderService(val app: Altitude):
   private def lockEditor(): Unit =
     app.service.user.lockActor(RequestContext.getAccount.persistedId, mustBeAdmin = true): Unit
 
-  /** Makes the Watch folder's failed files (final, to retry and parked) read again, as never tried; returns how many */
+  /**
+   * The Watch folder as its row lock finds it (`WatchFolderDao.lock`), or `NotFoundException`. A write of its files takes it
+   * first, as an edit, a removal and a scan's `remember` write the row before the files (**Lock order**).
+   */
+  private def locked(id: String): WatchFolder =
+    dao.lock(id).getOrElse(throw NotFoundException(s"Cannot find record in '${dao.tableName}' with ID [$id]"))
+
+  /**
+   * Makes the Watch folder's failed files (final, to retry and parked) read again, as never tried; returns how many. It locks the
+   * Watch folder's row first, so it takes its turn with a scan writing the memory.
+   */
   def retryFailed(id: String): Int =
     txManager.withTransaction {
-      dao.getById(id): Unit
+      locked(id): Unit
       val retried = fileDao.reread(id, Set(WatchFileState.Final, WatchFileState.Retry, WatchFileState.Parked))
       logger.info(s"Watch folder [$id]: $retried failed files are read again")
       retried
@@ -382,7 +392,7 @@ class WatchFolderService(val app: Altitude):
             status,
             reason,
             destination = destination.map(folder => app.service.imports.pathOf(folder.persistedId, NamedPath.SEPARATOR)),
-            lastScanAt = watchFolder.lastScanAt.map(dao.instantOf),
+            lastScanAt = watchFolder.lastScanAt.map(Util.instantOf),
             isScanning = scanning.contains(watchFolder.persistedId),
             imported = imported,
             failed = failed
@@ -435,27 +445,29 @@ class WatchFolderService(val app: Altitude):
 
   /**
    * Forgets, in every repository, remembered files absent for `days`. What a Watch folder's last scan found is never forgotten,
-   * so one that is not being scanned keeps its memory.
+   * so one that is not being scanned keeps its memory. Each Watch folder is one transaction that locks its row first and reads
+   * its last scan from the row as locked, so it takes its turn with a scan writing the memory.
    */
   def forgetAbsent(days: Int): Unit =
     val cutoff = OffsetDateTime.now(ZoneOffset.UTC).minusDays(days)
     app.service.library.forEachRepository {
       repository =>
-        val forgotten = txManager.withTransaction {
-          dao
-            .all()
-            .map {
-              watchFolder =>
-                watchFolder.lastScanAt.fold(0) {
+        val forgotten = txManager
+          .asReadOnly(dao.all())
+          .map {
+            listed =>
+              txManager.withTransaction {
+                // A Watch folder removed since the list forgets nothing
+                dao.lock(listed.persistedId).flatMap(_.lastScanAt).fold(0) {
                   lastScanAt =>
                     // A file the last scan found is stamped within a step of it
-                    val absentAtLastScan = dao.instantOf(lastScanAt).atOffset(ZoneOffset.UTC).minus(LAST_SEEN_STEP)
+                    val absentAtLastScan = Util.instantOf(lastScanAt).atOffset(ZoneOffset.UTC).minus(LAST_SEEN_STEP)
                     val before = if absentAtLastScan.isBefore(cutoff) then absentAtLastScan else cutoff
-                    fileDao.forgetLastSeenBefore(watchFolder.persistedId, before)
+                    fileDao.forgetLastSeenBefore(listed.persistedId, before)
                 }
-            }
-            .sum
-        }
+              }
+          }
+          .sum
         if forgotten > 0 then logger.info(s"Forgot $forgotten Watch folder files absent for $days days. Repo: ${repository.name}")
     }
 
@@ -893,7 +905,7 @@ class WatchFolderService(val app: Altitude):
           case Some(known) if known.sizeBytes != file.sizeBytes || known.modifiedAt != modifiedAt =>
             changedFiles += known.copy(sizeBytes = file.sizeBytes, modifiedAt = modifiedAt)
           case Some(known) =>
-            val lastSeen = known.lastSeenAt.map(fileDao.instantOf)
+            val lastSeen = known.lastSeenAt.map(Util.instantOf)
             if lastSeen.forall(_.isBefore(stale)) then foundAgain += file.relPath
             val isDue = known.state == WatchFileState.Retry ||
               (known.state == WatchFileState.Seen && lastSeen.forall(!_.isAfter(restedBy)))

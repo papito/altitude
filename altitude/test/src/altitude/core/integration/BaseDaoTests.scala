@@ -169,14 +169,24 @@ import altitude.core.util.Util
     rows.head.values.toList shouldBe nulls
   }
 
-  /** Runs `f` in a write transaction over a temporary table of two text columns, which the transaction's end removes */
+  /**
+   * Runs `f` in a write transaction over a temporary table of two text columns, which goes in that transaction: a temporary table
+   * is its connection's, and a drop in a transaction of its own may run on another pooled connection, leaving it and its rows to
+   * the next borrower. PostgreSQL drops it at the commit (`ON COMMIT DROP`) and undoes it at a rollback, where a failed statement
+   * leaves the transaction able to run nothing else; SQLite drops it after `f`, its transaction still open after a failed
+   * statement, and undoes the creation at a rollback.
+   */
   private def withPairTable[T](f: => T): T =
-    try
-      testApp.txManager.withTransaction {
-        update("CREATE TEMP TABLE IF NOT EXISTS pairs (a TEXT, b TEXT)")
+    testApp.txManager.withTransaction {
+      if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
+        update("CREATE TEMP TABLE pairs (a TEXT, b TEXT) ON COMMIT DROP")
         f
+      } else {
+        update("CREATE TEMP TABLE pairs (a TEXT, b TEXT)")
+        try f
+        finally update("DROP TABLE pairs")
       }
-    finally testApp.txManager.withTransaction(update("DROP TABLE IF EXISTS pairs"))
+    }
 
   test("A hand-written statement given fewer or more values than its placeholders fails, as does a batch row of another length") {
 
@@ -465,7 +475,7 @@ import altitude.core.util.Util
 
           for (read <- List(typed, handWritten)) {
             read.lastLoginAt shouldBe Some(stamped.toLocalDateTime)
-            read.lastLoginAt.map(dao.instantOf) shouldBe Some(stamped.toInstant)
+            read.lastLoginAt.map(Util.instantOf) shouldBe Some(stamped.toInstant)
           }
         }
       }
@@ -521,7 +531,7 @@ import altitude.core.util.Util
     assume(testApp.dataSourceType == Const.DbEngineName.SQLITE)
     val (dao, flags) = (testApp.DAO.person, exposedFolderDao)
     val person = testApp.service.person.addPerson(Person(name = Some("Flagged")))
-    val sql = "SELECT id FROM person WHERE repository_id = ? AND name_for_sort = ? AND is_deleted = ? AND is_bad_match = ?"
+    val sql = "SELECT id FROM person WHERE repository_id = ? AND name_key = ? AND is_deleted = ? AND is_bad_match = ?"
     def values(isDeleted: Boolean) =
       List(testContext.repository.persistedId, PersonService.nameKey("Flagged"), flags.flag(isDeleted), flags.flag(false))
 

@@ -334,8 +334,8 @@ import altitude.core.util.Util
      * Setup:
      *
      * An Admin, and a User holding a grant who imported a still image. A third transaction holds the User's grant while the
-     * Admin's rename of the User locks the account and waits on it; then the User's save of an Edit of the image starts and waits
-     * or ends; then the grant is let go (`whileHolding`).
+     * Admin's rename of the User locks the account and waits on it; then the User's save of an Edit of the image starts and
+     * waits; then the grant is let go (`whileHolding`).
      *
      * Assertions:
      *
@@ -349,7 +349,7 @@ import altitude.core.util.Util
      */
     assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
     val users = testApp.service.user
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val grants = Map(testContext.repository.persistedId -> Permissions.all)
     val account = users.create(admin.persistedId, testContext.makeUser(), "password 1", grants)
     val asset = testContext.persistAsset(user = Some(account))

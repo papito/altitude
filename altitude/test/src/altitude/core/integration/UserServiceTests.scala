@@ -199,7 +199,8 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The second insert fails with an `SQLException` that keeps the driver's SQLState and error code and names the statement.
-     * Neither its message, nor that of any exception it chains, nor any line logged holds the password hash.
+     * Neither its message, nor that of any exception it chains, nor any line logged holds the password hash, the transaction
+     * manager's lines included.
      */
     val account = testContext.persistUser()
     val hash = testApp.txManager.asReadOnly {
@@ -229,6 +230,8 @@ import altitude.core.util.Util
       .toList
     chained.foreach(e => (Option(e.getMessage).getOrElse("") should not).include(hash))
     lines.map(_.message).filter(_.contains("INSERT INTO account")) should not be empty
+    // The transaction manager's lines are among them, though `logback-test.xml` turns its loggers off
+    lines.map(_.message).filter(_.startsWith("Borrowed connection")) should not be empty
     lines.foreach(_.message should not include hash)
   }
 
@@ -541,37 +544,40 @@ import altitude.core.util.Util
   private def loginWhileHeld(user: User, password: String)(change: => Unit): Option[(User, String, java.time.Instant)] = {
     val holding = new CountDownLatch(1)
     val release = new CountDownLatch(1)
+    val writerPid = new java.util.concurrent.atomic.AtomicReference[AnyRef]()
     val (writer, writerFailure) = onAnotherThread {
       testApp.txManager.withTransaction {
         change
+        if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) writerPid.set(backendPid())
         holding.countDown()
-        release.await(30, TimeUnit.SECONDS): Unit
+        holdUntil(release)
       }
     }
+    var login: Option[Thread] = None
 
     try {
       holding.await(5, TimeUnit.SECONDS) shouldEqual true
       val result = new java.util.concurrent.atomic.AtomicReference[Option[(User, String, java.time.Instant)]](None)
-      val (login, loginFailure) = onAnotherThread(result.set(testApp.service.user.loginAndSetUser(user.username, password)))
+      val (thread, loginFailure) = onAnotherThread(result.set(testApp.service.user.loginAndSetUser(user.username, password)))
+      login = Some(thread)
 
-      // On PostgreSQL the login waits for the row lock, which pg_stat_activity shows; on SQLite its thread parks in the pool
+      // On PostgreSQL the login waits for the writer's row lock, which pg_stat_activity shows; on SQLite its thread parks in the
+      // pool
       def loginIsWaiting: Boolean = testApp.dataSourceType match {
-        case Const.DbEngineName.POSTGRES =>
-          testApp.txManager.asReadOnly {
-            query("SELECT pid FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()").nonEmpty
-          }
-        case _ => List(Thread.State.WAITING, Thread.State.TIMED_WAITING).contains(login.getState)
+        case Const.DbEngineName.POSTGRES => backendsWaitingOn(writerPid.get) > 0
+        case _ => List(Thread.State.WAITING, Thread.State.TIMED_WAITING).contains(thread.getState)
       }
       Eventually.eventually(Eventually.timeout(Span(30, Seconds)), Eventually.interval(Span(20, Millis))) {
         loginIsWaiting shouldBe true
       }
       release.countDown()
-      login.join()
+      joined(thread)
       loginFailure.get.foreach(throw _)
       result.get
     } finally {
       release.countDown()
-      writer.join()
+      login.foreach(_.join(THREAD_WAIT_SECONDS * 1000L))
+      writer.join(THREAD_WAIT_SECONDS * 1000L)
       writerFailure.get.foreach(throw _)
     }
   }
@@ -672,42 +678,41 @@ import altitude.core.util.Util
     loginResult shouldEqual None
   }
 
-  if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
-    test("Remembering the Library recorded already does not wait for the SQLite write connection") {
+  test("Remembering the Library recorded already does not wait for the SQLite write connection") {
 
-      /**
-       * Setup:
-       *
-       * A User whose last active Library is the common setup's, and a write transaction on a thread of its own that holds
-       * SQLite's single write connection until the test releases it.
-       *
-       * Assertions:
-       *
-       * While the write connection is held, remembering the recorded Library again completes within a few seconds and reports no
-       * write: it only reads.
-       */
-      val user: User = testContext.persistUser()
-      val repoId = testContext.repository.persistedId
-      testApp.service.user.rememberLastActiveRepository(user, repoId) shouldBe true
+    /**
+     * Setup:
+     *
+     * A User whose last active Library is the common setup's, and a write transaction on a thread of its own that holds SQLite's
+     * single write connection until the test releases it.
+     *
+     * Assertions:
+     *
+     * While the write connection is held, remembering the recorded Library again completes within a few seconds and reports no
+     * write: it only reads.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.SQLITE)
+    val user: User = testContext.persistUser()
+    val repoId = testContext.repository.persistedId
+    testApp.service.user.rememberLastActiveRepository(user, repoId) shouldBe true
 
-      val writing = new CountDownLatch(1)
-      val release = new CountDownLatch(1)
-      val writer = new Thread(
-        () =>
-          testApp.txManager.withTransaction {
-            writing.countDown()
-            release.await(30, TimeUnit.SECONDS): Unit
-          })
-      writer.start()
+    val writing = new CountDownLatch(1)
+    val release = new CountDownLatch(1)
+    val writer = new Thread(
+      () =>
+        testApp.txManager.withTransaction {
+          writing.countDown()
+          holdUntil(release)
+        })
+    writer.start()
 
-      try {
-        writing.await(5, TimeUnit.SECONDS) shouldEqual true
-        val remember = Future(testApp.service.user.rememberLastActiveRepository(user, repoId))
-        Await.result(remember, 5.seconds) shouldBe false
-      } finally {
-        release.countDown()
-        writer.join()
-      }
+    try {
+      writing.await(5, TimeUnit.SECONDS) shouldEqual true
+      val remember = Future(testApp.service.user.rememberLastActiveRepository(user, repoId))
+      Await.result(remember, 5.seconds) shouldBe false
+    } finally {
+      release.countDown()
+      writer.join(THREAD_WAIT_SECONDS * 1000L)
     }
   }
 }

@@ -87,7 +87,7 @@ class ImportService(val app: Altitude):
       destFolderId: Option[String] = None,
       watchFolderId: Option[String] = None,
       expectedFiles: Option[Int] = None): Import =
-    // Checked here: SQLite reports the column's CHECK as it reports a duplicate
+    // Checked here: the column's CHECK would refuse it as a raw constraint failure on either engine, a 500 (**Schema guards**)
     if expectedFiles.exists(_ < 0) then throw ValidationException(Const.Msg.Err.EXPECTED_FILES_INVALID)
 
     txManager.withTransaction {
@@ -432,7 +432,7 @@ class ImportService(val app: Altitude):
         anImport =>
           ImportEntry(
             anImport,
-            openedAt = anImport.createdAt.map(importDao.instantOf),
+            openedAt = anImport.createdAt.map(Util.instantOf),
             deliveredBy = anImport.accountId.flatMap(names.get),
             destination = anImport.destFolderId.map(destinations),
             isInterrupted = interrupted.contains(anImport.persistedId)

@@ -13,7 +13,7 @@ import altitude.core.models.WatchFolder
 import altitude.core.models.WatchFolderFile
 
 object WatchFolderFileDao:
-  // How many rows one statement inserts, or names by path: 7 values a row, well within what either engine binds
+  // How many rows one statement inserts: 7 values a row, well within what either engine binds
   private val CHUNK = 500
 
 abstract class WatchFolderFileDao(override val config: Config)
@@ -119,22 +119,19 @@ abstract class WatchFolderFileDao(override val config: Config)
       sql,
       files.map(file => List(file.sizeBytes, file.modifiedAt, SEEN, seen, repositoryId, watchFolderId, file.relPath))): Unit
 
+  // The paths bound as one set parameter, as a set of IDs is (`inIdSet`), however many a scan finds unchanged
   override def seenAgain(watchFolderId: String, relPaths: Seq[String], seenAt: OffsetDateTime): Int =
-    relPaths
-      .grouped(WatchFolderFileDao.CHUNK)
-      .map {
-        chunk =>
-          val sql = s"""
-            UPDATE $tableName
-               SET ${F.LAST_SEEN_AT} = ?
-             WHERE ${FieldConst.REPO_ID} = ?
-               AND ${F.WATCH_FOLDER_ID} = ?
-               AND ${F.REL_PATH} IN (${chunk.map(_ => "?").mkString(", ")})
-          """
+    if relPaths.isEmpty then return 0
 
-          updateByBySql(sql, List(nativeUtcTimestamp(seenAt), repositoryId, watchFolderId) ++ chunk)
-      }
-      .sum
+    val sql = s"""
+      UPDATE $tableName
+         SET ${F.LAST_SEEN_AT} = ?
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${F.WATCH_FOLDER_ID} = ?
+         AND ${F.REL_PATH} $inIdSet
+    """
+
+    updateByBySql(sql, List(nativeUtcTimestamp(seenAt), repositoryId, watchFolderId, idSet(relPaths.toSet)))
 
   override def setState(watchFolderId: String, relPath: String, sizeBytes: Long, modifiedAt: Long, state: WatchFileState): Int =
     val sql = s"UPDATE $tableName SET ${F.STATE} = ? $ASIS"

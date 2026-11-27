@@ -27,6 +27,12 @@ object Util:
    */
   def utcNow: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
 
+  /**
+   * A set of IDs as a log line names it: how many and one of them, never the whole set, which a Trash emptied of tens of
+   * thousands of assets would make a line of megabytes, built even with the level off
+   */
+  def inBrief(ids: Iterable[String]): String = ids.headOption.fold("none")(one => s"${ids.size} ([$one] among them)")
+
   /** The instant a model's `LocalDateTime` of an instant column stands for: its UTC wall clock, on both engines */
   def instantOf(utc: LocalDateTime): Instant = utc.toInstant(ZoneOffset.UTC)
 

@@ -1742,7 +1742,7 @@ import altitude.core.util.*
     withClue(plan)(plan should include("asset_01"))
   }
 
-  if (isPostgres) test("An excluded term is an anti-join on PostgreSQL") {
+  test("An excluded term is an anti-join on PostgreSQL") {
 
     /**
      * Setup:
@@ -1753,6 +1753,7 @@ import altitude.core.util.*
      *
      * The plan excludes through an Anti Join (`NOT EXISTS`), not a SubPlan probed per asset as `NOT IN` would be.
      */
+    assume(isPostgres)
     importAsset("beach.jpg")
     importAsset("lake.jpg")
     val query = new SearchQuery(text = Some("-beach"), params = browsingView)

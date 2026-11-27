@@ -22,7 +22,6 @@ import altitude.core.NotFoundException
 import altitude.core.models.Asset
 import altitude.core.models.DetectedFaces
 import altitude.core.models.Face
-import altitude.core.models.FaceImages
 import altitude.core.models.Person
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetWithContext
@@ -303,7 +302,8 @@ import altitude.core.util.Query
      *
      * Persons T, S and D, T first in ID order. An asset marked for purging holds a Face of T and one of S; D has a Face on
      * another asset. A third transaction locks T. The asset's row is deleted, as the purge's last step does, until that waits on
-     * it; then a merge of S into D starts, until it waits or ends; then T is let go (`whileHolding`).
+     * it; then a merge of S into D starts and ends, waiting on none of the purge's locks (`ends`); then T is let go
+     * (`whileHolding`).
      *
      * Assertions:
      *
@@ -327,7 +327,7 @@ import altitude.core.util.Query
 
     whileHolding(query("SELECT id FROM person WHERE id = ? FOR UPDATE", t.persistedId): Unit)(
       () => testApp.service.library.deletePurgedAsset(asset.persistedId),
-      () => testApp.service.person.merge(dest = testApp.service.person.getById(d.persistedId), source = s): Unit
+      ends(testApp.service.person.merge(dest = testApp.service.person.getById(d.persistedId), source = s): Unit)
     )
 
     intercept[NotFoundException](testApp.service.asset.getById(asset.persistedId))
@@ -355,27 +355,11 @@ import altitude.core.util.Query
     testContext.addTestFace(gone, purged, TestContext.unitVector(1))
     markForPurging(purged)
     val asset = testContext.insertAsset()
-    val face = Face(
-      x1 = 0,
-      y1 = 0,
-      width = 10,
-      height = 10,
-      detectionScore = 0.9,
-      checksum = TestContext.randomChecksum,
-      features = TestContext.between(TestContext.unitVector(1), TestContext.unitVector(2), 3),
-      quality = 20.0,
-      isEnrolled = true
-    )
-    val images = FaceImages(
-      image = IntegrationTestUtil.generateRandomImagBytesBgr(),
-      displayImage = IntegrationTestUtil.generateRandomImagBytesBgr(),
-      alignedImage = IntegrationTestUtil.generateRandomImagBytesBgr(),
-      alignedImageGs = IntegrationTestUtil.generateRandomImagBytesGray()
-    )
+    val detected = TestContext.detection(TestContext.between(TestContext.unitVector(1), TestContext.unitVector(2), 3))
 
     contend(
       first = testApp.service.library.deletePurgedAsset(purged.persistedId),
-      second = testApp.service.faceRecognition.recognizeAndStore(asset, DetectedFaces(List((face, images))))
+      second = testApp.service.faceRecognition.recognizeAndStore(asset, DetectedFaces(List(detected)))
     )
 
     intercept[NotFoundException](testApp.service.person.getById(gone.persistedId))
@@ -462,7 +446,7 @@ import altitude.core.util.Query
      * A User who imported two assets, a Person with a Face on each, and the asset of the lower ID marked for purging. A third
      * transaction holds the Library's stat rows; then a recycle of the other asset starts and waits on them; then an Admin's
      * rename of the User, which rewrites both importer records in ID order, starts and waits on the recycle; then the purge's
-     * delete of the marked asset starts and waits or ends; then the stat rows are let go (`whileHolding`).
+     * delete of the marked asset starts and waits; then the stat rows are let go (`whileHolding`).
      *
      * Assertions:
      *
@@ -475,7 +459,7 @@ import altitude.core.util.Query
      */
     assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
     val users = testApp.service.user
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val grants = Map(testContext.repository.persistedId -> altitude.core.models.Permissions.all)
     val importer = users.create(admin.persistedId, testContext.makeUser(), "password 1", grants)
     val List(marked, other) =

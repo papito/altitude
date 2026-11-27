@@ -45,7 +45,8 @@ trait PostgresOverrides:
 
   override protected def jsonFunc = "CAST(? as jsonb)"
 
-  override protected def jsonText(column: String, key: String): String = s"($column->>'$key')"
+  // Under the index's collation: a JSON key's text is of the database's collation, which no index of the schema compares by
+  override protected def jsonText(column: String, key: String): String = s"(($column->>'$key') COLLATE \"C\")"
 
   override protected def nativeBool(value: Boolean): Any = value
 

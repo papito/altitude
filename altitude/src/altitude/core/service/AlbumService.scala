@@ -6,6 +6,7 @@ import altitude.core.FieldConst
 import altitude.core.Validators
 import altitude.core.dao.AlbumDao
 import altitude.core.models.Album
+import altitude.core.util.Util
 
 /**
  * Nothing here writes an asset: album writes change membership rows only, an add share-locking the assets it adds. A recycle
@@ -80,7 +81,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
 
     txManager.withTransaction {
       val removed = dao.removeAssetsFromAllAlbums(assetIds)
-      logger.trace(s"Removed $removed album membership(s) for assets [${assetIds.mkString(",")}]")
+      logger.trace(s"Removed $removed album membership(s) for assets: ${Util.inBrief(assetIds)}")
       removed
     }
 

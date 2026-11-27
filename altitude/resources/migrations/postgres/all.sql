@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- Every other text column a list orders by or an index holds is COLLATE "C" too, so it orders by its bytes, as SQLite's binary
 -- collation does, and no locale upgrade can change an index's order under it: a name key (NameKey.of, folded in Scala) or a
 -- path. A list of names orders by a *_sort column instead, BYTEA: the name's SortKey, ICU's collation key, whose bytes give the
--- order a person reads the names in (NaturalOrder), the same on both engines and in memory.
+-- order a person reads the names in (the natural order), the same on both engines and in memory.
 --
 -- A repository's table holds repository_id NOT NULL, and a reference between its rows is a foreign key over
 -- (repository_id, <ref>_id), so the database refuses a reference into another repository. Each referenced table has
@@ -17,8 +17,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- are single columns: a person's cover, an Import file's asset and an Import's Watch folder.
 
 CREATE TABLE _core (
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
 CREATE TABLE system (
@@ -99,7 +98,10 @@ CREATE TABLE account (
   -- The account that created this one; NULL for the setup Admin, and once the creator is deleted
   created_by_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE SET NULL,
   last_login_at TIMESTAMP WITH TIME ZONE,
-  last_active_repo_id CHAR(36) COLLATE "C"
+  last_active_repo_id CHAR(36) COLLATE "C",
+  -- The last account change (an Admin's edit, a deactivation or reactivation, a password change); a login and the last active
+  -- Library are none
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL
 ) INHERITS (_core);
 
 -- One account per email address and per username, in any case or Unicode form; a login compares the key column
@@ -201,7 +203,7 @@ CREATE TABLE asset (
   -- NULL for an asset in no folder: a triaged one
   folder_id CHAR(36) COLLATE "C",
   filename TEXT NOT NULL,
-  -- SortKey.of(filename), which the file name sort orders by: natural order (NaturalOrder), case and accents aside
+  -- SortKey.of(filename), which the file name sort orders by: natural order (SortKey), case and accents aside
   filename_sort BYTEA NOT NULL,
   size_bytes BIGINT NOT NULL,
   is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
@@ -282,7 +284,8 @@ CREATE INDEX asset_sequence ON asset (sequence_id) WHERE sequence_id IS NOT NULL
 -- An account's assets in every Library, for the account key's check on delete
 CREATE INDEX asset_owner ON asset (owner_user_id);
 -- The assets an account imported, in every Library, by importer record ID: rewriting the records when the account changes
-CREATE INDEX asset_importer ON asset ((original_owner->>'id'));
+-- Under COLLATE "C" as every text key an index holds; BaseDao.jsonText spells the same expression
+CREATE INDEX asset_importer ON asset (((original_owner->>'id') COLLATE "C"));
 -- The still images nearest a description, for a Describe search: SigLIP 2 embeddings at half precision, which halves the index;
 -- PostgresSearchDialect.rankedByIndex writes the same cast. An asset with no embedding is not in it.
 CREATE INDEX asset_describe ON asset USING hnsw ((siglip2_embedding::halfvec(768)) halfvec_cosine_ops);
@@ -306,6 +309,8 @@ CREATE TABLE asset_edit (
   width INT NOT NULL,
   height INT NOT NULL,
   updated_by_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE SET NULL,
+  -- When the Edit was last saved
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
   FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
 ) INHERITS (_core);
 
@@ -321,8 +326,8 @@ CREATE TABLE person (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   -- An unnamed person's is "Unknown <n>", n drawn from person_label
   name TEXT NOT NULL,
-  name_for_sort TEXT COLLATE "C" NOT NULL,
-  -- SortKey.of(name), which the list orders by: natural order (NaturalOrder), case and accents aside
+  name_key TEXT COLLATE "C" NOT NULL,
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
   name_sort BYTEA NOT NULL,
   -- One of the person's own Faces, which the code checks; its key (person_cover_face, after the face table) refuses a non-Face.
   -- NULL for a person with no Face.
@@ -339,15 +344,15 @@ CREATE TABLE person (
 
 -- The partial person indexes cover the live people, which every person query reads; a merged-away person keeps its name and
 -- cover face, which another person may take.
--- person_01: name_for_sort is a named person's name key (PersonService.nameKey, folded in Scala) or "unknown 0000000042", so a
+-- person_01: name_key is the person's name key (PersonService.nameKey, folded in Scala), an unnamed person's "unknown 42", so a
 -- live name is unique under that fold: case in any script, canonical and compatibility forms
-CREATE UNIQUE INDEX person_01 ON person (repository_id, name_for_sort)
+CREATE UNIQUE INDEX person_01 ON person (repository_id, name_key)
     WHERE is_deleted = FALSE AND is_bad_match = FALSE;
 
 CREATE UNIQUE INDEX person_02 ON person (cover_face_id)
     WHERE is_deleted = FALSE;
 
-CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
+CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named)
     WHERE is_deleted = FALSE;
 -- Every person whose cover is a Face, a merged-away one included, for the cover's key when the Face is deleted
 CREATE INDEX person_04 ON person (cover_face_id);
@@ -409,7 +414,7 @@ CREATE TABLE album (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   name_key TEXT COLLATE "C" NOT NULL,
-  -- SortKey.of(name), which the list orders by: natural order (NaturalOrder), case and accents aside
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
   name_sort BYTEA NOT NULL,
   UNIQUE (id, repository_id)
 ) INHERITS (_core);
@@ -438,7 +443,7 @@ CREATE TABLE location (
   kind VARCHAR(16) NOT NULL,
   name VARCHAR(255) NOT NULL,
   name_key TEXT COLLATE "C" NOT NULL,
-  -- SortKey.of(name), which the list orders by: natural order (NaturalOrder), case and accents aside
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
   name_sort BYTEA NOT NULL,
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
@@ -504,7 +509,7 @@ CREATE TABLE watch_folder (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  -- SortKey.of(name), which the list orders by: natural order (NaturalOrder), case and accents aside
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
   name_sort BYTEA NOT NULL,
   -- The absolute path as entered. Unique in the instance; the code also refuses an overlap by real path, in any Library
   path TEXT COLLATE "C" NOT NULL UNIQUE,
@@ -521,6 +526,8 @@ CREATE TABLE watch_folder (
   status_reason TEXT,
   -- When its directory was last walked; NULL until the first scan that finds it available
   last_scan_at TIMESTAMP WITH TIME ZONE,
+  -- When an edit, a pause or a resume, or a change of owner last wrote it; what a scan finds (its reason, its time) leaves it
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
   UNIQUE (id, repository_id),
   -- No delete action: a folder is recycled, never deleted on its own
   FOREIGN KEY (repository_id, dest_folder_id) REFERENCES folder (repository_id, id)

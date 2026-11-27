@@ -225,8 +225,8 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * They are listed in that order on both engines, the order `NaturalOrder` sorts the names in memory: case ignored, an
-     * accented letter beside its base letter, a run of digits by its number.
+     * They are listed in that order on both engines, the order `SortKey.of` sorts the names in memory: case ignored, an accented
+     * letter beside its base letter, a run of digits by its number.
      */
     val names = TestContext.NATURAL_NAMES
     testApp.service.album.rename(testApp.service.album.add("zzz").persistedId, names.head)

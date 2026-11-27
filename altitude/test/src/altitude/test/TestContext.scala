@@ -77,6 +77,30 @@ object TestContext {
   def between(vector: Array[Float], other: Array[Float], parts: Int): Array[Float] =
     FaceRecognitionService.meanNormalized(Seq.fill(parts)(vector) :+ other)
 
+  /** A detection's Face with the given embedding, as detection hands it to recognition, before any Person has it */
+  def detectedFace(features: Array[Float], isEnrolled: Boolean = true): Face =
+    Face(
+      x1 = 0,
+      y1 = 0,
+      width = 10,
+      height = 10,
+      detectionScore = 0.9,
+      checksum = randomChecksum,
+      features = features,
+      quality = 20.0,
+      isEnrolled = isEnrolled)
+
+  /** A detection with the given embedding and random crops, as detection hands it to recognition */
+  def detection(features: Array[Float], isEnrolled: Boolean = true): (Face, FaceImages) =
+    (
+      detectedFace(features, isEnrolled),
+      FaceImages(
+        image = generateRandomImagBytesBgr(),
+        displayImage = generateRandomImagBytesBgr(),
+        alignedImage = generateRandomImagBytesBgr(),
+        alignedImageGs = generateRandomImagBytesGray()
+      ))
+
   /** A Scene embedding at `cosine` to the unit vector `embedding`, the rest along a random orthogonal direction by `seed` */
   def atCosine(embedding: SceneEmbedding, cosine: Double, seed: Int): SceneEmbedding = {
     val along = embedding.values.map(_.toDouble)
@@ -90,8 +114,9 @@ object TestContext {
   }
 
   /**
-   * Names in the order a person reads them (`NaturalOrder`), mixing what orders apart: a symbol, a leading number, a space before
-   * a parenthesis, digit runs of one and two digits, an accent and case, so a test of a list's order checks it against this.
+   * Names in the order a person reads them (the natural order, `SortKey.of`), mixing what orders apart: a symbol, a leading
+   * number, a space before a parenthesis, digit runs of one and two digits, an accent and case, so a test of a list's order
+   * checks it against this.
    */
   val NATURAL_NAMES: List[String] = List(
     "\uD83D\uDE42.jpg",
@@ -146,6 +171,9 @@ class TestContext(val testApp: Altitude) {
   )
 
   def makeAdminUser(): User = makeUser().copy(accountType = AccountType.Admin)
+
+  /** An Admin account of random names, stored */
+  def persistAdmin(): User = persistUser(Some(makeAdminUser()))
 
   /** The account `user` describes (a User of random names when None), under `username` when one is given */
   def persistUser(

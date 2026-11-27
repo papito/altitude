@@ -150,10 +150,10 @@ class LibraryService(val app: Altitude):
 
   /**
    * Undoes what an asset's import wrote, for an asset the pipeline dropped or a crash cut off; nothing for one never persisted or
-   * already complete. In one transaction it locks the people of its faces, so a face another import gives one of them meanwhile
-   * keeps that person; moves covers off its faces as a purge does; gives back its face counts; and deletes its row and any person
-   * left with no face, whom only this import can have started. Its files go after the commit. Stats need nothing: an asset counts
-   * once its import completes.
+   * already complete. In one transaction it locks the asset's row while it is unfinished, then the people of its faces (assets
+   * before people, **Lock order**), so a face another import gives one of them meanwhile keeps that person; moves covers off its
+   * faces as a purge does; gives back its face counts; and deletes its row and any person left with no face, whom only this
+   * import can have started. Its files go after the commit. Stats need nothing: an asset counts once its import completes.
    */
   def discardImport(asset: Asset): Unit =
     asset.id.foreach {
@@ -161,8 +161,8 @@ class LibraryService(val app: Altitude):
         val unfinished = new Query(Map(FieldConst.ID -> assetId, FieldConst.Asset.IS_PIPELINE_PROCESSED -> false))
 
         val discarded = txManager.withTransaction {
-          Option.when(app.service.asset.queryAll(unfinished).nonEmpty) {
-            // Locks the people of its faces first
+          Option.when(app.service.asset.lockUnfinished(assetId)) {
+            // Locks the people of its faces
             app.service.person.moveCoversOff(Set(assetId))
             val faces = app.service.person.getAllAssetFaces(assetId)
             app.service.person.recycleFacesForAssets(Set(assetId))
@@ -282,7 +282,7 @@ class LibraryService(val app: Altitude):
    * takes what recycling would, checked after the read, so another repository's asset is not found rather than refused.
    */
   def restoreRecycledAssets(assetIds: Set[String]): RestoreResult =
-    logger.debug(s"Restoring recycled assets [${assetIds.mkString(",")}]")
+    logger.debug(s"Restoring recycled assets: ${Util.inBrief(assetIds)}")
 
     val result = txManager.withTransaction {
       // Before the reads and row locks, as a folder delete takes it: a delete under way is seen done, restores take their
@@ -364,8 +364,9 @@ class LibraryService(val app: Altitude):
    * a sorted asset never carries one, so a Sequence whose last member moves is gone, and an asset recycled from Triage keeps its
    * Sequence until moved into a folder. An asset moved out of the Trash is restored, taking what recycling it would; as in
    * [[restoreRecycledAssets]], one whose content is live again stays in the Trash and is reported among the `duplicates`, and the
-   * rest move ([[leavingTheTrash]]). It takes the tree's turn first, as a restore does, so of two restores or moves of copies of
-   * one content the second sees the first's.
+   * rest move ([[leavingTheTrash]]). A destination in the Trash is refused (`IllegalOperationException`), as a stale folder
+   * picker may still offer one. It takes the tree's turn first, as a restore and a folder delete do, so of two restores or moves
+   * of copies of one content the second sees the first's, and a delete of the destination at the same time is seen done.
    */
   def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): RestoreResult =
     if destFolderId == null then throw IllegalOperationException("Destination folder ID cannot be null")
@@ -373,13 +374,14 @@ class LibraryService(val app: Altitude):
     val result = txManager.withTransaction {
       // Before the reads and row locks (**Lock order**)
       app.service.folder.lockTree()
-      app.service.folder.getById(destFolderId): Unit
+      app.service.folder
+        .requireLive(app.service.folder.getById(destFolderId), altitude.core.Const.Msg.Err.DESTINATION_IN_TRASH): Unit
       val (recycled, live) = app.service.asset.getAssetsToMove(assetIds).partition(_.isRecycled)
       AssetRules.requireRecycle(recycled, action = "restore")
       val TrashExit(restored, duplicates) = leavingTheTrash(recycled)
       val assetsToMove = live ++ restored
 
-      logger.debug(s"Moving assets [${assetIds.mkString(",")}] to folder [$destFolderId] " + assetsToMove.length)
+      logger.debug(s"Moving assets to folder [$destFolderId]: ${Util.inBrief(assetIds)}, ${assetsToMove.length} to move")
       if assetsToMove.nonEmpty then
         val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToMove.map(_.persistedId).toSet[Any]))
 
@@ -415,7 +417,7 @@ class LibraryService(val app: Altitude):
     txManager.withTransaction {
       val assetsToRecycle = app.service.asset.getAssetsToRecycle(assetIds)
       AssetRules.requireRecycle(assetsToRecycle)
-      logger.debug(s"Recycling assets [${assetIds.mkString(",")}]: ${assetsToRecycle.size} recyclable")
+      logger.debug(s"Recycling assets: ${Util.inBrief(assetIds)}, ${assetsToRecycle.size} recyclable")
 
       if assetsToRecycle.nonEmpty then
         val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToRecycle.map(_.persistedId).toSet[Any]))
@@ -443,7 +445,7 @@ class LibraryService(val app: Altitude):
     queueForPurging(assetsToPurge)
 
   def purgeSelectedAssets(assetIds: Set[String]): Unit =
-    logger.debug(s"Purging selected assets [${assetIds.mkString(",")}]")
+    logger.debug(s"Purging selected assets: ${Util.inBrief(assetIds)}")
     val assetsToPurge = txManager.withTransaction(markForPurging(app.service.asset.getAssetsToPurge(Some(assetIds))))
     queueForPurging(assetsToPurge)
 

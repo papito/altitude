@@ -10,8 +10,7 @@ case class FolderRow[T[_]](
     nameKey: T[String],
     parentId: T[String],
     isRecycled: T[Boolean],
-    createdAt: T[Option[OffsetDateTime]],
-    updatedAt: T[Option[OffsetDateTime]])
+    createdAt: T[Option[OffsetDateTime]])
 
 object FolderRow extends Table[FolderRow]:
   override def tableName: String = "folder"

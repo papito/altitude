@@ -64,7 +64,7 @@ import altitude.core.dao.sql.tables._
     /**
      * Setup:
      *
-     * The rendered `SELECT` of each of the 22 row classes on both engines, and the `CREATE TABLE` columns parsed from each
+     * The rendered `SELECT` of each of the 23 row classes on both engines, and the `CREATE TABLE` columns parsed from each
      * engine's `all.sql`, with PostgreSQL's inherited `_core` columns folded in.
      *
      * Assertions:
@@ -84,6 +84,37 @@ import altitude.core.dao.sql.tables._
         selected.nonEmpty shouldBe true
         selected.diff(declared) shouldBe List()
       }
+    }
+  }
+
+  test("Both schemas declare the same tables with the same columns, but where an engine has one of its own") {
+
+    /**
+     * Setup:
+     *
+     * The `CREATE TABLE` columns of each engine's `all.sql`, with PostgreSQL's inherited `_core` columns folded in.
+     *
+     * Assertions:
+     *
+     * Every table but the engines' own is in both schemas, and with the same set of columns, so a write or read of a column means
+     * one thing on either.
+     *
+     * Edge cases:
+     *
+     * Only these are an engine's own: PostgreSQL's `_core`, the parent the other tables inherit `created_at` from, and
+     * `search_document.tsv`, the generated text vector its full-text index holds; SQLite's `person_label`, the table its
+     * unnamed-person numbers are drawn from, PostgreSQL drawing them from a sequence, and `search_document.id`, the integer key
+     * its FTS5 index's external content needs.
+     */
+    val (postgres, sqlite) = (schemaColumns("postgres"), schemaColumns("sqlite"))
+    val ownTables = Map("postgres" -> Set("_core"), "sqlite" -> Set("person_label"))
+    val ownColumns = Map("postgres" -> Set("search_document.tsv"), "sqlite" -> Set("search_document.id"))
+
+    postgres.keySet -- ownTables("postgres") shouldBe sqlite.keySet -- ownTables("sqlite")
+    for (table <- postgres.keySet.intersect(sqlite.keySet)) withClue(s"$table: ") {
+      def columns(engine: String, schema: Map[String, List[String]]) =
+        schema(table).map(column => s"$table.$column").toSet -- ownColumns(engine)
+      columns("postgres", postgres) shouldBe columns("sqlite", sqlite)
     }
   }
 
@@ -157,8 +188,7 @@ import altitude.core.dao.sql.tables._
       "perceptual_hash",
       "sequence_id",
       "edit_rev",
-      "created_at",
-      "updated_at"
+      "created_at"
     )
 
     modelColumns.diff(selected) shouldBe Set()
@@ -324,30 +354,37 @@ import altitude.core.dao.sql.tables._
      * Setup:
      *
      * PostgreSQL's `all.sql`: each text column (`TEXT` or `VARCHAR`) that a btree index, a primary key or a unique constraint
-     * holds, and each that a list or a lookup orders or compares by its name (`*_key`, `*_sort`, `name_for_sort`, `path`,
-     * `rel_path`, `dimension`, `setting.name`).
+     * holds, and each that a list or a lookup orders or compares by its name (`*_key`, `*_sort`, `path`, `rel_path`, `dimension`,
+     * `setting.name`).
      *
      * Assertions:
      *
      * Each declares `COLLATE "C"`, so it compares by its bytes as SQLite does, and no locale upgrade can reorder an index under
-     * it. A `*_sort` column, a name's `SortKey`, is no text: `BYTEA` on PostgreSQL and `BLOB` on SQLite, both compared as
-     * `memcmp` compares.
+     * it; so does each text expression a btree index holds (a JSON key's text, `->>`), which a statement then spells the same to
+     * use the index. A `*_sort` column, a name's `SortKey`, is no text: `BYTEA` on PostgreSQL and `BLOB` on SQLite, both compared
+     * as `memcmp` compares.
      *
      * Edge cases:
      *
-     * A vector or full-text index (`hnsw`, `gin`) and an index's included columns compare nothing, and an expression is not a
-     * column.
+     * A vector or full-text index (`hnsw`, `gin`) and an index's included columns compare nothing.
      */
     val ddl = schemaText("postgres")
     val tables = schemaTables("postgres")
     def isText(column: Column): Boolean = "^\\w+ (TEXT|VARCHAR)\\b".r.findFirstIn(column.declaration).isDefined
 
-    val indexed = (for {
+    val items = for {
       m <- "CREATE (UNIQUE )?INDEX \\w+ ON (\\w+)(?: USING (\\w+))? \\(".r.findAllMatchIn(ddl).toList
       if !Option(m.group(3)).exists(Set("hnsw", "gin"))
       item <- topLevelItems(ddl, m.end - 1)
-      if "\\w+".r.matches(item)
-    } yield (m.group(2), item)) ++ (for {
+    } yield (m.group(2), item)
+    val (columnItems, expressions) = items.partition((_, item) => "\\w+".r.matches(item))
+
+    val textExpressions = expressions.filter((_, item) => item.contains("->>"))
+    textExpressions should not be empty
+    for ((table, expression) <- textExpressions)
+      withClue(s"$table $expression: ")(expression should include("COLLATE \"C\""))
+
+    val indexed = columnItems ++ (for {
       body <- "(?s)CREATE TABLE (\\w+) \\((.*?)\\n\\)".r.findAllMatchIn(ddl).map(m => m.group(1) -> m.group(2)).toList
       constraint <- "(?m)^\\s*(?:PRIMARY KEY|UNIQUE) \\(([^)]*)\\)".r.findAllMatchIn(body._2).toList
       column <- constraint.group(1).split(",").map(_.trim).toList
@@ -357,7 +394,7 @@ import altitude.core.dao.sql.tables._
       if column.declaration.contains("PRIMARY KEY") || "\\bUNIQUE\\b".r.findFirstIn(column.declaration).isDefined
     } yield (table, column.name))
 
-    val keyNamed = Set("name_for_sort", "path", "rel_path", "dimension")
+    val keyNamed = Set("path", "rel_path", "dimension")
     val ordered = for {
       (table, columns) <- tables.toList
       column <- columns
@@ -373,7 +410,7 @@ import altitude.core.dao.sql.tables._
     for {
       (engine, binary) <- List("postgres" -> "BYTEA", "sqlite" -> "BLOB")
       (table, columns) <- schemaTables(engine)
-      column <- columns if column.name.endsWith("_sort") && column.name != "name_for_sort"
+      column <- columns if column.name.endsWith("_sort")
     } withClue(s"$engine $table.${column.name}: ")(column.declaration should startWith(s"${column.name.toUpperCase} $binary "))
   }
 

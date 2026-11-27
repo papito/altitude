@@ -333,6 +333,15 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       """
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).nonEmpty
 
+  override def lockUnfinished(assetId: String): Boolean =
+    val sql = s"""
+      SELECT id
+        FROM asset
+       WHERE ${FieldConst.REPO_ID} = ? AND id = ? AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = FALSE
+      $forUpdate
+      """
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).nonEmpty
+
   override def shareLockLive(assetIds: Set[String]): Unit =
     // SQLite has no row locks, and its one write connection already holds off a recycle
     if assetIds.isEmpty || forKeyShare.isEmpty then return
@@ -676,12 +685,17 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     updateByBySql(sql, List(toAccountId, fromAccountId))
 
   override def rewriteImporterRecords(snapshot: AccountSnapshot): Int =
+    val (sql, values) = rewriteImporterRecordsStatement(snapshot)
+    updateByBySql(sql, values)
+
+  /** Public so the query-plan tests can explain it: it finds the account's assets through `asset_importer` */
+  def rewriteImporterRecordsStatement(snapshot: AccountSnapshot): (String, List[Any]) =
     val sql = s"""
       UPDATE asset
          SET ${FieldConst.Asset.ORIGINAL_OWNER} = $jsonFunc
        WHERE ${inIdOrder(s"${jsonText(FieldConst.Asset.ORIGINAL_OWNER, "id")} = ?")}
     """
-    updateByBySql(sql, List(ujson.write(snapshot.toJson), snapshot.id))
+    (sql, List(ujson.write(snapshot.toJson), snapshot.id))
 
   /**
    * The rows passing `test`, locked in ID order by a subquery before the update writes them, as a library operation locks its

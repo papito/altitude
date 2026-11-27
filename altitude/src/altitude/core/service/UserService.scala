@@ -369,7 +369,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
   def accountTimes(accountId: String): UserService.AccountTimes =
     txManager.asReadOnly {
       val account = dao.getById(accountId)
-      UserService.AccountTimes(account.createdAt.map(dao.instantOf), account.lastLoginAt.map(dao.instantOf))
+      UserService.AccountTimes(account.createdAt.map(Util.instantOf), account.lastLoginAt.map(Util.instantOf))
     }
 
   /** The account as an Admin's edit form opens it, with its grants and their state, read in one transaction */

@@ -17,7 +17,7 @@ trait WatchFolderFileDao extends BaseDao[WatchFolderFile]:
   /** Files a scan found changed are new files, each with its new size and modified time, never tried: one batch */
   def changed(watchFolderId: String, files: Seq[WatchFolderFile], seenAt: OffsetDateTime): Unit
 
-  /** Returns how many rows changed */
+  /** Stamps the files a scan found unchanged as seen at `seenAt`, in one statement however many; how many rows changed */
   def seenAgain(watchFolderId: String, relPaths: Seq[String], seenAt: OffsetDateTime): Int
 
   /** Only while the file is remembered with that size and modified time: one changed since keeps its state. How many rows changed. */

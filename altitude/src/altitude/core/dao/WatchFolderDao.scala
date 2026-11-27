@@ -26,7 +26,7 @@ trait WatchFolderDao extends BaseDao[WatchFolder]:
    */
   def lock(id: String): Option[WatchFolder]
 
-  /** By name, as the Libraries are listed (`NaturalOrder`), then by ID */
+  /** By name, in the natural order the Libraries are listed in (`SortKey`), then by ID */
   def all(): List[WatchFolder]
 
   /** Every Watch folder in every Library */

@@ -155,7 +155,7 @@ import altitude.core.util.Util
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.CreateUsers))
     val creator = testContext.user
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val mine = testApp.service.repository.getById(repoId)
     val hidden = library()
     val account = created(creator, AccountType.User, Map(repoId -> Permissions.none))

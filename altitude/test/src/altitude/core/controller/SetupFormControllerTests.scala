@@ -28,13 +28,17 @@ import altitude.core.util.Query
     withServerFlag(initialized = false)(f)
   }
 
-  private def postSetup(host: String, libraryName: String, username: String = "admin"): requests.Response = requests.post(
+  private def postSetup(
+      host: String,
+      libraryName: String,
+      username: String = "admin",
+      name: String = "Administrator"): requests.Response = requests.post(
     s"$host/htmx/setup",
     headers = Map("Content-Type" -> "application/json"),
     data = ujson.write(
       ujson.Obj(
         Api.Field.Setup.REPOSITORY_NAME -> libraryName,
-        Api.Field.Setup.ADMIN_NAME -> "Administrator",
+        Api.Field.Setup.ADMIN_NAME -> name,
         Api.Field.Setup.ADMIN_USERNAME -> username,
         Api.Field.Setup.ADMIN_EMAIL -> "admin@example.com",
         Api.Field.Setup.PASSWORD -> "password123",
@@ -144,6 +148,33 @@ import altitude.core.util.Query
 
         val withControl = postSetup(host, "Client\u0007Smith")
         withControl.text() should include("Remove the control characters")
+
+        testApp.service.repository.getAll shouldBe List()
+        testApp.service.system.readMetadata.isInitialized shouldBe false
+    }
+  }
+
+  test("Setup refuses an Admin name the name rule refuses, under the field") {
+
+    /**
+     * Setup:
+     *
+     * A new installation, and setup forms valid but for the Admin's name: one holding a zero-width space between its words, and
+     * one starting with a byte order mark, both invisible format characters that the request validator lets through.
+     *
+     * Assertions:
+     *
+     * Each submission answers with the setup form carrying the name rule's error under the Admin name field, not a server error;
+     * nothing is created.
+     */
+    onNewInstallation {
+      host =>
+        for (name <- List("Ada\u200BLovelace", "\uFEFFAda Lovelace")) withClue(s"[$name]: ") {
+          val refused = postSetup(host, "My Library", name = name)
+          refused.statusCode shouldBe 200
+          refused.text() should include("""id="setupForm"""")
+          refused.text() should include(s"""<div class="error">${Const.Msg.Err.CONTROL_CHARACTERS}</div>""")
+        }
 
         testApp.service.repository.getAll shouldBe List()
         testApp.service.system.readMetadata.isInitialized shouldBe false

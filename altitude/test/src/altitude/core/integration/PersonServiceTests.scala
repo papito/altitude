@@ -166,8 +166,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The assignable people list the named ones in that order on both engines, the order `NaturalOrder` sorts the names in
-     * memory, then the unnamed one.
+     * The assignable people list the named ones in that order on both engines, the order `SortKey.of` sorts the names in memory,
+     * then the unnamed one.
      *
      * Edge cases:
      *
@@ -195,7 +195,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The row holds the name and its name key as sort name, both as added and after renaming to "Jerry".
+     * The row holds the name and its name key, both as added and after renaming to "Jerry".
      */
     val name = "Ben"
     val person: Person = testApp.service.person.addPerson(Person(name = Some(name)))
@@ -203,14 +203,14 @@ import altitude.core.util.Util
 
     val row = personRow(person.persistedId)
     row("name") should be(name)
-    row("name_for_sort") should be("ben")
+    row("name_key") should be("ben")
 
     val newName = "Jerry"
     testApp.service.person.updateName(person, newName)
 
     val renamedRow = personRow(person.persistedId)
     renamedRow("name") should be(newName)
-    renamedRow("name_for_sort") should be("jerry")
+    renamedRow("name_key") should be("jerry")
   }
 
   test("Faces are added to a person") {
@@ -617,7 +617,7 @@ import altitude.core.util.Util
      * Assertions:
      *
      * Renaming Ann to "Élodie" decomposed (E + U+0301) fails as a duplicate. Renaming her to "Zoë" decomposed (e + U+0308) stores
-     * the precomposed name, with its name key as sort name.
+     * the precomposed name, with its name key.
      */
     testApp.service.person.addPerson(Person(name = Some(precomposed("Élodie"))))
     val ann: Person = testApp.service.person.addPerson(Person(name = Some("Ann")))
@@ -629,7 +629,7 @@ import altitude.core.util.Util
 
     val row = personRow(ann.persistedId)
     row("name") shouldBe precomposed("Zoë")
-    row("name_for_sort") shouldBe precomposed("zoë")
+    row("name_key") shouldBe precomposed("zoë")
   }
 
   test("A live person's name in another case fold is refused to a rename, and a Face moved to it joins them") {
@@ -687,7 +687,7 @@ import altitude.core.util.Util
 
     val row = personRow(tessa.persistedId)
     row("name") shouldBe "TESSA"
-    row("name_for_sort") shouldBe "tessa"
+    row("name_key") shouldBe "tessa"
   }
 
   test("A merged-away or bad-match person does not hold its name") {
@@ -852,7 +852,7 @@ import altitude.core.util.Util
     testApp.service.person.getFaceById(face.persistedId).personId shouldBe unnamed.id
   }
 
-  test("Adding a named person stores its name in NFC and its name key as sort name") {
+  test("Adding a named person stores its name in NFC and its name key") {
 
     /**
      * Setup:
@@ -861,8 +861,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The named row holds the precomposed name and the name key "élodie" as sort name, and the returned model the precomposed
-     * name. The unnamed row's sort name keeps its zero-padded "unknown 0000000042" form.
+     * The named row holds the precomposed name and its name key "élodie", and the returned model the precomposed name. The
+     * unnamed row's name key is its name's, "unknown 42" for "Unknown 42".
      */
     val named: Person = testApp.service.person.addPerson(Person(name = Some(decomposed("ÉLODIE"))))
     named.name shouldBe Some(precomposed("ÉLODIE"))
@@ -871,10 +871,10 @@ import altitude.core.util.Util
 
     val namedRow = personRow(named.persistedId)
     namedRow("name") shouldBe precomposed("ÉLODIE")
-    namedRow("name_for_sort") shouldBe precomposed("élodie")
+    namedRow("name_key") shouldBe precomposed("élodie")
 
-    val unnamedRow = personRow(unnamed.persistedId)
-    withClue(unnamedRow)("unknown \\d{10}".r.matches(unnamedRow("name_for_sort").toString) shouldBe true)
+    personRow(unnamed.persistedId)("name_key") shouldBe PersonService.nameKey(unnamed.name.get)
+    "Unknown \\d+".r.matches(unnamed.name.get) shouldBe true
   }
 
   test("Unnamed people sort by their number past 10,000") {
@@ -883,12 +883,13 @@ import altitude.core.util.Util
      * Setup:
      *
      * Two unnamed Persons, numbered after the label sequence is set forward past every number drawn: the first at a 2 followed by
-     * four or more zeros, the second at the next power of ten.
+     * four or more zeros, the second at the next power of ten. The sequence is the instance's, which every repository and test
+     * draws from, so it stays that far forward for the tests after this one: it is only ever moved forward.
      *
      * Assertions:
      *
-     * Each sort name is "unknown" and the number padded to ten digits, and the assignable people list the first before the
-     * second.
+     * Each name key is its name's, "unknown" and the number, and the assignable people list the first before the second: the list
+     * orders by the natural order, which compares the numbers as numbers.
      */
     def numberOf(person: Person): Long = person.name.get.stripPrefix(s"${PersonService.UNKNOWN_NAME_PREFIX} ").toLong
     def drawNext(label: Long): Person = {
@@ -907,9 +908,7 @@ import altitude.core.util.Util
     val second = drawNext(BigInt(10).pow(zeros + 1).toLong)
     (numberOf(first) < numberOf(second)) shouldBe true
 
-    List(first, second).map(person => personRow(person.persistedId)).foreach {
-      row => withClue(row)("unknown \\d{10}".r.matches(row("name_for_sort").toString) shouldBe true)
-    }
+    List(first, second).foreach(person => personRow(person.persistedId)("name_key") shouldBe s"unknown ${numberOf(person)}")
     testApp.service.person.getAssignable.map(_.persistedId).filter(Set(first.persistedId, second.persistedId)) shouldBe
       List(first.persistedId, second.persistedId)
   }
@@ -1152,8 +1151,8 @@ import altitude.core.util.Util
      * Assertions:
      *
      * A takes B's name, since only the source was named, and is named in full: the returned model and the stored row are named,
-     * the row's sort name is the name key "london", and A is in the Matched bucket with its two Faces, below the face threshold,
-     * so by its name alone. A Search for "London" finds A.
+     * the row's name key is "london", and A is in the Matched bucket with its two Faces, below the face threshold, so by its name
+     * alone. A Search for "London" finds A.
      */
     val personA: Person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(personA)
@@ -1174,7 +1173,7 @@ import altitude.core.util.Util
     mergedPerson.numOfFaces should be < FaceRecognition.MIN_FACES_THRESHOLD
 
     val row = personRow(personA.persistedId)
-    row("name_for_sort") shouldBe "london"
+    row("name_key") shouldBe "london"
 
     testApp.service.person.getInBuckets(Set(PeopleBucket.MATCHED)).map(_.persistedId) shouldBe List(personA.persistedId)
 
@@ -1191,7 +1190,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The returned model and the stored row keep London's name and flag, and the row its name key "london" as sort name.
+     * The returned model and the stored row keep London's name and flag, and the row its name key "london".
      */
     val london: Person = testApp.service.person.addPerson(Person(name = Some("London")))
     testContext.addTestFacesAndAssets(london)
@@ -1204,7 +1203,7 @@ import altitude.core.util.Util
 
     val row = personRow(london.persistedId)
     row("name") shouldBe "London"
-    row("name_for_sort") shouldBe "london"
+    row("name_key") shouldBe "london"
     testApp.service.person.getById(london.persistedId).isNamed shouldBe true
   }
 
@@ -1236,7 +1235,7 @@ import altitude.core.util.Util
     mergedA.isNamed shouldBe true
     val rowA = personRow(personA.persistedId)
     rowA("name") shouldBe "Tessa"
-    rowA("name_for_sort") shouldBe "tessa"
+    rowA("name_key") shouldBe "tessa"
 
     val staleC: Person = testApp.service.person.addPerson(Person())
     val personD: Person = testApp.service.person.addPerson(Person())
@@ -1248,7 +1247,7 @@ import altitude.core.util.Util
     mergedC.isNamed shouldBe true
     val rowC = personRow(staleC.persistedId)
     rowC("name") shouldBe "London"
-    rowC("name_for_sort") shouldBe "london"
+    rowC("name_key") shouldBe "london"
   }
 
   test("A stale merge takes no name from a source that is no longer live") {
@@ -1261,7 +1260,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Neither merge raises an error, and each destination stays unnamed in the returned model and on its row: its sort name keeps
+     * Neither merge raises an error, and each destination stays unnamed in the returned model and on its row: its name key keeps
      * the unnamed form and `is_named` stays false.
      *
      * Edge cases:
@@ -1288,7 +1287,7 @@ import altitude.core.util.Util
 
         val row = personRow(dest.persistedId)
         row("name") shouldBe dest.name.get
-        withClue(row)("unknown \\d{10}".r.matches(row("name_for_sort").toString) shouldBe true)
+        row("name_key") shouldBe PersonService.nameKey(dest.name.get)
         testApp.service.person.getById(dest.persistedId).isNamed shouldBe false
     }
   }

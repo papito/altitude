@@ -252,7 +252,7 @@ import altitude.core.util.*
      * Assertions:
      *
      * Sorted by file name and walked two to a page by cursor, they come in that order on both engines, which is the order
-     * `NaturalOrder` sorts the names in memory; descending walks the reverse.
+     * `SortKey.of` sorts the names in memory; descending walks the reverse.
      *
      * Edge cases:
      *
@@ -267,7 +267,7 @@ import altitude.core.util.*
           name -> asset.persistedId
       }
       .toMap
-    TestContext.NATURAL_NAMES.reverse.sorted(using NaturalOrder) shouldEqual TestContext.NATURAL_NAMES
+    TestContext.NATURAL_NAMES.reverse.sortBy(SortKey.of) shouldEqual TestContext.NATURAL_NAMES
     val expected = TestContext.NATURAL_NAMES.map(named)
 
     traverseFlat(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC), rpp = 2) shouldEqual expected

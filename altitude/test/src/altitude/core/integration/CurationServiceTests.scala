@@ -825,7 +825,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Three triaged assets: the two of the higher IDs in one Sequence, the other in none. A third transaction holds the lowest;
      * then a recycle of it and of the highest starts and waits on it; then a selection's resolve keeping the middle one and
-     * recycling the lowest starts and waits or ends; then the lowest is let go (`whileHolding`).
+     * recycling the lowest starts and waits; then the lowest is let go (`whileHolding`).
      *
      * Assertions:
      *
@@ -857,7 +857,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Two triaged assets: the one of the higher ID recycled. A third transaction holds the other; then a move of both into the
      * root folder starts and waits on it; then a reopen of a set keeping the lower and having recycled the higher, putting the
-     * Pick back in a Sequence, starts and waits or ends; then the lower is let go (`whileHolding`).
+     * Pick back in a Sequence, starts and waits; then the lower is let go (`whileHolding`).
      *
      * Assertions:
      *

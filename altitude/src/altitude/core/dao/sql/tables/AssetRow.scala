@@ -20,10 +20,10 @@ enum BulkyMetadata:
 /**
  * The `asset` table.
  *
- * `originalCreatedAt` is the camera's zoneless wall clock while `createdAt` / `updatedAt` are instants; they are typed
- * differently so neither engine's mapper can confuse them. `folderId` is NULL for a triaged asset, whose model has an empty
- * folder ID. `originalOwner` is the importer record's JSON text (`jsonb` on PostgreSQL, `TEXT` on SQLite). `filename_sort`, the
- * file name's `SortKey`, is not in the row, so no read of a row carries it: the file name sort names it beside `filename`.
+ * `originalCreatedAt` is the camera's zoneless wall clock while `createdAt` is an instant; they are typed differently so neither
+ * engine's mapper can confuse them. `folderId` is NULL for a triaged asset, whose model has an empty folder ID. `originalOwner`
+ * is the importer record's JSON text (`jsonb` on PostgreSQL, `TEXT` on SQLite). `filename_sort`, the file name's `SortKey`, is
+ * not in the row, so no read of a row carries it: the file name sort names it beside `filename`.
  *
  * The bulky Scene embeddings (`dinov2_embedding`, `siglip2_embedding`) are not in this row, so [[AssetRow.columnList]] leaves
  * them out too; only the hand-written Sequence candidates statements select them.
@@ -63,8 +63,7 @@ case class AssetRow[T[_]](
     perceptualHash: T[Option[Long]],
     sequenceId: T[Option[String]],
     editRev: T[Int],
-    createdAt: T[Option[OffsetDateTime]],
-    updatedAt: T[Option[OffsetDateTime]])
+    createdAt: T[Option[OffsetDateTime]])
 
 object AssetRow extends Table[AssetRow]:
   override def tableName: String = "asset"

@@ -1160,348 +1160,350 @@ object DescribeSearchTests {
     }
   }
 
-  if (isPostgres) {
+  /** `count` copies of `templateId`, each with a random unit vector as its SigLIP 2 embedding, IDs opening with `prefix` */
+  def seedEmbedded(templateId: String, count: Int, prefix: String): Unit =
+    update(
+      s"""INSERT INTO asset (id, repository_id, owner_user_id, original_owner, checksum, media_type, media_subtype, mime_type,
+         |                   width, height, area_size, folder_id, filename, filename_sort, size_bytes, is_triaged, is_recycled,
+         |                   is_purged, is_pipeline_processed, created_at, siglip2_embedding)
+         |SELECT '$prefix' || lpad(g.n::text, ${36 - prefix.length}, '0'), repository_id, owner_user_id, original_owner,
+         |       '$prefix' || lpad(g.n::text, ${64 - prefix.length}, '0'), media_type, media_subtype, mime_type,
+         |       width, height, area_size, folder_id, filename, filename_sort, size_bytes, is_triaged, is_recycled,
+         |       is_purged, is_pipeline_processed, created_at,
+         |       l2_normalize((SELECT array_agg(random() - 0.5 + (s + g.n) * 0) FROM generate_series(1, 768) AS s)::real[]::vector)
+         |  FROM asset CROSS JOIN generate_series(1, $count) AS g (n)
+         | WHERE asset.id = ?""".stripMargin,
+      templateId
+    )
 
-    /** `count` copies of `templateId`, each with a random unit vector as its SigLIP 2 embedding, IDs opening with `prefix` */
-    def seedEmbedded(templateId: String, count: Int, prefix: String): Unit =
-      update(
-        s"""INSERT INTO asset (id, repository_id, owner_user_id, original_owner, checksum, media_type, media_subtype, mime_type,
-           |                   width, height, area_size, folder_id, filename, filename_sort, size_bytes, is_triaged, is_recycled,
-           |                   is_purged, is_pipeline_processed, created_at, siglip2_embedding)
-           |SELECT '$prefix' || lpad(g.n::text, ${36 - prefix.length}, '0'), repository_id, owner_user_id, original_owner,
-           |       '$prefix' || lpad(g.n::text, ${64 - prefix.length}, '0'), media_type, media_subtype, mime_type,
-           |       width, height, area_size, folder_id, filename, filename_sort, size_bytes, is_triaged, is_recycled,
-           |       is_purged, is_pipeline_processed, created_at,
-           |       l2_normalize((SELECT array_agg(random() - 0.5 + (s + g.n) * 0) FROM generate_series(1, 768) AS s)::real[]::vector)
-           |  FROM asset CROSS JOIN generate_series(1, $count) AS g (n)
-           | WHERE asset.id = ?""".stripMargin,
-        templateId
-      )
+  /** Makes the planner read the vector index, which over seeded rows it may cost above a scan */
+  def preferVectorIndex(): Unit =
+    List("seqscan", "bitmapscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
 
-    /** Makes the planner read the vector index, which over seeded rows it may cost above a scan */
-    def preferVectorIndex(): Unit =
-      List("seqscan", "bitmapscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
+  /** How many scans of the Describe index the current transaction has made */
+  def describeIndexScans: Long =
+    query("SELECT pg_stat_get_xact_numscans('asset_describe'::regclass) AS n").head("n").asInstanceOf[Number].longValue
 
-    /** How many scans of the Describe index the current transaction has made */
-    def describeIndexScans: Long =
-      query("SELECT pg_stat_get_xact_numscans('asset_describe'::regclass) AS n").head("n").asInstanceOf[Number].longValue
+  test("A PostgreSQL Describe search finds its limit of rows past the candidates the vector index keeps") {
 
-    test("A PostgreSQL Describe search finds its limit of rows past the candidates the vector index keeps") {
+    /**
+     * Setup:
+     *
+     * 2,500 assets with random unit vectors as Scene embeddings, a random description embedding, and the planner told to read the
+     * vector index. pgvector keeps at most 1,000 candidates in a scan. Every search ranks through the index.
+     *
+     * Assertions:
+     *
+     * A page for a limit of 2,000 counts 2,000 rows, twice the candidates, in one index scan. 700 to a page, the pages hold the
+     * 2,000 once each, nearest first.
+     *
+     * Edge cases:
+     *
+     * The same statement in a transaction not set up for a vector search counts only a handful: the setup makes the scan go on
+     * until the limit is met.
+     */
+    assume(isPostgres)
+    val template = testContext.insertAsset()
+    val description = unitVector(1)
 
-      /**
-       * Setup:
-       *
-       * 2,500 assets with random unit vectors as Scene embeddings, a random description embedding, and the planner told to read
-       * the vector index. pgvector keeps at most 1,000 candidates in a scan. Every search ranks through the index.
-       *
-       * Assertions:
-       *
-       * A page for a limit of 2,000 counts 2,000 rows, twice the candidates, in one index scan. 700 to a page, the pages hold the
-       * 2,000 once each, nearest first.
-       *
-       * Edge cases:
-       *
-       * The same statement in a transaction not set up for a vector search counts only a handful: the setup makes the scan go on
-       * until the limit is met.
-       */
-      val template = testContext.insertAsset()
-      val description = unitVector(1)
+    atScale(seedEmbedded(template.persistedId, 2500, "embedded-")) {
+      preferVectorIndex()
+      // Before any search sets the transaction up: the setup lasts until it ends
+      val notSetUp =
+        testApp.DAO.search
+          .describe(
+            Filters().query(pageSize = 700, exactLimit = 0),
+            DescribeRanking(description, minCosine = -1, limit = 2000, weakerRatio = 0))
+      notSetUp.total.value should be < 100
+      val scansBefore = describeIndexScans
 
-      atScale(seedEmbedded(template.persistedId, 2500, "embedded-")) {
+      val first = page(description, limit = 2000, pageSize = 700, exactLimit = 0)
+      describeIndexScans shouldBe scansBefore + 1
+      first.total shouldBe Some(2000)
+      first.rows should have size 700
+      first.hasMore shouldBe true
+
+      def distances(found: SearchPage): List[Double] = found.rows.map(_.sortValue.bindValue.asInstanceOf[Double])
+      def cursorAfter(found: SearchPage): Option[SearchCursor] =
+        found.rows.lastOption.map(last => SearchCursor(None, None, last.sortValue, last.asset.persistedId, scope = ""))
+
+      val second = page(description, limit = 2000, cursor = cursorAfter(first), pageSize = 700, exactLimit = 0)
+      val third = page(description, limit = 2000, cursor = cursorAfter(second), pageSize = 700, exactLimit = 0)
+      third.rows should have size 600
+      third.hasMore shouldBe false
+      val all = List(first, second, third)
+      all.flatMap(_.rows.map(_.asset.persistedId)).distinct should have size 2000
+      all.flatMap(distances) shouldBe all.flatMap(distances).sorted
+    }
+  }
+
+  test("A PostgreSQL description within filters ranks few matching assets exactly, and many through the vector index") {
+
+    /**
+     * Setup:
+     *
+     * The folder Trips with the cactus and three portraits, two placed assets and one with no Scene embedding: six embedded. Two
+     * more are placed outside it. The planner is told to read the vector index, every image clears the threshold, and the weaker
+     * matches ratio is the test Settings' 0.75.
+     *
+     * Assertions:
+     *
+     * Within the folder, "a cactus" ranked exactly (six under the default limit) and through the index (under a limit of 5) finds
+     * the same six in the same order, total and weaker matches. The exact search makes no index scan and the other one a page. A
+     * cursor from either continues the other way with no repeat and no gap. Sorted by file name, both hold the same two parts;
+     * past the limit, each part's statement scans the index once.
+     *
+     * Edge cases:
+     *
+     * The limit counts only assets with an embedding: six under a limit of 6 are ranked exactly.
+     */
+    assume(isPostgres)
+    val description = "a cactus"
+    val trips = testApp.service.folder.add("Trips")
+    (CACTUS :: PHOTOS).foreach(sorted(_, Some(trips)))
+    placed(description, 0.5, seed = 1, folder = Some(trips))
+    placed(description, 0.3, seed = 2, folder = Some(trips))
+    testContext.insertAsset(testContext.makeAsset(folder = Some(trips)))
+    placed(description, 0.6, seed = 3)
+    placed(description, 0.4, seed = 4)
+    val inTrips = Filters(folderIds = Set(trips.persistedId))
+
+    withSetting(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY, EVERY_IMAGE) {
+      testApp.txManager.withTransaction {
         preferVectorIndex()
-        // Before any search sets the transaction up: the setup lasts until it ends
-        val notSetUp =
-          testApp.DAO.search
-            .describe(
-              Filters().query(pageSize = 700, exactLimit = 0),
-              DescribeRanking(description, minCosine = -1, limit = 2000, weakerRatio = 0))
-        notSetUp.total.value should be < 100
-        val scansBefore = describeIndexScans
 
-        val first = page(description, limit = 2000, pageSize = 700, exactLimit = 0)
-        describeIndexScans shouldBe scansBefore + 1
-        first.total shouldBe Some(2000)
-        first.rows should have size 700
-        first.hasMore shouldBe true
-
-        def distances(found: SearchPage): List[Double] = found.rows.map(_.sortValue.bindValue.asInstanceOf[Double])
-        def cursorAfter(found: SearchPage): Option[SearchCursor] =
-          found.rows.lastOption.map(last => SearchCursor(None, None, last.sortValue, last.asset.persistedId, scope = ""))
-
-        val second = page(description, limit = 2000, cursor = cursorAfter(first), pageSize = 700, exactLimit = 0)
-        val third = page(description, limit = 2000, cursor = cursorAfter(second), pageSize = 700, exactLimit = 0)
-        third.rows should have size 600
-        third.hasMore shouldBe false
-        val all = List(first, second, third)
-        all.flatMap(_.rows.map(_.asset.persistedId)).distinct should have size 2000
-        all.flatMap(distances) shouldBe all.flatMap(distances).sorted
-      }
-    }
-
-    test("A PostgreSQL description within filters ranks few matching assets exactly, and many through the vector index") {
-
-      /**
-       * Setup:
-       *
-       * The folder Trips with the cactus and three portraits, two placed assets and one with no Scene embedding: six embedded.
-       * Two more are placed outside it. The planner is told to read the vector index, every image clears the threshold, and the
-       * weaker matches ratio is the test Settings' 0.75.
-       *
-       * Assertions:
-       *
-       * Within the folder, "a cactus" ranked exactly (six under the default limit) and through the index (under a limit of 5)
-       * finds the same six in the same order, total and weaker matches. The exact search makes no index scan and the other one a
-       * page. A cursor from either continues the other way with no repeat and no gap. Sorted by file name, both hold the same two
-       * parts; past the limit, each part's statement scans the index once.
-       *
-       * Edge cases:
-       *
-       * The limit counts only assets with an embedding: six under a limit of 6 are ranked exactly.
-       */
-      val description = "a cactus"
-      val trips = testApp.service.folder.add("Trips")
-      (CACTUS :: PHOTOS).foreach(sorted(_, Some(trips)))
-      placed(description, 0.5, seed = 1, folder = Some(trips))
-      placed(description, 0.3, seed = 2, folder = Some(trips))
-      testContext.insertAsset(testContext.makeAsset(folder = Some(trips)))
-      placed(description, 0.6, seed = 3)
-      placed(description, 0.4, seed = 4)
-      val inTrips = Filters(folderIds = Set(trips.persistedId))
-
-      withSetting(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY, EVERY_IMAGE) {
-        testApp.txManager.withTransaction {
-          preferVectorIndex()
-
-          /** What a search finds, and how many scans of the vector index it made */
-          def scanning(search: => SearchResult): (SearchResult, Long) = {
-            val before = describeIndexScans
-            val found = search
-            (found, describeIndexScans - before)
-          }
-
-          val (exact, exactScans) = scanning(describe(description, inTrips))
-          exact.total shouldBe Some(6)
-          ids(exact) should have size 6
-          exact.weaker shouldBe Some(WeakerMatches(index = 1, count = 5))
-          exactScans shouldBe 0
-
-          val (byIndex, indexScans) = scanning(describe(description, inTrips, exactLimit = 5))
-          ids(byIndex) shouldBe ids(exact)
-          byIndex.total shouldBe Some(6)
-          byIndex.weaker shouldBe exact.weaker
-          indexScans shouldBe 1
-
-          scanning(describe(description, inTrips, exactLimit = 6))._2 shouldBe 0
-
-          val firstExact = describe(description, inTrips, pageSize = 2)
-          val (restByIndex, restScans) =
-            scanning(describe(description, inTrips, cursor = firstExact.nextCursor, pageSize = 10, exactLimit = 5))
-          ids(firstExact) ++ ids(restByIndex) shouldBe ids(exact)
-          firstExact.weaker shouldBe exact.weaker
-          restByIndex.weaker shouldBe None
-          restScans shouldBe 1
-
-          val firstByIndex = describe(description, inTrips, pageSize = 2, exactLimit = 5)
-          ids(firstByIndex) shouldBe ids(firstExact)
-          val (restExact, restExactScans) =
-            scanning(describe(description, inTrips, cursor = firstByIndex.nextCursor, pageSize = 10))
-          ids(firstByIndex) ++ ids(restExact) shouldBe ids(exact)
-          restExactScans shouldBe 0
-
-          val byName = Some(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC))
-          val (sortedExact, sortedExactScans) = scanning(describe(description, inTrips, sort = byName))
-          ids(sortedExact).toSet shouldBe ids(exact).toSet
-          sortedExact.weaker shouldBe exact.weaker
-          sortedExactScans shouldBe 0
-          val (sortedByIndex, sortedIndexScans) = scanning(describe(description, inTrips, exactLimit = 5, sort = byName))
-          ids(sortedByIndex) shouldBe ids(sortedExact)
-          sortedByIndex.weaker shouldBe sortedExact.weaker
-          sortedIndexScans shouldBe 2
+        /** What a search finds, and how many scans of the vector index it made */
+        def scanning(search: => SearchResult): (SearchResult, Long) = {
+          val before = describeIndexScans
+          val found = search
+          (found, describeIndexScans - before)
         }
+
+        val (exact, exactScans) = scanning(describe(description, inTrips))
+        exact.total shouldBe Some(6)
+        ids(exact) should have size 6
+        exact.weaker shouldBe Some(WeakerMatches(index = 1, count = 5))
+        exactScans shouldBe 0
+
+        val (byIndex, indexScans) = scanning(describe(description, inTrips, exactLimit = 5))
+        ids(byIndex) shouldBe ids(exact)
+        byIndex.total shouldBe Some(6)
+        byIndex.weaker shouldBe exact.weaker
+        indexScans shouldBe 1
+
+        scanning(describe(description, inTrips, exactLimit = 6))._2 shouldBe 0
+
+        val firstExact = describe(description, inTrips, pageSize = 2)
+        val (restByIndex, restScans) =
+          scanning(describe(description, inTrips, cursor = firstExact.nextCursor, pageSize = 10, exactLimit = 5))
+        ids(firstExact) ++ ids(restByIndex) shouldBe ids(exact)
+        firstExact.weaker shouldBe exact.weaker
+        restByIndex.weaker shouldBe None
+        restScans shouldBe 1
+
+        val firstByIndex = describe(description, inTrips, pageSize = 2, exactLimit = 5)
+        ids(firstByIndex) shouldBe ids(firstExact)
+        val (restExact, restExactScans) =
+          scanning(describe(description, inTrips, cursor = firstByIndex.nextCursor, pageSize = 10))
+        ids(firstByIndex) ++ ids(restExact) shouldBe ids(exact)
+        restExactScans shouldBe 0
+
+        val byName = Some(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC))
+        val (sortedExact, sortedExactScans) = scanning(describe(description, inTrips, sort = byName))
+        ids(sortedExact).toSet shouldBe ids(exact).toSet
+        sortedExact.weaker shouldBe exact.weaker
+        sortedExactScans shouldBe 0
+        val (sortedByIndex, sortedIndexScans) = scanning(describe(description, inTrips, exactLimit = 5, sort = byName))
+        ids(sortedByIndex) shouldBe ids(sortedExact)
+        sortedByIndex.weaker shouldBe sortedExact.weaker
+        sortedIndexScans shouldBe 2
       }
     }
+  }
 
-    test("A PostgreSQL description with no filter ranks a view of few embedded assets exactly") {
+  test("A PostgreSQL description with no filter ranks a view of few embedded assets exactly") {
 
-      /**
-       * Setup:
-       *
-       * Two repositories. The context's holds three sorted placed assets, two triaged, one recycled, and one with no Scene
-       * embedding; the other holds five embedded assets. The planner is told to read the vector index, and every image clears the
-       * threshold.
-       *
-       * Assertions:
-       *
-       * "a cactus" with no filter finds the three sorted assets, nearest first, with no index scan: the view's count is under the
-       * limit, so they are ranked exactly. Under a limit of 3 still exactly, under a limit of 2 through the index in one scan.
-       *
-       * Edge cases:
-       *
-       * Only the view's embedded assets count. With the triaged assets asked for, the view's five are ranked exactly under a
-       * limit of 5 and through the index under 4. The index's rows are checked to follow the exact ranking's order, not to be all
-       * of it: the index is approximate, and over a few rows a scan was seen to miss one.
-       */
-      val description = "a cactus"
-      val kept = List(0.5, 0.4, 0.3).zipWithIndex.map((cosine, seed) => placed(description, cosine, seed))
-      val inTriage = List(0.45, 0.35).zipWithIndex.map((cosine, seed) => placed(description, cosine, seed + 10, isTriaged = true))
-      testApp.service.library.recycleAssets(Set(placed(description, 0.6, seed = 20).id))
-      testContext.insertAsset()
+    /**
+     * Setup:
+     *
+     * Two repositories. The context's holds three sorted placed assets, two triaged, one recycled, and one with no Scene
+     * embedding; the other holds five embedded assets. The planner is told to read the vector index, and every image clears the
+     * threshold.
+     *
+     * Assertions:
+     *
+     * "a cactus" with no filter finds the three sorted assets, nearest first, with no index scan: the view's count is under the
+     * limit, so they are ranked exactly. Under a limit of 3 still exactly, under a limit of 2 through the index in one scan.
+     *
+     * Edge cases:
+     *
+     * Only the view's embedded assets count. With the triaged assets asked for, the view's five are ranked exactly under a limit
+     * of 5 and through the index under 4. The index's rows are checked to follow the exact ranking's order, not to be all of it:
+     * the index is approximate, and over a few rows a scan was seen to miss one.
+     */
+    assume(isPostgres)
+    val description = "a cactus"
+    val kept = List(0.5, 0.4, 0.3).zipWithIndex.map((cosine, seed) => placed(description, cosine, seed))
+    val inTriage = List(0.45, 0.35).zipWithIndex.map((cosine, seed) => placed(description, cosine, seed + 10, isTriaged = true))
+    testApp.service.library.recycleAssets(Set(placed(description, 0.6, seed = 20).id))
+    testContext.insertAsset()
 
-      val first = testContext.repository
-      val second = testContext.persistRepository()
-      switchContextRepo(second)
-      (30 until 35).foreach {
-        seed =>
-          val asset = testContext.makeAsset(repository = Some(second))
-          testContext.insertAsset(asset.copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(unitVector(seed)))))
-      }
-      switchContextRepo(first)
-
-      withSetting(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY, EVERY_IMAGE) {
-        testApp.txManager.withTransaction {
-          preferVectorIndex()
-
-          /** What the description finds under a limit of exact ranking, and how many scans of the vector index it made */
-          def scanning(exactLimit: Int, filters: Filters = Filters()): (List[String], Long) = {
-            val before = describeIndexScans
-            val found = describe(description, filters, exactLimit = exactLimit)
-            (ids(found), describeIndexScans - before)
-          }
-
-          /** One scan of the index, handing out rows of the exact ranking alone, each once, in its order */
-          def throughIndex(exactLimit: Int, filters: Filters, exact: List[String]): Unit = {
-            val (found, scans) = scanning(exactLimit, filters)
-            scans shouldBe 1
-            found shouldBe exact.filter(found.toSet)
-          }
-
-          scanning(Const.Search.DESCRIBE_EXACT_LIMIT) shouldBe (kept.map(_.id), 0)
-          scanning(exactLimit = 3) shouldBe (kept.map(_.id), 0)
-          throughIndex(exactLimit = 2, Filters(), kept.map(_.id))
-
-          val withTriage = ranked(kept ++ inTriage, description)
-          scanning(exactLimit = 5, Filters(triaged = true)) shouldBe (withTriage, 0)
-          throughIndex(exactLimit = 4, Filters(triaged = true), withTriage)
-        }
-      }
+    val first = testContext.repository
+    val second = testContext.persistRepository()
+    switchContextRepo(second)
+    (30 until 35).foreach {
+      seed =>
+        val asset = testContext.makeAsset(repository = Some(second))
+        testContext.insertAsset(asset.copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(unitVector(seed)))))
     }
+    switchContextRepo(first)
 
-    test("A PostgreSQL description's exact ranking plans no vector index, and its index ranking plans it with the filters") {
-
-      /**
-       * Setup:
-       *
-       * The folder Trips with 2,500 assets with random unit vectors as Scene embeddings, every other one in the Location Lisbon,
-       * a random description embedding, and the planner told to read the vector index. The search is within the folder, the
-       * Location, a Date Imported range holding them all, and a Search text excluding a word none has.
-       *
-       * Assertions:
-       *
-       * The exact page's query plan sorts and names no `asset_describe`. The index page's plan scans `asset_describe` in order,
-       * testing the folder, Location and Search text on the rows it hands out. Under a limit of 1,000, both find 1,000 of the
-       * 1,250 matches, the exact one with no index scan and the other with one, and no index row is nearer than the exact row.
-       *
-       * Edge cases:
-       *
-       * The capped count that chooses between the two (1,250 against limits of 1,249 and 1,250) reads no vector index.
-       */
-      val trips = testApp.service.folder.add("Trips")
-      val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14)
-      val template = testContext.insertAsset(testContext.makeAsset(folder = Some(trips)))
-      val description = unitVector(1)
-      val prefix = "embedded-"
-      // The IDs `seedEmbedded` gives its even copies: the prefix, then the copy's number padded with zeros to an ID's length
-      val members = (2 to 2500 by 2).map(n => prefix + "0" * (36 - prefix.length - n.toString.length) + n).toSet
-      val today = LocalDate.now
-      val filters = Filters(
-        text = Some("-zebra"),
-        folderIds = Set(trips.persistedId),
-        locationIds = Set(lisbon.persistedId),
-        importedRange = Some(DateRange(Some(today.minusDays(2)), Some(today.plusDays(2))))
-      )
-
-      atScale {
-        seedEmbedded(template.persistedId, 2500, prefix)
-        testApp.service.location.addAssets(lisbon.persistedId, members) shouldBe 1250
-      } {
+    withSetting(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY, EVERY_IMAGE) {
+      testApp.txManager.withTransaction {
         preferVectorIndex()
-        val query = testApp.service.search.withResolvedScope(filters.query())
-        val ranking = DescribeRanking(description, minCosine = -1, limit = 1000, weakerRatio = 0)
-        def planned(exactly: Boolean): String =
-          planOf(
-            SearchQueries
-              .described(searchDialect, query, testContext.repository.persistedId, ranking.copy(throughIndex = !exactly)))
 
-        val exactPlan = planned(exactly = true)
-        (exactPlan should not).include("asset_describe")
-        exactPlan should include("Sort")
-
-        val indexPlan = planned(exactly = false)
-        indexPlan should include("Index Scan using asset_describe")
-        indexPlan should include("Order By: ((siglip2_embedding)::halfvec(768) <=>")
-        List("folder_id", "location_asset", "text_0_0_document").foreach(indexPlan should include(_))
-
-        val scansBefore = describeIndexScans
-        val exact = page(description, filters = filters, pageSize = 1000)
-        describeIndexScans shouldBe scansBefore
-        val byIndex = page(description, filters = filters, pageSize = 1000, exactLimit = 1249)
-        describeIndexScans shouldBe scansBefore + 1
-        page(description, filters = filters, pageSize = 1, exactLimit = 1250)
-        describeIndexScans shouldBe scansBefore + 1
-
-        def distances(found: SearchPage): List[Double] = found.rows.map(_.sortValue.bindValue.asInstanceOf[Double])
-        for (found <- List(exact, byIndex)) {
-          found.total shouldBe Some(1000)
-          found.rows should have size 1000
-          found.rows.map(_.asset.persistedId).toSet.subsetOf(members) shouldBe true
-          distances(found) shouldBe distances(found).sorted
+        /** What the description finds under a limit of exact ranking, and how many scans of the vector index it made */
+        def scanning(exactLimit: Int, filters: Filters = Filters()): (List[String], Long) = {
+          val before = describeIndexScans
+          val found = describe(description, filters, exactLimit = exactLimit)
+          (ids(found), describeIndexScans - before)
         }
-        // Nothing the index hands out is nearer than the nearest of all, row for row
-        distances(exact).zip(distances(byIndex)).foreach((nearest, approximate) => nearest should be <= approximate)
+
+        /** One scan of the index, handing out rows of the exact ranking alone, each once, in its order */
+        def throughIndex(exactLimit: Int, filters: Filters, exact: List[String]): Unit = {
+          val (found, scans) = scanning(exactLimit, filters)
+          scans shouldBe 1
+          found shouldBe exact.filter(found.toSet)
+        }
+
+        scanning(Const.Search.DESCRIBE_EXACT_LIMIT) shouldBe (kept.map(_.id), 0)
+        scanning(exactLimit = 3) shouldBe (kept.map(_.id), 0)
+        throughIndex(exactLimit = 2, Filters(), kept.map(_.id))
+
+        val withTriage = ranked(kept ++ inTriage, description)
+        scanning(exactLimit = 5, Filters(triaged = true)) shouldBe (withTriage, 0)
+        throughIndex(exactLimit = 4, Filters(triaged = true), withTriage)
       }
     }
+  }
 
-    test("A PostgreSQL Describe search of a small Library finds its rows among a large instance's", Slow) {
+  test("A PostgreSQL description's exact ranking plans no vector index, and its index ranking plans it with the filters") {
 
-      /**
-       * Setup:
-       *
-       * Two repositories, the context's with 600 assets and the other with 40,000, each with a random unit vector as its Scene
-       * embedding, and the planner told to read the vector index. pgvector's own cap stops a scan after 20,000 vectors.
-       *
-       * Assertions:
-       *
-       * Ranked through the index, a page for a limit of 580 counts 580 rows, all the context repository's, though the scan passes
-       * nearly all of the other's 40,000 vectors: the search lifts the cap.
-       *
-       * Edge cases:
-       *
-       * Under the default limit the same search makes no index scan: the 600 are ranked exactly, and the page counts 580 again.
-       */
-      val template = testContext.insertAsset()
-      val first = testContext.repository
-      val second = testContext.persistRepository()
-      switchContextRepo(second)
-      val other = testContext.insertAsset(testContext.makeAsset(repository = Some(second)))
-      switchContextRepo(first)
+    /**
+     * Setup:
+     *
+     * The folder Trips with 2,500 assets with random unit vectors as Scene embeddings, every other one in the Location Lisbon, a
+     * random description embedding, and the planner told to read the vector index. The search is within the folder, the Location,
+     * a Date Imported range holding them all, and a Search text excluding a word none has.
+     *
+     * Assertions:
+     *
+     * The exact page's query plan sorts and names no `asset_describe`. The index page's plan scans `asset_describe` in order,
+     * testing the folder, Location and Search text on the rows it hands out. Under a limit of 1,000, both find 1,000 of the 1,250
+     * matches, the exact one with no index scan and the other with one, and no index row is nearer than the exact row.
+     *
+     * Edge cases:
+     *
+     * The capped count that chooses between the two (1,250 against limits of 1,249 and 1,250) reads no vector index.
+     */
+    assume(isPostgres)
+    val trips = testApp.service.folder.add("Trips")
+    val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14)
+    val template = testContext.insertAsset(testContext.makeAsset(folder = Some(trips)))
+    val description = unitVector(1)
+    val prefix = "embedded-"
+    // The IDs `seedEmbedded` gives its even copies: the prefix, then the copy's number padded with zeros to an ID's length
+    val members = (2 to 2500 by 2).map(n => prefix + "0" * (36 - prefix.length - n.toString.length) + n).toSet
+    val today = LocalDate.now
+    val filters = Filters(
+      text = Some("-zebra"),
+      folderIds = Set(trips.persistedId),
+      locationIds = Set(lisbon.persistedId),
+      importedRange = Some(DateRange(Some(today.minusDays(2)), Some(today.plusDays(2))))
+    )
 
-      atScale {
-        seedEmbedded(template.persistedId, 600, "small-")
-        seedEmbedded(other.persistedId, 40000, "large-")
-      } {
-        preferVectorIndex()
-        val scansBefore = describeIndexScans
+    atScale {
+      seedEmbedded(template.persistedId, 2500, prefix)
+      testApp.service.location.addAssets(lisbon.persistedId, members) shouldBe 1250
+    } {
+      preferVectorIndex()
+      val query = testApp.service.search.withResolvedScope(filters.query())
+      val ranking = DescribeRanking(description, minCosine = -1, limit = 1000, weakerRatio = 0)
+      def planned(exactly: Boolean): String =
+        planOf(
+          SearchQueries
+            .described(searchDialect, query, testContext.repository.persistedId, ranking.copy(throughIndex = !exactly)))
 
-        val found = page(unitVector(2), limit = 580, pageSize = 500, exactLimit = 0)
-        describeIndexScans shouldBe scansBefore + 1
-        found.total shouldBe Some(580)
-        found.rows.map(_.asset.persistedId).foreach(_ should startWith("small-"))
+      val exactPlan = planned(exactly = true)
+      (exactPlan should not).include("asset_describe")
+      exactPlan should include("Sort")
 
-        val exact = page(unitVector(2), limit = 580, pageSize = 500)
-        describeIndexScans shouldBe scansBefore + 1
-        exact.total shouldBe Some(580)
-        exact.rows.map(_.asset.persistedId).foreach(_ should startWith("small-"))
+      val indexPlan = planned(exactly = false)
+      indexPlan should include("Index Scan using asset_describe")
+      indexPlan should include("Order By: ((siglip2_embedding)::halfvec(768) <=>")
+      List("folder_id", "location_asset", "text_0_0_document").foreach(indexPlan should include(_))
+
+      val scansBefore = describeIndexScans
+      val exact = page(description, filters = filters, pageSize = 1000)
+      describeIndexScans shouldBe scansBefore
+      val byIndex = page(description, filters = filters, pageSize = 1000, exactLimit = 1249)
+      describeIndexScans shouldBe scansBefore + 1
+      page(description, filters = filters, pageSize = 1, exactLimit = 1250)
+      describeIndexScans shouldBe scansBefore + 1
+
+      def distances(found: SearchPage): List[Double] = found.rows.map(_.sortValue.bindValue.asInstanceOf[Double])
+      for (found <- List(exact, byIndex)) {
+        found.total shouldBe Some(1000)
+        found.rows should have size 1000
+        found.rows.map(_.asset.persistedId).toSet.subsetOf(members) shouldBe true
+        distances(found) shouldBe distances(found).sorted
       }
+      // Nothing the index hands out is nearer than the nearest of all, row for row
+      distances(exact).zip(distances(byIndex)).foreach((nearest, approximate) => nearest should be <= approximate)
+    }
+  }
+
+  test("A PostgreSQL Describe search of a small Library finds its rows among a large instance's", Slow) {
+
+    /**
+     * Setup:
+     *
+     * Two repositories, the context's with 600 assets and the other with 40,000, each with a random unit vector as its Scene
+     * embedding, and the planner told to read the vector index. pgvector's own cap stops a scan after 20,000 vectors.
+     *
+     * Assertions:
+     *
+     * Ranked through the index, a page for a limit of 580 counts 580 rows, all the context repository's, though the scan passes
+     * nearly all of the other's 40,000 vectors: the search lifts the cap.
+     *
+     * Edge cases:
+     *
+     * Under the default limit the same search makes no index scan: the 600 are ranked exactly, and the page counts 580 again.
+     */
+    assume(isPostgres)
+    val template = testContext.insertAsset()
+    val first = testContext.repository
+    val second = testContext.persistRepository()
+    switchContextRepo(second)
+    val other = testContext.insertAsset(testContext.makeAsset(repository = Some(second)))
+    switchContextRepo(first)
+
+    atScale {
+      seedEmbedded(template.persistedId, 600, "small-")
+      seedEmbedded(other.persistedId, 40000, "large-")
+    } {
+      preferVectorIndex()
+      val scansBefore = describeIndexScans
+
+      val found = page(unitVector(2), limit = 580, pageSize = 500, exactLimit = 0)
+      describeIndexScans shouldBe scansBefore + 1
+      found.total shouldBe Some(580)
+      found.rows.map(_.asset.persistedId).foreach(_ should startWith("small-"))
+
+      val exact = page(unitVector(2), limit = 580, pageSize = 500)
+      describeIndexScans shouldBe scansBefore + 1
+      exact.total shouldBe Some(580)
+      exact.rows.map(_.asset.persistedId).foreach(_ should startWith("small-"))
     }
   }
 }

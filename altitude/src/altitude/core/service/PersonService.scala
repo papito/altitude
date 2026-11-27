@@ -26,6 +26,7 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.NameKey
 import altitude.core.util.Query
 import altitude.core.util.SearchQuery
+import altitude.core.util.Util
 
 object PersonService:
   val UNKNOWN_NAME_PREFIX = "Unknown"
@@ -37,7 +38,7 @@ object PersonService:
   /** A name as stored: NFC, so a name typed with a combining accent and the same name typed precomposed are one name */
   def normalizedName(name: String): String = NameKey.normalized(name)
 
-  /** The folded name that `person_01` keeps unique, stored as a named person's `name_for_sort`: "Weiß", "WEISS" are one name */
+  /** The folded name that `person_01` keeps unique, stored as a person's `name_key`: "Weiß", "WEISS" are one name */
   def nameKey(name: String): String = NameKey.of(name)
 
   /**
@@ -215,7 +216,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
         logger.debug(s"Person [${persistedDest.persistedId}] takes the name [$name] of the merged person")
         Map(
           FieldConst.Person.NAME -> name,
-          FieldConst.Person.NAME_FOR_SORT -> PersonService.nameKey(name),
+          FieldConst.Person.NAME_KEY -> PersonService.nameKey(name),
           FieldConst.Person.IS_NAMED -> true
         )
       case None => Map.empty
@@ -272,7 +273,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    * ([[removeFace]], [[moveFace]]) ends first: read from a snapshot where its Face still existed, the count would drop twice.
    */
   def recycleFacesForAssets(assetIds: Set[String]): Unit =
-    logger.trace(s"Recycling the faces of assets [${assetIds.mkString(",")}]")
+    logger.trace(s"Recycling the faces of assets: ${Util.inBrief(assetIds)}")
 
     txManager.withTransaction {
       lockAssetPeople(assetIds): Unit
@@ -280,7 +281,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     }
 
   def restoreFacesForAssets(assetIds: Set[String]): Unit =
-    logger.trace(s"Restoring the faces of assets [${assetIds.mkString(",")}]")
+    logger.trace(s"Restoring the faces of assets: ${Util.inBrief(assetIds)}")
 
     txManager.withTransaction {
       lockAssetPeople(assetIds): Unit
@@ -358,7 +359,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
         if now.subsetOf(held) then held
         else
-          logger.debug(s"Faces of assets [${assetIds.mkString(",")}] changed hands while their people were locked; locking again")
+          logger.debug(s"Faces of assets (${Util.inBrief(assetIds)}) changed hands while their people were locked; locking again")
           locked()
 
       locked()
@@ -377,8 +378,9 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
   /**
    * Moves every cover off the Faces of assets about to go (a purge, a discarded import); run before their rows go. Each cover
-   * holder, live or not, takes their best Face on another asset not marked for purging, or none. The people are locked first, so
-   * a concurrent import, correction or cover change waits; lock order is assets, then people, in every transaction locking both.
+   * holder, live or not, takes their best Face on another asset not marked for purging, or none. The people are locked before
+   * their Faces are read, so a concurrent import, correction or cover change waits. A caller that also locks the assets locks
+   * them first (a discard its unfinished row), as every transaction locking both takes assets before people.
    */
   def moveCoversOff(assetIds: Set[String]): Unit =
     if assetIds.isEmpty then return
@@ -685,7 +687,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
         person.persistedId,
         Map(
           FieldConst.Person.NAME -> name,
-          FieldConst.Person.NAME_FOR_SORT -> PersonService.nameKey(name),
+          FieldConst.Person.NAME_KEY -> PersonService.nameKey(name),
           FieldConst.Person.IS_NAMED -> true
         ))
 

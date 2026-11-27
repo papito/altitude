@@ -26,7 +26,7 @@ import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.service.RepositoryService
 import altitude.core.util.NameKey
-import altitude.core.util.NaturalOrder
+import altitude.core.util.SortKey
 import altitude.core.util.Util
 
 @DoNotDiscover class RepositoryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
@@ -48,8 +48,6 @@ import altitude.core.util.Util
   /** Whether the account's login token opens the Library, as the claims built for it from the database say */
   private def canSee(account: User, library: Repository): Boolean =
     testApp.service.user.claimsOf(account.persistedId).exists(_.permissionsIn(library.persistedId).isDefined)
-
-  private def persistAdmin(): User = testContext.persistUser(Some(testContext.makeAdminUser()))
 
   test("create repository") {
 
@@ -311,12 +309,12 @@ import altitude.core.util.Util
      * The Admin's Libraries are every Library of the instance, by name, and the Admin can see both new ones. The Admin holds no
      * grant in either.
      */
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val usersLibrary = addLibraryFor(s"Users ${Util.randomStr()}", testContext.users.head)
     val nobodys = addLibrary(s"Nobody's ${Util.randomStr()}")
 
     testApp.service.repository.getAccessibleTo(admin).map(_.persistedId) shouldBe
-      testApp.service.repository.getAll.sortBy(_.name)(using NaturalOrder).map(_.persistedId)
+      testApp.service.repository.getAll.sortBy(library => SortKey.of(library.name)).map(_.persistedId)
 
     for (library <- List(usersLibrary, nobodys)) {
       canSee(admin, library) shouldBe true
@@ -351,7 +349,7 @@ import altitude.core.util.Util
       query("SELECT account_id FROM repository_grant WHERE repository_id = ?", library.persistedId).size
     } shouldBe 1
 
-    val admin = persistAdmin()
+    val admin = testContext.persistAdmin()
     val guest = testContext.persistUser(Some(testContext.makeUser().copy(accountType = AccountType.Guest)))
     intercept[IllegalOperationException](testContext.grant(admin, library))
     intercept[IllegalOperationException](testContext.grant(guest, library, Permissions.of(Permission.Import)))
@@ -659,7 +657,7 @@ import altitude.core.util.Util
      */
     val unflagged = testContext.persistUser()
     val deactivated = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
-    testApp.service.user.deactivate(persistAdmin().persistedId, deactivated.persistedId)
+    testApp.service.user.deactivate(testContext.persistAdmin().persistedId, deactivated.persistedId)
     val before = RequestContext.getRepository.persistedId
 
     for (
@@ -678,191 +676,191 @@ import altitude.core.util.Util
     }
   }
 
-  if (testApp.dataSourceType == C.DbEngineName.POSTGRES)
-    test("A Library created while its creator is deactivated is refused once the deactivation commits") {
+  test("A Library created while its creator is deactivated is refused once the deactivation commits") {
 
-      /**
-       * Setup:
-       *
-       * A User with the Create Libraries flag. An Admin's deactivation of the User holds its transaction open, having locked the
-       * User's row, while the User's create of a Library waits on it; then the deactivation commits.
-       *
-       * Assertions:
-       *
-       * The create is refused with `ForbiddenException` (`FORBIDDEN_INACTIVE`): it reads the creator as its lock finds it, after
-       * the deactivation. No Library of the name exists, and the User holds no grant it would have made.
-       */
-      val creator = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
-      val admin = persistAdmin()
-      val name = s"Deactivated meanwhile ${Util.randomStr()}"
+    /**
+     * Setup:
+     *
+     * A User with the Create Libraries flag. An Admin's deactivation of the User holds its transaction open, having locked the
+     * User's row, while the User's create of a Library waits on it; then the deactivation commits.
+     *
+     * Assertions:
+     *
+     * The create is refused with `ForbiddenException` (`FORBIDDEN_INACTIVE`): it reads the creator as its lock finds it, after
+     * the deactivation. No Library of the name exists, and the User holds no grant it would have made.
+     */
+    assume(testApp.dataSourceType == C.DbEngineName.POSTGRES)
+    val creator = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
+    val admin = testContext.persistAdmin()
+    val name = s"Deactivated meanwhile ${Util.randomStr()}"
 
-      intercept[ForbiddenException] {
-        contend(
-          testApp.service.user.deactivate(admin.persistedId, creator.persistedId),
-          testApp.service.repository.addRepository(name, C.StorageEngineName.FS, creatorId = Some(creator.persistedId)): Unit
-        )
-      }.getMessage shouldBe C.Msg.Err.FORBIDDEN_INACTIVE
+    intercept[ForbiddenException] {
+      contend(
+        testApp.service.user.deactivate(admin.persistedId, creator.persistedId),
+        testApp.service.repository.addRepository(name, C.StorageEngineName.FS, creatorId = Some(creator.persistedId)): Unit
+      )
+    }.getMessage shouldBe C.Msg.Err.FORBIDDEN_INACTIVE
 
-      librariesKeyed(NameKey.of(name)) shouldBe empty
-      testApp.txManager.asReadOnly(testApp.DAO.repositoryGrant.getByAccount(creator.persistedId)) shouldBe empty
-    }
+    librariesKeyed(NameKey.of(name)) shouldBe empty
+    testApp.txManager.asReadOnly(testApp.DAO.repositoryGrant.getByAccount(creator.persistedId)) shouldBe empty
+  }
 
-  if (testApp.dataSourceType == C.DbEngineName.POSTGRES)
-    test("Two Libraries created at once, each granting the other's creator, lock their accounts in one order and both commit") {
+  test("Two Libraries created at once, each granting the other's creator, lock their accounts in one order and both commit") {
 
-      /**
-       * Setup:
-       *
-       * Two accounts with the Create Libraries flag whose new-Library switch is on, the first and the second as the switch's read
-       * lists them, and a third with the flag alone. A transaction holds the first account's row. The third account creates a
-       * Library, which waits for that row; then the first account creates one, which waits too, having taken whatever came before
-       * it. Then the holding transaction ends.
-       *
-       * Assertions:
-       *
-       * Both creates commit and neither fails: each takes the rows of the accounts it grants in one pass, in ID order, so the two
-       * cannot wait on each other. In the first Library the first account holds its new-Library Permissions, in the second every
-       * Permission, and the second account holds its new-Library Permissions in both.
-       */
-      val candidates = List.fill(2)(testContext.persistUser(Some(testContext
+    /**
+     * Setup:
+     *
+     * Two accounts with the Create Libraries flag whose new-Library switch is on, the first and the second as the switch's read
+     * lists them, and a third with the flag alone. A transaction holds the first account's row. The third account creates a
+     * Library, which waits for that row; then the first account creates one, which waits too, having taken whatever came before
+     * it. Then the holding transaction ends.
+     *
+     * Assertions:
+     *
+     * Both creates commit and neither fails: each takes the rows of the accounts it grants in one pass, in ID order, so the two
+     * cannot wait on each other. In the first Library the first account holds its new-Library Permissions, in the second every
+     * Permission, and the second account holds its new-Library Permissions in both.
+     */
+    assume(testApp.dataSourceType == C.DbEngineName.POSTGRES)
+    val candidates = List.fill(2)(
+      testContext.persistUser(Some(testContext
         .makeUser()
         .copy(canCreateLibraries = true, grantsNewLibraries = true, newLibraryPermissions = Permissions.of(Permission.Import)))))
-      // The order an unordered read of the switch lists them in, which a create that did not lock by ID would take them in
-      val listed = testApp.txManager.asReadOnly {
-        query("SELECT id FROM account WHERE grants_new_libraries = ?", Boolean.box(true)).map(_("id").toString.trim)
-      }
-      val List(first, second) = candidates.sortBy(account => listed.indexOf(account.persistedId))
-      val third = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
-
-      val backends = new java.util.concurrent.ConcurrentHashMap[String, AnyRef]()
-      def isWaiting(who: String): Boolean =
-        Option(backends.get(who)).exists {
-          pid =>
-            testApp.txManager.asReadOnly {
-              query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
-            }
-        }
-      def creating(who: String, creator: User, name: String) =
-        onAnotherThread {
-          testApp.txManager.withTransaction {
-            backends.put(who, query("SELECT pg_backend_pid() AS pid").head("pid"))
-            testApp.service.repository.addRepository(name, C.StorageEngineName.FS, creatorId = Some(creator.persistedId)): Unit
-          }
-        }
-      def eventually(condition: => Boolean): Unit =
-        org.scalatest.concurrent.Eventually.eventually(
-          org.scalatest.concurrent.Eventually.timeout(org.scalatest.time.Span(30, org.scalatest.time.Seconds)),
-          org.scalatest.concurrent.Eventually.interval(org.scalatest.time.Span(20, org.scalatest.time.Millis))
-        ) {
-          condition shouldBe true
-        }
-
-      val release = new java.util.concurrent.CountDownLatch(1)
-      val holding = new java.util.concurrent.CountDownLatch(1)
-      val (holder, _) = onAnotherThread {
-        testApp.txManager.withTransaction {
-          testApp.DAO.user.lockById(first.persistedId)
-          holding.countDown()
-          release.await(30, java.util.concurrent.TimeUnit.SECONDS): Unit
-        }
-      }
-      holding.await(30, java.util.concurrent.TimeUnit.SECONDS) shouldBe true
-
-      val (thirdName, firstName) = (s"By the third ${Util.randomStr()}", s"By the first ${Util.randomStr()}")
-      val (byThird, thirdFailure) = creating("third", third, thirdName)
-      eventually(isWaiting("third"))
-      val (byFirst, firstFailure) = creating("first", first, firstName)
-      eventually(isWaiting("first"))
-      release.countDown()
-      List(holder, byThird, byFirst).foreach(_.join())
-
-      thirdFailure.get shouldBe None
-      firstFailure.get shouldBe None
-      val (thirdLibrary, firstLibrary) = (librariesKeyed(NameKey.of(thirdName)).head, librariesKeyed(NameKey.of(firstName)).head)
-      testContext.grantOf(first, thirdLibrary.persistedId) shouldBe Some(Permissions.of(Permission.Import))
-      testContext.grantOf(first, firstLibrary.persistedId) shouldBe Some(Permissions.all)
-      for (library <- List(thirdLibrary, firstLibrary))
-        testContext.grantOf(second, library.persistedId) shouldBe Some(Permissions.of(Permission.Import))
+    // The order an unordered read of the switch lists them in, which a create that did not lock by ID would take them in
+    val listed = testApp.txManager.asReadOnly {
+      query("SELECT id FROM account WHERE grants_new_libraries = ?", Boolean.box(true)).map(_("id").toString.trim)
     }
+    val List(first, second) = candidates.sortBy(account => listed.indexOf(account.persistedId))
+    val third = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
 
-  if (testApp.dataSourceType == C.DbEngineName.POSTGRES)
-    test("An Admin creating a Library while another Admin edits an account it grants take the rows in one order") {
-
-      /**
-       * Setup:
-       *
-       * Two Admins, the creator and the editor, and a User holding Import in a Library, whose new-Library switch is on and whose
-       * ID sorts before the creator's. The editor's transaction takes the active Admins' rows, as an Admin's edit does first, and
-       * holds them until the creator's create of a Library waits; then the editor renames the User in it.
-       *
-       * Assertions:
-       *
-       * Both commit and neither fails: the create takes the active Admins' rows before the rows of the accounts it grants, as
-       * every account write does, so it holds no grantee's row while it waits on the editor. The User is renamed, and holds its
-       * new-Library Permissions in the new Library.
-       */
-      val creator = persistAdmin()
-      val editor = persistAdmin()
-      def sortsFirst(account: User): Boolean =
-        testApp.txManager.asReadOnly {
-          query("SELECT id FROM account WHERE id IN (?, ?) ORDER BY id", account.persistedId, creator.persistedId)
-            .head("id")
-            .toString
-            .trim
-        } == account.persistedId
-      val user = Iterator
-        .continually(testContext.persistUser(Some(
-          testContext.makeUser().copy(grantsNewLibraries = true, newLibraryPermissions = Permissions.of(Permission.Import)))))
-        .find(sortsFirst)
-        .get
-      // An account edit keeps a User in at least one Library
-      testContext.grant(user, testContext.repository, Permissions.of(Permission.Import))
-      val users = testApp.service.user
-      val opened = users.openForEdit(user.persistedId)
-
-      val backends = new java.util.concurrent.ConcurrentHashMap[String, AnyRef]()
-      def isWaiting(who: String): Boolean =
-        Option(backends.get(who)).exists {
-          pid =>
-            testApp.txManager.asReadOnly {
-              query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
-            }
-        }
-      def eventually(condition: => Boolean): Unit =
-        org.scalatest.concurrent.Eventually.eventually(
-          org.scalatest.concurrent.Eventually.timeout(org.scalatest.time.Span(30, org.scalatest.time.Seconds)),
-          org.scalatest.concurrent.Eventually.interval(org.scalatest.time.Span(20, org.scalatest.time.Millis))
-        ) {
-          condition shouldBe true
-        }
-
-      val holding = new java.util.concurrent.CountDownLatch(1)
-      val go = new java.util.concurrent.CountDownLatch(1)
-      val (editing, editFailure) = onAnotherThread {
-        testApp.txManager.withTransaction {
-          testApp.DAO.user.lockActiveAdmins()
-          holding.countDown()
-          go.await(30, java.util.concurrent.TimeUnit.SECONDS)
-          users.update(editor.persistedId, user.copy(name = "Renamed Grantee"), opened.grants, opened.state): Unit
-        }
+    val backends = new java.util.concurrent.ConcurrentHashMap[String, AnyRef]()
+    def isWaiting(who: String): Boolean =
+      Option(backends.get(who)).exists {
+        pid =>
+          testApp.txManager.asReadOnly {
+            query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
+          }
       }
-      holding.await(30, java.util.concurrent.TimeUnit.SECONDS) shouldBe true
-
-      val name = s"By an Admin ${Util.randomStr()}"
-      val (creating, createFailure) = onAnotherThread {
+    def creating(who: String, creator: User, name: String) =
+      onAnotherThread {
         testApp.txManager.withTransaction {
-          backends.put("creator", query("SELECT pg_backend_pid() AS pid").head("pid"))
+          backends.put(who, query("SELECT pg_backend_pid() AS pid").head("pid"))
           testApp.service.repository.addRepository(name, C.StorageEngineName.FS, creatorId = Some(creator.persistedId)): Unit
         }
       }
-      eventually(isWaiting("creator"))
-      go.countDown()
-      List(editing, creating).foreach(_.join())
+    def eventually(condition: => Boolean): Unit =
+      org.scalatest.concurrent.Eventually.eventually(
+        org.scalatest.concurrent.Eventually.timeout(org.scalatest.time.Span(30, org.scalatest.time.Seconds)),
+        org.scalatest.concurrent.Eventually.interval(org.scalatest.time.Span(20, org.scalatest.time.Millis))
+      ) {
+        condition shouldBe true
+      }
 
-      editFailure.get shouldBe None
-      createFailure.get shouldBe None
-      testApp.service.user.getById(user.persistedId).name shouldBe "Renamed Grantee"
-      testContext.grantOf(user, librariesKeyed(NameKey.of(name)).head.persistedId) shouldBe Some(
-        Permissions.of(Permission.Import))
+    val release = new java.util.concurrent.CountDownLatch(1)
+    val holding = new java.util.concurrent.CountDownLatch(1)
+    val (holder, _) = onAnotherThread {
+      testApp.txManager.withTransaction {
+        testApp.DAO.user.lockById(first.persistedId)
+        holding.countDown()
+        holdUntil(release)
+      }
     }
+    holding.await(30, java.util.concurrent.TimeUnit.SECONDS) shouldBe true
+
+    val (thirdName, firstName) = (s"By the third ${Util.randomStr()}", s"By the first ${Util.randomStr()}")
+    val (byThird, thirdFailure) = creating("third", third, thirdName)
+    eventually(isWaiting("third"))
+    val (byFirst, firstFailure) = creating("first", first, firstName)
+    eventually(isWaiting("first"))
+    release.countDown()
+    List(holder, byThird, byFirst).foreach(joined)
+
+    thirdFailure.get shouldBe None
+    firstFailure.get shouldBe None
+    val (thirdLibrary, firstLibrary) = (librariesKeyed(NameKey.of(thirdName)).head, librariesKeyed(NameKey.of(firstName)).head)
+    testContext.grantOf(first, thirdLibrary.persistedId) shouldBe Some(Permissions.of(Permission.Import))
+    testContext.grantOf(first, firstLibrary.persistedId) shouldBe Some(Permissions.all)
+    for (library <- List(thirdLibrary, firstLibrary))
+      testContext.grantOf(second, library.persistedId) shouldBe Some(Permissions.of(Permission.Import))
+  }
+
+  test("An Admin creating a Library while another Admin edits an account it grants take the rows in one order") {
+
+    /**
+     * Setup:
+     *
+     * Two Admins, the creator and the editor, and a User holding Import in a Library, whose new-Library switch is on and whose ID
+     * sorts before the creator's. The editor's transaction takes the active Admins' rows, as an Admin's edit does first, and
+     * holds them until the creator's create of a Library waits; then the editor renames the User in it.
+     *
+     * Assertions:
+     *
+     * Both commit and neither fails: the create takes the active Admins' rows before the rows of the accounts it grants, as every
+     * account write does, so it holds no grantee's row while it waits on the editor. The User is renamed, and holds its
+     * new-Library Permissions in the new Library.
+     */
+    assume(testApp.dataSourceType == C.DbEngineName.POSTGRES)
+    val creator = testContext.persistAdmin()
+    val editor = testContext.persistAdmin()
+    def sortsFirst(account: User): Boolean =
+      testApp.txManager.asReadOnly {
+        query("SELECT id FROM account WHERE id IN (?, ?) ORDER BY id", account.persistedId, creator.persistedId)
+          .head("id")
+          .toString
+          .trim
+      } == account.persistedId
+    val user = Iterator
+      .continually(testContext.persistUser(
+        Some(testContext.makeUser().copy(grantsNewLibraries = true, newLibraryPermissions = Permissions.of(Permission.Import)))))
+      .find(sortsFirst)
+      .get
+    // An account edit keeps a User in at least one Library
+    testContext.grant(user, testContext.repository, Permissions.of(Permission.Import))
+    val users = testApp.service.user
+    val opened = users.openForEdit(user.persistedId)
+
+    val backends = new java.util.concurrent.ConcurrentHashMap[String, AnyRef]()
+    def isWaiting(who: String): Boolean =
+      Option(backends.get(who)).exists {
+        pid =>
+          testApp.txManager.asReadOnly {
+            query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
+          }
+      }
+    def eventually(condition: => Boolean): Unit =
+      org.scalatest.concurrent.Eventually.eventually(
+        org.scalatest.concurrent.Eventually.timeout(org.scalatest.time.Span(30, org.scalatest.time.Seconds)),
+        org.scalatest.concurrent.Eventually.interval(org.scalatest.time.Span(20, org.scalatest.time.Millis))
+      ) {
+        condition shouldBe true
+      }
+
+    val holding = new java.util.concurrent.CountDownLatch(1)
+    val go = new java.util.concurrent.CountDownLatch(1)
+    val (editing, editFailure) = onAnotherThread {
+      testApp.txManager.withTransaction {
+        testApp.DAO.user.lockActiveAdmins()
+        holding.countDown()
+        go.await(30, java.util.concurrent.TimeUnit.SECONDS)
+        users.update(editor.persistedId, user.copy(name = "Renamed Grantee"), opened.grants, opened.state): Unit
+      }
+    }
+    holding.await(30, java.util.concurrent.TimeUnit.SECONDS) shouldBe true
+
+    val name = s"By an Admin ${Util.randomStr()}"
+    val (creating, createFailure) = onAnotherThread {
+      testApp.txManager.withTransaction {
+        backends.put("creator", query("SELECT pg_backend_pid() AS pid").head("pid"))
+        testApp.service.repository.addRepository(name, C.StorageEngineName.FS, creatorId = Some(creator.persistedId)): Unit
+      }
+    }
+    eventually(isWaiting("creator"))
+    go.countDown()
+    List(editing, creating).foreach(joined)
+
+    editFailure.get shouldBe None
+    createFailure.get shouldBe None
+    testApp.service.user.getById(user.persistedId).name shouldBe "Renamed Grantee"
+    testContext.grantOf(user, librariesKeyed(NameKey.of(name)).head.persistedId) shouldBe Some(Permissions.of(Permission.Import))
+  }
 }

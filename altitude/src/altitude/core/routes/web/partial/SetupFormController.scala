@@ -36,6 +36,13 @@ class SetupFormController(using logger: Logger) extends BaseController:
     lower = List(Api.Field.Setup.ADMIN_EMAIL)
   )
 
+  /** The account rules' fields (`User.valid`), each with the setup form's field its error shows under */
+  private val ACCOUNT_FIELDS = List(
+    FieldConst.User.USERNAME -> Api.Field.Setup.ADMIN_USERNAME,
+    FieldConst.User.NAME -> Api.Field.Setup.ADMIN_NAME,
+    FieldConst.User.EMAIL -> Api.Field.Setup.ADMIN_EMAIL
+  )
+
   private val apiRequestValidator = ApiRequestValidator(
     required = List(
       Api.Field.Setup.ADMIN_EMAIL,
@@ -101,14 +108,19 @@ class SetupFormController(using logger: Logger) extends BaseController:
             Api.Field.Setup.PASSWORD -> C.Msg.Err.PASSWORDS_DO_NOT_MATCH
           )
 
-      // The username rule, checked here too so its error shows beside the others; UserService.add applies it again
-      if !validationException.errors.contains(Api.Field.Setup.ADMIN_USERNAME) then
-        try User.validUsername(username)
-        catch
-          case ex: ValidationException =>
-            ex.errors.get(FieldConst.User.USERNAME).foreach {
-              error => validationException.errors += (Api.Field.Setup.ADMIN_USERNAME -> error)
-            }
+      // The account rules (User.valid: the username rule, the name rule, the email address), checked here too so each error shows
+      // beside the others under its field rather than fail Setup; UserService.add applies them again. A field the request
+      // validator refused keeps that error.
+      val userModel = User(email = email, username = username, name = name, accountType = AccountType.Admin)
+      try User.valid(userModel): Unit
+      catch
+        case ex: ValidationException =>
+          ACCOUNT_FIELDS.foreach {
+            (accountField, setupField) =>
+              ex.errors.get(accountField).filterNot(_ => validationException.errors.contains(setupField)).foreach {
+                error => validationException.errors += (setupField -> error)
+              }
+          }
 
       // The Library name rule, likewise; addRepository applies it again
       try Repository.validName(repositoryName)
@@ -122,13 +134,6 @@ class SetupFormController(using logger: Logger) extends BaseController:
         val payload = "<!doctype html>" + htmx.html.setup_form(jsonIn, validationException.errors.toMap)
         cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
       else
-        val userModel = User(
-          email = email,
-          username = username,
-          name = name,
-          accountType = AccountType.Admin
-        )
-
         // The Library is recorded as the Admin's last active one when the redirect loads its page
         // The flag is set once a Setup commits, so a submission racing one that has not yet is refused by the system row. That
         // refusal means a Setup has committed: the flag is set here too, should this request come before the other's flag is.

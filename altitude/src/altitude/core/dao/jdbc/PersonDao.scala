@@ -57,14 +57,13 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
         INSERT INTO person (${FieldConst.ID},
                             ${FieldConst.REPO_ID},
                             ${FieldConst.Person.NAME},
-                            ${FieldConst.Person.NAME_FOR_SORT},
+                            ${FieldConst.Person.NAME_KEY},
                             ${FieldConst.Person.NAME_SORT},
                             ${FieldConst.Person.IS_NAMED})
               VALUES (?, ?, ?, ?, ?, ?)
    """
 
     val personName = getPersonName(person, personSeqNum)
-    val personSortName = getPersonSortName(person, personSeqNum)
     val isNamed = person.name.isDefined
 
     val id = BaseDao.genId
@@ -73,7 +72,9 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
       id,
       RequestContext.getRepository.persistedId,
       personName,
-      personSortName,
+      // An unnamed person's is the key of "Unknown 42": the reserved-name rule (PersonService.isReservedName) keeps every named
+      // person's key apart from it, and the label sequence makes it unique
+      PersonService.nameKey(personName),
       SortKey.of(personName).bytes,
       isNamed
     )
@@ -85,13 +86,6 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
   protected def getPersonName(person: Person, sequenceNum: Long): String =
     if person.name.isDefined then PersonService.normalizedName(person.name.get)
     else s"${PersonService.UNKNOWN_NAME_PREFIX} $sequenceNum"
-
-  // The name key, or "unknown 0000000042" etc: the name key of the prefix, so the reserved-name rule
-  // (PersonService.isReservedName) keeps every named person's key apart from it. Ten digits keep the unnamed in number order as
-  // text up to label 9,999,999,999 of the instance-wide label sequence, which discarded imports also draw from.
-  protected def getPersonSortName(person: Person, sequenceNum: Long): String =
-    if person.name.isDefined then PersonService.nameKey(person.name.get)
-    else f"${PersonService.nameKey(PersonService.UNKNOWN_NAME_PREFIX)} $sequenceNum%010d"
 
   def getAll: Map[String, Person] =
     val sql = """SELECT *
@@ -266,7 +260,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
        WHERE repository_id = ?
          AND id $inIdSet
          $namedTest
-         AND NOT EXISTS (SELECT 1 FROM face WHERE face.person_id = person.id)
+         AND NOT EXISTS (SELECT 1 FROM face WHERE face.repository_id = person.repository_id AND face.person_id = person.id)
     """
     val faceless = manyBySqlQuery(sql, List(repositoryId, idSet(personIds)))
       .map(_(FieldConst.ID).asInstanceOf[String])
@@ -287,6 +281,6 @@ object PersonDao:
 
     PersonRow.select.filter {
       person =>
-        (person.repositoryId `=` repositoryId) && (person.nameForSort `=` nameKey) && (person.isDeleted `=` false) &&
+        (person.repositoryId `=` repositoryId) && (person.nameKey `=` nameKey) && (person.isDeleted `=` false) &&
         (person.isBadMatch `=` false)
     }

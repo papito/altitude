@@ -9,10 +9,13 @@ import org.scalatest.matchers.should.Matchers.shouldBe
 
 import scala.util.Random
 
-import altitude.core.util.NaturalOrder
 import altitude.core.util.SortKey
 
+/** The natural order (**Natural order** in `altitude/AGENTS.md`), which `SortKey.of` defines */
 @DoNotDiscover class NaturalOrderTests extends funsuite.AnyFunSuite with TestFocus {
+
+  /** The sign of two names' comparison in the natural order: by their keys */
+  private def sign(a: String, b: String): Int = Integer.signum(summon[Ordering[SortKey]].compare(SortKey.of(a), SortKey.of(b)))
 
   test("Names sort case-insensitively, with each run of digits compared as a number") {
 
@@ -39,7 +42,7 @@ import altitude.core.util.SortKey
       "Zeta"
     )
 
-    Random.shuffle(expected).sorted(using NaturalOrder) shouldBe expected
+    Random.shuffle(expected).sortBy(SortKey.of) shouldBe expected
   }
 
   test("Numbers of any length compare by value, and the order stays total") {
@@ -55,16 +58,15 @@ import altitude.core.util.SortKey
      * Long numbers compare by value. Of equal numbers, fewer leading zeros come first, and names equal but for case keep a fixed
      * order, so no two different names compare equal.
      */
-    NaturalOrder.compare("Roll 99999999999999999999", "Roll 100000000000000000000") shouldBe -1
-    NaturalOrder.compare("Roll 100000000000000000000", "Roll 99999999999999999999") shouldBe 1
+    sign("Roll 99999999999999999999", "Roll 100000000000000000000") shouldBe -1
+    sign("Roll 100000000000000000000", "Roll 99999999999999999999") shouldBe 1
 
     val zeros = List("File 7", "File 07", "File 007", "File 8")
-    Random.shuffle(zeros).sorted(using NaturalOrder) shouldBe zeros
+    Random.shuffle(zeros).sortBy(SortKey.of) shouldBe zeros
 
-    Math.signum(NaturalOrder.compare("Smith", "smith").toFloat) shouldBe -Math.signum(
-      NaturalOrder.compare("smith", "Smith").toFloat)
-    (NaturalOrder.compare("Smith", "smith") != 0) shouldBe true
-    NaturalOrder.compare("Same 1", "Same 1") shouldBe 0
+    sign("Smith", "smith") shouldBe -sign("smith", "Smith")
+    (sign("Smith", "smith") != 0) shouldBe true
+    sign("Same 1", "Same 1") shouldBe 0
   }
 
   test("Accented letters sort beside their base letters") {
@@ -89,7 +91,7 @@ import altitude.core.util.SortKey
       "Zoo"
     )
 
-    Random.shuffle(expected).sorted(using NaturalOrder) shouldBe expected
+    Random.shuffle(expected).sortBy(SortKey.of) shouldBe expected
   }
 
   test("The order is total and transitive across numbers, punctuation, accents, other scripts and digits of other kinds") {
@@ -130,8 +132,6 @@ import altitude.core.util.SortKey
       "E\u0301mile"
     )
 
-    def sign(a: String, b: String): Int = Integer.signum(NaturalOrder.compare(a, b))
-
     for (a <- names; b <- names) {
       withClue(s"[$a] [$b]: ") {
         sign(a, b) shouldBe -sign(b, a)
@@ -155,8 +155,8 @@ import altitude.core.util.SortKey
      *
      * Assertions:
      *
-     * `NaturalOrder` sorts them in that order, and so do their `SortKey`s, whose bytes a `*_sort` column holds and both engines
-     * compare as `memcmp` does.
+     * Their `SortKey`s sort them in that order, and so do the keys' bytes, which a `*_sort` column holds and both engines compare
+     * as `memcmp` does.
      *
      * Edge cases:
      *
@@ -164,7 +164,6 @@ import altitude.core.util.SortKey
      */
     val names = TestContext.NATURAL_NAMES
 
-    Random.shuffle(names).sorted(using NaturalOrder) shouldBe names
     Random.shuffle(names).sortBy(SortKey.of) shouldBe names
     Random
       .shuffle(names)
@@ -217,6 +216,6 @@ import altitude.core.util.SortKey
       "\u00DE\u00F3r"
     )
 
-    Random.shuffle(expected).sorted(using NaturalOrder) shouldBe expected
+    Random.shuffle(expected).sortBy(SortKey.of) shouldBe expected
   }
 }

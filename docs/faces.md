@@ -195,7 +195,7 @@ the assets and in ID order), so a correction holding one of them (see **Correcti
 while it held, from a snapshot in which its Face still existed, the count would take the asset from the Person twice.
 `merge` recounts the destination from a search for its assets.
 The faces themselves go with the asset on purge, and their files with them (`LibraryService.deletePurgedAsset`, the
-purge's last step). An unnamed person left with no Face then goes too (`deletePeopleWithoutFaces` with `keepNamed`); a
+purge's last step). An unnamed person left with no Face then goes too (`deleteUnnamedPeopleWithoutFaces`); a
 named one keeps their row and name with no Face, still holding the name under `person_01` and offered in the Change
 combobox, so a Face can be given to them again. The asset's row is locked first (`AssetDao.lockPurged`), as a library
 operation locks its assets before their people, since an account write may hold it. The people of the asset's Faces
@@ -275,14 +275,14 @@ negative number is shown: such a person is left off the list until the next reco
 The tab's actions:
 
 - **Name**: `updateName` stores the name in NFC (`PersonService.normalizedName`, `NameKey.normalized`) and sets
-  `is_named`; a named person is Matched whatever their count. A named person's `name_for_sort` is its name key
+  `is_named`; a named person is Matched whatever their count. A person's `name_key` is its name key
   (`PersonService.nameKey`, which is `NameKey.of`; **Names** in `altitude/AGENTS.md`), and `person_01` keeps that unique
   over the live people, hidden ones included, so a name is unique regardless of case, in any script, and of Unicode form:
   "Weiß" and "WEISS", a Greek name with a final sigma and with a plain one ("σοφος" and "σοφοσ"), or a name with a
   full-width letter and the same name without, are one name. A merged-away or bad-match person holds no name. An unnamed
-  person's `name_for_sort` is `unknown 0000000042` (the name key of `UNKNOWN_NAME_PREFIX`, then the number padded to ten
-  digits), so a name of the
-  form `Unknown N`, in any case and spacing, is reserved and refused with a validation error. The name is held to 2 to 80
+  person's is the key of their name `Unknown 42`, `unknown 42`, which the label sequence makes unique, so a name of the
+  form `Unknown N`, in any case and spacing, is reserved and refused with a validation error: no named person's key is
+  ever one of them. The name is held to 2 to 80
   characters once in NFC, with a name key within `NameKey.MAX_KEY_BYTES` (`PersonService.validName`, which every naming
   path, a rename and a move of a Face to a Person by name, goes through; **Names** in `altitude/AGENTS.md`). `isReservedName` tests the name's NFKC form, as the key folds it, so the form's
   compatibility forms are reserved too: a full-width "Ｕnknown 42", or one with circled digits. `updateName` takes the
@@ -312,7 +312,7 @@ The tab's actions:
 - **Merge** (`merge(dest, source)`): the source's faces move to the destination, the source is soft-deleted, and the
   destination's count is recounted from the search. Both people's rows are locked first (`lockAndGetLive`, in ID order).
   The merged name is decided from the two stored rows, not the models passed in: an unnamed destination with a named,
-  live source takes the source's `name`, its name key as `name_for_sort`, and `is_named`; otherwise the destination, named
+  live source takes the source's `name`, its name key as `name_key`, and `is_named`; otherwise the destination, named
   or not, keeps all three. A source no longer live (merged away or a bad match) gives no name; a merge of one is not
   refused. A destination no longer live is not found (`NotFoundException`), as a stale modal or a second account may still
   offer it: its Faces would go to someone no list shows and later imports would vote for. The source is soft-deleted first, so `person_01` never sees the name on two live people. One Face per Person

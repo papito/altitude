@@ -150,7 +150,7 @@ import altitude.core.util.SequenceRule
      *
      * Three frames of a burst imported unpaired under strict thresholds; of the first two, the one of the higher ID is captured
      * first and its row written first. A third transaction holds the other; then a recycle of both starts and waits on it; then,
-     * at the defaults, the third frame is assigned and waits or ends; then the frame is let go (`whileHolding`).
+     * at the defaults, the third frame is assigned and waits; then the frame is let go (`whileHolding`).
      *
      * Assertions:
      *
@@ -190,8 +190,8 @@ import altitude.core.util.SequenceRule
      *
      * Two frames of a burst, each in a Sequence of its own: the one of the lower ID with two more assets, the other with one
      * more, of a lower ID than its own and captured nowhere near. A third transaction holds that member; then a recycle of it and
-     * its frame starts and waits on it; then a third frame of the burst is assigned, matching both frames, and waits or ends;
-     * then the member is let go (`whileHolding`).
+     * its frame starts and waits on it; then a third frame of the burst is assigned, matching both frames, and waits; then the
+     * member is let go (`whileHolding`).
      *
      * Assertions:
      *
@@ -211,7 +211,11 @@ import altitude.core.util.SequenceRule
     }
     val List(inLarger, inSmaller) = frames.sortBy(_.persistedId)
     // Of a lower ID than its frame, so the recycle locks it first
-    val outside = Iterator.continually(testContext.persistAsset(isTriaged = true)).find(_.persistedId < inSmaller.persistedId).get
+    val outside = Iterator
+      .continually(testContext.persistAsset(isTriaged = true))
+      .take(40)
+      .find(_.persistedId < inSmaller.persistedId)
+      .getOrElse(fail("No asset of a lower ID than the frame's in 40"))
     val (larger, smaller) = (UUID.randomUUID.toString, UUID.randomUUID.toString)
     testContext.setAssetSequence(inLarger :: List.fill(2)(testContext.persistAsset(isTriaged = true)), larger)
     testContext.setAssetSequence(List(inSmaller, outside), smaller)
@@ -235,7 +239,7 @@ import altitude.core.util.SequenceRule
      * A User who imported two frames of a burst, unpaired under strict thresholds; the one of the higher ID is put back to before
      * its completion. A third transaction holds the repository's turn among Sequence writers; then the frame's completion starts,
      * at the defaults, and waits on it; then an Admin's rename of the User, which rewrites the importer records of both frames,
-     * starts and waits or ends; then the turn is let go (`whileHolding`).
+     * starts and waits; then the turn is let go (`whileHolding`).
      *
      * Assertions:
      *
@@ -249,7 +253,7 @@ import altitude.core.util.SequenceRule
      */
     assume(testApp.dataSourceType == altitude.core.Const.DbEngineName.POSTGRES)
     val users = testApp.service.user
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val grants = Map(testContext.repository.persistedId -> altitude.core.models.Permissions.all)
     val importer = users.create(admin.persistedId, testContext.makeUser(), "password 1", grants)
     val actor = RequestContext.account.value.get

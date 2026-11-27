@@ -261,7 +261,7 @@ import altitude.core.models.Permissions
      *
      * The name is HTML-escaped in the title.
      */
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val repoId = addLibrary("Smith & Sons", admin).persistedId
     login()
 
@@ -423,7 +423,7 @@ import altitude.core.models.Permissions
      *
      * The User's Library is listed too: an Admin sees every Library.
      */
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val client10 = addLibrary("Client 10", admin)
     val client2 = addLibrary("client 2", admin)
     val alpha = addLibrary("Alpha", admin)
@@ -501,7 +501,7 @@ import altitude.core.models.Permissions
      * A nav reload's Browse cell holds the Browse link, then the Library menu's host, `hx-preserve` and empty, since htmx keeps
      * the page's built host and drops the reload's.
      */
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val repoId = addLibrary("Library A", admin).persistedId
     addLibrary("Library B", admin)
     login()
@@ -625,7 +625,7 @@ import altitude.core.models.Permissions
      *
      * With B recorded, A's nav reload, its folder tree API and an unknown asset's page leave B recorded and write nothing.
      */
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val a = addLibrary("Library A", admin)
     val b = addLibrary("Library B", admin)
     login()

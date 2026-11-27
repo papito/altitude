@@ -74,7 +74,7 @@ object FieldConst:
 
   object Person:
     val NAME = "name"
-    val NAME_FOR_SORT = "name_for_sort"
+    val NAME_KEY = "name_key"
     val NAME_SORT = "name_sort"
     val COVER_FACE_ID = "cover_face_id"
     val NUM_OF_FACES = "num_of_faces"

@@ -78,7 +78,7 @@ import altitude.core.service.AuditService
      *
      * A failed login is recorded with no actor and no target.
      */
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val user = testContext.persistUser()
     RequestContext.repository.value = None
 

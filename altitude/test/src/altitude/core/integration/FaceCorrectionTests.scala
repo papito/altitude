@@ -656,7 +656,7 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Naming them "Andreea" through one Face names the same Person, sort name included, and all three Faces stay theirs. The
+     * Naming them "Andreea" through one Face names the same Person, name key included, and all three Faces stay theirs. The
      * answer holds the Face and the Person before and after.
      */
     val p = person()
@@ -674,8 +674,8 @@ import altitude.core.service.PersonService.FaceTarget
     named.name shouldBe Some("Andreea")
     named.isNamed shouldBe true
     named.numOfFaces shouldBe 3
-    testApp.txManager.asReadOnly(query("SELECT name_for_sort FROM person WHERE id = ?", p.persistedId).head)(
-      "name_for_sort") shouldBe "andreea"
+    testApp.txManager.asReadOnly(query("SELECT name_key FROM person WHERE id = ?", p.persistedId).head)(
+      "name_key") shouldBe "andreea"
     faceOwners(assets) shouldBe Set(p.persistedId)
   }
 

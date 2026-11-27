@@ -1113,7 +1113,7 @@ object SearchQueries:
 
   /**
    * What a search sorts by: the sort's column or the Relevance. The file name sorts by its stored `SortKey` (`filename_sort`), so
-   * both engines order it as `NaturalOrder` does; the key is in no row class, so no asset read carries it
+   * both engines order it in the natural order (`SortKey`); the key is in no row class, so no asset read carries it
    * ([[unmappedAssetColumn]]), and a cursor carries the file name, whose key the continuation binds ([[cursorSortValue]]). The
    * similarity is not an expression of the asset's row and is read from `scored` ([[scoredCte]]).
    */

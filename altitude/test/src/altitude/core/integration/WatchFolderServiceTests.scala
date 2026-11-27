@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.LoggedLine
 import altitude.test.TestContext
 import java.nio.file.Files
 import java.nio.file.FileSystems
@@ -81,7 +82,7 @@ import altitude.core.util.Sha256
 
   override def beforeEach(): Unit = {
     super.beforeEach()
-    admin = persistAdmin()
+    admin = testContext.persistAdmin()
     switchContextUser(admin)
   }
 
@@ -93,8 +94,6 @@ import altitude.core.util.Sha256
 
   private def eventually[T](f: => T): T =
     Eventually.eventually(Eventually.timeout(Span(60, Seconds)), Eventually.interval(Span(100, Millis)))(f)
-
-  private def persistAdmin(): User = testContext.persistUser(Some(testContext.makeAdminUser()))
 
   /** A fresh, empty directory under the suite's temporary directory */
   private def directory(prefix: String = "watched"): Path = Files.createTempDirectory(tempRoot, prefix).toRealPath()
@@ -281,7 +280,7 @@ import altitude.core.util.Sha256
      * Assertions:
      *
      * The cards, and the Watch folders whose destination is their folder, list them in that order on both engines, the order
-     * `NaturalOrder` sorts the names in memory. The two named "a.jpg" come in ID order.
+     * `SortKey.of` sorts the names in memory. The two named "a.jpg" come in ID order.
      *
      * Edge cases:
      *
@@ -933,6 +932,7 @@ import altitude.core.util.Sha256
 
     val locked = new CountDownLatch(1)
     val release = new CountDownLatch(1)
+    val locker = new java.util.concurrent.atomic.AtomicReference[Option[(Thread, AnyRef)]](None)
 
     if (isPostgres) testApp.txManager.withTransaction {
       update(
@@ -946,31 +946,37 @@ import altitude.core.util.Sha256
     // Locks the memory's table as the scan offers its file, which then settles only once the lock is released
     val locking = pipelineThat {
       if (isPostgres) {
-        onAnotherThread {
+        val pid = new java.util.concurrent.atomic.AtomicReference[AnyRef]()
+        val (thread, _) = onAnotherThread {
           testApp.txManager.withTransaction {
             update("LOCK TABLE watch_folder_file IN ACCESS EXCLUSIVE MODE")
+            pid.set(backendPid())
             locked.countDown()
-            release.await(60, TimeUnit.SECONDS): Unit
+            holdUntil(release)
           }
         }
-        locked.await(30, TimeUnit.SECONDS): Unit
+        locked.await(30, TimeUnit.SECONDS) shouldBe true
+        locker.set(Some((thread, pid.get)))
       }
     }
+    // Counted by the lock's holder: the import and the scan run on threads the test does not start
+    def waitingOnTheLock: Int = backendsWaitingOn(locker.get.get._2)
 
     try {
       scan(watchFolder, locking) shouldBe ScanResult.Scanned(1)
       // The image's import waits at its memory's write
-      if (isPostgres) eventually(backendsWaitingOnLocks shouldBe 1)
+      if (isPostgres) eventually(waitingOnTheLock shouldBe 1)
 
       val next = watchFolders.scan(watchFolder.persistedId)
       // And the next scan at its read of the memory
-      if (isPostgres) eventually(backendsWaitingOnLocks shouldBe 2)
+      if (isPostgres) eventually(waitingOnTheLock shouldBe 2)
       release.countDown()
 
       Await.result(next, 60.seconds) shouldBe ScanResult.Scanned(0)
       settle(watchFolder)
     } finally {
       release.countDown()
+      locker.get.foreach((thread, _) => thread.join(THREAD_WAIT_SECONDS * 1000L))
       locking.shutdown()
     }
 
@@ -980,42 +986,86 @@ import altitude.core.util.Sha256
   }
 
   /**
-   * Runs `first` in a transaction of its own and holds it open while a scan of the Watch folder starts and waits on a lock, then
-   * while each of `meanwhile` starts, on a thread of its own, and waits too or ends; then lets `first` commit. Returns the scan's
-   * result and what each of `meanwhile` threw.
+   * Runs `first` in a transaction of its own and holds it open while a scan of the Watch folder starts and waits on a lock it
+   * holds, then while each of `meanwhile` starts, on a thread of its own in a transaction of its own, and waits on a lock too;
+   * then lets `first` commit. Returns the scan's result and what each of `meanwhile` threw. One of `meanwhile` that ends without
+   * waiting fails the test, as in `whileHolding`.
    */
   private def scanWhileHolding(watchFolder: WatchFolder)(first: => Unit)(
       meanwhile: (() => Unit)*): (ScanResult, List[Option[Throwable]]) = {
     val holding = new CountDownLatch(1)
     val release = new CountDownLatch(1)
+    val holderPid = new java.util.concurrent.atomic.AtomicReference[AnyRef]()
     val (holder, holderFailure) = onAnotherThread {
       testApp.txManager.withTransaction {
         first
+        holderPid.set(backendPid())
         holding.countDown()
-        release.await(60, TimeUnit.SECONDS): Unit
+        holdUntil(release)
       }
     }
+    val others = scala.collection.mutable.ListBuffer[(Thread, java.util.concurrent.atomic.AtomicReference[Option[Throwable]])]()
 
     try {
       holding.await(30, TimeUnit.SECONDS) shouldBe true
       val scanning = watchFolders.scan(watchFolder.persistedId)
-      eventually(backendsWaitingOnLocks shouldBe 1)
-      val others = meanwhile.zipWithIndex.map {
-        (other, waiting) =>
-          val started = onAnotherThread(asAdmin(testContext.repository)(other()))
-          eventually((backendsWaitingOnLocks == waiting + 2 || !started._1.isAlive) shouldBe true)
-          started
+      // The scan runs on the import dispatcher, so it is known by the lock it waits on
+      eventually(backendsWaitingOn(holderPid.get) shouldBe 1)
+      meanwhile.zipWithIndex.foreach {
+        (other, index) =>
+          val backend = new java.util.concurrent.atomic.AtomicReference[Option[AnyRef]](None)
+          val started = onAnotherThread {
+            asAdmin(testContext.repository) {
+              testApp.txManager.withTransaction {
+                backend.set(Some(backendPid()))
+                other()
+              }
+            }
+          }
+          others += started
+          eventually((backend.get.exists(waitsOnLock) || !started._1.isAlive) shouldBe true)
+          if (!backend.get.exists(waitsOnLock)) {
+            started._2.get.foreach(throw _)
+            fail(s"Writer ${index + 1} ended without waiting on a lock")
+          }
       }
       release.countDown()
 
-      others.foreach(_._1.join())
+      others.foreach(other => joined(other._1))
       val result = Await.result(scanning, 60.seconds)
       (result, others.map(_._2.get).toList)
     } finally {
       release.countDown()
-      holder.join()
+      others.foreach(_._1.join(THREAD_WAIT_SECONDS * 1000L))
+      holder.join(THREAD_WAIT_SECONDS * 1000L)
       holderFailure.get.foreach(throw _)
     }
+  }
+
+  test("Reading failed files again and forgetting absent ones wait for the Watch folder's row, as a scan's memory write does") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder scanned once. A third transaction holds its row, as a scan writing its memory does, until a retry of its
+     * failed files waits on it; then again until the prune's forgetting of absent files waits on it (`contend`).
+     *
+     * Assertions:
+     *
+     * Each waits for the row before it writes the Watch folder's files, and then ends: neither changes a file a scan is
+     * remembering at the same time.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val dir = directory()
+    image(dir, "a.png")
+    val watchFolder = watch(dir)
+    scanAndSettle(watchFolder) shouldBe ScanResult.Scanned(0)
+    def holdingTheRow: Unit = query("SELECT id FROM watch_folder WHERE id = ? FOR UPDATE", watchFolder.persistedId): Unit
+
+    contend(first = holdingTheRow, second = watchFolders.retryFailed(watchFolder.persistedId): Unit)
+    contend(first = holdingTheRow, second = watchFolders.forgetAbsent(30))
+
+    memory(watchFolder).keySet shouldBe Set("a.png")
   }
 
   test("A scan and an edit of its Watch folder at once both end, the edit as made") {
@@ -1102,7 +1152,7 @@ import altitude.core.util.Sha256
      * reason of a pause.
      */
     assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
-    val owner = persistAdmin()
+    val owner = testContext.persistAdmin()
     val dir = directory()
     switchContextUser(owner)
     val watchFolder = watch(dir)
@@ -1161,7 +1211,7 @@ import altitude.core.util.Sha256
      * only while the owner it read still owns it, so it overwrites no owner an edit made meanwhile.
      */
     assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
-    val (owner, editor) = (persistAdmin(), persistAdmin())
+    val (owner, editor) = (testContext.persistAdmin(), testContext.persistAdmin())
     val dir = directory()
     switchContextUser(owner)
     val watchFolder = watch(dir)
@@ -1223,7 +1273,7 @@ import altitude.core.util.Sha256
      * reason: it is the editing Admin's, with the edit's name.
      */
     assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
-    val owner = persistAdmin()
+    val owner = testContext.persistAdmin()
     val dir = directory()
     switchContextUser(owner)
     val watchFolder = watch(dir)
@@ -1254,7 +1304,7 @@ import altitude.core.util.Sha256
      * The scan does not start, and the Watch folder is not paused and has no reason: its owner is an active Admin again.
      */
     assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
-    val owner = persistAdmin()
+    val owner = testContext.persistAdmin()
     val dir = directory()
     switchContextUser(owner)
     val watchFolder = watch(dir)
@@ -1707,8 +1757,8 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * The Watch folder service's log captured at WARN, and `sun.jnu.encoding`, the JVM's file name encoding, read as ASCII, as a
-     * start under the C locale reads it; then as UTF-8. Scans are started each time with a schedule that runs no round.
+     * The application's log captured (`LoggedLine.during`), and `sun.jnu.encoding`, the JVM's file name encoding, read as ASCII,
+     * as a start under the C locale reads it; then as UTF-8. Scans are started each time with a schedule that runs no round.
      *
      * Assertions:
      *
@@ -1719,33 +1769,22 @@ import altitude.core.util.Sha256
      * Windows reads file names as UTF-16 whatever the property says, so there the test is cancelled.
      */
     assume(!System.getProperty("os.name").startsWith("Windows"))
-    val logger = org.slf4j.LoggerFactory
-      .getLogger(classOf[altitude.core.service.WatchFolderService])
-      .asInstanceOf[ch.qos.logback.classic.Logger]
-    val capture = new ch.qos.logback.core.read.ListAppender[ch.qos.logback.classic.spi.ILoggingEvent]()
-    // Test logging is off, so the level is raised for the test
-    val level = logger.getLevel
     val encoding = System.getProperty("sun.jnu.encoding")
-    capture.start()
-    logger.addAppender(capture)
-    logger.setLevel(ch.qos.logback.classic.Level.WARN)
 
     def warnings(read: String): List[String] = {
-      capture.list.clear()
       System.setProperty("sun.jnu.encoding", read)
-      watchFolders.start((_, _) => Cancellable.alreadyCancelled)
-      capture.list.asScala.map(_.getFormattedMessage).toList
+      LoggedLine
+        .during(watchFolders.start((_, _) => Cancellable.alreadyCancelled))
+        .filter(_.level == ch.qos.logback.classic.Level.WARN)
+        .map(_.message)
+        .toList
     }
 
     try {
       val ascii = warnings("ANSI_X3.4-1968")
       ascii.exists(line => line.contains("ANSI_X3.4-1968") && line.contains("UTF-8")) shouldBe true
       warnings("UTF-8") shouldBe empty
-    } finally {
-      System.setProperty("sun.jnu.encoding", encoding)
-      logger.detachAppender(capture)
-      logger.setLevel(level)
-    }
+    } finally System.setProperty("sun.jnu.encoding", encoding)
   }
 
   test("A deactivated or demoted Admin's Watch folders pause, and a deleted Admin's pass to the Admin who deletes it") {
@@ -1768,9 +1807,9 @@ import altitude.core.util.Sha256
      */
     val users = testApp.service.user
     val firstLibrary = testContext.repository
-    val deactivated = persistAdmin()
-    val demoted = persistAdmin()
-    val deleted = persistAdmin()
+    val deactivated = testContext.persistAdmin()
+    val demoted = testContext.persistAdmin()
+    val deleted = testContext.persistAdmin()
 
     def watchAs(owner: User, name: String): (WatchFolder, Path) = {
       switchContextUser(owner)
@@ -1831,7 +1870,8 @@ import altitude.core.util.Sha256
      *
      * An Admin who owns a Watch folder and an asset, and a second Admin who deletes them. A third transaction holds the asset
      * while the delete locks the Admins' rows and waits on it to pass it on; then the suite's Admin edits the Watch folder, which
-     * makes them its owner, and waits or ends; then the asset is let go (`whileHolding`).
+     * makes them its owner, and ends, since the delete's lock of the Admins lets its share lock through (`ends`); then the asset
+     * is let go (`whileHolding`).
      *
      * Assertions:
      *
@@ -1839,13 +1879,13 @@ import altitude.core.util.Sha256
      *
      * Edge cases:
      *
-     * The edit's foreign key check against its editor, an Admin the delete holds among the active Admins, goes through that lock.
-     * A lock that stopped it would leave the edit holding the Watch folder while it waits on the delete, and the delete waiting
-     * on the Watch folder to pass it on: a deadlock PostgreSQL ends by failing one of them.
+     * The edit's share lock of its editor, an Admin the delete holds among the active Admins, goes through that lock, so the edit
+     * commits while the delete waits. A lock that stopped it would hold every Admin's Watch folder edit up behind any Admin's
+     * write of another account.
      */
     assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
-    val owner = persistAdmin()
-    val deleter = persistAdmin()
+    val owner = testContext.persistAdmin()
+    val deleter = testContext.persistAdmin()
     val dir = directory()
     switchContextUser(owner)
     val watchFolder = watch(dir)
@@ -1854,7 +1894,7 @@ import altitude.core.util.Sha256
 
     whileHolding(query("SELECT id FROM asset WHERE id = ? FOR UPDATE", asset.persistedId): Unit)(
       () => testApp.service.user.delete(deleter.persistedId, owner.persistedId): Unit,
-      () => watchFolders.update(watchFolder.persistedId, WatchFolderSpec("Edited", dir.toString, None)): Unit
+      ends(watchFolders.update(watchFolder.persistedId, WatchFolderSpec("Edited", dir.toString, None)): Unit)
     )
 
     testApp.txManager.asReadOnly(testApp.DAO.user.getAll).map(_.persistedId) should not contain owner.persistedId
@@ -1870,7 +1910,7 @@ import altitude.core.util.Sha256
      *
      * A Watch folder of the suite's Admin, and a second Admin who owns an asset. A third transaction holds the asset while a
      * third Admin's delete of the second locks their account and waits on it; then the second edits the Watch folder, which would
-     * make them its owner, and waits or ends; then the asset is let go (`whileHolding`).
+     * make them its owner, and waits; then the asset is let go (`whileHolding`).
      *
      * Assertions:
      *
@@ -1885,7 +1925,7 @@ import altitude.core.util.Sha256
     assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
     val dir = directory()
     val watchFolder = watch(dir)
-    val (editor, deleter) = (persistAdmin(), persistAdmin())
+    val (editor, deleter) = (testContext.persistAdmin(), testContext.persistAdmin())
     val asset = testContext.persistAsset(user = Some(editor))
 
     intercept[ForbiddenException] {
@@ -1922,7 +1962,7 @@ import altitude.core.util.Sha256
     val users = testApp.service.user
     val dir = directory()
     val watchFolder = watch(dir)
-    val (editor, demoter) = (persistAdmin(), persistAdmin())
+    val (editor, demoter) = (testContext.persistAdmin(), testContext.persistAdmin())
     switchContextUser(editor)
     val theirs = watch(directory(), name = "Theirs")
     switchContextUser(admin)
@@ -1969,7 +2009,7 @@ import altitude.core.util.Sha256
     val secondFile = image(secondDir, "b.png")
     val watchFolder = watch(firstDir)
     scanTwice(watchFolder) shouldBe ScanResult.Scanned(1)
-    val editor = persistAdmin()
+    val editor = testContext.persistAdmin()
 
     switchContextUser(editor)
     watchFolders.update(watchFolder.persistedId, WatchFolderSpec("Renamed", secondDir.toString, scans.id)): Unit

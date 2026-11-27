@@ -3,7 +3,6 @@
 @import altitude.core.models.ImportEntry
 @import altitude.core.models.ImportHistory
 @import altitude.core.models.ImportSource
-@import altitude.core.util.Util
 
 @(history: ImportHistory, shown: Int)
 
@@ -29,7 +28,7 @@
     <header>
         @kind(listed)
         @includes.html.import_title(listed.anImport)
-        <span class="meta">@deliveredBy(listed)@listed.openedAt.map { at => · <time datetime="@at" x-data="localTime">@Util.utcText(at, withTime = true)</time>} · into @listed.destination.getOrElse("Triage")@if(listed.isInterrupted) { · <span class="interrupted">interrupted by a restart</span>}</span>
+        <span class="meta">@deliveredBy(listed)@listed.openedAt.map { at => · @includes.html.local_time(at, withTime = true)} · into @listed.destination.getOrElse("Triage")@if(listed.isInterrupted) { · <span class="interrupted">interrupted by a restart</span>}</span>
     </header>
     @includes.html.import_status(listed.anImport)
     <details id="@sizes.filesId(listed.anImport.persistedId)" hx-preserve data-app-import-files>

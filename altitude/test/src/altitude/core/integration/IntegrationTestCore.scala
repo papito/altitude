@@ -214,6 +214,27 @@ abstract class IntegrationTestCore
   }
 
   /**
+   * How long a test waits for a thread it started, or a holder for its release, before it fails rather than hang: the test
+   * database's `lock_timeout` is 0, so a lock wait has no end of its own
+   */
+  val THREAD_WAIT_SECONDS = 60
+
+  /** Waits for the thread to end, failing the test when it still runs after [[THREAD_WAIT_SECONDS]] */
+  def joined(thread: Thread): Unit = {
+    thread.join(THREAD_WAIT_SECONDS * 1000L)
+    withClue(s"${thread.getName} still runs: ")(thread.isAlive shouldBe false)
+  }
+
+  /**
+   * Holds the caller's transaction open until `release` is counted down, failing the holder (so the test) when it is not by
+   * [[THREAD_WAIT_SECONDS]]: a holder that let go on its own would commit before the writers it holds off, and the test would
+   * pass without the interleaving it names
+   */
+  def holdUntil(release: CountDownLatch): Unit =
+    if (!release.await(THREAD_WAIT_SECONDS, TimeUnit.SECONDS))
+      throw new IllegalStateException(s"The holder was not released within $THREAD_WAIT_SECONDS seconds")
+
+  /**
    * Runs `first` and `second` on threads of their own, each in its transaction, `first` holding its open until `second` waits on
    * it: for a row lock on PostgreSQL (seen by backend PID), for the one write connection on SQLite (a thread parked in the pool).
    */
@@ -221,12 +242,13 @@ abstract class IntegrationTestCore
     val holding = new CountDownLatch(1)
     val release = new CountDownLatch(1)
     val secondBackend = new AtomicReference[Option[AnyRef]](None)
+    var secondThread: Option[Thread] = None
 
     val (firstThread, firstFailure) = onAnotherThread {
       testApp.txManager.withTransaction {
         first
         holding.countDown()
-        release.await(30, TimeUnit.SECONDS): Unit
+        holdUntil(release)
       }
     }
 
@@ -236,46 +258,66 @@ abstract class IntegrationTestCore
       firstFailure.get.foreach(throw _)
       held shouldBe true
 
-      val (secondThread, secondFailure) = onAnotherThread {
+      val (thread, secondFailure) = onAnotherThread {
         testApp.txManager.withTransaction {
           if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) secondBackend.set(Some(backendPid()))
           second
         }
       }
+      secondThread = Some(thread)
 
       def secondIsWaiting: Boolean = testApp.dataSourceType match {
         case Const.DbEngineName.POSTGRES => secondBackend.get.exists(waitsOnLock)
-        case _ => secondThread.getState == Thread.State.TIMED_WAITING || secondThread.getState == Thread.State.WAITING
+        case _ => thread.getState == Thread.State.TIMED_WAITING || thread.getState == Thread.State.WAITING
       }
 
       Eventually.eventually(Eventually.timeout(Span(30, Seconds)), Eventually.interval(Span(20, Millis))) {
+        // A second that failed before it waited is its own reason
+        if (!thread.isAlive) secondFailure.get.foreach(throw _)
         secondIsWaiting shouldBe true
       }
       release.countDown()
-      secondThread.join()
+      joined(thread)
       secondFailure.get.foreach(throw _)
     } finally {
       release.countDown()
-      firstThread.join()
+      secondThread.foreach(_.join(THREAD_WAIT_SECONDS * 1000L))
+      firstThread.join(THREAD_WAIT_SECONDS * 1000L)
     }
+    withClue("The first still runs: ")(firstThread.isAlive shouldBe false)
     firstFailure.get.foreach(throw _)
   }
 
   /**
+   * A writer of [[whileHolding]] that must end before the holder lets go, waiting on no lock: one whose fix lets it through,
+   * where without the fix it would wait. Any other writer must wait.
+   */
+  final class Ends(writer: () => Unit) extends (() => Unit) {
+    def apply(): Unit = writer()
+  }
+
+  /** `writer`, as a writer of [[whileHolding]] that must end without waiting on a lock ([[Ends]]) */
+  def ends(writer: => Unit): () => Unit = new Ends(() => writer)
+
+  /**
    * On PostgreSQL, an interleaving of more writers than [[contend]] takes: runs `first` in a transaction of its own and holds it
    * open, then starts each of `writers` in order, each on a thread of its own in a transaction of its own, once the one before
-   * waits on a lock or has ended. Then lets `first` commit, waits for every writer and rethrows the first failure.
+   * waits on a lock, or has ended when it is one that [[ends]]. A writer that ends without waiting, or one that [[ends]] and
+   * still runs after 30 seconds, fails the test, so the interleaving the test names is the one it ran. Then lets `first` commit,
+   * waits for every writer and rethrows the first failure.
    */
   def whileHolding(first: => Unit)(writers: (() => Unit)*): Unit = {
     require(testApp.dataSourceType == Const.DbEngineName.POSTGRES, "Row locks to wait on are PostgreSQL's")
+    require(writers.headOption.exists(!_.isInstanceOf[Ends]), "The first writer waits on the holder")
     val holding = new CountDownLatch(1)
     val release = new CountDownLatch(1)
+    val started = scala.collection.mutable.ListBuffer[(Thread, AtomicReference[Option[Throwable]])]()
 
     val (holder, holderFailure) = onAnotherThread {
       testApp.txManager.withTransaction {
         first
         holding.countDown()
-        release.await(30, TimeUnit.SECONDS): Unit
+        holdUntil(release)
       }
     }
 
@@ -284,8 +326,8 @@ abstract class IntegrationTestCore
       holderFailure.get.foreach(throw _)
       held shouldBe true
 
-      val started = writers.map {
-        writer =>
+      writers.zipWithIndex.foreach {
+        (writer, index) =>
           val backend = new AtomicReference[Option[AnyRef]](None)
           val (thread, failure) = onAnotherThread {
             testApp.txManager.withTransaction {
@@ -293,19 +335,32 @@ abstract class IntegrationTestCore
               writer()
             }
           }
-          Eventually.eventually(Eventually.timeout(Span(30, Seconds)), Eventually.interval(Span(20, Millis))) {
-            (backend.get.exists(waitsOnLock) || !thread.isAlive) shouldBe true
+          started += ((thread, failure))
+          if (writer.isInstanceOf[Ends]) {
+            thread.join(30000)
+            withClue(s"Writer ${index + 1} still waits: ")(thread.isAlive shouldBe false)
+          } else {
+            var waited = false
+            Eventually.eventually(Eventually.timeout(Span(30, Seconds)), Eventually.interval(Span(20, Millis))) {
+              waited = backend.get.exists(waitsOnLock)
+              (waited || !thread.isAlive) shouldBe true
+            }
+            if (!waited) {
+              failure.get.foreach(throw _)
+              fail(s"Writer ${index + 1} ended without waiting on a lock")
+            }
           }
-          (thread, failure)
       }
 
       release.countDown()
-      started.foreach(_._1.join())
+      started.foreach(started => joined(started._1))
       started.foreach(_._2.get.foreach(throw _))
     } finally {
       release.countDown()
-      holder.join()
+      started.foreach(_._1.join(THREAD_WAIT_SECONDS * 1000L))
+      holder.join(THREAD_WAIT_SECONDS * 1000L)
     }
+    withClue("The holder still runs: ")(holder.isAlive shouldBe false)
     holderFailure.get.foreach(throw _)
   }
 
@@ -328,13 +383,15 @@ abstract class IntegrationTestCore
       query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
     }
 
-  /** How many PostgreSQL backends of the test database wait on a lock, for work running on threads the test cannot name */
-  def backendsWaitingOnLocks: Int =
+  /**
+   * How many PostgreSQL backends wait on a lock that the backend `holder` holds, for work running on threads the test cannot name
+   * (a scan, a pipeline stage): counted by the holder the test started, so another bundle's or suite's waits never count
+   */
+  def backendsWaitingOn(holder: AnyRef): Int =
     testApp.txManager.asReadOnly {
-      query("SELECT count(*) AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()")
-        .head("n")
-        .toString
-        .toInt
+      query(
+        "SELECT count(*) AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND ?::int = ANY(pg_blocking_pids(pid))",
+        holder).head("n").toString.toInt
     }
 
   /** The advisory key [[pausingInserts]] waits on, which a holder takes with `SELECT pg_advisory_xact_lock(...)` */
@@ -362,21 +419,27 @@ abstract class IntegrationTestCore
   }
 
   /**
-   * Two of the context repository's assets, the first of a higher ID but earlier in the table's physical order, so a sequential
-   * scan reaches them in the opposite order of an ID-ordered read; assets are imported until two are so
+   * On PostgreSQL, two of the context repository's assets, the first of a higher ID and a higher checksum but earlier in the
+   * table's physical order, so a sequential scan reaches them in the opposite order of a read by an index, whether by ID (the
+   * primary key) or by content (`asset_01`, which the planner may take for a few rows); assets are imported until two are so
    */
   def assetsOutOfIdOrder(): (Asset, Asset) = {
     val assets = scala.collection.mutable.ListBuffer[Asset]()
     def pair: Option[(String, String)] = {
       val physical = testApp.txManager.asReadOnly {
         query(
-          "SELECT id FROM asset WHERE id = ANY(?) ORDER BY ctid",
-          RequestContext.getConn.createArrayOf("varchar", assets.map(_.persistedId).toArray[AnyRef])).map(_("id").toString)
+          "SELECT id, checksum FROM asset WHERE id = ANY(?) ORDER BY ctid",
+          RequestContext.getConn.createArrayOf("varchar", assets.map(_.persistedId).toArray[AnyRef])
+        )
+          .map(row => (row("id").toString, row("checksum").toString))
       }
-      physical.combinations(2).collectFirst { case List(first, second) if first > second => (first, second) }
+      physical.combinations(2).collectFirst {
+        case List((first, firstContent), (second, secondContent)) if first > second && firstContent > secondContent =>
+          (first, second)
+      }
     }
     while (pair.isEmpty) {
-      require(assets.size < 20, "No two assets out of ID order")
+      require(assets.size < 40, "No two assets out of ID order")
       assets += testContext.persistAsset()
     }
     val (first, second) = pair.get

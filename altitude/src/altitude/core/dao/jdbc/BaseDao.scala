@@ -7,7 +7,6 @@ import java.sql.ResultSet
 import java.sql.SQLException
 import java.sql.Statement
 import java.sql.Types
-import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -47,7 +46,6 @@ import altitude.core.models.SceneEmbedding
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SortKey
-import altitude.core.util.Util
 
 object BaseDao:
   final def genId: String = UUID.randomUUID.toString
@@ -181,7 +179,7 @@ abstract class BaseDao[Model <: BaseModel]:
 
   /**
    * A top-level key of a JSON object column, spelled as its index is (`asset_importer`) so a comparison uses the index:
-   * `(column->>'key')` on PostgreSQL, `json_extract(column, '$.key')` on SQLite
+   * `((column->>'key') COLLATE "C")` on PostgreSQL, `json_extract(column, '$.key')` on SQLite
    */
   protected def jsonText(column: String, key: String): String
 
@@ -235,12 +233,6 @@ abstract class BaseDao[Model <: BaseModel]:
    */
   final protected[dao] def toLocalDateTime(value: OffsetDateTime): LocalDateTime =
     value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime
-
-  /**
-   * The instant a model's `LocalDateTime` of an instant column stands for: the UTC wall clock [[toLocalDateTime]] gives. Needed
-   * before a moment leaves the server, which shows it in the viewer's zone.
-   */
-  final def instantOf(value: LocalDateTime): Instant = Util.instantOf(value)
 
   // Aggregates such as COUNT(*) come back as Long on Postgres and Integer on SQLite
   protected def getIntField(value: AnyRef): Int = value match
@@ -340,7 +332,9 @@ abstract class BaseDao[Model <: BaseModel]:
 
   /**
    * `column $inIdSet` tests a column against a set of IDs bound as one [[idSet]] parameter, so any selection size neither grows
-   * the statement nor hits the engine's parameter limit. The typed twin is `Columns.isInSet`.
+   * the statement nor hits the engine's parameter limit. The typed twin is `Columns.isInSet`. Any set of strings binds so, a
+   * Watch folder's paths too (`WatchFolderFileDao.seenAgain`): a column of IDs or of `COLLATE "C"` text compares by its own
+   * collation, so its index is used.
    */
   protected val inIdSet: String
 
