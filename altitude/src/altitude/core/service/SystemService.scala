@@ -5,6 +5,7 @@ import java.util.Base64
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import altitude.core.AlreadyInitializedException
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.RequestContext
@@ -48,14 +49,21 @@ class SystemService(val app: Altitude):
       Base64.getDecoder.decode(stored)
     }
 
+  /**
+   * Sets the instance up: its first Admin, signed in on the request, and its first Library. An instance set up already is refused
+   * with an `AlreadyInitializedException` and nothing is added. The system row is marked first, so of two setups at once the
+   * second waits for the first to commit and is refused; the instance's flag is set once the change has committed, so a failed
+   * commit leaves Setup open.
+   */
   def initializeSystem(
       repositoryName: String,
       adminModel: User,
       password: String,
       clientIp: Option[String] = None): (User, Repository) =
-    logger.warn("INITIALIZING SYSTEM")
-
     txManager.withTransaction {
+      if !systemMetadataDao.setInitialized() then throw AlreadyInitializedException()
+      logger.warn("INITIALIZING SYSTEM")
+
       val admin = app.service.user.add(adminModel, password = password)
       // The setup Admin creates itself: no other account exists to act
       app.service.audit.record(
@@ -73,9 +81,7 @@ class SystemService(val app: Altitude):
 
       RequestContext.repository.value = Some(repo)
 
-      systemMetadataDao.setInitialized()
-
-      app.setIsInitializedState()
+      txManager.afterCommit(app.isInitialized = true)
 
       // Setup signs the new Admin in: the request is the Admin's from here on
       app.service.user.switchContextToUser(admin)

@@ -114,10 +114,14 @@ class Altitude(
       preConfig.withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(sqliteUrl))
   }
 
-  /** Whether the first admin user exists, cached from the system metadata by [[setIsInitializedState]] */
-  var isInitialized = false
+  /**
+   * Whether the first admin user exists: read from the system metadata at the start ([[setIsInitializedState]]), and set by Setup
+   * once it commits. Volatile, since request threads read it.
+   */
+  @volatile var isInitialized = false
 
-  final private val schemaVersion = 2
+  /** The schema version this build migrates a database to (**Schema migrations** in the guide) */
+  final val schemaVersion = 2
 
   final val dataSourceType: String = config.getString(Const.Conf.DB_ENGINE)
   logger.debug(s"Datasource type: $dataSourceType")
@@ -294,7 +298,7 @@ class Altitude(
   }
 
   final val migrationService: MigrationService =
-    MigrationService(app, currentVersion = schemaVersion, migrationsDir = s"/migrations/$dataSourceType")
+    MigrationService(app, app.txManager, currentVersion = schemaVersion, migrationsDir = s"/migrations/$dataSourceType")
 
   // In every environment, before anything reads the database
   migrationService.migrate()

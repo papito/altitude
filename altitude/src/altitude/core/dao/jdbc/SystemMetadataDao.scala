@@ -36,11 +36,14 @@ abstract class SystemMetadataDao(override val config: Config)
     logger.trace(s"UPDATE SQL: $sql, to version $toVersion")
     runner.update(RequestContext.getConn, sql, toVersion, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
 
-  def setInitialized(): Unit =
+  // Only while the instance is not set up, so of two setups at once the second waits on the row (PostgreSQL) and then matches
+  // nothing; SQLite runs writers one at a time
+  def setInitialized(): Boolean =
     val runner: QueryRunner = new QueryRunner()
-    val sql = s"UPDATE system SET ${FieldConst.SystemMetadata.IS_INITIALIZED} = ? WHERE id = ?"
+    val column = FieldConst.SystemMetadata.IS_INITIALIZED
+    val sql = s"UPDATE system SET $column = ? WHERE id = ? AND $column = ?"
     logger.trace(s"UPDATE SQL: $sql, initialized")
-    runner.update(RequestContext.getConn, sql, true, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
+    runner.update(RequestContext.getConn, sql, true, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID, false) == 1
 
   def setUninitialized(): Unit =
     val runner: QueryRunner = new QueryRunner()

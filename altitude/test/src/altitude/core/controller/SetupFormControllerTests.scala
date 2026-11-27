@@ -10,16 +10,22 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.routes.decorators
 import altitude.core.routes.web.SessionController
+import altitude.core.util.Query
 
 @DoNotDiscover class SetupFormControllerTests extends ControllerTestCore {
 
-  /** Runs `f` with the server's instance as a new installation, putting its flag back afterwards for the next suites. */
-  private def onNewInstallation[T](f: String => T): T = {
+  /** Runs `f` against the server with its instance's in-memory flag set to `initialized`, putting it back afterwards */
+  private def withServerFlag[T](initialized: Boolean)(f: String => T): T = {
     val wasInitialized = App.altitude.isInitialized
-    uninitializeInstance()
-    App.altitude.isInitialized = false
+    App.altitude.isInitialized = initialized
     try withServer(App)(f)
     finally App.altitude.isInitialized = wasInitialized
+  }
+
+  /** Runs `f` with the server's instance as a new installation, putting its flag back afterwards for the next suites. */
+  private def onNewInstallation[T](f: String => T): T = {
+    uninitializeInstance()
+    withServerFlag(initialized = false)(f)
   }
 
   private def postSetup(host: String, libraryName: String, username: String = "admin"): requests.Response = requests.post(
@@ -83,6 +89,36 @@ import altitude.core.routes.web.SessionController
         testApp.service.system.readMetadata.isInitialized shouldBe false
     }
     withServer(App)(refusals)
+  }
+
+  test("Setup is refused once the database says the instance is set up, though the server's flag does not yet") {
+
+    /**
+     * Setup:
+     *
+     * An instance set up, as each controller test's is, whose server has its in-memory flag cleared, as a submission racing
+     * another finds it before the other commits; then a valid setup form posted by nobody signed in.
+     *
+     * Assertions:
+     *
+     * The submission is answered 400 with the refusal of an instance already set up, as one the server knows is set up is, and
+     * adds no account and no Library. The server's flag then says the instance is set up.
+     */
+    testApp.service.system.readMetadata.isInitialized shouldBe true
+    val accounts = testApp.service.user.query(new Query()).records.size
+    val libraries = testApp.service.repository.getAll.size
+
+    withServerFlag(initialized = false) {
+      host =>
+        val response = postSetup(host, "Second Library", "second.admin")
+        response.statusCode shouldBe 400
+        response.text() shouldBe Const.Msg.Err.ALREADY_INITIALIZED
+        // The refusal means a Setup has committed, so the server's flag now says so too
+        App.altitude.isInitialized shouldBe true
+    }
+
+    testApp.service.user.query(new Query()).records.size shouldBe accounts
+    testApp.service.repository.getAll.size shouldBe libraries
   }
 
   test("Setup refuses a Library name the Library name rule refuses, under the field") {

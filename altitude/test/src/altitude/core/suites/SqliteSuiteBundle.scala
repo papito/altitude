@@ -13,7 +13,7 @@ object SqliteSuiteBundle {
     TestDatabase.reset(testApp)
 
     testApp.txManager.withTransaction {
-      testApp.DAO.systemMetadata.setInitialized()
+      testApp.DAO.systemMetadata.setInitialized(): Unit
     }
 
     testApp.isInitialized = true

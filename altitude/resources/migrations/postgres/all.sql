@@ -1,5 +1,5 @@
-DROP SCHEMA IF EXISTS public CASCADE;
-CREATE SCHEMA public;
+-- Runs in one transaction with the version stamp, and only on a database with no table in the schema it creates into, an
+-- extension's aside (MigrationService.requireEmpty): it drops nothing.
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -24,7 +24,8 @@ CREATE TABLE system (
   signing_key CHAR(44)
 );
 
-INSERT INTO system (version, is_initialized) VALUES (1, False);
+-- Version 0 until the migration stamps the current one (Altitude.schemaVersion) in the script's transaction
+INSERT INTO system (version, is_initialized) VALUES (0, False);
 
 -- The Settings an Admin tunes, seeded with their defaults; the registry is models/Settings.scala
 CREATE TABLE setting (

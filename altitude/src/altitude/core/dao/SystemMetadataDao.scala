@@ -9,7 +9,9 @@ object SystemMetadataDao:
 
 trait SystemMetadataDao extends BaseDao[SystemMetadata]:
   def updateVersion(toVersion: Int): Unit
-  def setInitialized(): Unit
+
+  /** Marks the instance set up unless it is already; whether this call marked it */
+  def setInitialized(): Boolean
 
   /** The Base64 key of signed content URLs */
   def getSigningKey: Option[String]

@@ -5,6 +5,7 @@ import cask.model.Response
 import org.slf4j.Logger
 
 import altitude.core.{ Const => C }
+import altitude.core.AlreadyInitializedException
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
@@ -56,19 +57,17 @@ class SetupFormController(using logger: Logger) extends BaseController:
     email = List(Api.Field.Setup.ADMIN_EMAIL)
   )
 
+  private def alreadyInitialized: Response[String] =
+    logger.warn(C.Msg.Err.ALREADY_INITIALIZED)
+    cask.Response(data = C.Msg.Err.ALREADY_INITIALIZED, statusCode = 400)
+
   // Anyone can post here, before Setup and after, and the body is read whole before the instance's state is asked
   @smallBody()
   @cask.route(f"/$prefix/setup", methods = Seq("post"))
   def htmxAdminSetup(using request: Request): Response[String] =
     val jsonData = unscrubbedJson
 
-    if App.altitude.isInitialized then
-      val message = "Instance is already initialized."
-      logger.warn(message)
-      cask.Response(
-        data = message,
-        statusCode = 400
-      )
+    if App.altitude.isInitialized then alreadyInitialized
     else
       val jsonIn: ujson.Obj = dataScrubber.scrub(jsonData.get)
 
@@ -131,12 +130,20 @@ class SetupFormController(using logger: Logger) extends BaseController:
         )
 
         // The Library is recorded as the Admin's last active one when the redirect loads its page
-        val (_, repo) = App.altitude.service.system.initializeSystem(
-          repositoryName = repositoryName,
-          adminModel = userModel,
-          password = password,
-          clientIp = BaseController.clientIpOf(request)
-        )
+        // The flag is set once a Setup commits, so a submission racing one that has not yet is refused by the system row. That
+        // refusal means a Setup has committed: the flag is set here too, should this request come before the other's flag is.
+        val (_, repo) =
+          try
+            App.altitude.service.system.initializeSystem(
+              repositoryName = repositoryName,
+              adminModel = userModel,
+              password = password,
+              clientIp = BaseController.clientIpOf(request)
+            )
+          catch
+            case _: AlreadyInitializedException =>
+              App.altitude.isInitialized = true
+              return alreadyInitialized
 
         // Log the new Admin in
         val claims = App.altitude.service.user.claimsOf(RequestContext.getAccount.persistedId).get

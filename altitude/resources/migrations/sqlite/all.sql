@@ -11,6 +11,7 @@ CREATE TABLE system (
   signing_key CHAR(44)
 );
 
+-- Version 0 until the migration stamps the current one (Altitude.schemaVersion) in the script's transaction
 INSERT INTO system (version, is_initialized) VALUES (0, 0);
 
 -- The Settings an Admin tunes, seeded with their defaults; the registry is models/Settings.scala

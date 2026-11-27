@@ -137,9 +137,11 @@ abstract class IntegrationTestCore
     testContext = new TestContext(testApp)
 
     // A bundle's database keeps every test's accounts, and a new Library grants each account whose new-Library switch is on, so
-    // no switch outlives its test
+    // no switch outlives its test. Every test starts on an instance not yet set up, in the database as in memory, so a test of
+    // Setup is not refused for an earlier test's.
     testApp.txManager.withTransaction {
       new QueryRunner().update(RequestContext.getConn, "UPDATE account SET grants_new_libraries = ?", Boolean.box(false))
+      testApp.DAO.systemMetadata.setUninitialized()
     }
 
     // One repository and one account (a User with no grant), since every asset has an owner

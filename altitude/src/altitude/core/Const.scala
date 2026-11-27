@@ -243,6 +243,8 @@ object Const:
       val DUPLICATE = "Duplicate"
       val INCORRECT_VALUE_TYPE = "Incorrect value type"
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
+      // A Setup submission to an instance set up already, refused by the server's flag or by the system row
+      val ALREADY_INITIALIZED = "Instance is already initialized"
       // `User.validUsername`; the bounds are Api.Constraints.MIN_/MAX_USERNAME_LENGTH
       val USERNAME_RULE = "Use 3 to 32 letters, digits, dots, underscores or hyphens"
       // More grants than a login token has room for (`RepositoryService.MAX_GRANTS_PER_ACCOUNT`)
