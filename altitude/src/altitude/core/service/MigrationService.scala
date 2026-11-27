@@ -118,11 +118,11 @@ class MigrationService(app: Altitude, txManager: TransactionManager, currentVers
     }
 
   /**
-   * A fresh database (version 0) gets the whole schema from `all.sql`, stamped with the current version (the script seeds 0), and
-   * fresh connections in place of those opened before its schema existed. An existing one is brought forward a version at a time
-   * with `<version>.sql`, every script read before the first runs. A script runs in one transaction with its version's code and
-   * the stamp of its version (DDL is transactional on both engines), so a failure or a stop leaves the version before it, never a
-   * schema the stored version does not describe.
+   * A fresh database (version 0) gets the whole schema from `all.sql`, stamped with the current version (the script seeds 0); a
+   * SQLite connection opened before the schema existed registers its vector columns at its next transaction. An existing one is
+   * brought forward a version at a time with `<version>.sql`, every script read before the first runs. A script runs in one
+   * transaction with its version's code and the stamp of its version (DDL is transactional on both engines), so a failure or a
+   * stop leaves the version before it, never a schema the stored version does not describe.
    */
   def migrate(): Unit =
     val oldVersion = version
@@ -137,7 +137,6 @@ class MigrationService(app: Altitude, txManager: TransactionManager, currentVers
         executeCommand(schema)
         systemMetadataDao.updateVersion(toVersion = currentVersion)
       }
-      txManager.schemaCreated()
     else
       logger.warn(s"Migrating the database from version $oldVersion to $currentVersion")
       val scripts =

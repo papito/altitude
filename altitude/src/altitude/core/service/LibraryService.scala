@@ -29,6 +29,7 @@ import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 import altitude.core.util.Sha256
 import altitude.core.util.TriageSubset
+import altitude.core.util.Util
 
 /** Operations on the library as a whole that span several services, above `AssetService` and its peers */
 object LibraryService:
@@ -124,11 +125,13 @@ class LibraryService(val app: Altitude):
 
   /**
    * Sorts a just-completed asset into the folder `folderPath` names under `destination` (`FolderService.ensurePath`), out of
-   * Triage and so in no Sequence
+   * Triage and so in no Sequence. A directory's name may hold control characters, which the folder rule refuses: each is replaced
+   * by U+FFFD (`Util.withControlCharactersReplaced`, as an Import's shown name is), so the file lands in a folder of the cleaned
+   * name rather than fail for its directory's.
    */
   private def sortInto(asset: Asset, destination: Folder, folderPath: Seq[String]): Asset =
     val folder =
-      try app.service.folder.ensurePath(destination.persistedId, folderPath)
+      try app.service.folder.ensurePath(destination.persistedId, folderPath.map(Util.withControlCharactersReplaced))
       catch
         case refused: ValidationException => throw uncreatable(refused.message)
         // A name taken meanwhile past the turn-taking, or held by the root. Never left a DuplicateException, which would settle

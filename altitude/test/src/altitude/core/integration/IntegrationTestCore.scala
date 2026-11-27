@@ -186,17 +186,31 @@ abstract class IntegrationTestCore
   }
 
   /**
-   * Starts `f` on a thread of its own, which inherits the test's repository and account but not its transaction. Returns the
-   * thread and what `f` threw, which is set by the time the thread is joined.
+   * Starts `f` on a thread of its own, under the test thread's repository, account, Permissions and grants as they are now (a
+   * thread inherits none of them) but outside its transaction. Returns the thread and what `f` threw, which is set by the time
+   * the thread is joined.
    */
   protected def onAnotherThread(f: => Unit): (Thread, AtomicReference[Option[Throwable]]) = {
     val failure = new AtomicReference[Option[Throwable]](None)
+    val inContext = underThisContext(f)
     val thread = new Thread(
       () =>
-        try f
+        try inContext()
         catch { case ex: Throwable => failure.set(Some(ex)) })
     thread.start()
     (thread, failure)
+  }
+
+  /** `f`, to run on another thread under this thread's repository, account, Permissions and grants as they are now */
+  def underThisContext[T](f: => T): () => T = {
+    val (repository, account) = (RequestContext.repository.value, RequestContext.account.value)
+    val (permissions, grants) = (RequestContext.permissions.value, RequestContext.grants.value)
+    () =>
+      RequestContext.repository.withValue(repository) {
+        RequestContext.account.withValue(account) {
+          RequestContext.permissions.withValue(permissions)(RequestContext.grants.withValue(grants)(f))
+        }
+      }
   }
 
   /**

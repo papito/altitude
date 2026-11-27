@@ -353,8 +353,10 @@ contend(first = ensure(), second = ensure())
 ensured.toArray.distinct.length shouldBe 1
 ```
 
-`onAnotherThread(f)` starts one thread, which acts as the test's account in its Library but runs outside its
-transaction. It answers the thread and what `f` threw, to rethrow after the join:
+`onAnotherThread(f)` starts one thread, which acts as the test's account in its Library, with its Permissions and
+grants as they are when it starts, but runs outside its transaction. A thread inherits no request context
+(`RequestContext`'s values are `ThreadVariable`s), so a test that starts a thread itself binds what the work reads, or
+wraps it in `underThisContext(f)`. It answers the thread and what `f` threw, to rethrow after the join:
 
 ```scala
 val (thread, failure) = onAnotherThread(testApp.service.library.recycleAssets(Set(asset.persistedId)))

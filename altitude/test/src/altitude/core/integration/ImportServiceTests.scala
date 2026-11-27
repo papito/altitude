@@ -484,8 +484,8 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A second account's upload into Clients/Wedding left with a pending file, a Watch folder scan closed, then a restart, then
-     * the context account's upload in progress. Another repository has an Import.
+     * A second account's upload into Clients/Wedding left with a pending file, a Watch folder scan closed whose account is gone,
+     * then a restart, then the context account's upload in progress. Another repository has an Import.
      *
      * Assertions:
      *
@@ -508,7 +508,9 @@ import altitude.core.util.Query
     imports.settle(done.persistedId, ImportOutcome.Imported)
     switchContextUser(testContext.users.head)
 
-    val scan = RequestContext.account.withValue(None)(imports.open(ImportSource.WatchFolder, name = Some("Phone sync")))
+    val scan = imports.open(ImportSource.WatchFolder, name = Some("Phone sync"))
+    // Every Import is opened by an account; one whose account was deleted names nobody
+    testApp.txManager.withTransaction(update("UPDATE import SET account_id = NULL WHERE id = ?", scan.persistedId))
     val scanned = imports.addFile(scan.persistedId, "IMG_0001.jpg", sizeBytes = 10)
     imports.settle(scanned.persistedId, ImportOutcome.Imported)
     imports.close(scan.persistedId)

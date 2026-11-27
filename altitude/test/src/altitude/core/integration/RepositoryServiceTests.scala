@@ -12,6 +12,7 @@ import altitude.core.Altitude
 import altitude.core.Const as C
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
+import altitude.core.ForbiddenException
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
@@ -643,16 +644,79 @@ import altitude.core.util.Util
     RequestContext.getRepository.persistedId shouldBe library.persistedId
   }
 
+  test("A creator who is deactivated or may no longer create Libraries creates none") {
+
+    /**
+     * Setup:
+     *
+     * A User whose Create Libraries flag is off, a deactivated User whose flag is on, and an account ID no account holds, each
+     * naming itself the creator of a Library.
+     *
+     * Assertions:
+     *
+     * Each create is refused with `ForbiddenException`, for want of the flag, for the deactivation, and for no active account, as
+     * the account's row reads under its lock; no Library of either name exists, and the request's Library is the one it was.
+     */
+    val unflagged = testContext.persistUser()
+    val deactivated = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
+    testApp.service.user.deactivate(persistAdmin().persistedId, deactivated.persistedId)
+    val before = RequestContext.getRepository.persistedId
+
+    for (
+      (creatorId, why) <- List(
+        unflagged.persistedId -> C.Msg.Err.FORBIDDEN_LIBRARY_CREATOR,
+        deactivated.persistedId -> C.Msg.Err.FORBIDDEN_INACTIVE,
+        BaseDao.genId -> C.Msg.Err.FORBIDDEN_INACTIVE
+      )
+    ) withClue(s"$why: ") {
+      val name = s"Refused ${Util.randomStr()}"
+      intercept[ForbiddenException] {
+        testApp.service.repository.addRepository(name, C.StorageEngineName.FS, creatorId = Some(creatorId))
+      }.getMessage shouldBe why
+      librariesKeyed(NameKey.of(name)) shouldBe empty
+      RequestContext.getRepository.persistedId shouldBe before
+    }
+  }
+
+  if (testApp.dataSourceType == C.DbEngineName.POSTGRES)
+    test("A Library created while its creator is deactivated is refused once the deactivation commits") {
+
+      /**
+       * Setup:
+       *
+       * A User with the Create Libraries flag. An Admin's deactivation of the User holds its transaction open, having locked the
+       * User's row, while the User's create of a Library waits on it; then the deactivation commits.
+       *
+       * Assertions:
+       *
+       * The create is refused with `ForbiddenException` (`FORBIDDEN_INACTIVE`): it reads the creator as its lock finds it, after
+       * the deactivation. No Library of the name exists, and the User holds no grant it would have made.
+       */
+      val creator = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
+      val admin = persistAdmin()
+      val name = s"Deactivated meanwhile ${Util.randomStr()}"
+
+      intercept[ForbiddenException] {
+        contend(
+          testApp.service.user.deactivate(admin.persistedId, creator.persistedId),
+          testApp.service.repository.addRepository(name, C.StorageEngineName.FS, creatorId = Some(creator.persistedId)): Unit
+        )
+      }.getMessage shouldBe C.Msg.Err.FORBIDDEN_INACTIVE
+
+      librariesKeyed(NameKey.of(name)) shouldBe empty
+      testApp.txManager.asReadOnly(testApp.DAO.repositoryGrant.getByAccount(creator.persistedId)) shouldBe empty
+    }
+
   if (testApp.dataSourceType == C.DbEngineName.POSTGRES)
     test("Two Libraries created at once, each granting the other's creator, lock their accounts in one order and both commit") {
 
       /**
        * Setup:
        *
-       * Two accounts whose new-Library switch is on, the first and the second as the switch's read lists them, and a third with
-       * the Create Libraries flag. A transaction holds the first account's row. The third account creates a Library, which waits
-       * for that row; then the first account creates one, which waits too, having taken whatever came before it. Then the holding
-       * transaction ends.
+       * Two accounts with the Create Libraries flag whose new-Library switch is on, the first and the second as the switch's read
+       * lists them, and a third with the flag alone. A transaction holds the first account's row. The third account creates a
+       * Library, which waits for that row; then the first account creates one, which waits too, having taken whatever came before
+       * it. Then the holding transaction ends.
        *
        * Assertions:
        *
@@ -660,8 +724,9 @@ import altitude.core.util.Util
        * cannot wait on each other. In the first Library the first account holds its new-Library Permissions, in the second every
        * Permission, and the second account holds its new-Library Permissions in both.
        */
-      val candidates = List.fill(2)(testContext.persistUser(
-        Some(testContext.makeUser().copy(grantsNewLibraries = true, newLibraryPermissions = Permissions.of(Permission.Import)))))
+      val candidates = List.fill(2)(testContext.persistUser(Some(testContext
+        .makeUser()
+        .copy(canCreateLibraries = true, grantsNewLibraries = true, newLibraryPermissions = Permissions.of(Permission.Import)))))
       // The order an unordered read of the switch lists them in, which a create that did not lock by ID would take them in
       val listed = testApp.txManager.asReadOnly {
         query("SELECT id FROM account WHERE grants_new_libraries = ?", Boolean.box(true)).map(_("id").toString.trim)

@@ -817,7 +817,8 @@ import altitude.core.util.Util
     testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bob")
   }
 
-  test("A person name is held to 2 to 80 characters once in NFC, and to a name key that is not too long") {
+  test(
+    "A person name is held to 2 to 80 characters once in NFC, to a name key that is not too long, and to no control character") {
 
     /**
      * Setup:
@@ -828,8 +829,9 @@ import altitude.core.util.Util
      *
      * Renaming Bob, or moving the Face to a Person by name, to 80 of U+FB2C (80 characters as typed, 240 in NFC) fails validation
      * with the name field's too-long error; to "e" and a combining accent (one character in NFC) with the too-short error; and to
-     * 70 of U+FDFA (whose name key NFKC spells out to 2310 bytes) with the name key error. Bob keeps his name, and the Face its
-     * Person.
+     * 70 of U+FDFA (whose name key NFKC spells out to 2310 bytes) with the name key error; and to a name holding a NUL with the
+     * control character error, which PostgreSQL would otherwise refuse as a raw `SQLException`. Bob keeps his name, and the Face
+     * its Person.
      */
     val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
     val unnamed: Person = testApp.service.person.addPerson(Person())
@@ -837,7 +839,8 @@ import altitude.core.util.Util
     val refused = List(
       lengthenedByNfc(Api.Constraints.MAX_NAME_LENGTH) -> Const.Msg.Err.VALUE_TOO_LONG.format(Api.Constraints.MAX_NAME_LENGTH),
       "e\u0301" -> Const.Msg.Err.VALUE_TOO_SHORT.format(Api.Constraints.MIN_NAME_LENGTH),
-      longKeyName(70) -> Const.Msg.Err.NAME_KEY_TOO_LONG
+      longKeyName(70) -> Const.Msg.Err.NAME_KEY_TOO_LONG,
+      "Before\u0000after" -> Const.Msg.Err.CONTROL_CHARACTERS
     )
 
     for ((name, message) <- refused) withClue(s"[$name]: ") {

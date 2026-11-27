@@ -124,9 +124,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
     QueryResult(
       // The closed ones fill what the ones in progress leave of `shown`
       records = (inProgress ++ closed).take(shown).map(makeModel),
-      total = getIntField(count.head(TOTAL)),
-      rpp = shown,
-      sort = Nil
+      total = getIntField(count.head(TOTAL))
     )
 
   override def addPending(importId: String): Int =

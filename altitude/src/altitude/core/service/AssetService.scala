@@ -94,11 +94,12 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
 
   /**
    * Stores the pipeline's measurements and embeddings in the same update that marks the import complete, so an asset is never
-   * complete without them. Each stays NULL where the pipeline did not measure or embed.
+   * complete without them. Each stays NULL where the pipeline did not measure or embed. An asset not in the context Library is a
+   * `NotFoundException`, never completed silently.
    */
   def markAsCompleted(asset: Asset): Asset =
     txManager.withTransaction {
-      dao.markAsCompleted(asset): Unit
+      BaseService.requireFound(dao.tableName, asset.persistedId, dao.markAsCompleted(asset)): Unit
       asset.copy(isPipelineProcessed = true)
     }
 

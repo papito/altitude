@@ -1146,6 +1146,68 @@ import altitude.core.util.Sha256
     (stored.name, stored.isPaused) shouldBe ("Edited", false)
   }
 
+  test("A resume that finds the owner gone keeps the owner a concurrent edit made") {
+
+    /**
+     * Setup:
+     *
+     * A second Admin's Watch folder, paused by that Admin's deactivation. A third Admin edits it, which makes them its owner, and
+     * holds that transaction open while the suite's Admin resumes it, having read the deactivated owner, and waits on its row;
+     * then the edit commits.
+     *
+     * Assertions:
+     *
+     * The Watch folder is resumed with the edit's name and stays the editing Admin's: the resume gives it to the resuming Admin
+     * only while the owner it read still owns it, so it overwrites no owner an edit made meanwhile.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val (owner, editor) = (persistAdmin(), persistAdmin())
+    val dir = directory()
+    switchContextUser(owner)
+    val watchFolder = watch(dir)
+    switchContextUser(admin)
+    testApp.service.user.deactivate(admin.persistedId, owner.persistedId)
+    watchFolders.getById(watchFolder.persistedId).isPaused shouldBe true
+    val repository = testContext.repository
+
+    contend(
+      RequestContext.account.withValue(Some(editor)) {
+        watchFolders.update(watchFolder.persistedId, WatchFolderSpec("Edited", dir.toString)): Unit
+      },
+      asAdmin(repository)(watchFolders.resume(watchFolder.persistedId))
+    )
+
+    val stored = watchFolders.getById(watchFolder.persistedId)
+    (stored.name, stored.isPaused, stored.accountId) shouldBe ("Edited", false, editor.persistedId)
+  }
+
+  test("A resume of a Watch folder removed meanwhile is a not-found error once the removal commits") {
+
+    /**
+     * Setup:
+     *
+     * A paused Watch folder. Its removal holds its transaction open while a resume of it waits on its row; then the removal
+     * commits.
+     *
+     * Assertions:
+     *
+     * The resume fails with `NotFoundException`, as a resume of an unknown Watch folder does, rather than report a resume of a
+     * row that is gone; the Watch folder stays removed.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val watchFolder = watch(directory())
+    watchFolders.pause(watchFolder.persistedId)
+    val repository = testContext.repository
+
+    intercept[NotFoundException] {
+      contend(
+        asAdmin(repository)(watchFolders.remove(watchFolder.persistedId)),
+        asAdmin(repository)(watchFolders.resume(watchFolder.persistedId))
+      )
+    }
+    intercept[NotFoundException](watchFolders.getById(watchFolder.persistedId))
+  }
+
   test("A scan pauses no Watch folder for an owner an Admin's edit has replaced meanwhile") {
 
     /**

@@ -86,6 +86,10 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
 
   override def lockPaths(): Unit = advisoryLock(tableName)
 
+  override def lock(id: String): Option[WatchFolder] =
+    val sql = s"SELECT * FROM $tableName WHERE ${FieldConst.ID} = ? AND ${FieldConst.REPO_ID} = ? $forNoKeyUpdate"
+    manyBySqlQuery(sql, List(id, repositoryId)).headOption.map(makeModel)
+
   override def all(): List[WatchFolder] =
     val sql = s"SELECT * FROM $tableName WHERE ${FieldConst.REPO_ID} = ? ORDER BY ${F.NAME_SORT}, ${FieldConst.ID}"
     manyBySqlQuery(sql, List(repositoryId)).map(makeModel)

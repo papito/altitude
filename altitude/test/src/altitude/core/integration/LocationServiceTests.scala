@@ -72,7 +72,8 @@ import altitude.core.models.Repository
     category.longitude shouldEqual None
   }
 
-  test("A Location or category name longer than 250 characters once in NFC, or whose name key is too long, is refused") {
+  test(
+    "A Location or category name with a control character, longer than 250 characters in NFC, or of too long a name key, is refused") {
 
     /**
      * Setup:
@@ -83,13 +84,19 @@ import altitude.core.models.Repository
      *
      * Adding a Location or a category, or renaming "Existing", to 250 of U+FB2C (250 characters as typed, 750 in NFC) fails
      * validation with the name field's too-long error, and to 100 of U+FDFA (whose name key NFKC spells out to 3300 bytes) with
-     * the name key error. The repository keeps "Existing" alone.
+     * the name key error, and to a name holding a NUL with the control character error, which PostgreSQL would otherwise refuse
+     * as a raw `SQLException`. The repository keeps "Existing" alone.
      */
     val max = Api.Constraints.MAX_LOCATION_NAME_LENGTH
     val existing: Location = addLocation("Existing")
     val tooLong = Const.Msg.Err.VALUE_TOO_LONG.format(max)
 
-    for ((name, message) <- List(lengthenedByNfc(max) -> tooLong, longKeyName(100) -> Const.Msg.Err.NAME_KEY_TOO_LONG)) {
+    for (
+      (name, message) <- List(
+        lengthenedByNfc(max) -> tooLong,
+        longKeyName(100) -> Const.Msg.Err.NAME_KEY_TOO_LONG,
+        "Before\u0000after" -> Const.Msg.Err.CONTROL_CHARACTERS)
+    ) {
       refusesName(Api.Field.Location.NAME, message)(addLocation(name))
       refusesName(Api.Field.Location.NAME, message)(testApp.service.location.addCategory(name))
       refusesName(Api.Field.Location.NAME, message)(testApp.service.location.rename(existing.persistedId, name))

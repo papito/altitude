@@ -26,8 +26,12 @@ import altitude.core.dao.RepositoryDao
 import altitude.core.dao.UserDao
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.dao.jdbc.BaseDao.UniqueIndex
+import altitude.core.dao.postgres.PostgresOverrides
 import altitude.core.dao.sqlite.SqliteOverrides
 import altitude.core.models.EditRecipe
+import altitude.core.models.Folder
+import altitude.core.models.Person
+import altitude.core.service.PersonService
 import altitude.core.util.Query
 import altitude.core.util.Util
 
@@ -498,5 +502,101 @@ import altitude.core.util.Util
 
     stamps should have size 4
     stamps.foreach(stamp => withClue(s"$stamp: ")("\\.\\d{7}".r.findFirstIn(stamp.toString) shouldBe None))
+  }
+
+  test("A flag a hand-written statement binds is a number, which a partial index's predicate on the flag matches") {
+
+    /**
+     * Setup:
+     *
+     * On SQLite, the plan of a read of a live person by name key that binds both flags of `person_01`'s predicate as a
+     * hand-written statement binds them (`nativeBool`), and a person matching it.
+     *
+     * Assertions:
+     *
+     * SQLite plans the read through `person_01`: its query planner takes a partial index for a bound value only when the value
+     * equals the predicate's, and a flag bound as the text "0" never equals `FALSE`. The read finds the person, and one binding
+     * the other value of a flag does not.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.SQLITE)
+    val (dao, flags) = (testApp.DAO.person, exposedFolderDao)
+    val person = testApp.service.person.addPerson(Person(name = Some("Flagged")))
+    val sql = "SELECT id FROM person WHERE repository_id = ? AND name_for_sort = ? AND is_deleted = ? AND is_bad_match = ?"
+    def values(isDeleted: Boolean) =
+      List(testContext.repository.persistedId, PersonService.nameKey("Flagged"), flags.flag(isDeleted), flags.flag(false))
+
+    val plan = testApp.txManager.asReadOnly(dao.manyBySqlQuery(s"EXPLAIN QUERY PLAN $sql", values(isDeleted = false)))
+    plan.map(_("detail").toString).mkString("\n") should include("person_01")
+    testApp.txManager.asReadOnly(dao.manyBySqlQuery(sql, values(isDeleted = false))).map(_("id").toString.trim) shouldBe
+      List(person.persistedId)
+    testApp.txManager.asReadOnly(dao.manyBySqlQuery(sql, values(isDeleted = true))) shouldBe empty
+  }
+
+  test("A stored flag that is neither of SQLite's two numbers fails its read rather than read as false") {
+
+    /**
+     * Setup:
+     *
+     * On SQLite, a folder whose recycled flag is set to 2, then to the text "yes", neither of which a write of the app stores.
+     *
+     * Assertions:
+     *
+     * Each read of the folder fails, naming the value, instead of reading the folder as not recycled.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.SQLITE)
+    val folder = testApp.service.folder.add("Flagged")
+
+    try
+      for (value <- List[Any](2, "yes")) withClue(s"$value: ") {
+        testApp.txManager.withTransaction(update("UPDATE folder SET is_recycled = ? WHERE id = ?", value, folder.persistedId))
+        intercept[IllegalArgumentException](testApp.service.folder.getById(folder.persistedId)).getMessage should include(
+          value.toString)
+      }
+    finally testApp.txManager.withTransaction(update("UPDATE folder SET is_recycled = 0 WHERE id = ?", folder.persistedId))
+  }
+
+  test("A flag a hand-written read gets back as NULL, or as no flag of its engine, fails the read rather than read as false") {
+
+    /**
+     * Setup:
+     *
+     * A folder's row as a hand-written read gets it, its recycled flag replaced by a NULL, and by a value of another type than
+     * the engine's flag (a text), as a schema or statement mistake would hand it over.
+     *
+     * Assertions:
+     *
+     * Each fails its read into a folder, naming the value, on both engines: on PostgreSQL a NULL would otherwise read as false.
+     * The row as read reads back as the folder, not recycled.
+     */
+    val folder = testApp.service.folder.add("Flagged")
+    val dao = exposedFolderDao
+    val row = testApp.txManager
+      .asReadOnly(testApp.DAO.folder.manyBySqlQuery("SELECT * FROM folder WHERE id = ?", List(folder.persistedId)))
+      .head
+
+    dao.folderOf(row).isRecycled shouldBe false
+    for (value <- List[AnyRef](null, "yes")) withClue(s"$value: ") {
+      intercept[IllegalArgumentException](dao.folderOf(row + (FieldConst.Folder.IS_RECYCLED -> value))).getMessage should include(
+        String.valueOf(value))
+    }
+  }
+
+  /** The folder DAO of the engine with its flag binding and its hand-written read's model at hand */
+  private def exposedFolderDao: ExposedFolderDao = testApp.dataSourceType match {
+    case Const.DbEngineName.POSTGRES =>
+      new altitude.core.dao.jdbc.FolderDao(testApp.config) with PostgresOverrides with ExposedFolderDao {
+        def flag(value: Boolean): Any = nativeBool(value)
+        def folderOf(row: Map[String, AnyRef]): Folder = makeModel(row)
+      }
+    case _ =>
+      new altitude.core.dao.jdbc.FolderDao(testApp.config) with SqliteOverrides with ExposedFolderDao {
+        def flag(value: Boolean): Any = nativeBool(value)
+        def folderOf(row: Map[String, AnyRef]): Folder = makeModel(row)
+      }
+  }
+
+  private trait ExposedFolderDao {
+    def flag(value: Boolean): Any
+    def folderOf(row: Map[String, AnyRef]): Folder
   }
 }

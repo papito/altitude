@@ -47,8 +47,7 @@ trait PostgresOverrides:
 
   override protected def jsonText(column: String, key: String): String = s"($column->>'$key')"
 
-  override protected def nativeBool(value: Boolean): Any =
-    if value then true else false
+  override protected def nativeBool(value: Boolean): Any = value
 
   override protected val vectorPlaceholder: String = "?::vector"
 
@@ -81,7 +80,11 @@ trait PostgresOverrides:
       case instant: OffsetDateTime => Some(toLocalDateTime(instant))
       case other => throw IllegalArgumentException(s"Invalid type for date/time field: $other")
 
-  override protected def getBooleanField(value: AnyRef): Boolean = value.asInstanceOf[Boolean]
+  // A hand-written read's flag (`makeModel`): anything but a boolean fails the read, a NULL included, which `asInstanceOf` would
+  // read as false
+  override protected def getBooleanField(value: AnyRef): Boolean = value match
+    case b: java.lang.Boolean => b.booleanValue
+    case other => throw IllegalArgumentException(s"Invalid value for a boolean field: $other")
 
   override protected def getNextVal(tableName: String): AnyRef =
     val labelSql = f"SELECT nextval('$tableName')"

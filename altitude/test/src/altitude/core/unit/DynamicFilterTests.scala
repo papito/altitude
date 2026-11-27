@@ -15,8 +15,6 @@ import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
-import altitude.core.util.Sort
-import altitude.core.util.SortDirection
 
 /**
  * The string-keyed `Query` turned into a typed predicate. The assertions are structural rather than exact SQL: values are bound,
@@ -121,34 +119,6 @@ import altitude.core.util.SortDirection
     placeholders(sql) shouldBe 0
   }
 
-  test("Sorting and paging bind rather than inline, and the window count spans the whole match") {
-
-    /**
-     * Setup:
-     *
-     * A query for non-recycled assets sorted by file name descending, second page of ten, rendered as a paged read is built: a
-     * window count over the filtered rows, the sort, then offset and limit.
-     *
-     * Assertions:
-     *
-     * The count is a window in a single SELECT rather than a wrapped subquery, the sort orders by the column's alias, and the
-     * limit and offset are bound.
-     */
-    val query =
-      new Query(params = Map("is_recycled" -> false), rpp = 10, page = 2, sort = List(Sort("filename", SortDirection.DESC)))
-    val sql = renderPage(query)
-
-    withClue(sql) {
-      sql.contains("COUNT(1) OVER ()") shouldBe true
-      // Both engines order by the column's select-list alias
-      "ORDER BY \\S*filename DESC".r.findFirstIn(sql).isDefined shouldBe true
-      sql.contains("LIMIT ?") shouldBe true
-      sql.contains("OFFSET ?") shouldBe true
-
-      "SELECT".r.findAllIn(sql).size shouldBe 1
-    }
-  }
-
   test("An unknown column is an error") {
 
     /**
@@ -211,19 +181,6 @@ import altitude.core.util.SortDirection
 
   private def render(query: Query, engine: Dialect = dialect): String =
     DbApi.renderSql(matching(query, engine), Db.config, engine)
-
-  private def renderPage(query: Query): String = {
-    import dialect._
-
-    val counted = matching(query).mapAggregate((row, aggregate) => (row, aggregate.size.over))
-    val sorted = query.sort.headOption.fold(counted) {
-      sort =>
-        val ordered = counted.sortBy(row => Columns.required(columns(row._1), AssetRow, sort.param))
-        if (sort.direction == SortDirection.DESC) ordered.desc else ordered.asc
-    }
-
-    DbApi.renderSql(sorted.drop((query.page - 1) * query.rpp).take(query.rpp), Db.config, dialect)
-  }
 
   private def matching(query: Query, engine: Dialect = dialect) = {
     import engine._

@@ -1310,6 +1310,31 @@ import altitude.core.util.Query
     folderNames shouldBe Set("Clients")
   }
 
+  test("A file below a folder whose name holds control characters lands in a folder of the name with them replaced") {
+
+    /**
+     * Setup:
+     *
+     * An Import into Clients of an image under a folder named with a soft hyphen and of another under one named with a tab, as
+     * directories on disk may be named.
+     *
+     * Assertions:
+     *
+     * Both import, each into a folder of its name with the control character replaced by U+FFFD, as an Import's shown name is
+     * stored: the folder rule, which a dialog's name is refused by, never fails a file for its directory's name.
+     */
+    val clients = testApp.service.folder.add("Clients")
+    val context = PipelineContext(testContext.repository, Some(testContext.user))
+    val opened = testApp.service.imports.open(ImportSource.Upload, destFolderId = clients.id)
+    val (hyphened, hyphenedFile) = asFileAt(opened, "Cere\u00ADmony/vows.jpg")
+    val (tabbed, tabbedFile) = asFileAt(opened, "Tab\tbed/dance.jpg")
+
+    runPipeline((hyphened, context), (tabbed, context))
+
+    placeOf(assetOf(hyphenedFile)) shouldBe List("Clients", "Cere\uFFFDmony")
+    placeOf(assetOf(tabbedFile)) shouldBe List("Clients", "Tab\uFFFDbed")
+  }
+
   test("A file below a folder that cannot be created because its name is taken fails with that reason, and is no duplicate") {
 
     /**

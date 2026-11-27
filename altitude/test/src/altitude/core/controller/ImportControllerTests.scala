@@ -759,8 +759,8 @@ object ImportControllerTests {
      * Setup:
      *
      * A User logged in with Import in a Library with the folder Clients/Wedding. Closed: the User's upload "Wedding 2026" into
-     * Wedding (two imported, one duplicate, one failed) and a Watch folder's scan "Phone sync" (one imported, no account). In
-     * progress: the User's upload of files (one imported, one pending). Another Library has an Import "Theirs".
+     * Wedding (two imported, one duplicate, one failed) and a Watch folder's scan "Phone sync" (one imported, its account gone).
+     * In progress: the User's upload of files (one imported, one pending). Another Library has an Import "Theirs".
      *
      * Assertions:
      *
@@ -786,8 +786,10 @@ object ImportControllerTests {
     fileOf(folderUpload, "d.jpg", ImportOutcome.Failed, Some("Cannot decode image"))
     imports.close(folderUpload)
 
-    val scan =
-      RequestContext.account.withValue(None)(imports.open(ImportSource.WatchFolder, name = Some("Phone sync")).persistedId)
+    val scan = imports.open(ImportSource.WatchFolder, name = Some("Phone sync")).persistedId
+    // Every Import is opened by an account; one whose account was deleted names nobody
+    testApp.txManager.withTransaction(
+      testApp.DAO.user.updateByBySql("UPDATE import SET account_id = NULL WHERE id = ?", List(scan)): Unit)
     fileOf(scan, "IMG_0001.jpg", ImportOutcome.Imported)
     imports.close(scan)
 

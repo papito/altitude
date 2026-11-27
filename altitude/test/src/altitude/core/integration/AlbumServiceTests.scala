@@ -56,7 +56,8 @@ import altitude.core.util.SearchQuery
     album.name shouldEqual "Summer 2024"
   }
 
-  test("An album name longer than 250 characters once in NFC, or whose name key is too long, is refused") {
+  test(
+    "An album name with a control character, longer than 250 characters once in NFC, or whose name key is too long, is refused") {
 
     /**
      * Setup:
@@ -67,13 +68,19 @@ import altitude.core.util.SearchQuery
      *
      * Adding an album, creating one for a selection, or renaming "Existing", to 250 of U+FB2C (250 characters as typed, 750 in
      * NFC) fails validation with the name field's too-long error, and to 100 of U+FDFA (whose name key NFKC spells out to 3300
-     * bytes) with the name key error. The repository keeps "Existing" alone.
+     * bytes) with the name key error, and to a name holding a NUL with the control character error, which PostgreSQL would
+     * otherwise refuse as a raw `SQLException`. The repository keeps "Existing" alone.
      */
     val max = Api.Constraints.MAX_ALBUM_NAME_LENGTH
     val existing: Album = testApp.service.album.add("Existing")
     val tooLong = Const.Msg.Err.VALUE_TOO_LONG.format(max)
 
-    for ((name, message) <- List(lengthenedByNfc(max) -> tooLong, longKeyName(100) -> Const.Msg.Err.NAME_KEY_TOO_LONG)) {
+    for (
+      (name, message) <- List(
+        lengthenedByNfc(max) -> tooLong,
+        longKeyName(100) -> Const.Msg.Err.NAME_KEY_TOO_LONG,
+        "Before\u0000after" -> Const.Msg.Err.CONTROL_CHARACTERS)
+    ) {
       refusesName(Api.Field.Album.NAME, message)(testApp.service.album.add(name))
       refusesName(Api.Field.Album.NAME, message)(testApp.service.album.addAssetsToNewAlbum(name, Set.empty))
       refusesName(Api.Field.Album.NAME, message)(testApp.service.album.rename(existing.persistedId, name))

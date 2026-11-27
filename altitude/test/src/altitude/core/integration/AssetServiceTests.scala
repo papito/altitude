@@ -37,6 +37,31 @@ import altitude.core.util.Query
     queried(image.persistedId) shouldBe None
   }
 
+  test("Completing an asset that is not in the Library is a not-found error, not a silent no-op") {
+
+    /**
+     * Setup:
+     *
+     * An asset never stored, and an asset of another Library, each completed as an import completes them.
+     *
+     * Assertions:
+     *
+     * Each completion fails with `NotFoundException`, as a write by an unknown ID does, rather than answer the asset as
+     * completed; the other Library's asset stays incomplete.
+     */
+    val repository: Repository = testContext.repository
+    val foreignRepository: Repository = testContext.persistRepository()
+    switchContextRepo(foreignRepository)
+    val foreign: Asset = testApp.service.asset.add(testContext.makeAsset(repository = Some(foreignRepository)))
+    switchContextRepo(repository)
+
+    intercept[NotFoundException](
+      testApp.service.asset.markAsCompleted(testContext.makeAsset(repository = Some(repository)).copy(id = Some(BaseDao.genId))))
+    intercept[NotFoundException](testApp.service.asset.markAsCompleted(foreign))
+    switchContextRepo(foreignRepository)
+    testApp.service.asset.getById(foreign.persistedId).isPipelineProcessed shouldBe false
+  }
+
   test(
     "Image quality, the perceptual hash and the Sequence are stored on completion and read back, and an unmeasured asset has none") {
 

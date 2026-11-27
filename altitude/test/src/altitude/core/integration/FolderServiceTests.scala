@@ -492,7 +492,7 @@ import altitude.core.util.NameKey
     testApp.service.folder.add("\uFF33ummer").name shouldBe "\uFF33ummer"
   }
 
-  test("A folder name longer than 250 characters once in NFC, or whose name key is too long, is refused") {
+  test("A folder name with a control character, longer than 250 characters once in NFC, or of too long a name key, is refused") {
 
     /**
      * Setup:
@@ -502,7 +502,8 @@ import altitude.core.util.NameKey
      * Assertions:
      *
      * Adding a folder, or renaming "Existing", to 250 of U+FB2C (750 code points in NFC) fails with the too-long error, and to
-     * 100 of U+FDFA (a 3300-byte name key) with the name key error. "Existing" keeps its name.
+     * 100 of U+FDFA (a 3300-byte name key) with the name key error, and to a name holding a NUL with the control character error,
+     * which PostgreSQL would otherwise refuse as a raw `SQLException`. "Existing" keeps its name.
      *
      * Edge cases:
      *
@@ -517,6 +518,11 @@ import altitude.core.util.NameKey
     refusesName(Api.Field.Folder.NAME, Const.Msg.Err.NAME_KEY_TOO_LONG)(testApp.service.folder.add(longKeyName(100)))
     refusesName(Api.Field.Folder.NAME, Const.Msg.Err.NAME_KEY_TOO_LONG) {
       testApp.service.folder.rename(existing.persistedId, longKeyName(100))
+    }
+    val withNul = "Before\u0000after"
+    refusesName(Api.Field.Folder.NAME, Const.Msg.Err.CONTROL_CHARACTERS)(testApp.service.folder.add(withNul))
+    refusesName(Api.Field.Folder.NAME, Const.Msg.Err.CONTROL_CHARACTERS) {
+      testApp.service.folder.rename(existing.persistedId, withNul)
     }
     testApp.service.folder.getById(existing.persistedId).name shouldBe "Existing"
 

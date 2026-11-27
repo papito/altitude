@@ -6,6 +6,7 @@ import altitude.core.{ Const => C }
 import altitude.core.Altitude
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
+import altitude.core.ForbiddenException
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
@@ -108,6 +109,10 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
    * Grants a new Library: their new-Library Permissions to accounts whose switch is on, and every Permission to a non-Admin
    * creator (by stored type). An account at its grant bound is skipped with a WARN, so another account's bound never fails the
    * add; the creator's does. Each grant is audited as the creator's act (no actor at setup).
+   *
+   * The creator is read as its lock finds it, as `UserService.create` reads its creator: one deactivated or deleted since the
+   * request's login token was made is refused (`FORBIDDEN_INACTIVE`), and so is one that is no Admin and has lost the Create
+   * Libraries flag (`FORBIDDEN_LIBRARY_CREATOR`), failing the add.
    */
   private def grantNewLibrary(repo: Repository, creatorId: Option[String]): Unit =
     // Rows are locked in the order of every account write, so none deadlocks with this: the active Admins first (an Admin's
@@ -115,7 +120,14 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
     // grantees, so without the Admins first it could hold a grantee's row that an Admin's edit of that grantee waits on.
     app.DAO.user.lockActiveAdmins()
     val locked = app.DAO.user.lockGrantees(creatorId)
-    val actor = creatorId.flatMap(id => locked.find(_.id.contains(id)))
+    val actor = creatorId.map {
+      id =>
+        val account = locked.find(_.id.contains(id)).filter(_.isActive)
+        account.getOrElse(throw ForbiddenException(C.Msg.Err.FORBIDDEN_INACTIVE))
+    }
+    actor.filterNot(account => account.accountType == AccountType.Admin || account.canCreateLibraries).foreach {
+      _ => throw ForbiddenException(C.Msg.Err.FORBIDDEN_LIBRARY_CREATOR)
+    }
     val creator = actor.filter(_.accountType != AccountType.Admin)
 
     def grant(account: User, permissions: Permissions): Unit =

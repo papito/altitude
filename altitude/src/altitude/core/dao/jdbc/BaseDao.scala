@@ -31,7 +31,6 @@ import scalasql.dialects.Dialect
 import scalasql.query.TableRef
 
 import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
 
 import altitude.core.{ Const => C }
 import altitude.core.ConstraintException
@@ -47,7 +46,6 @@ import altitude.core.models.BaseModel
 import altitude.core.models.SceneEmbedding
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
-import altitude.core.util.SortDirection
 import altitude.core.util.SortKey
 import altitude.core.util.Util
 
@@ -66,9 +64,6 @@ object BaseDao:
 
   private def incrReadQueryCount(): Unit =
     RequestContext.readQueryCount.value = RequestContext.readQueryCount.value + 1
-
-  def incrWriteQueryCount(): Unit =
-    RequestContext.writeQueryCount.value = RequestContext.writeQueryCount.value + 1
 
   /**
    * Binds `values` to a hand-written statement in order: `setObject`, and for a NULL `setNull` with no type (`Types.NULL`), which
@@ -190,6 +185,10 @@ abstract class BaseDao[Model <: BaseModel]:
    */
   protected def jsonText(column: String, key: String): String
 
+  /**
+   * The bind value of a flag in a hand-written statement: a boolean on PostgreSQL, the number 0 or 1 on SQLite, which matches a
+   * partial index's predicate on the flag
+   */
   protected def nativeBool(value: Boolean): Any
 
   /**
@@ -401,28 +400,16 @@ abstract class BaseDao[Model <: BaseModel]:
 
   def query(q: Query): QueryResult[Model] = queryRecords(q)
 
-  /** The generic read behind [[query]], kept separate for DAOs that close [[query]] off (assets are read view-scoped) */
+  /**
+   * The generic read behind [[query]], kept separate for DAOs that close [[query]] off (assets are read view-scoped): every
+   * match, in no order. A page of a list is the search's (`SearchDao`), which orders by its sort and the ID.
+   */
   protected def queryRecords(q: Query): QueryResult[Model] =
-    import dialect.*
-
-    // The window count is added before the ordering and the page, so it counts every match rather than the page
-    val counted = matching(q).mapAggregate((row, aggregate) => (row, aggregate.size.over))
-
-    val sorted = q.sort.headOption.fold(counted) {
-      sort =>
-        val ordered = counted.sortBy(row => column(row._1, sort.param))
-        if sort.direction == SortDirection.DESC then ordered.desc else ordered.asc
-    }
-
-    val page = if q.rpp > 0 then sorted.drop((q.page - 1) * q.rpp).take(q.rpp) else sorted
-
-    val rows = Db.read(dialect)(_.run(page))
-    val total: Int = rows.headOption.map(_._2).getOrElse(0)
-    logger.trace(s"Found [$total] records. Retrieved [${rows.length}] records")
-    QueryResult(records = rows.map((row, _) => toModel(row)).toList, total = total, rpp = q.rpp, sort = q.sort)
+    val rows = Db.read(dialect)(_.run(matching(q)))
+    logger.trace(s"Found [${rows.length}] records")
+    QueryResult(records = rows.map(toModel).toList)
 
   protected def addRecord(sql: String, values: List[Any]): Unit =
-    BaseDao.incrWriteQueryCount()
     trace(s"INSERT SQL: $sql with ${values.length} values")
     runUpdate(sql, values): Unit
 
@@ -433,7 +420,6 @@ abstract class BaseDao[Model <: BaseModel]:
   def batchBySql(sql: String, rows: Seq[Seq[Any]]): Array[Int] =
     if rows.isEmpty then return Array.empty
 
-    BaseDao.incrWriteQueryCount()
     trace(s"BATCH SQL: $sql with ${rows.length} rows of values")
     val width = rows.head.length
     try
@@ -530,7 +516,6 @@ abstract class BaseDao[Model <: BaseModel]:
     numUpdated
 
   def updateByBySql(sql: String, values: List[Any]): Int =
-    BaseDao.incrWriteQueryCount()
     trace(s"WRITE SQL: $sql with ${values.length} values")
     val numAffected = runUpdate(sql, values)
     trace(s"Affected records: $numAffected")
@@ -539,13 +524,6 @@ abstract class BaseDao[Model <: BaseModel]:
   def getFloatListByJsonKey(jsonStr: String, key: String): List[Float] =
     val json = ujson.read(jsonStr)
     json(key).arr.map(_.num.toFloat).toList
-
-  def makeCsv[T](values: List[T]): String =
-    values.map(_.toString).mkString(",")
-
-  def loadCsv[T: ClassTag](csv: String): List[T] =
-    if csv == null || csv.isEmpty then return List()
-    csv.split(",").map(_.asInstanceOf[T]).toList
 
   /** Returns the rows changed: 0 for a missing row or, for a scoped DAO, another repository's */
   def increment(id: String, field: String, count: Int = 1): Int =
@@ -562,9 +540,6 @@ abstract class BaseDao[Model <: BaseModel]:
     import dialect.*
     val filter = scoped(q)
     table.select.filter(row => DynamicFilter(table, selectColumns(row), filter, dialect))
-
-  private def column(row: Row[Expr], name: String): Expr[?] =
-    Columns.required(selectColumns(row), table, name)
 
   private def selectColumns(row: Row[Expr]): Map[String, Expr[?]] =
     Columns.byName(table, rowQueryable.walkExprs(row))

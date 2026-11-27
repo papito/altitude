@@ -328,12 +328,14 @@ class WatchFolderService(val app: Altitude):
 
   /**
    * Resumes a paused Watch folder. One whose owner is no longer an active Admin (which paused it) passes to the context account,
-   * since its assets need an owner.
+   * since its assets need an owner. It decides on the Watch folder as its row lock finds it, after the editor's share lock
+   * (**Lock order**): an edit committed meanwhile made its editor, an active Admin, the owner, which stands, and one removed
+   * meanwhile is a `NotFoundException`.
    */
   def resume(id: String): Unit =
     txManager.withTransaction {
       lockEditor()
-      val stored = dao.getById(id)
+      val stored = dao.lock(id).getOrElse(throw NotFoundException(s"Cannot find record in '${dao.tableName}' with ID [$id]"))
       if !owns(app.DAO.user.getById(stored.accountId)) then
         val owner = RequestContext.getAccount
         dao.setOwner(id, owner.persistedId): Unit
@@ -475,11 +477,10 @@ class WatchFolderService(val app: Altitude):
 
     val name = spec.name.trim
     if name.isEmpty then refused.errors += F.NAME -> Const.Msg.Err.VALUE_REQUIRED
-    // Each scan's Import takes the name, and PostgreSQL refuses a NUL in text
-    else if Util.holdsControlCharacter(name) then refused.errors += F.NAME -> Const.Msg.Err.CONTROL_CHARACTERS
     else
+      // Each scan's Import takes the name, so it holds no control character either, as no name does
       try Validators.validName(name, F.NAME, Api.Constraints.MAX_WATCH_FOLDER_NAME_LENGTH): Unit
-      catch case tooLong: ValidationException => refused.errors ++= tooLong.errors
+      catch case invalid: ValidationException => refused.errors ++= invalid.errors
 
     val path = parsed(spec.path) match
       case Left(error) =>

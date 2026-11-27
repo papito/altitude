@@ -320,12 +320,14 @@ import altitude.core.transactions.TransactionManager
        * Setup:
        *
        * A transaction manager of its own over a new, empty database file, its read and write connections opened before any table
-       * exists, as a fresh install's are. The schema is then created on the write connection and the manager told so.
+       * exists, as a fresh install's are. The schema is then created on the write connection; the connections stay in their
+       * pools.
        *
        * Assertions:
        *
        * Plain read and write transactions search the face vectors and the SigLIP 2 Scene embeddings: the connections opened
-       * before the `face` and `asset` tables existed have been replaced by ones set up for both.
+       * before the `face` and `asset` tables existed register both columns at their first transaction once the tables exist, so
+       * no connection, however it raced the schema's creation, is left unable to scan them.
        */
       val dbFile = new File(testApp.config.getString(Const.Conf.TEST_DIR), "fresh.sqlite.db")
       dbFile.getParentFile.mkdirs()
@@ -353,11 +355,71 @@ import altitude.core.transactions.TransactionManager
           try statement.executeUpdate(schema)
           finally statement.close()
         }
-        manager.schemaCreated()
 
         manager.asReadOnly(searchCount) shouldBe 0
         manager.withTransaction(searchCount) shouldBe 0
       } finally manager.shutdown()
+    }
+
+    test("A SQLite read connection opens while another connection holds the write lock, and writes no statistics") {
+
+      /**
+       * Setup:
+       *
+       * A new database file holding a table of 5,000 rows with an index and no statistics, which `PRAGMA optimize` would analyze,
+       * and the vector extension's table, and a connection of its own holding the file's write lock in an open transaction, as
+       * another process might. A transaction manager of its own over the file then runs a read.
+       *
+       * Assertions:
+       *
+       * The read answers at once, well within the 10 seconds a connection waits on a lock: no read connection refreshes the
+       * statistics, which would write the file outside the one write connection, and the write connection's own refresh at open
+       * gives up on a locked file rather than wait. Once the lock is let go, no read connection has written statistics.
+       */
+      val testDir = Files.createDirectories(Paths.get(testApp.config.getString(Const.Conf.TEST_DIR)).toAbsolutePath)
+      val dbFile = Files.createTempFile(testDir, "stats", ".sqlite.db")
+      val url = s"jdbc:sqlite:$dbFile"
+      val sqliteConfig = new SQLiteConfig()
+      sqliteConfig.setJournalMode(SQLiteConfig.JournalMode.WAL)
+      sqliteConfig.enableLoadExtension(true)
+      def execute(conn: Connection, sql: String): Unit = {
+        val statement = conn.createStatement()
+        try statement.execute(sql): Unit
+        finally statement.close()
+      }
+
+      val holder = sqliteConfig.createConnection(url)
+      try {
+        // The extension's first load into a file writes its own table, which a later load finds
+        val loading = holder.prepareStatement("SELECT load_extension(?)")
+        try {
+          loading.setString(1, TransactionManager.vectorExtensionPath(None))
+          loading.execute(): Unit
+        } finally loading.close()
+        execute(holder, "CREATE TABLE numbers (n INTEGER, flag INTEGER NOT NULL)")
+        execute(
+          holder,
+          "WITH RECURSIVE s(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM s WHERE i < 5000) INSERT INTO numbers SELECT i % 50, i % 2 FROM s")
+        execute(holder, "CREATE INDEX numbers_1 ON numbers (n)")
+        holder.setAutoCommit(false)
+        execute(holder, "INSERT INTO numbers VALUES (1, 1)")
+
+        val config = testApp.config.withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(url))
+        val manager = new TransactionManager(config, None, () => None)
+        try {
+          val started = System.nanoTime
+          manager.asReadOnly(query("SELECT count(*) AS n FROM numbers").head("n").toString) shouldBe "5000"
+          (System.nanoTime - started) / 1000000 should be < 5000L
+          holder.rollback()
+          manager
+            .asReadOnly(query("SELECT count(*) AS n FROM sqlite_master WHERE name = 'sqlite_stat1'"))
+            .head("n")
+            .toString shouldBe "0"
+        } finally manager.shutdown()
+      } finally {
+        holder.close()
+        List("", "-wal", "-shm").foreach(suffix => Files.deleteIfExists(Paths.get(s"$dbFile$suffix")))
+      }
     }
 
     test("sqlite-vector loads from the folder altitude.native.dir names, and from the classpath when it names none") {

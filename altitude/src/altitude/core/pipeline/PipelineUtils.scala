@@ -20,6 +20,7 @@ import altitude.core.SceneEmbedderClosedException
 import altitude.core.StorageException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.VideoException
+import altitude.core.models.AccountType
 import altitude.core.models.AssetWithData
 import altitude.core.models.Permissions
 import altitude.core.pipeline.PipelineConstants.DEBUG
@@ -33,14 +34,20 @@ object PipelineUtils:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   /**
-   * Runs the work under the context's repository, account and Permissions, scoped to the work alone so a pooled thread never
-   * works under the request that last ran on it. The log context (the MDC's request ID and user) is the request thread's and is
-   * not bound here: a line the work logs carries neither.
+   * Runs the work under the context's repository, account, Permissions and grants, scoped to the work alone, and puts the
+   * thread's own back after it. A pooled thread inherits no request's context (`RequestContext`), so work handed to one reads
+   * only what this binds: the grants are the context's Library's Permissions, none for an Admin (who holds every one by type) or
+   * for no account. The log context (the MDC's request ID and user) is the request thread's and is not bound here: a line the
+   * work logs carries neither.
    */
   def withContext[A](ctx: PipelineContext)(work: => A): A =
+    val permissions = if ctx.account.isEmpty then Permissions.none else ctx.permissions
+    val grants =
+      if ctx.account.forall(_.accountType == AccountType.Admin) then Map.empty
+      else Map(ctx.repository.persistedId -> permissions)
     RequestContext.repository.withValue(Some(ctx.repository)) {
       RequestContext.account.withValue(ctx.account) {
-        RequestContext.permissions.withValue(if ctx.account.isEmpty then Permissions.none else ctx.permissions)(work)
+        RequestContext.permissions.withValue(permissions)(RequestContext.grants.withValue(grants)(work))
       }
     }
 

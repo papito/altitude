@@ -279,9 +279,8 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
 object PersonDao:
 
   /**
-   * The live person with that name key. The predicate is `person_01`'s, typed so ScalaSql binds the flags as numbers: SQLite uses
-   * a partial index only when the query's terms imply its predicate, which a flag bound as text (`nativeBool` on SQLite) does
-   * not.
+   * The live person with that name key. The predicate is `person_01`'s, its flags bound as numbers: SQLite uses a partial index
+   * only when the query's terms imply its predicate, which a flag bound as text would not.
    */
   def liveByNameKey(dialect: Dialect, repositoryId: String, nameKey: String): Select[PersonRow[Expr], PersonRow[Sc]] =
     import dialect.*

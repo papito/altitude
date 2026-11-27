@@ -43,10 +43,10 @@ database always has its files and a rolled-back one leaves none.
 
 `withFaceVector` (`transactions/TransactionManager.scala`) wraps every read or write that touches the `features`
 column. On SQLite every connection, as it is opened, loads the `sqlite-vector` extension and runs `vector_init('face',
-'features', 'dimension=512,type=FLOAT32,distance=cosine')` when the `face` table exists, and the migration of a fresh
-database has the connections opened before its schema existed replaced (`schemaCreated`), so the wrapper sets nothing
-up per transaction there; on Postgres the column is a pgvector `vector` and the wrapper sets the HNSW search parameters
-for the transaction.
+'features', 'dimension=512,type=FLOAT32,distance=cosine')` when the `face` table exists; one opened before a fresh
+database's schema existed runs it at the start of its first transaction that finds the table
+(`TransactionManager.registerVectorColumns`), so the wrapper sets nothing up per transaction there; on Postgres the
+column is a pgvector `vector` and the wrapper sets the HNSW search parameters for the transaction.
 
 ## Detection
 

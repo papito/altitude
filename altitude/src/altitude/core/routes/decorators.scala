@@ -509,9 +509,9 @@ object decorators:
 
   /**
    * Logs a request's START and END lines at DEBUG, and owns the request's log context (`Const.LogContext`, the MDC). Every
-   * request starts with the context cleared: request threads are pooled, so a line would otherwise carry the request ID and the
-   * user of the last request on its thread. A request then gets a request ID of its own, and its account's ID as the user once it
-   * has an account (`UserService.switchContextToUser`).
+   * request starts and ends with the context cleared: request threads are pooled, so a line would otherwise carry the request ID
+   * and the user of the last request on its thread. A request then gets a request ID of its own, and its account's ID as the user
+   * once it has an account (`UserService.switchContextToUser`).
    *
    * The context is the request thread's alone. What a request hands to another thread (the import pipeline, a render, a Watch
    * folder scan, an actor, an open WebSocket's messages) logs with neither, and nothing propagates it there.
@@ -519,7 +519,11 @@ object decorators:
   class requestResponseLogger extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
       MDC.clear()
+      try logged(req, delegate)
+      // Nor does the thread keep it past the request
+      finally MDC.clear()
 
+    private def logged(req: cask.Request, delegate: Delegate): Result[Raw] =
       val path = req.exchange.getRequestPath
       if path.startsWith("/static/") || path.startsWith("/assets/") || path.startsWith("/content") then
         // No START or END line for a file request, and so no request ID; its lines still carry its user
@@ -555,15 +559,16 @@ object decorators:
 
   class repoContext extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
-      // Request threads are pooled, so a request starts with no account or repository rather than the last request's
+      // Request threads are pooled, so a request starts with no account or repository rather than the last request's, and
+      // leaves none for whatever the thread runs next
       RequestContext.clear()
-      val path = req.exchange.getRequestPath
+      try
+        req.exchange.getRequestPath match {
+          case RepoPath(id) =>
+            App.altitude.service.repository.setContextFromRequest(Some(id))
+            logger.trace(s"Repository context from [${req.exchange.getRequestURI}]")
+          case _ =>
+        }
 
-      path match {
-        case RepoPath(id) =>
-          App.altitude.service.repository.setContextFromRequest(Some(id))
-          logger.trace(s"Repository context from [${req.exchange.getRequestURI}]")
-        case _ => // println("No repository context found in path: " + path)
-      }
-
-      delegate(req, Map("request" -> req))
+        delegate(req, Map("request" -> req))
+      finally RequestContext.clear()

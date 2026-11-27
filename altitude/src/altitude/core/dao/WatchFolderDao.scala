@@ -20,6 +20,12 @@ trait WatchFolderDao extends BaseDao[WatchFolder]:
    */
   def lockPaths(): Unit
 
+  /**
+   * The Watch folder as it is committed, its row locked until the transaction ends (`FOR NO KEY UPDATE`: its key stays, so an
+   * Import or a file of it referencing it waits for nothing); none when it is not in the context repository
+   */
+  def lock(id: String): Option[WatchFolder]
+
   /** By name, as the Libraries are listed (`NaturalOrder`), then by ID */
   def all(): List[WatchFolder]
 

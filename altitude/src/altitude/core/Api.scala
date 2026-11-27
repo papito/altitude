@@ -51,11 +51,6 @@ object Api:
     // JSON a dialog's operation adds to its declared success detail (`BaseController.dialogSuccessResponse`)
     val SUCCESS_DETAIL_HEADER = "App-Success-Detail"
 
-    val TOTAL_RECORDS = "totalRecords"
-    val TOTAL_PAGES = "totalPages"
-    val CURRENT_PAGE = "currentPage"
-    val RESULTS_PER_PAGE = "resultsPerPage"
-
     val ID = "id"
     val DATA = "data"
     val PATH = "path"

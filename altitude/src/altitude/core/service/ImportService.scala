@@ -103,7 +103,8 @@ class ImportService(val app: Altitude):
           source = source,
           name = name.map(Util.withControlCharactersReplaced),
           watchFolderId = watchFolderId,
-          accountId = RequestContext.account.value.map(_.persistedId),
+          // Every Import is an account's: an upload's, or a Watch folder's owner's
+          accountId = Some(RequestContext.getAccount.persistedId),
           destFolderId = destFolderId,
           expectedFiles = expectedFiles
         ))

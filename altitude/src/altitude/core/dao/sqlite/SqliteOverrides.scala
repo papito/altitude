@@ -46,8 +46,10 @@ trait SqliteOverrides:
 
   override protected def jsonText(column: String, key: String): String = s"json_extract($column, '$$.$key')"
 
+  // A number, as a boolean column stores it: SQLite takes a partial index whose predicate is on a flag only for a bound value
+  // equal to the predicate's, which the text "0" never is
   override protected def nativeBool(value: Boolean): Any =
-    if value then "1" else "0"
+    if value then 1 else 0
 
   override protected val vectorPlaceholder: String = "?"
 
@@ -79,15 +81,12 @@ trait SqliteOverrides:
 
     Some(LocalDateTime.parse(value.get.asInstanceOf[String], SqliteOverrides.DATETIME_FORMATTER))
 
-  // SQLite has no BOOLEAN type: a boolean column reads back as an INTEGER
+  // A hand-written read's flag (`makeModel`). SQLite has no BOOLEAN type: a boolean column reads back as an INTEGER, 0 or 1.
+  // Anything else, a NULL included, is no flag the app wrote, and fails the read rather than read as false.
   override protected def getBooleanField(value: AnyRef): Boolean = value match
     case b: java.lang.Boolean => b.booleanValue
-    case i: java.lang.Integer =>
-      i.intValue match
-        case 0 => false
-        case 1 => true
-        case _ => false
-    case _ => false
+    case i: java.lang.Integer if i.intValue == 0 || i.intValue == 1 => i.intValue == 1
+    case other => throw IllegalArgumentException(s"Invalid value for a boolean field: $other")
 
   override protected def getNextVal(tableName: String): AnyRef =
     val sql = s"INSERT INTO $tableName DEFAULT VALUES RETURNING id"
