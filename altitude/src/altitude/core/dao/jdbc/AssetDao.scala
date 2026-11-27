@@ -4,7 +4,6 @@ import com.typesafe.config.Config
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
-import org.apache.commons.dbutils.QueryRunner
 import scalasql.Sc
 import scalasql.Table
 
@@ -202,8 +201,6 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     asset.copy(id = Some(id))
 
   override def setUserMetadata(assetId: String, userMetadata: UserMetadata): Int =
-    BaseDao.incrWriteQueryCount()
-
     val metadataWithIds = UserMetadata.withIds(userMetadata)
 
     val sql = s"""
@@ -212,11 +209,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
        WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} = ?
       """
 
-    val updateValues = List(metadataWithIds.toJson.toString, RequestContext.getRepository.persistedId, assetId)
-    logger.trace(s"Update SQL: [$sql] with values: $updateValues")
-    val runner: QueryRunner = new QueryRunner()
-
-    runner.update(RequestContext.getConn, sql, updateValues*)
+    updateByBySql(sql, List(metadataWithIds.toJson.toString, RequestContext.getRepository.persistedId, assetId))
 
   /** The row's columns without the bulky metadata JSON; the Scene embeddings are not among them either */
   private val assetWithoutBulkyMetadata: String = AssetRow.columnList(BulkyMetadata.Omitted)

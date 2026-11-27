@@ -31,11 +31,11 @@ object SqliteOverrides:
     .optionalEnd()
     .toFormatter
 
-  /** A Scene embedding as its BLOB: raw little-endian float32 values, the layout `vector_as_f32` stores and sqlite-vector scans */
-  def vectorBytes(embedding: SceneEmbedding): Array[Byte] =
-    val buffer = ByteBuffer.allocate(embedding.values.length * java.lang.Float.BYTES).order(ByteOrder.LITTLE_ENDIAN)
+  /** A vector as its BLOB: raw little-endian float32 values, the layout `vector_as_f32` stores and sqlite-vector scans */
+  def vectorBytes(values: IArray[Float]): Array[Byte] =
+    val buffer = ByteBuffer.allocate(values.length * java.lang.Float.BYTES).order(ByteOrder.LITTLE_ENDIAN)
     val floats = buffer.asFloatBuffer
-    embedding.values.foreach(floats.put)
+    values.foreach(floats.put)
     buffer.array
 
 trait SqliteOverrides:
@@ -57,8 +57,7 @@ trait SqliteOverrides:
 
   override protected val vectorPlaceholder: String = "?"
 
-  override protected def vectorBind(embedding: Option[SceneEmbedding]): Any =
-    embedding.map(SqliteOverrides.vectorBytes).orNull
+  override protected def vectorBind(values: IArray[Float]): Any = SqliteOverrides.vectorBytes(values)
 
   override protected def getVectorField(value: AnyRef): Option[SceneEmbedding] = Option(value).map {
     case bytes: Array[Byte] =>

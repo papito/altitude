@@ -666,8 +666,8 @@ class UserService(val app: Altitude) extends BaseService[User]:
       case e: SQLException =>
         newDuplicateExceptionOrRethrow(e) match
           case _: DuplicateException =>
-            // QueryRunner rethrows the driver's exception with the statement in its message, the driver's as the next one
-            val message = Option(e.getNextException).getOrElse(e).getMessage
+            // A raw statement's failure carries the driver's exception as its cause (`BaseDao.statementFailed`)
+            val message = Option(e.getCause).collect { case driver: SQLException => driver }.getOrElse(e).getMessage
             if message.contains("username_key") || message.contains("account_02") then
               throw fieldError(FieldConst.User.USERNAME, Const.Msg.Err.USERNAME_TAKEN)
             else throw fieldError(FieldConst.User.EMAIL, Const.Msg.Err.EMAIL_TAKEN)

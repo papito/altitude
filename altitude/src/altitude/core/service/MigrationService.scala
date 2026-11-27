@@ -28,14 +28,14 @@ class MigrationService(app: Altitude, txManager: TransactionManager, currentVers
     val stmt = RequestContext.getConn.createStatement()
 
     // `executeUpdate` fails on a Postgres script whose statements return values (nextval); `execute` fails on SQLite
-    app.dataSourceType match {
-      case Const.DbEngineName.SQLITE =>
-        stmt.executeUpdate(command)
-      case Const.DbEngineName.POSTGRES =>
-        stmt.execute(command)
-    }
-
-    stmt.close()
+    try
+      app.dataSourceType match {
+        case Const.DbEngineName.SQLITE =>
+          stmt.executeUpdate(command)
+        case Const.DbEngineName.POSTGRES =>
+          stmt.execute(command)
+      }
+    finally stmt.close()
 
   /** The script at `path`; a missing one fails naming it and the versions */
   private def script(path: String, fromVersion: Int): String =

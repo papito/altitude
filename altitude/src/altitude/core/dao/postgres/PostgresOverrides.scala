@@ -61,8 +61,7 @@ trait PostgresOverrides:
   override protected val vectorPlaceholder: String = "?::vector"
 
   // Bound as text and cast by the placeholder
-  override protected def vectorBind(embedding: Option[SceneEmbedding]): Any =
-    embedding.map(e => PostgresOverrides.vectorLiteral(e.values)).orNull
+  override protected def vectorBind(values: IArray[Float]): Any = PostgresOverrides.vectorLiteral(values)
 
   // pgJDBC hands a `vector` column out as a PGobject whose value is the literal `vectorLiteral` writes
   override protected def getVectorField(value: AnyRef): Option[SceneEmbedding] = Option(value).map {

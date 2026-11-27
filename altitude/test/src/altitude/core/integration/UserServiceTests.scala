@@ -1,7 +1,9 @@
 package altitude.core.integration
 
 import altitude.core
+import altitude.test.LoggedLine
 import altitude.test.TestContext
+import java.sql.SQLException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.scalatest.DoNotDiscover
@@ -11,6 +13,7 @@ import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.be
 import org.scalatest.matchers.should.Matchers.contain
 import org.scalatest.matchers.should.Matchers.empty
+import org.scalatest.matchers.should.Matchers.include
 import org.scalatest.matchers.should.Matchers.should
 import org.scalatest.matchers.should.Matchers.shouldBe
 import org.scalatest.matchers.should.Matchers.shouldEqual
@@ -182,6 +185,50 @@ import altitude.core.util.Util
     testApp.txManager.asReadOnly {
       query("SELECT id FROM account WHERE username_key = ?", NameKey.of(username)).size
     } shouldBe 1
+  }
+
+  test("A failed account insert names its statement, never the password hash it bound, in its exception or its log") {
+
+    /**
+     * Setup:
+     *
+     * An account, then a second insert of it straight through the DAO with the same password hash, while every line the
+     * application logs is captured, at TRACE too.
+     *
+     * Assertions:
+     *
+     * The second insert fails with an `SQLException` that keeps the driver's SQLState and error code and names the statement.
+     * Neither its message, nor that of any exception it chains, nor any line logged holds the password hash.
+     */
+    val account = testContext.persistUser()
+    val hash = testApp.txManager.asReadOnly {
+      query("SELECT password_hash FROM account WHERE id = ?", account.persistedId).head("password_hash").toString
+    }
+
+    var failure: Option[SQLException] = None
+    val lines = LoggedLine.tracedDuring {
+      failure = Some(intercept[SQLException](testApp.txManager.withTransaction(testApp.DAO.user.addUser(account, hash))))
+    }
+
+    val error = failure.get
+    error.getMessage should include("INSERT INTO account")
+    val driverError = Option(error.getNextException).getOrElse(error.getCause.asInstanceOf[SQLException])
+    error.getSQLState shouldBe driverError.getSQLState
+    error.getErrorCode shouldBe driverError.getErrorCode
+
+    val chained = Iterator
+      .iterate[Throwable](error)(
+        e =>
+          Option(e.getCause).getOrElse(e match {
+            case sql: SQLException => sql.getNextException
+            case _ => null
+          }))
+      .takeWhile(_ != null)
+      .take(10)
+      .toList
+    chained.foreach(e => (Option(e.getMessage).getOrElse("") should not).include(hash))
+    lines.map(_.message).filter(_.contains("INSERT INTO account")) should not be empty
+    lines.foreach(_.message should not include hash)
   }
 
   test("A username keeps to the rule: 3 to 32 ASCII letters, digits, dots, underscores and hyphens") {

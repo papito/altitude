@@ -1,12 +1,10 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import org.apache.commons.dbutils.QueryRunner
 import scalasql.Sc
 import scalasql.Table
 
 import altitude.core.FieldConst
-import altitude.core.RequestContext
 import altitude.core.dao.sql.tables.SystemRow
 import altitude.core.models.SystemMetadata
 
@@ -31,25 +29,20 @@ abstract class SystemMetadataDao(override val config: Config)
   )
 
   def updateVersion(toVersion: Int): Unit =
-    val runner: QueryRunner = new QueryRunner()
     val sql = s"UPDATE system SET ${FieldConst.SystemMetadata.VERSION} = ? WHERE id = ?"
-    logger.trace(s"UPDATE SQL: $sql, to version $toVersion")
-    runner.update(RequestContext.getConn, sql, toVersion, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
+    logger.trace(s"Setting the schema version to $toVersion")
+    updateByBySql(sql, List(toVersion, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)): Unit
 
   // Only while the instance is not set up, so of two setups at once the second waits on the row (PostgreSQL) and then matches
   // nothing; SQLite runs writers one at a time
   def setInitialized(): Boolean =
-    val runner: QueryRunner = new QueryRunner()
     val column = FieldConst.SystemMetadata.IS_INITIALIZED
     val sql = s"UPDATE system SET $column = ? WHERE id = ? AND $column = ?"
-    logger.trace(s"UPDATE SQL: $sql, initialized")
-    runner.update(RequestContext.getConn, sql, true, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID, false) == 1
+    updateByBySql(sql, List(true, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID, false)) == 1
 
   def setUninitialized(): Unit =
-    val runner: QueryRunner = new QueryRunner()
     val sql = s"UPDATE system SET ${FieldConst.SystemMetadata.IS_INITIALIZED} = ? WHERE id = ?"
-    logger.trace(s"UPDATE SQL: $sql, uninitialized")
-    runner.update(RequestContext.getConn, sql, false, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
+    updateByBySql(sql, List(false, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)): Unit
 
   def getSigningKey: Option[String] =
     val sql = s"SELECT ${FieldConst.SystemMetadata.SIGNING_KEY} FROM system WHERE id = ?"
@@ -58,11 +51,9 @@ abstract class SystemMetadataDao(override val config: Config)
 
   // Only while the column is NULL, so of two instances starting at once the second writes nothing and adopts the first one's key
   def setSigningKey(key: String): Boolean =
-    val runner: QueryRunner = new QueryRunner()
     val column = FieldConst.SystemMetadata.SIGNING_KEY
     val sql = s"UPDATE system SET $column = ? WHERE id = ? AND $column IS NULL"
-    logger.trace(s"UPDATE SQL: $sql, signing key")
-    runner.update(RequestContext.getConn, sql, key, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID) == 1
+    updateByBySql(sql, List(key, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)) == 1
 
   // The one row's ID is an integer, bound as one
   override def getById(id: String): SystemMetadata =

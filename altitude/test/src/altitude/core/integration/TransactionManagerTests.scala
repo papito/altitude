@@ -1,5 +1,7 @@
 package altitude.core.integration
 
+import altitude.test.LoggedLine
+import ch.qos.logback.classic.Level
 import com.typesafe.config.ConfigValueFactory
 import java.io.File
 import java.nio.file.Files
@@ -7,11 +9,17 @@ import java.nio.file.Paths
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
+import java.sql.SQLTransientConnectionException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ be, empty, include, not, should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ a, be, empty, have, include, not, should, shouldBe }
+import org.scalatest.tagobjects.Slow
+import org.slf4j.LoggerFactory
 import org.sqlite.SQLiteConfig
 import scalasql.core.SqlStr.SqlStringSyntax
 
+import scala.concurrent.duration.DurationLong
 import scala.io.Source
 
 import altitude.core.Altitude
@@ -120,6 +128,7 @@ import altitude.core.transactions.TransactionManager
      * Edge cases:
      *
      * An action that throws is logged and swallowed: the actions after it run, and the committed transaction does not fail.
+     * Outside a transaction, too, a throwing action does not reach its caller.
      */
     val ran = scala.collection.mutable.ListBuffer[String]()
 
@@ -142,6 +151,8 @@ import altitude.core.transactions.TransactionManager
 
     testApp.txManager.afterCommit(ran += "no transaction")
     ran.toList shouldBe List("committed, connection false", "no transaction")
+
+    testApp.txManager.afterCommit(throw IllegalStateException("A failing action outside a transaction"))
   }
 
   test("A transaction leaves no connection behind, committed or failed") {
@@ -185,6 +196,89 @@ import altitude.core.transactions.TransactionManager
           intercept[SQLException](other.createStatement().execute("BEGIN IMMEDIATE"))
         }
       finally other.close()
+    }
+
+    /**
+     * Runs `second` on this thread while another holds `manager`'s write connection for `holdFor` milliseconds; answers how long
+     * `second` took, and rethrows a failure of the holder
+     */
+    def whileWriting[A](manager: TransactionManager, holdFor: Long)(second: => A): (Either[Throwable, A], Long) = {
+      val holding = new CountDownLatch(1)
+      val (holder, failure) = onAnotherThread(manager.withTransaction {
+        holding.countDown()
+        Thread.sleep(holdFor)
+      })
+      holding.await(10, TimeUnit.SECONDS) shouldBe true
+      val started = System.nanoTime
+      val result =
+        try Right(second)
+        catch { case e: Exception => Left(e) }
+      val waited = (System.nanoTime - started).nanos.toMillis
+      holder.join()
+      failure.get.foreach(throw _)
+      (result, waited)
+    }
+
+    test("A SQLite writer waits for the write connection past HikariCP's 30 seconds", Slow) {
+
+      /**
+       * Setup:
+       *
+       * A write transaction held open for 35 seconds on another thread, and a second write transaction begun while it holds the
+       * write connection, with the transaction manager's WARN lines captured.
+       *
+       * Assertions:
+       *
+       * The second transaction runs once the first ends, after waiting more than 30 seconds, rather than failing for want of a
+       * connection: the write pool waits as long as `db.sqlite.write_connection_timeout`, minutes by default. A WARN says how
+       * long it waited.
+       */
+      // `logback-test.xml` turns the transaction manager's lines off
+      val logger = LoggerFactory.getLogger(classOf[TransactionManager]).asInstanceOf[ch.qos.logback.classic.Logger]
+      val level = logger.getLevel
+      logger.setLevel(Level.WARN)
+      var outcome: (Either[Throwable, Int], Long) = (Left(IllegalStateException("not run")), 0L)
+      val lines =
+        try
+          LoggedLine.during {
+            outcome = whileWriting(testApp.txManager, holdFor = 35000)(testApp.txManager.withTransaction(countAssets))
+          }
+        finally logger.setLevel(level)
+
+      val (second, waited) = outcome
+      second.isRight shouldBe true
+      waited should be > 30000L
+      lines.map(_.message).filter(_.startsWith("Waited")) should have size 1
+    }
+
+    test("A SQLite writer waits for the write connection as long as the configured timeout, and no longer") {
+
+      /**
+       * Setup:
+       *
+       * A transaction manager of its own over a new database file, whose write connection timeout is one second, and a write
+       * transaction held open for three seconds on another thread while a second one begins.
+       *
+       * Assertions:
+       *
+       * The second transaction fails for want of a connection after waiting the second, before the first ends.
+       */
+      val testDir = Files.createDirectories(Paths.get(testApp.config.getString(Const.Conf.TEST_DIR)).toAbsolutePath)
+      val dbFile = Files.createTempFile(testDir, "timeout", ".sqlite.db")
+      val config = testApp.config
+        .withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(s"jdbc:sqlite:$dbFile"))
+        .withValue(Const.Conf.SQLITE_WRITE_CONNECTION_TIMEOUT, ConfigValueFactory.fromAnyRef("1s"))
+      val manager = new TransactionManager(config, None, () => None)
+
+      try {
+        val (second, waited) = whileWriting(manager, holdFor = 3000)(manager.withTransaction(()))
+        second.left.toOption.get shouldBe a[SQLTransientConnectionException]
+        waited should be >= 1000L
+        waited should be < 3000L
+      } finally {
+        manager.shutdown()
+        List("", "-wal", "-shm").foreach(suffix => Files.deleteIfExists(Paths.get(s"$dbFile$suffix")))
+      }
     }
 
     test("SQLite read and write connections are in WAL mode, enforce foreign keys and keep temporary storage in memory") {
@@ -284,8 +378,9 @@ import altitude.core.transactions.TransactionManager
        *
        * The folder that holds no build fails the connection, naming the property and the missing file: with the property set,
        * nothing is taken from the classpath. An empty property counts as unset, and a relative folder is under the working
-       * directory. A build on the classpath inside a jar, as in one that is no platform jar, fails naming the jar, the property
-       * and the platform jar: SQLite loads an extension from a file alone, and nothing extracts it.
+       * directory. A folder named `o'brien`, as a home folder such as `C:\Users\O'Brien` is, loads the build: the path is bound,
+       * never spliced into the statement. A build on the classpath inside a jar, as in one that is no platform jar, fails naming
+       * the jar, the property and the platform jar: SQLite loads an extension from a file alone, and nothing extracts it.
        */
       val testDir = Paths.get(testApp.config.getString(Const.Conf.TEST_DIR)).toAbsolutePath
       Files.createDirectories(testDir)
@@ -322,6 +417,10 @@ import altitude.core.transactions.TransactionManager
       val version = versionWith(None)
       version should not be empty
       versionWith(Some(nativeDir.toString)) shouldBe version
+
+      val quotedDir = Files.createDirectories(Files.createTempDirectory(testDir, "native").resolve("o'brien"))
+      Files.copy(onClasspath, quotedDir.resolve(onClasspath.getFileName))
+      versionWith(Some(quotedDir.toString)) shouldBe version
 
       val refusal = intercept[Exception](versionWith(Some(emptyDir.toString)))
       val reasons = Iterator.iterate[Throwable](refusal)(_.getCause).takeWhile(_ != null).map(_.getMessage).mkString(" / ")
@@ -360,6 +459,24 @@ import altitude.core.transactions.TransactionManager
         intercept[QueryTimeoutException] {
           testApp.txManager.asReadOnly(Db.read(AltitudePostgresDialect)(_.runSql[Int](sql"SELECT 1 FROM pg_sleep(2)")))
         }
+      }
+    }
+
+    test("A PostgreSQL read transaction takes the largest read statement timeout the Setting allows") {
+
+      /**
+       * Setup:
+       *
+       * The read statement timeout saved at its most, 2,147,483 seconds.
+       *
+       * Assertions:
+       *
+       * A read transaction begins, and its statement timeout is that many seconds: the milliseconds it is set in fit PostgreSQL's
+       * limit. A guard of the Setting's bound: at the bound the product fits an `Int` too, so the test does not tell the `Long`
+       * product from an `Int` one.
+       */
+      withSetting(Settings.DB_POSTGRES_READ_STATEMENT_TIMEOUT, "2147483") {
+        testApp.txManager.asReadOnly(query("SHOW statement_timeout").head("statement_timeout")) shouldBe "2147483s"
       }
     }
 

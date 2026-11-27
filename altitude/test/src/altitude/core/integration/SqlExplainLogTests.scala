@@ -231,13 +231,14 @@ import altitude.core.transactions.TransactionManager
     /**
      * Setup:
      *
-     * A write transaction of an explaining manager that runs a query through a plain statement, and creates and drops a temporary
-     * table through prepared statements.
+     * A write transaction of an explaining manager that runs a query through a plain statement and one through a raw helper with
+     * no values, and creates and drops a temporary table through prepared statements.
      *
      * Assertions:
      *
-     * The log stays empty: neither the plain statement, the DDL nor the manager's housekeeping at a transaction's start is
-     * explained.
+     * The log stays empty: neither the plain statement, the raw helper's (which sends a statement with no values as a plain one,
+     * as it does a `SELECT nextval(...)` that an explain running it would advance), the DDL nor the manager's housekeeping at a
+     * transaction's start is explained.
      */
     withExplainingManager {
       manager =>
@@ -247,6 +248,8 @@ import altitude.core.transactions.TransactionManager
           try statement.execute("SELECT 1")
           finally statement.close()
 
+          testApp.DAO.user.manyBySqlQuery("SELECT 2 AS n")
+
           execute(conn.prepareStatement("CREATE TEMPORARY TABLE explain_probe (id INT)"))
           execute(conn.prepareStatement("DROP TABLE explain_probe"))
         }
@@ -254,6 +257,23 @@ import altitude.core.transactions.TransactionManager
     }
 
     logged shouldBe ""
+  }
+
+  test("A typed read that binds no value is explained") {
+
+    /**
+     * Setup:
+     *
+     * A read of every Setting through the typed path, in a read transaction of an explaining manager. The statement binds no
+     * value.
+     *
+     * Assertions:
+     *
+     * It is explained: ScalaSql prepares it.
+     */
+    withExplainingManager(_.asReadOnly(testApp.DAO.setting.getAll))
+
+    logged should include("FROM setting")
   }
 
   test("An explained query is counted once") {

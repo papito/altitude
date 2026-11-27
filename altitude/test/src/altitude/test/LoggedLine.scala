@@ -40,20 +40,29 @@ object LoggedLine {
    * given a reader of the lines captured so far. `logback-test.xml` silences these loggers, so the lines are captured here and
    * written nowhere.
    */
-  def capturing[T](f: (() => Seq[LoggedLine]) => T): T = {
+  def capturing[T](f: (() => Seq[LoggedLine]) => T): T = capturingAt(Level.DEBUG)(f)
+
+  /** The lines captured while `f` runs, the TRACE lines included: what `ALTITUDE_LOG_LEVEL=TRACE` would write */
+  def tracedDuring(f: => Any): Seq[LoggedLine] = capturingAt(Level.TRACE) {
+    lines =>
+      f
+      lines()
+  }
+
+  private def capturingAt[T](level: Level)(f: (() => Seq[LoggedLine]) => T): T = {
     val logger = LoggerFactory.getLogger("altitude.core").asInstanceOf[Logger]
     val capture = new Capture
-    val level = logger.getLevel
+    val before = logger.getLevel
     capture.setContext(logger.getLoggerContext)
     capture.start()
     logger.addAppender(capture)
-    logger.setLevel(Level.DEBUG)
+    logger.setLevel(level)
     logger.setAdditive(false)
     try f(() => capture.lines.asScala.toSeq)
     finally {
       logger.setAdditive(true)
       logger.detachAppender(capture)
-      logger.setLevel(level)
+      logger.setLevel(before)
     }
   }
 

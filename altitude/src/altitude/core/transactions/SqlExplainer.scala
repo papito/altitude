@@ -40,6 +40,11 @@ object SqlExplainer:
   // A quoted string or identifier, with its doubled quotes
   private val QUOTED: Regex = """'(?:[^']|'')*'|"(?:[^"]|"")*"""".r
   private val PLACEHOLDER: Regex = """\?""".r
+
+  /** The columns whose values the log never writes: a statement naming one shows each of its text values masked */
+  private val SECRET_COLUMN: Regex = """(?i)\b(password_hash|signing_key)\b""".r
+
+  private val MASKED = "'…'"
   private val PLACEHOLDER_LIST: Regex = """\(\s*\?(?:\s*,\s*\?)*\s*\)""".r
   // Digits that are not part of an identifier, a numbered parameter or another number
   private val NUMBER: Regex = """(?<![\w.$])\d+(?:\.\d+)?(?!\w)""".r
@@ -82,16 +87,22 @@ object SqlExplainer:
 
   /**
    * The statement with each placeholder replaced by the literal of the value bound to it, by position. A question mark inside a
-   * quoted string is not a placeholder, and a placeholder with no value stays one.
+   * quoted string is not a placeholder, and a placeholder with no value stays one. A statement that names a secret column
+   * (`password_hash`, `signing_key`) shows each text value as `'…'`, so the log never holds a password hash or the signing key.
    */
   def runnable(sql: String, values: Map[Int, Any]): String =
+    val namesSecret = SECRET_COLUMN.findFirstIn(sql).isDefined
+    def shown(value: Any): String = value match
+      case _: String if namesSecret => MASKED
+      case other => literal(other)
+
     var index = 0
     mapUnquoted(sql) {
       PLACEHOLDER.replaceAllIn(
         _,
         _ =>
           index += 1
-          values.get(index).fold("?")(value => Regex.quoteReplacement(literal(value))))
+          values.get(index).fold("?")(value => Regex.quoteReplacement(shown(value))))
     }
 
   /**

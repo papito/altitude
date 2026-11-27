@@ -70,6 +70,9 @@ Foundations to build on, beyond the items below:
 - ✅ Passwords are hashed with bcrypt at cost 10 ([Util] `hashPassword`).
 - [ ] bcrypt rather than Argon2id, through jBCrypt 0.4 (2015, unmaintained). The 50-character limit ([Api] `MAX_PASSWORD_LENGTH`) is tight for passphrases, and a non-ASCII password can pass bcrypt's 72-byte cutoff.
   - Fix: Argon2id through Bouncy Castle (`bcprov-jdk18on`, declared directly in place of the transitive `bcprov-jdk15on` 1.69 that jpaseto brings), rehashing on the next login.
+- ✅ Altitude writes no bound value, a password hash included, into a log line or an exception's message; PostgreSQL's own message is the next item. A hand-written statement that fails is rethrown with the driver's message, SQLState and error code and the statement, never the values bound to it; a failed batch from the error that ended it, since PostgreSQL's driver inlines a batch entry's values into its own message. Its TRACE lines give the number of values alone, and the dev-only SQL explain log masks the text values of a statement naming `password_hash` or `signing_key`. So a failed account write (a deadlock, a dropped connection) and `ALTITUDE_LOG_LEVEL=TRACE` show neither the hash nor the signing key of their own ([BaseDao] `statementFailed`, `trace`; [SqlExplainer] `runnable`; [UserServiceTests], [BaseDaoTests]).
+- [ ] PostgreSQL's own error message, which the rethrow keeps, can still quote a bound value: the key of a unique violation (an email address or a username), the whole failing row of a NOT NULL or CHECK violation (`Detail: Failing row contains (…)`, an account's password hash included), and a value of the wrong type (`invalid input syntax for type …: "…"`). The account rules and the types are checked before the write, so no known path reaches the last two (unconfirmed). [LOW]
+  - Fix: pgjdbc's `logServerErrorDetail=false` on the pool's connections ([TransactionManager] `postgresPool`), which keeps the error and the constraint's name and drops the detail, the colliding key of a unique violation with it; a value of the wrong type stays quoted in the error itself.
 - ✅ A login is a username or an email address, folded with `NameKey.of` and compared to the key column (an "@" makes it an email). A login naming no account checks a dummy hash of the same cost, and it, a wrong password and a deactivated account answer the same 401, so accounts cannot be enumerated ([UserService] `loginAndSetUser`, [LoginControllerTests]). The password check only reads; the last login time and an audit event, a failure's with the client IP, are written after it in a short transaction of their own ([UserServiceTests]).
 - ✅ Session cookies are `HttpOnly`, `SameSite=Strict` and, unless the server's config says otherwise, `Secure`, identical everywhere they are set, all through [SessionController] `authCookie`, the cookie that clears a session included ([SessionControllerTests], [LoginControllerTests]). Login issues a new token. Tokens are PASETO v2.local: encrypted and authenticated, with no algorithm confusion. Logout is POST-only.
 - ✅ Plain-HTTP LAN access (`http://nas:8080`) is a choice the operator makes: a browser keeps a `Secure` cookie over plain HTTP on `localhost` alone, so a login there loops until `server.secure_cookies` is false (`ALTITUDE_SECURE_COOKIES=false`), which drops `Secure` from the session cookie. Every start logs a WARN while it is false ([App] `logStart`), and [README-DOCKER] documents it beside HTTPS through a reverse proxy. Accepted exposure: with it false the session cookie crosses the network in the clear, which the [Deployment](#deployment) target, a LAN or VPN, allows.
@@ -548,6 +551,7 @@ Entries leave this list when their items close.
 [FileStoreService]: ../altitude/src/altitude/core/service/filestore/FileStoreService.scala
 [FileSystemStoreService]: ../altitude/src/altitude/core/service/filestore/FileSystemStoreService.scala
 [TransactionManager]: ../altitude/src/altitude/core/transactions/TransactionManager.scala
+[SqlExplainer]: ../altitude/src/altitude/core/transactions/SqlExplainer.scala
 [CaptureDateResolver]: ../altitude/src/altitude/core/util/CaptureDateResolver.scala
 [ImageUtil]: ../altitude/src/altitude/core/util/ImageUtil.scala
 [DescribeEmbedder]: ../altitude/src/altitude/core/util/DescribeEmbedder.scala
@@ -575,6 +579,7 @@ Entries leave this list when their items close.
 [RepositoryIsolationTests]: ../altitude/test/src/altitude/core/integration/RepositoryIsolationTests.scala
 [RepositoryServiceTests]: ../altitude/test/src/altitude/core/integration/RepositoryServiceTests.scala
 [UserServiceTests]: ../altitude/test/src/altitude/core/integration/UserServiceTests.scala
+[BaseDaoTests]: ../altitude/test/src/altitude/core/integration/BaseDaoTests.scala
 [AuditServiceTests]: ../altitude/test/src/altitude/core/integration/AuditServiceTests.scala
 [SearchMapTests]: ../altitude/test/src/altitude/core/integration/SearchMapTests.scala
 [TransactionBoundaryTests]: ../altitude/test/src/altitude/core/unit/TransactionBoundaryTests.scala

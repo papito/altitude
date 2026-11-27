@@ -117,6 +117,29 @@ import altitude.core.transactions.SqlExplainer.Frame
       "SELECT 'why?' FROM t WHERE a = 'x' AND b = '[1,2]'::vector AND c = ?"
   }
 
+  test("A statement that names a secret column shows its text values masked in the runnable form") {
+
+    /**
+     * Setup:
+     *
+     * An account insert binding an email address, a password hash and a flag, an update of the signing key, and an update of an
+     * account's name.
+     *
+     * Assertions:
+     *
+     * The insert and the signing key's update show each text value as `'…'`, so the dev-only explain log never writes a hash or
+     * the key; a number or a flag stays as bound. A statement naming no secret column shows its values.
+     */
+    SqlExplainer.runnable(
+      "INSERT INTO account (email, password_hash, is_active) VALUES (?, ?, ?)",
+      Map(1 -> "a@example.com", 2 -> "$2a$10$abcdefghijklmnopqrstuv", 3 -> true)) shouldBe
+      "INSERT INTO account (email, password_hash, is_active) VALUES ('…', '…', true)"
+    SqlExplainer.runnable("UPDATE system SET signing_key = ? WHERE id = ?", Map(1 -> "c2VjcmV0", 2 -> 1)) shouldBe
+      "UPDATE system SET signing_key = '…' WHERE id = 1"
+    SqlExplainer.runnable("UPDATE account SET name = ? WHERE id = ?", Map(1 -> "Jane", 2 -> "x")) shouldBe
+      "UPDATE account SET name = 'Jane' WHERE id = 'x'"
+  }
+
   test("The origin is the innermost application frame, and a DAO statement also names its first caller outside the DAOs") {
 
     /**

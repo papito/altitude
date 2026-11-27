@@ -21,6 +21,7 @@ object Const:
     val REL_SQLITE_DB_PATH = "db.sqlite.rel_db_path"
     val SQLITE_URL = "db.sqlite.url"
     val SQLITE_READ_POOL_SIZE = "db.sqlite.read_pool_size"
+    val SQLITE_WRITE_CONNECTION_TIMEOUT = "db.sqlite.write_connection_timeout"
     val DB_POOL_LEAK_DETECTION_THRESHOLD = "db.pool.leak_detection_threshold"
 
     // Dumps detection debug images into the project debug/ folder. Tunable values are Settings (`models.Settings`), not config.

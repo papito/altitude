@@ -40,6 +40,9 @@ object TransactionManager:
    */
   private val HNSW_SCAN_MEM_MULTIPLIER = 8
 
+  /** A wait for a pooled connection longer than this, HikariCP's own timeout, is logged */
+  private val SLOW_CONNECTION_WAIT_MS = 30000L
+
   /**
    * The system property naming a folder that holds this platform's sqlite-vector build. The Docker image sets it to the folder
    * its native libraries are put in when the image is built, and a native jar's start to the folder it unpacks them into
@@ -94,8 +97,9 @@ object TransactionManager:
  * timeout Setting; a write is the default `READ COMMITTED`.
  *
  * SQLite has a read pool and a one-connection write pool over the same file. Writes begin `IMMEDIATE`, so the single write
- * connection queues writers in the process instead of failing them with `SQLITE_BUSY`. Read connections refuse writes
- * (`query_only`): a write nested in a read transaction would otherwise be discarded by its closing rollback.
+ * connection queues writers in the process instead of failing them with `SQLITE_BUSY`; a writer that waits longer than
+ * `db.sqlite.write_connection_timeout` for it fails. Read connections refuse writes (`query_only`): a write nested in a read
+ * transaction would otherwise be discarded by its closing rollback.
  *
  * Read transactions end with a rollback. An `explainer` (development only) wraps each connection in an [[ExplainingConnection]].
  * `settings` is read as each transaction begins; it is None before the first load, when a fresh database's migration runs without
@@ -138,7 +142,13 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
    */
   def connection(readOnly: Boolean): Connection =
     val (readPool, writePool) = pools
-    val conn = (if readOnly then readPool else writePool).getConnection
+    val pool = if readOnly then readPool else writePool
+    val waitStarted = System.nanoTime
+    val conn = pool.getConnection
+    val waitedMs = (System.nanoTime - waitStarted) / 1000000
+    // SQLite's writers queue for the one write connection, so a long write holds up every writer behind it
+    if waitedMs > TransactionManager.SLOW_CONNECTION_WAIT_MS then
+      logger.warn(s"Waited ${waitedMs / 1000} s for a connection of the ${pool.getPoolName} pool")
     logger.trace(s"Borrowed connection $conn. Read-only: $readOnly")
 
     try
@@ -153,7 +163,7 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
 
   /** The transaction's own settings, before its first statement; `SET LOCAL` ends with the transaction */
   private def beginPostgresRead(conn: Connection): Unit =
-    val timeLimit = settings().map(s => s"; SET LOCAL statement_timeout = ${s.dbPostgresReadStatementTimeout * 1000}")
+    val timeLimit = settings().map(s => s"; SET LOCAL statement_timeout = ${s.dbPostgresReadStatementTimeout * 1000L}")
     val statement = conn.createStatement()
     try statement.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY" + timeLimit.getOrElse(""))
     finally statement.close()
@@ -252,12 +262,13 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
   /**
    * Runs `action` once the thread's outermost transaction has committed, with no connection held, or at once outside a
    * transaction; a rollback (as every read transaction ends) drops it. For what must not happen unless the change does, such as a
-   * log line. A throwing action is logged and fails neither the transaction nor the actions after it.
+   * log line. A throwing action is logged, never thrown: it fails neither its caller, nor the transaction, nor the actions after
+   * it.
    */
   def afterCommit(action: => Unit): Unit =
     afterCommitActions.value match
       case Some(actions) => actions += (() => action)
-      case None => action
+      case None => runAfterCommit(List(() => action))
 
   /**
    * Runs `f` in a transaction of its own, on a connection the thread holds until `f` ends. A write is committed; a read has
@@ -372,6 +383,8 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
 
     val hikari = poolConfig(name, size)
     hikari.setDataSource(dataSource)
+    // The writers queue for the one write connection, so a writer waits for every write ahead of it, not for HikariCP's 30 s
+    if !isReadPool then hikari.setConnectionTimeout(config.getDuration(Const.Conf.SQLITE_WRITE_CONNECTION_TIMEOUT).toMillis)
     logger.trace(s"Opening a SQLite pool [$name] of $size connections")
     new HikariDataSource(hikari)
 
@@ -381,9 +394,16 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
    * connection plans anything. The write connection checkpoints the WAL every 500 pages; read connections refuse writes.
    */
   private def setUpSqliteConnection(conn: Connection, isReadPool: Boolean): Unit =
+    // Bound, never spliced into the statement: a native jar unpacks it under the home folder, whose name may hold a quote
+    // (`C:\Users\O'Brien`)
+    val loading = conn.prepareStatement("SELECT load_extension(?)")
+    try
+      loading.setString(1, vectorExtensionPath)
+      loading.execute()
+    finally loading.close()
+
     val statement = conn.createStatement()
     try
-      statement.execute(s"SELECT load_extension('$vectorExtensionPath')")
       if hasTable(statement, "face") then
         statement.execute("SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')")
       if hasTable(statement, "asset") then

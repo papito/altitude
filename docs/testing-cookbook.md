@@ -437,6 +437,9 @@ refusal.head.user shouldBe Some(guest.persistedId)
 
 `LoggedLine.capturing { lines => ... }` reads the lines as they come, for a test that waits on one.
 
+Both capture DEBUG and above. `LoggedLine.tracedDuring` captures the TRACE lines too, for a test of what
+`ALTITUDE_LOG_LEVEL=TRACE` would write (`UserServiceTests`: no password hash in a failed insert's lines).
+
 ## JS tests
 
 The browser's modules that need no DOM are tested under Node's built-in runner, in `scripts/test-js/<name>.test.mjs`,

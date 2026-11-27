@@ -77,7 +77,7 @@ object SqliteSearchDialect extends SearchDialect:
       sql"${scanned.distance}, ${asset.id}",
       SqlStr.raw(s" LIMIT ${ranking.limit}")
     )
-    val vector = scalasql.Bytes(SqliteOverrides.vectorBytes(ranking.embedding))
+    val vector = scalasql.Bytes(SqliteOverrides.vectorBytes(ranking.embedding.values))
     RankedRows(
       rows = nearest,
       sources = Seq(sql"""scanned (asset_rowid, distance) AS (

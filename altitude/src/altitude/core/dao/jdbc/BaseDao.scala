@@ -1,16 +1,19 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import java.sql.BatchUpdateException
+import java.sql.PreparedStatement
+import java.sql.ResultSet
 import java.sql.SQLException
+import java.sql.Statement
+import java.sql.Types
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.util.UUID
 import org.apache.commons.dbutils.BasicRowProcessor
-import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.RowProcessor
-import org.apache.commons.dbutils.handlers.MapListHandler
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import scalasql.Column
@@ -57,6 +60,33 @@ object BaseDao:
   def incrWriteQueryCount(): Unit =
     RequestContext.writeQueryCount.value = RequestContext.writeQueryCount.value + 1
 
+  /**
+   * Binds `values` to a hand-written statement in order: `setObject`, and for a NULL `setNull` with no type (`Types.NULL`), which
+   * the database takes from where the parameter stands. Asking the driver for the statement's parameter types instead, as
+   * commons-dbutils' `QueryRunner` does, costs a describe round trip per statement on PostgreSQL.
+   */
+  def bind(statement: PreparedStatement, values: Seq[Any]): Unit =
+    values.iterator.zipWithIndex.foreach {
+      case (null, i) => statement.setNull(i + 1, Types.NULL)
+      case (value, i) => statement.setObject(i + 1, value)
+    }
+
+  /**
+   * A failed statement's exception as it is rethrown: the driver's message, SQLState and error code with the statement, and the
+   * driver's exception as its cause, never the values bound to it (a password hash, an email address). A failed batch is rethrown
+   * from the error that ended it (its next exception), since PostgreSQL's driver writes the batch entry into its own message with
+   * every value inlined.
+   */
+  def statementFailed(sql: String, e: SQLException): SQLException =
+    val driver = e match
+      case batch: BatchUpdateException => Option(batch.getNextException).getOrElse(batch)
+      case other => other
+    new SQLException(s"${driver.getMessage} Statement: $sql", driver.getSQLState, driver.getErrorCode, driver)
+
+  /** The failure of a statement given another number of values than it has placeholders, as `QueryRunner` reported it */
+  private def wrongValueCount(expected: Int, bound: Int): SQLException =
+    new SQLException(s"Wrong number of parameters: expected $expected, was given $bound")
+
 abstract class BaseDao[Model <: BaseModel]:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -99,14 +129,17 @@ abstract class BaseDao[Model <: BaseModel]:
 
   protected def nativeBool(value: Boolean): Any
 
-  /** The placeholder of a bound Scene embedding: `?::vector` on PostgreSQL (pgvector), plain `?` on SQLite (a BLOB) */
+  /**
+   * The placeholder of a bound vector (a Scene embedding, a Face's features): `?::vector` on PostgreSQL (pgvector), plain `?` on
+   * SQLite (a BLOB)
+   */
   protected def vectorPlaceholder: String
 
-  /**
-   * The bind value for [[vectorPlaceholder]]: the pgvector literal on PostgreSQL, little-endian float32 bytes on SQLite; `None`
-   * binds NULL
-   */
-  protected def vectorBind(embedding: Option[SceneEmbedding]): Any
+  /** The bind value for [[vectorPlaceholder]]: the pgvector literal on PostgreSQL, little-endian float32 bytes on SQLite */
+  protected def vectorBind(values: IArray[Float]): Any
+
+  /** [[vectorBind]] of a Scene embedding; `None` binds NULL */
+  final protected def vectorBind(embedding: Option[SceneEmbedding]): Any = embedding.map(e => vectorBind(e.values)).orNull
 
   /** A vector column as read: a `PGobject` holding the literal on PostgreSQL, the BLOB's bytes on SQLite */
   protected def getVectorField(value: AnyRef): Option[SceneEmbedding]
@@ -164,7 +197,59 @@ abstract class BaseDao[Model <: BaseModel]:
 
   protected def getNextVal(tableName: String): AnyRef
 
-  private def queryRunner = new QueryRunner()
+  /**
+   * A TRACE line, its text built only with TRACE on: a raw statement's line names how many values it binds, never the values,
+   * which can be a password hash or an embedding
+   */
+  protected def trace(message: => String): Unit =
+    if logger.isTraceEnabled then logger.trace(message)
+
+  /**
+   * Whether the driver counts a statement's placeholders without asking the database. SQLite's does, so the values given are
+   * checked against the count; PostgreSQL's would answer with a describe round trip, and refuses a wrong count itself: a value
+   * past the last placeholder as it is bound, a missing one as the statement runs.
+   */
+  private lazy val countsPlaceholdersLocally: Boolean = getDataSourceType == C.DbEngineName.SQLITE
+
+  private def requireValueCount(statement: PreparedStatement, bound: Int): Unit =
+    if countsPlaceholdersLocally then
+      val expected = statement.getParameterMetaData.getParameterCount
+      if expected != bound then throw BaseDao.wrongValueCount(expected, bound)
+
+  /**
+   * Runs `sql` with `values`: prepared, its values bound ([[BaseDao.bind]]) and checked against its placeholders, then run by
+   * `prepared`; with no values, as a plain statement run by `plain`, as `QueryRunner` sends one, so the dev SQL explain log never
+   * runs a bind-less `SELECT nextval(...)` again. The statement is closed after, and a failure is rethrown without the values
+   * ([[BaseDao.statementFailed]]).
+   */
+  private def runStatement[T](sql: String, values: Seq[Any])(prepared: PreparedStatement => T, plain: Statement => T): T =
+    try
+      if values.isEmpty then
+        val statement = RequestContext.getConn.createStatement()
+        try plain(statement)
+        finally statement.close()
+      else
+        val statement = RequestContext.getConn.prepareStatement(sql)
+        try
+          requireValueCount(statement, values.length)
+          BaseDao.bind(statement, values)
+          prepared(statement)
+        finally statement.close()
+    catch case e: SQLException => throw BaseDao.statementFailed(sql, e)
+
+  private def runUpdate(sql: String, values: Seq[Any]): Int = runStatement(sql, values)(_.executeUpdate(), _.executeUpdate(sql))
+
+  /** Reads the result of `sql` with `read`, fetching `fetchSize` rows at a time when it is positive (the driver's default when 0) */
+  private def runQuery[T](sql: String, values: Seq[Any], fetchSize: Int = 0)(read: ResultSet => T): T =
+    def reading(statement: Statement)(execute: => ResultSet): T =
+      if fetchSize > 0 then statement.setFetchSize(fetchSize)
+      val rs = execute
+      try read(rs)
+      finally rs.close()
+
+    runStatement(sql, values)(
+      statement => reading(statement)(statement.executeQuery()),
+      statement => reading(statement)(statement.executeQuery(sql)))
 
   protected def getDataSourceType: String = config.getString(C.Conf.DB_ENGINE)
 
@@ -206,7 +291,9 @@ abstract class BaseDao[Model <: BaseModel]:
   def getOneByQuery(q: Query): Model =
     val rows = Db.read(dialect)(_.run(matching(q)))
 
-    if rows.isEmpty then throw NotFoundException(s"Cannot find record in '$tableName' with query: $q")
+    // The fields read by, never their values
+    if rows.isEmpty then
+      throw NotFoundException(s"Cannot find record in '$tableName' by ${q.params.keys.toList.sorted.mkString(", ")}")
 
     if rows.length > 1 then throw ConstraintException("getById should return only a single result")
 
@@ -215,7 +302,7 @@ abstract class BaseDao[Model <: BaseModel]:
   def executeAndGetOne(sql: String, values: List[Any] = List()): Map[String, AnyRef] =
     val res = executeAndGetMany(sql, values)
 
-    if res.isEmpty then throw NotFoundException(s"Cannot find record with SQL: $sql and values: $values")
+    if res.isEmpty then throw NotFoundException(s"Cannot find record with SQL: $sql")
 
     if res.length > 1 then throw ConstraintException("getById should return only a single result")
 
@@ -271,53 +358,65 @@ abstract class BaseDao[Model <: BaseModel]:
 
   protected def addRecord(sql: String, values: List[Any]): Unit =
     BaseDao.incrWriteQueryCount()
-    logger.trace(s"INSERT SQL: $sql with values: $values")
-    val runner = queryRunner
-    runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
+    trace(s"INSERT SQL: $sql with ${values.length} values")
+    runUpdate(sql, values): Unit
+
+  /**
+   * Runs `sql` once for each row of values, in one batch; answers each run's row count. Every row has as many values as the
+   * statement has placeholders, and a row's values never carry over to the next.
+   */
+  def batchBySql(sql: String, rows: Seq[Seq[Any]]): Array[Int] =
+    if rows.isEmpty then return Array.empty
+
+    BaseDao.incrWriteQueryCount()
+    trace(s"BATCH SQL: $sql with ${rows.length} rows of values")
+    val width = rows.head.length
+    try
+      val statement = RequestContext.getConn.prepareStatement(sql)
+      try
+        requireValueCount(statement, width)
+        rows.foreach {
+          row =>
+            if row.length != width then throw BaseDao.wrongValueCount(width, row.length)
+            statement.clearParameters()
+            BaseDao.bind(statement, row)
+            statement.addBatch()
+        }
+        statement.executeBatch()
+      finally statement.close()
+    catch case e: SQLException => throw BaseDao.statementFailed(sql, e)
 
   private def executeAndGetMany(sql: String, values: List[Any]): List[Map[String, AnyRef]] =
     BaseDao.incrReadQueryCount()
-    logger.trace(s"SELECT SQL: $sql with values: $values")
-    val res =
-      queryRunner
-        .query(RequestContext.getConn, sql, new MapListHandler(rowProcessor), values.map(_.asInstanceOf[Object])*)
-        .asScala
-        .toList
-    logger.trace(s"Found ${res.length} records")
-    res.map(_.asScala.toMap[String, AnyRef])
+    trace(s"SELECT SQL: $sql with ${values.length} values")
+    val res = runQuery(sql, values) {
+      rs => Iterator.continually(rs).takeWhile(_.next()).map(rowProcessor.toMap(_).asScala.toMap[String, AnyRef]).toList
+    }
+    trace(s"Found ${res.length} records")
+    res
 
   def manyBySqlQuery(sql: String, values: List[Any] = List()): List[Map[String, AnyRef]] =
     executeAndGetMany(sql, values)
 
   /**
    * A read whose rows are judged as they are fetched and mostly dropped: `f` sees each row as [[manyBySqlQuery]] would return it,
-   * and only what it keeps stays in memory, however large the result. A failure is rethrown with the statement and values in the
-   * message, as `QueryRunner` reports it for the other reads.
+   * and only what it keeps stays in memory, however large the result. A failure is rethrown as the other raw statements' are,
+   * naming the statement and not its values.
    */
   def collectBySqlQuery[T](sql: String, values: List[Any] = List())(f: Map[String, AnyRef] => Option[T]): BaseDao.Collected[T] =
     BaseDao.incrReadQueryCount()
-    logger.trace(s"STREAMING SELECT SQL: $sql with values: $values")
-    try
-      val statement = RequestContext.getConn.prepareStatement(sql)
-      try
-        statement.setFetchSize(BaseDao.STREAMING_FETCH_SIZE)
-        queryRunner.fillStatement(statement, values.map(_.asInstanceOf[Object])*)
-        val rs = statement.executeQuery()
-        try
-          val kept = List.newBuilder[T]
-          var scanned = 0
-          while rs.next() do
-            scanned += 1
-            f(rowProcessor.toMap(rs).asScala.toMap[String, AnyRef]).foreach(kept += _)
-          val collected = BaseDao.Collected(kept.result(), scanned)
-          logger.trace(s"Scanned ${collected.scanned} records, kept ${collected.kept.length}")
-          collected
-        finally rs.close()
-      finally statement.close()
-    catch
-      case e: SQLException =>
-        val message = s"${e.getMessage} Query: $sql Parameters: ${values.mkString(", ")}"
-        throw new SQLException(message, e.getSQLState, e.getErrorCode, e)
+    trace(s"STREAMING SELECT SQL: $sql with ${values.length} values")
+    runQuery(sql, values, fetchSize = BaseDao.STREAMING_FETCH_SIZE) {
+      rs =>
+        val kept = List.newBuilder[T]
+        var scanned = 0
+        while rs.next() do
+          scanned += 1
+          f(rowProcessor.toMap(rs).asScala.toMap[String, AnyRef]).foreach(kept += _)
+        val collected = BaseDao.Collected(kept.result(), scanned)
+        trace(s"Scanned ${collected.scanned} records, kept ${collected.kept.length}")
+        collected
+    }
 
   def getByIds(ids: Set[String]): List[Model] =
     if ids.isEmpty then return List()
@@ -343,10 +442,9 @@ abstract class BaseDao[Model <: BaseModel]:
 
   def updateByBySql(sql: String, values: List[Any]): Int =
     BaseDao.incrWriteQueryCount()
-    logger.trace(s"WRITE SQL: $sql with values: $values")
-    val runner = queryRunner
-    val numAffected = runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
-    logger.trace(s"Affected records: $numAffected")
+    trace(s"WRITE SQL: $sql with ${values.length} values")
+    val numAffected = runUpdate(sql, values)
+    trace(s"Affected records: $numAffected")
     numAffected
 
   def getFloatListByJsonKey(jsonStr: String, key: String): List[Float] =

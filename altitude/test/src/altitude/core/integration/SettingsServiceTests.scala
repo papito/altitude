@@ -736,6 +736,29 @@ import altitude.core.models.SettingType
     Settings.all.filter(_.engine.isDefined).foreach(_.engine shouldBe Some(Const.DbEngineName.POSTGRES))
   }
 
+  test("The read statement timeout is at most 2,147,483 seconds, the most PostgreSQL's limit holds in milliseconds") {
+
+    /**
+     * Setup:
+     *
+     * The read statement timeout's rule, and on PostgreSQL a save of one second past its bound.
+     *
+     * Assertions:
+     *
+     * 2,147,483 seconds is valid and 2,147,484 is refused, saying why: PostgreSQL's `statement_timeout` is at most 2,147,483,647
+     * milliseconds. On PostgreSQL the save is a `ValidationException` and the stored value stays the seed.
+     */
+    val name = Settings.DB_POSTGRES_READ_STATEMENT_TIMEOUT
+    val rule = Settings.byName(name).valueType
+    rule.error("2147483") shouldBe None
+    rule.error("2147484") shouldBe Some("Must be at most 2147483")
+
+    if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
+      intercept[ValidationException](testApp.settings.save(Map(name -> "2147484"))).errors.keySet shouldBe Set(name)
+      storedValues(name) shouldBe seeds(name)
+    }
+  }
+
   test("A submitted value is trimmed, and a number spelled differently is not a change") {
 
     /**
