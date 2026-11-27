@@ -16,7 +16,7 @@
 @isAdmin = @{ account.accountType == AccountType.Admin }
 
 @moment(at: Option[Instant], withTime: Boolean) = {@at match {
-  case Some(instant) => {<time datetime="@instant" x-data="localTime" data-app-time-style="@{ if (withTime) "datetime" else "date" }">@Util.utcText(instant, withTime)</time>}
+  case Some(instant) => {@includes.html.local_time(instant, withTime)}
   case None => {Never}
 }}
 

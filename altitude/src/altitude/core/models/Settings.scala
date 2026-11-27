@@ -461,7 +461,8 @@ object Settings:
       Operations,
       "Read statement timeout (seconds)",
       "A read statement running longer is cancelled, and the search answers 503 instead of holding a backend.",
-      Integer(1),
+      // PostgreSQL's statement_timeout is at most 2,147,483,647 milliseconds
+      Integer(1, 2147483),
       engine = postgresOnly
     ),
     SettingDef(

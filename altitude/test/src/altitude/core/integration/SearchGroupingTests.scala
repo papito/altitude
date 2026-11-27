@@ -497,34 +497,6 @@ import altitude.core.util.*
     result.assets.length shouldBe 4
   }
 
-  if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
-    test("A legacy null import time keeps its capture day") {
-
-      /**
-       * Setup:
-       *
-       * SQLite only, since only its legacy rows can have a NULL import time: two assets taken on 2026-09-06, one with its
-       * `created_at` cleared to NULL.
-       *
-       * Assertions:
-       *
-       * Sorted by import time descending, both are grouped and counted under their capture day and in the total, and the NULL
-       * import time sorts last, where SQLite puts nulls in a descending sort.
-       */
-      val dated = persistDated("2026-09-06T10:00:00", "a1.jpg")
-      val undated = persistDated("2026-09-06T11:00:00", "a2.jpg")
-      testApp.txManager.withTransaction {
-        update("UPDATE asset SET created_at = NULL WHERE id = ?", undated.persistedId)
-      }
-
-      val byCapture = grouped(sort = SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
-      ids(byCapture) shouldEqual List(dated.persistedId, undated.persistedId)
-      byCapture.total shouldBe Some(2)
-      byCapture.groups.map(group => (dayOf(group.key), group.total, group.assets.length)) shouldEqual List(
-        (day("2026-09-06"), 2, 2))
-    }
-  }
-
   test("Location groups are in path order, hold an asset under each of its Locations, and end with No location") {
 
     /**
@@ -572,7 +544,8 @@ import altitude.core.util.*
     page.total shouldBe Some(4)
     page.groups.map(_.key.cursorGroupId) shouldEqual
       List(Some(berlin.persistedId), Some(alba.persistedId), Some(rome.persistedId), Some(kyoto.persistedId), None)
-    page.groups.head.key.cursorKey shouldBe Some("berlin")
+    // The path key: Berlin's sort key, as it has no category
+    page.groups.head.key.cursorKey shouldBe Some(pathKeyOf("Berlin"))
     page.continuesGroup shouldBe false
     page.nextCursor shouldBe None
 

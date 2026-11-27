@@ -196,7 +196,7 @@ import altitude.core.models.Permissions
     val recycler = account(AccountType.User, Permissions.of(Permission.Recycle))
     val curator = account(AccountType.User, Permissions.of(Permission.CurateOwn))
     val editor = account(AccountType.User, Permissions.of(Permission.EditMetadata))
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val taken = testApp.service.person.addPerson(altitude.core.models.Person(name = Some("Taken")))
 
     val newLibrary = s"/htmx/library/r/$repoId/dialogs/new"

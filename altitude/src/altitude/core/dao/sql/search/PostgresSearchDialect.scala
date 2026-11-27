@@ -101,11 +101,19 @@ object PostgresSearchDialect extends SearchDialect:
         FROM ($nearest) AS nearest (id, distance)
        WHERE nearest.distance <= ${ranking.maxDistance}""")
 
-  // Capture time is the only nullable timestamp: it is unknown when no metadata rung succeeds.
-  override def isNullableTimestamp(field: String): Boolean = field == FieldConst.Asset.ORIGINAL_CREATED_AT
+  // `encode` gives text of the database's collation, which the path key is not ordered by
+  override def pathKey(categorySort: Expr[?], locationSort: Expr[?]): Expr[String] =
+    Expr[String](
+      implicit ctx => sql"""((COALESCE(encode($categorySort, 'hex'), '') || encode($locationSort, 'hex')) COLLATE "C")""")
 
   // PostgreSQL orders NULL after every value
   override def nullsFirst(direction: SortDirection): Boolean = direction == SortDirection.DESC
+
+  // Read by the column's type: the capture time a wall-clock `timestamp`, the import time a `timestamptz`
+  override protected def readsTimestampAs(field: String, value: SortValue): Boolean = value match
+    case SortValue.LocalTimestamp(_) => field == FieldConst.Asset.ORIGINAL_CREATED_AT
+    case SortValue.UtcInstant(_) => field == FieldConst.CREATED_AT
+    case _ => false
 
   override val sortValueMapper: TypeMapper[SortValue] = new TypeMapper[SortValue]:
     def jdbcType: JDBCType = JDBCType.OTHER
@@ -118,6 +126,7 @@ object PostgresSearchDialect extends SearchDialect:
       r.getMetaData.getColumnTypeName(idx) match
         case "timestamp" => wrap(r.getObject(idx, classOf[LocalDateTime]))(SortValue.LocalTimestamp.apply)
         case "timestamptz" => wrap(r.getObject(idx, classOf[OffsetDateTime]))(SortValue.UtcInstant.apply)
+        case "bytea" => wrap(r.getBytes(idx))(SortValue.Bytes.apply)
         case _ =>
           r.getObject(idx) match
             case null => SortValue.Null
@@ -133,6 +142,7 @@ object PostgresSearchDialect extends SearchDialect:
       case SortValue.Real(number) => r.setDouble(idx, number)
       case SortValue.LocalTimestamp(dateTime) => r.setObject(idx, dateTime)
       case SortValue.UtcInstant(instant) => r.setObject(idx, instant)
+      case SortValue.Bytes(bytes) => r.setBytes(idx, bytes)
       case SortValue.Null => throw IllegalStateException("A null sort value is compared with IS NULL, never bound")
 
     private def wrap[T](value: T)(f: T => SortValue): SortValue = if value == null then SortValue.Null else f(value)

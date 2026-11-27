@@ -46,10 +46,13 @@ case class SearchCursor(
 
   /** A cursor without it cannot continue a Relevance-sorted search */
   def requireSecondSortValue: SortValue =
-    secondSortValue.getOrElse(throw SearchCursorException("Malformed cursor"))
+    secondSortValue.getOrElse(throw SearchCursor.malformed)
 
 object SearchCursor:
   private val VERSION = 6
+
+  /** The refusal of a token that does not read as a cursor, or holds values its search could not have written */
+  def malformed: SearchCursorException = SearchCursorException("Malformed cursor")
 
   def decode(token: String): SearchCursor =
     try
@@ -65,7 +68,7 @@ object SearchCursor:
       )
     catch
       case ex: SearchCursorException => throw ex
-      case _: Exception => throw SearchCursorException("Malformed cursor")
+      case _: Exception => throw malformed
 
   /**
    * The filters as requested: a folder filter as given, not its current descendants, and a date range as its days, not the
@@ -129,6 +132,7 @@ object SearchCursor:
     case SortValue.Real(number) => ujson.Obj("t" -> "real", "v" -> number.toString)
     case SortValue.LocalTimestamp(dateTime) => ujson.Obj("t" -> "ts", "v" -> dateTime.toString)
     case SortValue.UtcInstant(instant) => ujson.Obj("t" -> "tsz", "v" -> instant.toString)
+    case SortValue.Bytes(_) => throw IllegalStateException("A cursor carries a file name, never its sort key")
     case SortValue.Null => ujson.Obj("t" -> "null")
 
   private def sortValueFromJson(json: ujson.Value): SortValue = json("t").str match

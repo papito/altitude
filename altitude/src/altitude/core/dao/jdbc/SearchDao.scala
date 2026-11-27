@@ -1,11 +1,8 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.sql.PreparedStatement
-import java.sql.Types
 import java.time.LocalDate
 import java.time.LocalDateTime
-import org.apache.commons.dbutils.QueryRunner
 import scalasql.Sc
 import scalasql.core.Expr
 import scalasql.core.Queryable
@@ -327,18 +324,13 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
 
   private def clearMetadata(assetId: String): Unit =
     logger.trace(s"Clearing asset $assetId metadata")
-    BaseDao.incrWriteQueryCount()
     val sql =
       s"""
          DELETE FROM metadata_parameter
                WHERE ${FieldConst.REPO_ID} = ?
                  AND ${FieldConst.SearchToken.ASSET_ID} = ?
       """
-    val bindValues = List[Object](RequestContext.getRepository.persistedId, assetId)
-    logger.trace(s"Delete SQL: $sql, with values: $bindValues")
-    val runner: QueryRunner = new QueryRunner()
-    val numDeleted = runner.update(RequestContext.getConn, sql, bindValues*)
-    logger.trace(s"Deleted records: $numDeleted")
+    updateByBySql(sql, List(RequestContext.getRepository.persistedId, assetId)): Unit
 
   private def indexMetadata(asset: Asset, metadataFields: Map[String, UserMetadataField]): Unit =
     logger.trace(s"Indexing metadata for asset ${asset.persistedId}")
@@ -363,22 +355,17 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
       logger.trace(s"Field [${field.nameKey}] of type ${field.fieldType} has no metadata parameters")
       return
 
-    logger.trace(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString}")
-    val preparedStatement: PreparedStatement = RequestContext.getConn.prepareStatement(SearchDao.VALUE_INSERT_SQL)
-    values.foreach {
+    val rows = values.toList.map {
       valueStr =>
-        preparedStatement.clearParameters()
-        preparedStatement.setString(1, RequestContext.getRepository.persistedId)
-        preparedStatement.setString(2, asset.persistedId)
-        preparedStatement.setString(3, field.persistedId)
-        // keyword, under its name key, which a keyword filter is folded to as well (`SearchQueries.valueMatch`)
-        if field.fieldType == FieldType.KEYWORD then preparedStatement.setString(4, NameKey.of(valueStr))
-        else preparedStatement.setNull(4, Types.VARCHAR)
-        if field.fieldType == FieldType.NUMBER then preparedStatement.setDouble(5, valueStr.toDouble)
-        else preparedStatement.setNull(5, Types.DOUBLE)
-        // boolean, from any form the field accepts ("1", "TRUE")
-        if field.fieldType == FieldType.BOOL then preparedStatement.setBoolean(6, UserMetadataValue.asBoolean(valueStr).get)
-        else preparedStatement.setNull(6, Types.BOOLEAN)
-        BaseDao.incrWriteQueryCount()
-        preparedStatement.execute()
+        List(
+          RequestContext.getRepository.persistedId,
+          asset.persistedId,
+          field.persistedId,
+          // keyword, under its name key, which a keyword filter is folded to as well (`SearchQueries.valueMatch`)
+          if field.fieldType == FieldType.KEYWORD then NameKey.of(valueStr) else null,
+          if field.fieldType == FieldType.NUMBER then valueStr.toDouble else null,
+          // boolean, from any form the field accepts ("1", "TRUE")
+          if field.fieldType == FieldType.BOOL then UserMetadataValue.asBoolean(valueStr).get else null
+        )
     }
+    batchBySql(SearchDao.VALUE_INSERT_SQL, rows): Unit

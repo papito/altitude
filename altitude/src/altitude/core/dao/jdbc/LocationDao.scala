@@ -10,6 +10,7 @@ import altitude.core.dao.sql.tables.LocationRow
 import altitude.core.models.Location
 import altitude.core.models.LocationKind
 import altitude.core.util.Query
+import altitude.core.util.SortKey
 
 abstract class LocationDao(override val config: Config) extends BaseDao[Location] with altitude.core.dao.LocationDao:
   final override val tableName = "location"
@@ -17,6 +18,8 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
 
   final override type Row[T[_]] = LocationRow[T]
   final override protected def table: Table[Row] = LocationRow
+
+  override protected val sortKeyColumns: Map[String, String] = Map(FieldConst.Location.NAME -> FieldConst.Location.NAME_SORT)
 
   // `numOfAssets` and `categoryName` come only from `getAll`'s hand-written query; the typed paths never select them
   override protected def toModel(row: LocationRow[Sc]): Location =
@@ -50,8 +53,8 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
     val sql = s"""
         INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Location.CATEGORY_ID},
                                 ${FieldConst.Location.KIND}, ${FieldConst.Location.NAME}, ${FieldConst.Location.NAME_KEY},
-                                ${FieldConst.Location.LATITUDE}, ${FieldConst.Location.LONGITUDE})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                ${FieldConst.Location.NAME_SORT}, ${FieldConst.Location.LATITUDE}, ${FieldConst.Location.LONGITUDE})
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
 
     val values: List[Any] = List(
@@ -61,6 +64,7 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
       location.kind.dbValue,
       location.name,
       location.nameKey,
+      SortKey.of(location.name).bytes,
       location.latitude.orNull,
       location.longitude.orNull
     )
@@ -80,16 +84,19 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
         FROM $tableName l
              LEFT JOIN $tableName p ON p.${FieldConst.ID} = l.${FieldConst.Location.CATEGORY_ID}
        WHERE l.${FieldConst.REPO_ID} = ?
-       ORDER BY COALESCE(p.${FieldConst.Location.NAME_KEY}, l.${FieldConst.Location.NAME_KEY}),
+       ORDER BY COALESCE(p.${FieldConst.Location.NAME_SORT}, l.${FieldConst.Location.NAME_SORT}),
                 CASE WHEN l.${FieldConst.Location.CATEGORY_ID} IS NULL THEN 0 ELSE 1 END,
-                l.${FieldConst.Location.NAME_KEY}
+                l.${FieldConst.Location.NAME_SORT}, l.${FieldConst.ID}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
 
   override def addAssets(locationId: String, assetIds: Set[String]): Int =
-    // Selecting from `asset` drops unknown, foreign and recycled IDs; existing members are skipped rather than tripping the
-    // unique index
+    // Selected from `asset` to drop unknown, foreign and recycled IDs. A member is skipped by the unique index rather than by a
+    // test of the table, which cannot see a concurrent add's uncommitted row: that add's row is waited for, then skipped. The
+    // rows are written in ID order, so two adds of the same assets wait on each other's rows in one order whatever each reads
+    // them by. The count is of the rows that were new. The `WHERE` stays ahead of the `ORDER BY`: SQLite reads an upsert after
+    // a `SELECT` with none as a join's `ON`.
     val sql = s"""
       INSERT INTO $membershipTable (${FieldConst.REPO_ID}, ${FieldConst.Location.LOCATION_ID}, ${FieldConst.Location.ASSET_ID})
       SELECT asset.${FieldConst.REPO_ID}, ?, asset.${FieldConst.ID}
@@ -97,15 +104,11 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
        WHERE asset.${FieldConst.REPO_ID} = ?
          AND asset.${FieldConst.ID} $inIdSet
          AND asset.${FieldConst.Asset.IS_RECYCLED} = ?
-         AND NOT EXISTS (
-           SELECT 1
-             FROM $membershipTable la
-            WHERE la.${FieldConst.Location.LOCATION_ID} = ?
-              AND la.${FieldConst.Location.ASSET_ID} = asset.${FieldConst.ID})
+       ORDER BY asset.${FieldConst.ID}
+          ON CONFLICT DO NOTHING
     """
 
-    val values: List[Any] =
-      List(locationId, RequestContext.getRepository.persistedId, idSet(assetIds), nativeBool(false), locationId)
+    val values: List[Any] = List(locationId, RequestContext.getRepository.persistedId, idSet(assetIds), nativeBool(false))
 
     updateByBySql(sql, values)
 
@@ -150,7 +153,8 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
              LEFT JOIN $tableName p ON p.${FieldConst.ID} = l.${FieldConst.Location.CATEGORY_ID}
        WHERE la.${FieldConst.REPO_ID} = ?
          AND la.${FieldConst.Location.ASSET_ID} = ?
-       ORDER BY COALESCE(p.${FieldConst.Location.NAME_KEY}, l.${FieldConst.Location.NAME_KEY}), l.${FieldConst.Location.NAME_KEY}
+       ORDER BY COALESCE(p.${FieldConst.Location.NAME_SORT}, l.${FieldConst.Location.NAME_SORT}), l.${FieldConst.Location.NAME_SORT},
+                l.${FieldConst.ID}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).map(makeModel)

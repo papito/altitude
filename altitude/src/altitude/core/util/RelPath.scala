@@ -12,7 +12,8 @@ object RelPath:
 
   /**
    * The file's name last. A path with an empty name (an empty path, a leading, trailing or doubled separator), a "..", or a name
-   * imports ignore is a `ValidationException` that says which.
+   * imports ignore is a `ValidationException` that says which. Control characters are names' own; a NUL, which PostgreSQL cannot
+   * store, fails the file in its Import instead (`ImportService.failOnArrival`).
    */
   def segments(relPath: String): List[String] =
     // A negative limit keeps the empty names a trailing separator leaves

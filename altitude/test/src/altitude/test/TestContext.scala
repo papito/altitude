@@ -77,6 +77,30 @@ object TestContext {
   def between(vector: Array[Float], other: Array[Float], parts: Int): Array[Float] =
     FaceRecognitionService.meanNormalized(Seq.fill(parts)(vector) :+ other)
 
+  /** A detection's Face with the given embedding, as detection hands it to recognition, before any Person has it */
+  def detectedFace(features: Array[Float], isEnrolled: Boolean = true): Face =
+    Face(
+      x1 = 0,
+      y1 = 0,
+      width = 10,
+      height = 10,
+      detectionScore = 0.9,
+      checksum = randomChecksum,
+      features = features,
+      quality = 20.0,
+      isEnrolled = isEnrolled)
+
+  /** A detection with the given embedding and random crops, as detection hands it to recognition */
+  def detection(features: Array[Float], isEnrolled: Boolean = true): (Face, FaceImages) =
+    (
+      detectedFace(features, isEnrolled),
+      FaceImages(
+        image = generateRandomImagBytesBgr(),
+        displayImage = generateRandomImagBytesBgr(),
+        alignedImage = generateRandomImagBytesBgr(),
+        alignedImageGs = generateRandomImagBytesGray()
+      ))
+
   /** A Scene embedding at `cosine` to the unit vector `embedding`, the rest along a random orthogonal direction by `seed` */
   def atCosine(embedding: SceneEmbedding, cosine: Double, seed: Int): SceneEmbedding = {
     val along = embedding.values.map(_.toDouble)
@@ -88,6 +112,26 @@ object TestContext {
     SceneEmbedding(
       IArray.from(across.indices.map(i => (cosine * along(i) + math.sqrt(1 - cosine * cosine) * across(i) / length).toFloat)))
   }
+
+  /**
+   * Names in the order a person reads them (the natural order, `SortKey.of`), mixing what orders apart: a symbol, a leading
+   * number, a space before a parenthesis, digit runs of one and two digits, an accent and case, so a test of a list's order
+   * checks it against this.
+   */
+  val NATURAL_NAMES: List[String] = List(
+    "\uD83D\uDE42.jpg",
+    "2020.jpg",
+    "a (2).jpg",
+    "A (10).jpg",
+    "a.jpg",
+    "beach.jpg",
+    "emile.jpg",
+    "\u00C9mile.jpg",
+    "IMG_9.jpg",
+    "img_10.jpg",
+    "Zebra.jpg",
+    "zoo.jpg"
+  )
 
   /** The tables that carry `repository_id`, whose rows only their own repository's context reaches */
   val SCOPED_TABLES: List[String] = List(
@@ -127,6 +171,9 @@ class TestContext(val testApp: Altitude) {
   )
 
   def makeAdminUser(): User = makeUser().copy(accountType = AccountType.Admin)
+
+  /** An Admin account of random names, stored */
+  def persistAdmin(): User = persistUser(Some(makeAdminUser()))
 
   /** The account `user` describes (a User of random names when None), under `username` when one is given */
   def persistUser(
@@ -318,7 +365,7 @@ class TestContext(val testApp: Altitude) {
 
   /** What a Watch folder of the context repository remembers of the files of its directory */
   def watchFolderMemory(watchFolderId: String): List[WatchFolderFile] =
-    testApp.txManager.asReadOnly(testApp.DAO.watchFolderFile.ofWatchFolder(watchFolderId))
+    testApp.txManager.asReadOnly(testApp.DAO.watchFolderFile.memoryOf(watchFolderId).values.toList)
 
   /**
    * Whether `service` is scanning the Watch folder or still has a file of it in the import pipeline, not yet settled. Both live

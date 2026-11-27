@@ -30,6 +30,5 @@ case class ImportFile(
     reason: Option[String] = None,
     assetId: Option[String] = None,
     sizeBytes: Long,
-    createdAt: Option[LocalDateTime] = None,
-    updatedAt: Option[LocalDateTime] = None)
+    createdAt: Option[LocalDateTime] = None)
   extends BaseModel

@@ -76,7 +76,7 @@ import altitude.core.service.UserService.TokenCheck
     claims.permissionsIn(importOnly.persistedId) shouldBe Some(Permissions.of(Permission.Import))
     claims.permissionsIn(testContext.repository.persistedId) shouldBe None
 
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val adminClaims = claimsOf(tokenOf(admin))
     adminClaims.grants shouldBe Map.empty
     adminClaims.permissionsIn(importOnly.persistedId) shouldBe Some(Permissions.all)

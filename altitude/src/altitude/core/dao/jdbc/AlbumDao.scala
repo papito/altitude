@@ -8,6 +8,7 @@ import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.sql.tables.AlbumRow
 import altitude.core.models.Album
+import altitude.core.util.SortKey
 
 abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with altitude.core.dao.AlbumDao:
   final override val tableName = "album"
@@ -16,32 +17,30 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
   final override type Row[T[_]] = AlbumRow[T]
   final override protected def table: Table[Row] = AlbumRow
 
+  override protected val sortKeyColumns: Map[String, String] = Map(FieldConst.Album.NAME -> FieldConst.Album.NAME_SORT)
+
   // `numOfAssets` is counted only by `getAll`'s hand-written query
   override protected def toModel(row: AlbumRow[Sc]): Album =
-    Album(
-      id = Option(row.id),
-      name = row.name,
-      createdAt = row.createdAt.map(toLocalDateTime),
-      updatedAt = row.updatedAt.map(toLocalDateTime))
+    Album(id = Option(row.id), name = row.name, createdAt = row.createdAt.map(toLocalDateTime))
 
   override protected def makeModel(rec: Map[String, AnyRef]): Album =
     Album(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       name = rec(FieldConst.Album.NAME).asInstanceOf[String],
       numOfAssets = rec.get(FieldConst.Album.NUM_OF_ASSETS).map(getIntField).getOrElse(0),
-      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
-      updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
+      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT))
     )
 
   override def add(album: Album): Album =
     val id = album.id.getOrElse(BaseDao.genId)
 
     val sql = s"""
-        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Album.NAME}, ${FieldConst.Album.NAME_KEY})
-             VALUES (?, ?, ?, ?)
+        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Album.NAME}, ${FieldConst.Album.NAME_KEY},
+                                ${FieldConst.Album.NAME_SORT})
+             VALUES (?, ?, ?, ?, ?)
     """
 
-    addRecord(sql, List(id, RequestContext.getRepository.persistedId, album.name, album.nameKey))
+    addRecord(sql, List(id, RequestContext.getRepository.persistedId, album.name, album.nameKey, SortKey.of(album.name).bytes))
     album.copy(id = Some(id))
 
   override def getAll: List[Album] =
@@ -53,14 +52,17 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
       ) AS ${FieldConst.Album.NUM_OF_ASSETS}
         FROM $tableName a
        WHERE a.${FieldConst.REPO_ID} = ?
-       ORDER BY a.${FieldConst.Album.NAME_KEY}
+       ORDER BY a.${FieldConst.Album.NAME_SORT}, a.${FieldConst.ID}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
 
   override def addAssets(albumId: String, assetIds: Set[String]): Int =
-    // Selected from the asset table to drop unknown, foreign and recycled IDs, and to skip members rather than trip the unique
-    // index
+    // Selected from `asset` to drop unknown, foreign and recycled IDs. A member is skipped by the unique index rather than by a
+    // test of the table, which cannot see a concurrent add's uncommitted row: that add's row is waited for, then skipped. The
+    // rows are written in ID order, so two adds of the same assets wait on each other's rows in one order whatever each reads
+    // them by. The count is of the rows that were new. The `WHERE` stays ahead of the `ORDER BY`: SQLite reads an upsert after
+    // a `SELECT` with none as a join's `ON`.
     val sql = s"""
       INSERT INTO $membershipTable (${FieldConst.REPO_ID}, ${FieldConst.Album.ALBUM_ID}, ${FieldConst.Album.ASSET_ID})
       SELECT asset.${FieldConst.REPO_ID}, ?, asset.${FieldConst.ID}
@@ -68,15 +70,11 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
        WHERE asset.${FieldConst.REPO_ID} = ?
          AND asset.${FieldConst.ID} $inIdSet
          AND asset.${FieldConst.Asset.IS_RECYCLED} = ?
-         AND NOT EXISTS (
-           SELECT 1
-             FROM $membershipTable aa
-            WHERE aa.${FieldConst.Album.ALBUM_ID} = ?
-              AND aa.${FieldConst.Album.ASSET_ID} = asset.${FieldConst.ID})
+       ORDER BY asset.${FieldConst.ID}
+          ON CONFLICT DO NOTHING
     """
 
-    val values: List[Any] =
-      List(albumId, RequestContext.getRepository.persistedId, idSet(assetIds), nativeBool(false), albumId)
+    val values: List[Any] = List(albumId, RequestContext.getRepository.persistedId, idSet(assetIds), nativeBool(false))
 
     updateByBySql(sql, values)
 
@@ -118,7 +116,7 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
              JOIN $membershipTable aa ON aa.${FieldConst.Album.ALBUM_ID} = a.${FieldConst.ID}
        WHERE aa.${FieldConst.REPO_ID} = ?
          AND aa.${FieldConst.Album.ASSET_ID} = ?
-       ORDER BY a.${FieldConst.Album.NAME_KEY}
+       ORDER BY a.${FieldConst.Album.NAME_SORT}, a.${FieldConst.ID}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).map(makeModel)

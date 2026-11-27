@@ -14,7 +14,6 @@ import java.nio.file.attribute.FileTime
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
-import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
@@ -83,10 +82,13 @@ object WatchFolderService:
     /** This many files were handed to the import pipeline */
     case Scanned(offered: Int)
 
-    /** A scan was already running, or the server is stopping */
+    /**
+     * A scan was already running, the server is stopping, or the Watch folder changed since the scan read it, and the next scan
+     * reads it again
+     */
     case NotStarted
 
-    /** Not scanned, for the reason: paused, destination lost, directory unavailable, or removed */
+    /** Not scanned, for the reason: paused, destination lost, directory unavailable, removed, or its path changed */
     case Blocked(reason: String)
 
   /** Why a path cannot be a Watch folder's, or be scanned: `error` for the dialog's path field, `reason` for the card */
@@ -95,15 +97,40 @@ object WatchFolderService:
   // A file as a walk found it; `relPath` is under the watched directory
   private case class Found(relPath: String, path: Path, sizeBytes: Long, modifiedAt: FileTime)
 
-  // A walk's result: files in path order, the unreadable directories it went on past, and the app's own directory it stopped
-  // at, if any
-  private case class Walked(files: List[Found], unreadable: List[Path], own: Option[Path]):
-    // The card's note on unreadable directories, if any
+  /**
+   * A walk's result: files in path order; what it went past, each in path order, so the note it makes stays the same from scan to
+   * scan: the unreadable directories, the paths of the files too long to remember (`Const.WatchFolder.MAX_PATH_BYTES`) and those
+   * of the files whose names read as another's, by their bytes percent-encoded ([[onePerPath]]); and the app's own directory it
+   * stopped at, if any.
+   */
+  private case class Walked(
+      files: List[Found],
+      unreadable: List[Path],
+      tooLong: List[String],
+      sameName: List[String],
+      own: Option[Path]):
+    // The card's note on what the walk went past, if anything
     def problem: Option[String] =
-      unreadable match
+      val W = Const.WatchFolder
+      val directories = unreadable match
         case Nil => None
-        case List(directory) => Some(Const.WatchFolder.DIRECTORY_UNREADABLE.format(directory))
-        case first :: _ => Some(Const.WatchFolder.DIRECTORIES_UNREADABLE.format(unreadable.size, first))
+        case List(directory) => Some(W.DIRECTORY_UNREADABLE.format(directory))
+        case first :: _ => Some(W.DIRECTORIES_UNREADABLE.format(unreadable.size, first))
+      val long = tooLong match
+        case Nil => None
+        case List(relPath) => Some(W.PATH_TOO_LONG.format(W.MAX_PATH_BYTES, shortened(relPath)))
+        case first :: _ => Some(W.PATHS_TOO_LONG.format(tooLong.size, W.MAX_PATH_BYTES, shortened(first)))
+      val named = sameName match
+        case Nil => None
+        case List(relPath) => Some(W.NAME_READS_AS_ANOTHER.format(shortened(relPath)))
+        case first :: _ => Some(W.NAMES_READ_AS_OTHERS.format(sameName.size, shortened(first)))
+      Option(List(directories, long, named).flatten.mkString("; ")).filter(_.nonEmpty)
+
+  // A path cut to what a card shows, by whole characters
+  private def shortened(relPath: String): String =
+    val shown = Const.WatchFolder.SHOWN_PATH_LENGTH
+    if relPath.codePointCount(0, relPath.length) <= shown then relPath
+    else relPath.substring(0, relPath.offsetByCodePoints(0, shown)) + "…"
 
   /**
    * The directories the app stores into (`paths`, real paths), which no Watch folder may read or delete from. A directory matches
@@ -175,7 +202,12 @@ object WatchFolderService:
   private val REST = java.time.Duration.ofSeconds(Const.WatchFolder.REST_SECONDS)
 
   private val STOPPING = "the server is stopping"
-  private val REMOVED = "the Watch folder was removed"
+
+  /** Why a scan of a Watch folder removed before or during it scans nothing */
+  val REMOVED = "the Watch folder was removed"
+
+  /** Why a scan of a Watch folder whose path an edit changed during it remembers nothing */
+  val PATH_CHANGED = "the Watch folder's path was changed"
 
 /**
  * Watch folders: server directories the app scans, each for one Library, importing the files that arrive. Files are only ever
@@ -244,11 +276,12 @@ class WatchFolderService(val app: Altitude):
    * Edits a Watch folder under the rules of [[add]]; the context account owns it from here on. A changed path forgets the old
    * directory's files. Switching deletion on makes its handled files read again, so each is checked against the Library (and
    * re-imported if its asset is gone) before it is deleted, never on the memory's word alone. The status reason is cleared for
-   * the next scan to find again; a paused Watch folder stays paused.
+   * the next scan to find again; the edit writes no pause, so one paused or resumed meanwhile stays as that left it.
    */
   def update(id: String, spec: WatchFolderSpec): WatchFolder =
     txManager.withTransaction {
       dao.lockPaths()
+      lockEditor()
       val stored = dao.getById(id)
       val valid = validated(spec, Some(stored))
       val edited = stored.copy(
@@ -259,8 +292,6 @@ class WatchFolderService(val app: Altitude):
         accountId = RequestContext.getAccount.persistedId
       )
       BaseService.requireFound(dao.tableName, id, dao.update(edited)): Unit
-      if stored.isPaused then dao.setPaused(id, isPaused = true, reason = None): Unit
-      else dao.setStatusReason(id, None): Unit
 
       if edited.path != stored.path then
         val forgotten = fileDao.forgetAll(id)
@@ -297,11 +328,14 @@ class WatchFolderService(val app: Altitude):
 
   /**
    * Resumes a paused Watch folder. One whose owner is no longer an active Admin (which paused it) passes to the context account,
-   * since its assets need an owner.
+   * since its assets need an owner. It decides on the Watch folder as its row lock finds it, after the editor's share lock
+   * (**Lock order**): an edit committed meanwhile made its editor, an active Admin, the owner, which stands, and one removed
+   * meanwhile is a `NotFoundException`.
    */
   def resume(id: String): Unit =
     txManager.withTransaction {
-      val stored = dao.getById(id)
+      lockEditor()
+      val stored = locked(id)
       if !owns(app.DAO.user.getById(stored.accountId)) then
         val owner = RequestContext.getAccount
         dao.setOwner(id, owner.persistedId): Unit
@@ -311,10 +345,29 @@ class WatchFolderService(val app: Altitude):
       changed()
     }
 
-  /** Makes the Watch folder's failed files (final, to retry and parked) read again, as never tried; returns how many */
+  /**
+   * Share-locks the context account (`UserService.lockActor`), which an edit or a resume may make the owner, before the Watch
+   * folder's row: an account write locks the accounts first and then pauses or passes on Watch folders, so the two take turns.
+   * After `lockPaths`, as an add's insert share-locks its owner after it. An editor deactivated, deleted or demoted by then is
+   * refused, since a Watch folder's owner must be an active Admin.
+   */
+  private def lockEditor(): Unit =
+    app.service.user.lockActor(RequestContext.getAccount.persistedId, mustBeAdmin = true): Unit
+
+  /**
+   * The Watch folder as its row lock finds it (`WatchFolderDao.lock`), or `NotFoundException`. A write of its files takes it
+   * first, as an edit, a removal and a scan's `remember` write the row before the files (**Lock order**).
+   */
+  private def locked(id: String): WatchFolder =
+    dao.lock(id).getOrElse(throw NotFoundException(s"Cannot find record in '${dao.tableName}' with ID [$id]"))
+
+  /**
+   * Makes the Watch folder's failed files (final, to retry and parked) read again, as never tried; returns how many. It locks the
+   * Watch folder's row first, so it takes its turn with a scan writing the memory.
+   */
   def retryFailed(id: String): Int =
     txManager.withTransaction {
-      dao.getById(id): Unit
+      locked(id): Unit
       val retried = fileDao.reread(id, Set(WatchFileState.Final, WatchFileState.Retry, WatchFileState.Parked))
       logger.info(s"Watch folder [$id]: $retried failed files are read again")
       retried
@@ -339,7 +392,7 @@ class WatchFolderService(val app: Altitude):
             status,
             reason,
             destination = destination.map(folder => app.service.imports.pathOf(folder.persistedId, NamedPath.SEPARATOR)),
-            lastScanAt = watchFolder.lastScanAt.map(dao.instantOf),
+            lastScanAt = watchFolder.lastScanAt.map(Util.instantOf),
             isScanning = scanning.contains(watchFolder.persistedId),
             imported = imported,
             failed = failed
@@ -392,27 +445,29 @@ class WatchFolderService(val app: Altitude):
 
   /**
    * Forgets, in every repository, remembered files absent for `days`. What a Watch folder's last scan found is never forgotten,
-   * so one that is not being scanned keeps its memory.
+   * so one that is not being scanned keeps its memory. Each Watch folder is one transaction that locks its row first and reads
+   * its last scan from the row as locked, so it takes its turn with a scan writing the memory.
    */
   def forgetAbsent(days: Int): Unit =
     val cutoff = OffsetDateTime.now(ZoneOffset.UTC).minusDays(days)
     app.service.library.forEachRepository {
       repository =>
-        val forgotten = txManager.withTransaction {
-          dao
-            .all()
-            .map {
-              watchFolder =>
-                watchFolder.lastScanAt.fold(0) {
+        val forgotten = txManager
+          .asReadOnly(dao.all())
+          .map {
+            listed =>
+              txManager.withTransaction {
+                // A Watch folder removed since the list forgets nothing
+                dao.lock(listed.persistedId).flatMap(_.lastScanAt).fold(0) {
                   lastScanAt =>
                     // A file the last scan found is stamped within a step of it
-                    val absentAtLastScan = dao.instantOf(lastScanAt).atOffset(ZoneOffset.UTC).minus(LAST_SEEN_STEP)
+                    val absentAtLastScan = Util.instantOf(lastScanAt).atOffset(ZoneOffset.UTC).minus(LAST_SEEN_STEP)
                     val before = if absentAtLastScan.isBefore(cutoff) then absentAtLastScan else cutoff
-                    fileDao.forgetLastSeenBefore(watchFolder.persistedId, before)
+                    fileDao.forgetLastSeenBefore(listed.persistedId, before)
                 }
-            }
-            .sum
-        }
+              }
+          }
+          .sum
         if forgotten > 0 then logger.info(s"Forgot $forgotten Watch folder files absent for $days days. Repo: ${repository.name}")
     }
 
@@ -435,8 +490,9 @@ class WatchFolderService(val app: Altitude):
     val name = spec.name.trim
     if name.isEmpty then refused.errors += F.NAME -> Const.Msg.Err.VALUE_REQUIRED
     else
+      // Each scan's Import takes the name, so it holds no control character either, as no name does
       try Validators.validName(name, F.NAME, Api.Constraints.MAX_WATCH_FOLDER_NAME_LENGTH): Unit
-      catch case tooLong: ValidationException => refused.errors ++= tooLong.errors
+      catch case invalid: ValidationException => refused.errors ++= invalid.errors
 
     val path = parsed(spec.path) match
       case Left(error) =>
@@ -457,13 +513,16 @@ class WatchFolderService(val app: Altitude):
     refused.trigger()
     spec.copy(name = name, path = path.get.toString)
 
-  // The path as typed: absolute, with no "." or ".." left in it
+  // The path as typed: absolute, with no "." or ".." left in it, and within the bytes its unique index takes
   private def parsed(text: String): Either[String, Path] =
     if text.trim.isEmpty then Left(Const.Msg.Err.VALUE_REQUIRED)
     else
       try
         val path = Path.of(text.trim)
-        if path.isAbsolute then Right(path.normalize()) else Left(Const.Msg.Err.WATCH_PATH_RELATIVE)
+        if !path.isAbsolute then Left(Const.Msg.Err.WATCH_PATH_RELATIVE)
+        else if WatchFolder.isPathTooLong(path.normalize().toString) then
+          Left(Const.Msg.Err.WATCH_PATH_TOO_LONG.format(Const.WatchFolder.MAX_PATH_BYTES))
+        else Right(path.normalize())
       catch case _: InvalidPathException => Left(Const.Msg.Err.WATCH_PATH_INVALID)
 
   // A path with its symbolic links resolved, or as it is written where it does not exist
@@ -537,10 +596,26 @@ class WatchFolderService(val app: Altitude):
    * may drive the rounds itself.
    */
   def start(schedule: (FiniteDuration, () => Unit) => Cancellable = onActorSystem): Unit =
+    warnOfFileNameEncoding()
     logger.info(
       s"Scanning the Watch folders, now and then every ${Util.minutesText(app.settings.current.watchFolderScanInterval)} " +
         "(watch_folder.scan_interval)")
     tick(schedule)
+
+  /**
+   * Warns when the JVM reads file names in an encoding other than UTF-8 (`sun.jnu.encoding`, from the locale it starts under: a
+   * start under the C or POSIX locale reads ASCII). Every name with a byte it cannot read then reads with U+FFFD in its place, so
+   * names that differ only there read as one and a scan skips all but one of them ([[onePerPath]]). Windows reads file names as
+   * UTF-16, whatever the property says.
+   */
+  private def warnOfFileNameEncoding(): Unit =
+    val encoding = System.getProperty("sun.jnu.encoding", "")
+    val isUtf8 = encoding.equalsIgnoreCase("UTF-8") || encoding.equalsIgnoreCase("UTF8")
+    if !isUtf8 && !System.getProperty("os.name", "").startsWith("Windows") then
+      logger.warn(
+        s"The JVM reads file names as $encoding, not UTF-8: a Watch folder's files whose names differ only in characters " +
+          s"$encoding cannot read are taken for one file, and all but one skipped. Start the server under a UTF-8 locale " +
+          "(LANG=C.UTF-8, or another UTF-8 one).")
 
   // One round of scans, and the next one scheduled. A round that fails is logged, and the next one still comes
   private def tick(schedule: (FiniteDuration, () => Unit) => Cancellable): Unit =
@@ -629,18 +704,24 @@ class WatchFolderService(val app: Altitude):
       read match
         case None => Left(ScanResult.Blocked(REMOVED))
         case Some((watchFolder, owner, destination, others)) =>
-          val heldBack =
-            if watchFolder.isPaused then Some(watchFolder.statusReason.getOrElse(WatchFolderStatus.Paused.label))
-            else if !owns(owner) then Some(pauseFor(watchFolder, owner))
-            else if destination.exists(_.isRecycled) then Some(Const.WatchFolder.DESTINATION_LOST)
-            else None
+          // None when the owner it read can no longer own it, yet it is no longer theirs or theirs to pause either
+          val heldBack: Option[Option[String]] =
+            if watchFolder.isPaused then Some(Some(watchFolder.statusReason.getOrElse(WatchFolderStatus.Paused.label)))
+            else if !owns(owner) then pauseFor(watchFolder, owner).map(Some(_))
+            else if destination.exists(_.isRecycled) then Some(Some(Const.WatchFolder.DESTINATION_LOST))
+            else Some(None)
 
           heldBack match
-            case Some(reason) =>
+            case None =>
+              logger.info(
+                s"Watch folder [$id] \"${watchFolder.name}\" changed since its scan read it, which is not started: the next " +
+                  "one reads it again")
+              Left(ScanResult.NotStarted)
+            case Some(Some(reason)) =>
               if notScanned.put(id, reason) != reason then
                 logger.info(s"Watch folder [$id] \"${watchFolder.name}\" is not scanned: $reason")
               Left(ScanResult.Blocked(reason))
-            case None =>
+            case Some(None) =>
               if notScanned.remove(id) != null then logger.info(s"Watch folder [$id] \"${watchFolder.name}\" is scanned again")
               val path = Path.of(watchFolder.path)
               val own = ownDirectories()
@@ -657,12 +738,16 @@ class WatchFolderService(val app: Altitude):
                   val walkStarted = Instant.now()
                   walk(root, own) match
                     // Nothing of such a directory is remembered or read, the files beside the app's own included
-                    case Walked(_, _, Some(met)) => unavailable(Const.WatchFolder.PATH_HOLDS_DATA.format(met))
-                    case walked @ Walked(found, _, None) =>
-                      val files = txManager.withTransaction(remember(watchFolder, found, walkStarted, walked.problem))
-                      logger.debug(
-                        s"Watch folder [$id] \"${watchFolder.name}\": ${found.size} files found, ${files.size} to read")
-                      Right(Run(repository, watchFolder, owner, root, files, pipeline))
+                    case Walked(_, _, _, _, Some(met)) => unavailable(Const.WatchFolder.PATH_HOLDS_DATA.format(met))
+                    case walked @ Walked(found, _, _, _, None) =>
+                      txManager.withTransaction(remember(watchFolder, found, walkStarted, walked.problem)) match
+                        case Left(reason) =>
+                          logger.info(s"Watch folder [$id] \"${watchFolder.name}\" is not scanned, as during its walk $reason")
+                          Left(ScanResult.Blocked(reason))
+                        case Right(files) =>
+                          logger.debug(
+                            s"Watch folder [$id] \"${watchFolder.name}\": ${found.size} files found, ${files.size} to read")
+                          Right(Run(repository, watchFolder, owner, root, files, pipeline))
     }
 
   // The Watch folder, unless it was removed
@@ -670,38 +755,55 @@ class WatchFolderService(val app: Altitude):
     try Some(dao.getById(id))
     catch case _: NotFoundException => None
 
-  // Pauses a Watch folder whose owner can no longer own it, as the account change would have; returns the reason
-  private def pauseFor(watchFolder: WatchFolder, owner: User): String =
-    val reason = if owner.isActive then Const.WatchFolder.OWNER_DEMOTED else Const.WatchFolder.OWNER_DEACTIVATED
+  /**
+   * Pauses a Watch folder whose owner can no longer own it, as the account change would have, and returns the reason. The owner
+   * is share-locked and read again first, before the Watch folder's row as the Lock order takes an account before its Watch
+   * folders, so an account write of it either committed and is read here or waits for the pause. None, pausing nothing, when the
+   * owner may own it again (reactivated, promoted), or when the Watch folder is no longer theirs or unpaused, as the scan read
+   * it: an Admin who edited or resumed it since owns it now, or one paused it.
+   */
+  private def pauseFor(watchFolder: WatchFolder, owner: User): Option[String] =
     txManager.withTransaction {
-      dao.setPaused(watchFolder.persistedId, isPaused = true, Some(reason)): Unit
-      changed()
+      val now = app.DAO.user.shareLock(owner.persistedId)
+      if now.exists(owns) then None
+      else
+        val reason = if now.exists(_.isActive) then Const.WatchFolder.OWNER_DEMOTED else Const.WatchFolder.OWNER_DEACTIVATED
+        Option.when(dao.pauseForOwner(watchFolder.persistedId, owner.persistedId, reason) > 0) {
+          changed()
+          reason
+        }
     }
-    reason
 
-  // Stores and logs a change in the directory's availability: `problem` is why it is unavailable, in whole or in part
-  // (directories a scan went on past), or None
+  /**
+   * Stores and logs a change in the directory's availability: `problem` is why it is unavailable, in whole or in part
+   * (directories and files a scan went past), or None. Only a problem other than the one the scan read is written, so a scan that
+   * finds it as before writes nothing; then the row decides, not that earlier read, and a paused Watch folder keeps its pause's
+   * reason. The log escapes the problem, which may name a file as a name on disk spells it (`Util.printable`).
+   */
   private def available(watchFolder: WatchFolder, problem: Option[String]): Unit =
-    if watchFolder.statusReason != problem then
-      txManager.withTransaction {
-        dao.setStatusReason(watchFolder.persistedId, problem): Unit
-        changed()
-      }
+    val isChanged = watchFolder.statusReason != problem && txManager.withTransaction {
+      val updated = dao.setStatusReason(watchFolder.persistedId, problem) > 0
+      if updated then changed()
+      updated
+    }
+    if isChanged then
       val named = s"Watch folder [${watchFolder.persistedId}] \"${watchFolder.name}\" at ${watchFolder.path}"
       problem match
-        case Some(reason) => logger.warn(s"$named is unavailable: $reason")
+        case Some(reason) => logger.warn(s"$named is unavailable: ${Util.printable(reason, reason.length * 6)}")
         case None => logger.warn(s"$named is available again")
 
   /**
    * The non-empty regular files under the directory, in path order, without symbolic links or names imports ignore. What cannot
    * be read is left for a later scan and the walk goes on; a directory that cannot be opened, or whose listing fails midway (a
-   * stale network handle), is returned as unreadable.
+   * stale network handle), is returned as unreadable, and a file whose path under the directory is too long to remember as too
+   * long. Of files whose paths read as one, one is kept and the others returned ([[onePerPath]]).
    *
    * The walk stops at one of the app's own directories, under whatever path it meets it, and the caller then reads nothing.
    */
   private def walk(root: Path, own: OwnDirectories): Walked =
     val found = List.newBuilder[Found]
     val unreadable = List.newBuilder[Path]
+    val tooLong = List.newBuilder[String]
     var met: Option[Path] = None
 
     // Symbolic links are not followed, which is the walk's default: a link is visited as a file that is one
@@ -718,7 +820,9 @@ class WatchFolderService(val app: Altitude):
 
         override def visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult =
           if attributes.isRegularFile && attributes.size > 0 && !IgnoredFiles.ignores(file.getFileName.toString) then
-            found += Found(relPathOf(root, file), file, attributes.size, attributes.lastModifiedTime)
+            val relPath = relPathOf(root, file)
+            if WatchFolder.isPathTooLong(relPath) then tooLong += relPath
+            else found += Found(relPath, file, attributes.size, attributes.lastModifiedTime)
           FileVisitResult.CONTINUE
 
         // A directory that cannot be opened comes here too, rather than to the two visits of a directory
@@ -736,7 +840,20 @@ class WatchFolderService(val app: Altitude):
           FileVisitResult.CONTINUE
     )
 
-    Walked(found.result().sortBy(_.relPath), unreadable.result(), met)
+    val (files, sameName) = onePerPath(root, found.result())
+    Walked(files, unreadable.result().sorted, tooLong.result().sorted, sameName, met)
+
+  /**
+   * The files in path order, one per path, and the paths of those left out. Two names whose bytes the JVM's file name encoding
+   * cannot read (invalid UTF-8) both read with U+FFFD in their place, as one path, and the memory keeps one file per path: the
+   * first by its name's bytes is kept, the same one every scan, and each other is left alone, its path under the directory given
+   * by its bytes, percent-encoded as a file URI spells them, so the card tells it from the one kept.
+   */
+  private def onePerPath(root: Path, found: List[Found]): (List[Found], List[String]) =
+    val sorted = found.sortBy(file => (file.relPath, file.path))
+    val kept = sorted.distinctBy(_.relPath)
+    val left = sorted.diff(kept).map(file => root.toUri.relativize(file.path.toUri).getRawPath)
+    (kept, left.sorted)
 
   // A file's path under the directory, as an Import file's is written: its names separated by "/"
   private def relPathOf(root: Path, file: Path): String =
@@ -746,19 +863,32 @@ class WatchFolderService(val app: Altitude):
    * Records what a walk found, in the caller's transaction, and returns the files to read, in path order. A changed size or
    * modified time makes a new file, whatever became of it before. A remembered file is read when it is to be retried, or when it
    * is seen and has rested: last seen at least `REST` before `walkStarted`, so the two looks are that far apart however long the
-   * walks took. A file still in the pipeline is not read again. The status reason becomes `problem`.
+   * walks took. A file still in the pipeline is not read again. The status reason becomes `problem` unless it is paused by then;
+   * the memory is read streamed into a map, and the changed files are written in one batch.
+   *
+   * The Watch folder's row is written first, as an edit and a removal of it write it first, so the two take turns instead of each
+   * holding rows the other waits on, and only while its path is the one walked. Otherwise nothing is remembered, and the reason
+   * is returned: the Watch folder was removed meanwhile, or an edit moved it to another directory and forgot the old one's files,
+   * which the walk found.
    */
-  private def remember(watchFolder: WatchFolder, found: List[Found], walkStarted: Instant, problem: Option[String]): List[Found] =
+  private def remember(
+      watchFolder: WatchFolder,
+      found: List[Found],
+      walkStarted: Instant,
+      problem: Option[String]): Either[String, List[Found]] =
     val id = watchFolder.persistedId
-    val now = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
+    val now = Util.utcNow
+    if dao.scanned(id, now, watchFolder.path) == 0 then return Left(if find(id).isEmpty then REMOVED else PATH_CHANGED)
+
     val stale = now.minus(LAST_SEEN_STEP).toInstant
     val restedBy = walkStarted.minus(REST)
     // In-flight files are read before the rows: a file leaves the pipeline only after its row is written ([[settled]]), so one
     // settling in between still counts as in flight. The other order could offer it twice.
     val flying = inFlight.values.asScala.filter(_.watchFolderId == id).map(_.relPath).toSet
-    val remembered = fileDao.ofWatchFolder(id).map(file => file.relPath -> file).toMap
+    val remembered = fileDao.memoryOf(id)
 
     val fresh = mutable.ListBuffer[WatchFolderFile]()
+    val changedFiles = mutable.ListBuffer[WatchFolderFile]()
     val foundAgain = mutable.ListBuffer[String]()
     val toRead = mutable.ListBuffer[Found]()
 
@@ -773,9 +903,9 @@ class WatchFolderService(val app: Altitude):
               sizeBytes = file.sizeBytes,
               modifiedAt = modifiedAt)
           case Some(known) if known.sizeBytes != file.sizeBytes || known.modifiedAt != modifiedAt =>
-            fileDao.changed(id, file.relPath, file.sizeBytes, modifiedAt, now): Unit
+            changedFiles += known.copy(sizeBytes = file.sizeBytes, modifiedAt = modifiedAt)
           case Some(known) =>
-            val lastSeen = known.lastSeenAt.map(fileDao.instantOf)
+            val lastSeen = known.lastSeenAt.map(Util.instantOf)
             if lastSeen.forall(_.isBefore(stale)) then foundAgain += file.relPath
             val isDue = known.state == WatchFileState.Retry ||
               (known.state == WatchFileState.Seen && lastSeen.forall(!_.isAfter(restedBy)))
@@ -783,10 +913,10 @@ class WatchFolderService(val app: Altitude):
     }
 
     fileDao.addAll(fresh.toList, now)
+    fileDao.changed(id, changedFiles.toList, now)
     fileDao.seenAgain(id, foundAgain.toList, now): Unit
-    dao.scanned(id, now): Unit
     available(watchFolder, problem)
-    toRead.toList
+    Right(toRead.toList)
 
   // Offers the files one after another, each waiting for the queue without holding a thread, then marks the scan's Import
   // complete, if it opened one; it closes once its last file settles

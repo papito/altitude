@@ -32,8 +32,7 @@ case class Import(
     duplicate: Int = 0,
     unsupported: Int = 0,
     failed: Int = 0,
-    createdAt: Option[LocalDateTime] = None,
-    updatedAt: Option[LocalDateTime] = None)
+    createdAt: Option[LocalDateTime] = None)
   extends BaseModel:
 
   def isInProgress: Boolean = closedAt.isEmpty

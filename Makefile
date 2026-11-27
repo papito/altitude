@@ -52,19 +52,17 @@ lint:
 # Tests tagged Slow (org.scalatest.tagobjects.Slow) are left out of every target but test-with-slow and the focused ones
 SKIP_SLOW = -l org.scalatest.tags.Slow
 
-test:
+# The JS tests first: they take a second and fail before the Scala bundles start
+test: test-js test-db
 	ALTITUDE_ENV=test ./mill -j4 altitude.test.testOnly '*SuiteBundle' -- $(SKIP_SLOW)
 
-test-with-slow:
+test-with-slow: test-js test-db
 	ALTITUDE_ENV=test ./mill -j4 altitude.test.testOnly '*SuiteBundle'
 
-test-local: test-js
-	ALTITUDE_ENV=test ./mill -j3 altitude.test.testOnly '*UnitSuiteBundle' '*SqliteSuiteBundle' '*ControllerSuiteBundle' -- $(SKIP_SLOW)
-
-test-focused:
+test-focused: test-db
 	ALTITUDE_ENV=test ./mill -j4 altitude.test.testOnly '*SuiteBundle' -- -n focused -oD
 
-test-focused-psql:
+test-focused-psql: test-db
 	ALTITUDE_ENV=test ./mill -j1 altitude.test.testOnly *PostgresSuiteBundle -- -n focused -oD
 
 test-focused-sqlite:
@@ -76,7 +74,7 @@ test-focused-unit:
 test-focused-controllers:
 	ALTITUDE_ENV=test ./mill -j1 altitude.test.testOnly *ControllerSuiteBundle -- -n focused -oD
 
-test-psql:
+test-psql: test-db
 	ALTITUDE_ENV=test ./mill -j1 altitude.test.testOnly *PostgresSuiteBundle --show-output -- $(SKIP_SLOW)
 
 test-sqlite:
@@ -96,7 +94,14 @@ test-js:
 db:
 	docker compose -f compose.dev.yaml -f compose.test.yaml up
 
-.PHONY: dist-jars smoke-jar docker smoke-docker
+# The test database the PostgreSQL bundle reaches on port 5433 (compose.test.yaml), started unless it is up already;
+# --wait returns once its health check passes, and fails if it turns unhealthy. The dev container is in the same compose
+# project but not in this file, so compose would call it an orphan: COMPOSE_IGNORE_ORPHANS keeps that warning out and
+# leaves the container alone.
+test-db:
+	COMPOSE_IGNORE_ORPHANS=true docker compose -f compose.test.yaml up --wait
+
+.PHONY: dist-jars smoke-jar docker smoke-docker test-db
 
 # Builds the image and loads it as altitude:local, for this machine's architecture. DOCKER_PLATFORM=linux/arm64 (or
 # linux/amd64) builds the other one's, which needs QEMU for the image's one RUN:

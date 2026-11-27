@@ -30,11 +30,14 @@ trait PersonDao extends BaseDao[Person]:
   def recycleFacesForAssets(assetIds: Set[String]): Unit
   def restoreFacesForAssets(assetIds: Set[String]): Unit
 
-  /** Locks the people with a Face on any of the assets, in ID order as `lockAndGetLive` locks */
-  def lockAssetPeople(assetIds: Set[String]): Unit
+  /** Locks the people with a Face on any of the assets, in ID order as `lockAndGetLive` locks, and returns their IDs */
+  def lockAssetPeople(assetIds: Set[String]): Set[String]
+
+  /** The people with a Face on any of the assets, read without a lock */
+  def getAssetPeople(assetIds: Set[String]): Set[String]
 
   /** Locks the people in ID order, so transactions locking the same people cannot deadlock; returns the live ones' IDs */
   def lockAndGetLive(personIds: Set[String]): Set[String]
 
-  /** Deletes those with no Face left; returns their IDs */
-  def deleteFaceless(personIds: Set[String]): Set[String]
+  /** Deletes those with no Face left, or with `keepNamed` only the unnamed among them; returns their IDs */
+  def deleteFaceless(personIds: Set[String], keepNamed: Boolean): Set[String]

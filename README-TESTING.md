@@ -5,8 +5,9 @@ How the tests are organized, how to run them, and what to know before writing on
 
 ## Before the first run
 
-* `make db` starts the Postgres test database (`altitude-core-postgres-test`, on port 5433) together with the dev
-  one. Only the Postgres integration tests need it.
+* The Postgres integration tests need the Postgres test database (`altitude-core-postgres-test`, on port 5433), and
+  so Docker. Every make target that runs them starts it when it is down and waits until it accepts connections
+  (`make test-db`); `make db` starts it together with the dev one.
 * The first test run downloads the model files (about 1.6 GB) into the Models directory, the same one the dev server
   uses ([Models](README.md#models)), so a machine downloads them once. The download is logged, so the run does not look
   hung.
@@ -15,8 +16,7 @@ How the tests are organized, how to run them, and what to know before writing on
 ## Running the tests
 
 ```sh
-make test              # every bundle at once (needs the Postgres test database)
-make test-local        # the JS tests, then the unit, SQLite and controller bundles: no Postgres needed
+make test              # the JS tests, then every bundle at once (starts the Postgres test database if it is down)
 ```
 
 One bundle at a time:
@@ -27,7 +27,7 @@ One bundle at a time:
     make test-controllers
     make test-js
 
-`make test` and `make test-local` run the bundles in parallel, each in its own JVM and sandbox
+`make test` runs the bundles in parallel, each in its own JVM and sandbox
 (`out/altitude/test/testOnly.dest/worker-N/sandbox`). Each worker's output is in `worker-N.log` and the merged report
 in `test-report.xml`, both in `out/altitude/test/testOnly.dest/`. The run takes as long as the slowest bundle, a few
 minutes.

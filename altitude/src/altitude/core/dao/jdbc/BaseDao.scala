@@ -1,30 +1,39 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import java.sql.BatchUpdateException
+import java.sql.PreparedStatement
+import java.sql.ResultSet
 import java.sql.SQLException
-import java.time.Instant
+import java.sql.Statement
+import java.sql.Types
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 import org.apache.commons.dbutils.BasicRowProcessor
-import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.RowProcessor
-import org.apache.commons.dbutils.handlers.MapListHandler
+import org.postgresql.util.PSQLException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
+import scalasql.Bytes
 import scalasql.Column
 import scalasql.Sc
 import scalasql.Table
 import scalasql.core.Expr
 import scalasql.core.Queryable
+import scalasql.core.SqlStr.SqlStringSyntax
 import scalasql.dialects.Dialect
+import scalasql.query.TableRef
 
 import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
 
 import altitude.core.{ Const => C }
 import altitude.core.ConstraintException
+import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
@@ -36,7 +45,7 @@ import altitude.core.models.BaseModel
 import altitude.core.models.SceneEmbedding
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
-import altitude.core.util.SortDirection
+import altitude.core.util.SortKey
 
 object BaseDao:
   final def genId: String = UUID.randomUUID.toString
@@ -54,8 +63,85 @@ object BaseDao:
   private def incrReadQueryCount(): Unit =
     RequestContext.readQueryCount.value = RequestContext.readQueryCount.value + 1
 
-  def incrWriteQueryCount(): Unit =
-    RequestContext.writeQueryCount.value = RequestContext.writeQueryCount.value + 1
+  /**
+   * Binds `values` to a hand-written statement in order: `setObject`, and for a NULL `setNull` with no type (`Types.NULL`), which
+   * the database takes from where the parameter stands. Asking the driver for the statement's parameter types instead, as
+   * commons-dbutils' `QueryRunner` does, costs a describe round trip per statement on PostgreSQL.
+   */
+  def bind(statement: PreparedStatement, values: Seq[Any]): Unit =
+    values.iterator.zipWithIndex.foreach {
+      case (null, i) => statement.setNull(i + 1, Types.NULL)
+      case (value, i) => statement.setObject(i + 1, value)
+    }
+
+  /**
+   * A failed statement's exception as it is rethrown: the driver's message, SQLState and error code with the statement, and the
+   * driver's exception as its cause, never the values bound to it (a password hash, an email address). A failed batch is rethrown
+   * from the error that ended it (its next exception), since PostgreSQL's driver writes the batch entry into its own message with
+   * every value inlined.
+   */
+  def statementFailed(sql: String, e: SQLException): SQLException =
+    val driver = e match
+      case batch: BatchUpdateException => Option(batch.getNextException).getOrElse(batch)
+      case other => other
+    new SQLException(s"${driver.getMessage} Statement: $sql", driver.getSQLState, driver.getErrorCode, driver)
+
+  /**
+   * A unique index, as each engine names the one a write broke: PostgreSQL by its `name`, SQLite by its `columns` (`table.column,
+   * …`), or by its name (`index '<name>'`) for an index on an expression. Each is defined beside the DAO of its table;
+   * `BaseDaoTests` checks every one against both schemas.
+   */
+  final case class UniqueIndex(name: String, columns: String)
+
+  // The text sqlite-jdbc wraps SQLite's own message in ends with the unique index a write broke: its columns, or for an index on
+  // an expression its name
+  private val SqliteUniqueColumns = """\(UNIQUE constraint failed: (.+)\)$""".r.unanchored
+  private val SqliteUniqueIndexName = """index '(.+)'""".r
+
+  /** The driver's exception behind `e`: `e` itself, or its cause ([[statementFailed]]) */
+  private def driverException(e: SQLException): Option[SQLException] =
+    Iterator.iterate[Throwable](e)(_.getCause).takeWhile(_ != null).collectFirst {
+      case postgres: PSQLException => postgres
+      case sqlite: SQLiteException => sqlite
+    }
+
+  /**
+   * Whether `e` is a unique violation, of a unique index or a primary key. SQLite gives every constraint failure the one error
+   * code 19, so its extended result code tells a unique one from a NOT NULL, CHECK, foreign key or trigger failure.
+   */
+  def isUniqueViolation(e: SQLException): Boolean =
+    driverException(e) match
+      case Some(sqlite: SQLiteException) =>
+        sqlite.getResultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE ||
+        sqlite.getResultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_PRIMARYKEY
+      case Some(postgres) => postgres.getSQLState == /* unique_violation */ "23505"
+      case None => e.getSQLState == "23505"
+
+  /**
+   * Whether `e` is a unique violation of `index`. Read from the driver's exception: on PostgreSQL the server's constraint field,
+   * on SQLite the index's columns exactly, or its name for an index on an expression. Never a search of the message, which on
+   * PostgreSQL quotes the refused value: an email address may hold any index's name.
+   */
+  def violates(e: SQLException, index: UniqueIndex): Boolean =
+    driverException(e).exists {
+      case postgres: PSQLException =>
+        postgres.getSQLState == /* unique_violation */ "23505" &&
+        Option(postgres.getServerErrorMessage).flatMap(error => Option(error.getConstraint)).contains(index.name)
+      case sqlite: SQLiteException =>
+        sqlite.getResultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE && (sqlite.getMessage match
+          case SqliteUniqueColumns(SqliteUniqueIndexName(name)) => name == index.name
+          case SqliteUniqueColumns(violated) => violated == index.columns
+          case _ => false)
+      case _ => false
+    }
+
+  /** A unique violation as a `DuplicateException` of `message`; any other failure as it is */
+  def newDuplicateExceptionOrRethrow(e: SQLException, message: Option[String] = None): Exception =
+    if isUniqueViolation(e) then DuplicateException(message = message) else e
+
+  /** The failure of a statement given another number of values than it has placeholders, as `QueryRunner` reported it */
+  private def wrongValueCount(expected: Int, bound: Int): SQLException =
+    new SQLException(s"Wrong number of parameters: expected $expected, was given $bound")
 
 abstract class BaseDao[Model <: BaseModel]:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -93,20 +179,27 @@ abstract class BaseDao[Model <: BaseModel]:
 
   /**
    * A top-level key of a JSON object column, spelled as its index is (`asset_importer`) so a comparison uses the index:
-   * `(column->>'key')` on PostgreSQL, `json_extract(column, '$.key')` on SQLite
+   * `((column->>'key') COLLATE "C")` on PostgreSQL, `json_extract(column, '$.key')` on SQLite
    */
   protected def jsonText(column: String, key: String): String
 
+  /**
+   * The bind value of a flag in a hand-written statement: a boolean on PostgreSQL, the number 0 or 1 on SQLite, which matches a
+   * partial index's predicate on the flag
+   */
   protected def nativeBool(value: Boolean): Any
 
-  /** The placeholder of a bound Scene embedding: `?::vector` on PostgreSQL (pgvector), plain `?` on SQLite (a BLOB) */
+  /**
+   * The placeholder of a bound vector (a Scene embedding, a Face's features): `?::vector` on PostgreSQL (pgvector), plain `?` on
+   * SQLite (a BLOB)
+   */
   protected def vectorPlaceholder: String
 
-  /**
-   * The bind value for [[vectorPlaceholder]]: the pgvector literal on PostgreSQL, little-endian float32 bytes on SQLite; `None`
-   * binds NULL
-   */
-  protected def vectorBind(embedding: Option[SceneEmbedding]): Any
+  /** The bind value for [[vectorPlaceholder]]: the pgvector literal on PostgreSQL, little-endian float32 bytes on SQLite */
+  protected def vectorBind(values: IArray[Float]): Any
+
+  /** [[vectorBind]] of a Scene embedding; `None` binds NULL */
+  final protected def vectorBind(embedding: Option[SceneEmbedding]): Any = embedding.map(e => vectorBind(e.values)).orNull
 
   /** A vector column as read: a `PGobject` holding the literal on PostgreSQL, the BLOB's bytes on SQLite */
   protected def getVectorField(value: AnyRef): Option[SceneEmbedding]
@@ -134,16 +227,12 @@ abstract class BaseDao[Model <: BaseModel]:
   protected val dialect: Dialect
 
   /**
-   * An instant column as the model's `LocalDateTime`. The engines differ: PostgreSQL stores a `timestamptz` and shows it in the
-   * JVM zone, SQLite stores UTC wall-clock text verbatim. The engine decides here, as `getDateTimeField` does for the raw paths.
+   * An instant column as the model's `LocalDateTime`: its UTC wall clock on both engines, whatever the JVM's zone, so a time in a
+   * zone's repeated autumn hour reads back as itself. PostgreSQL reads a `timestamptz` as an offset date-time, SQLite stores the
+   * UTC text; `getDateTimeField` reads the raw paths alike.
    */
-  protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime
-
-  /**
-   * The instant a model's `LocalDateTime` stands for, read the way this engine wrote it: in the JVM zone on PostgreSQL, as UTC on
-   * SQLite. Needed before a moment leaves the server, which shows it in the viewer's zone.
-   */
-  def instantOf(value: LocalDateTime): Instant
+  final protected[dao] def toLocalDateTime(value: OffsetDateTime): LocalDateTime =
+    value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime
 
   // Aggregates such as COUNT(*) come back as Long on Postgres and Integer on SQLite
   protected def getIntField(value: AnyRef): Int = value match
@@ -164,7 +253,59 @@ abstract class BaseDao[Model <: BaseModel]:
 
   protected def getNextVal(tableName: String): AnyRef
 
-  private def queryRunner = new QueryRunner()
+  /**
+   * A TRACE line, its text built only with TRACE on: a raw statement's line names how many values it binds, never the values,
+   * which can be a password hash or an embedding
+   */
+  protected def trace(message: => String): Unit =
+    if logger.isTraceEnabled then logger.trace(message)
+
+  /**
+   * Whether the driver counts a statement's placeholders without asking the database. SQLite's does, so the values given are
+   * checked against the count; PostgreSQL's would answer with a describe round trip, and refuses a wrong count itself: a value
+   * past the last placeholder as it is bound, a missing one as the statement runs.
+   */
+  private lazy val countsPlaceholdersLocally: Boolean = getDataSourceType == C.DbEngineName.SQLITE
+
+  private def requireValueCount(statement: PreparedStatement, bound: Int): Unit =
+    if countsPlaceholdersLocally then
+      val expected = statement.getParameterMetaData.getParameterCount
+      if expected != bound then throw BaseDao.wrongValueCount(expected, bound)
+
+  /**
+   * Runs `sql` with `values`: prepared, its values bound ([[BaseDao.bind]]) and checked against its placeholders, then run by
+   * `prepared`; with no values, as a plain statement run by `plain`, as `QueryRunner` sends one, so the dev SQL explain log never
+   * runs a bind-less `SELECT nextval(...)` again. The statement is closed after, and a failure is rethrown without the values
+   * ([[BaseDao.statementFailed]]).
+   */
+  private def runStatement[T](sql: String, values: Seq[Any])(prepared: PreparedStatement => T, plain: Statement => T): T =
+    try
+      if values.isEmpty then
+        val statement = RequestContext.getConn.createStatement()
+        try plain(statement)
+        finally statement.close()
+      else
+        val statement = RequestContext.getConn.prepareStatement(sql)
+        try
+          requireValueCount(statement, values.length)
+          BaseDao.bind(statement, values)
+          prepared(statement)
+        finally statement.close()
+    catch case e: SQLException => throw BaseDao.statementFailed(sql, e)
+
+  private def runUpdate(sql: String, values: Seq[Any]): Int = runStatement(sql, values)(_.executeUpdate(), _.executeUpdate(sql))
+
+  /** Reads the result of `sql` with `read`, fetching `fetchSize` rows at a time when it is positive (the driver's default when 0) */
+  private def runQuery[T](sql: String, values: Seq[Any], fetchSize: Int = 0)(read: ResultSet => T): T =
+    def reading(statement: Statement)(execute: => ResultSet): T =
+      if fetchSize > 0 then statement.setFetchSize(fetchSize)
+      val rs = execute
+      try read(rs)
+      finally rs.close()
+
+    runStatement(sql, values)(
+      statement => reading(statement)(statement.executeQuery()),
+      statement => reading(statement)(statement.executeQuery(sql)))
 
   protected def getDataSourceType: String = config.getString(C.Conf.DB_ENGINE)
 
@@ -191,7 +332,9 @@ abstract class BaseDao[Model <: BaseModel]:
 
   /**
    * `column $inIdSet` tests a column against a set of IDs bound as one [[idSet]] parameter, so any selection size neither grows
-   * the statement nor hits the engine's parameter limit. The typed twin is `Columns.isInSet`.
+   * the statement nor hits the engine's parameter limit. The typed twin is `Columns.isInSet`. Any set of strings binds so, a
+   * Watch folder's paths too (`WatchFolderFileDao.seenAgain`): a column of IDs or of `COLLATE "C"` text compares by its own
+   * collation, so its index is used.
    */
   protected val inIdSet: String
 
@@ -206,7 +349,9 @@ abstract class BaseDao[Model <: BaseModel]:
   def getOneByQuery(q: Query): Model =
     val rows = Db.read(dialect)(_.run(matching(q)))
 
-    if rows.isEmpty then throw NotFoundException(s"Cannot find record in '$tableName' with query: $q")
+    // The fields read by, never their values
+    if rows.isEmpty then
+      throw NotFoundException(s"Cannot find record in '$tableName' by ${q.params.keys.toList.sorted.mkString(", ")}")
 
     if rows.length > 1 then throw ConstraintException("getById should return only a single result")
 
@@ -215,7 +360,7 @@ abstract class BaseDao[Model <: BaseModel]:
   def executeAndGetOne(sql: String, values: List[Any] = List()): Map[String, AnyRef] =
     val res = executeAndGetMany(sql, values)
 
-    if res.isEmpty then throw NotFoundException(s"Cannot find record with SQL: $sql and values: $values")
+    if res.isEmpty then throw NotFoundException(s"Cannot find record with SQL: $sql")
 
     if res.length > 1 then throw ConstraintException("getById should return only a single result")
 
@@ -249,75 +394,83 @@ abstract class BaseDao[Model <: BaseModel]:
 
   def query(q: Query): QueryResult[Model] = queryRecords(q)
 
-  /** The generic read behind [[query]], kept separate for DAOs that close [[query]] off (assets are read view-scoped) */
+  /**
+   * The generic read behind [[query]], kept separate for DAOs that close [[query]] off (assets are read view-scoped): every
+   * match, in no order. A page of a list is the search's (`SearchDao`), which orders by its sort and the ID.
+   */
   protected def queryRecords(q: Query): QueryResult[Model] =
-    import dialect.*
-
-    // The window count is added before the ordering and the page, so it counts every match rather than the page
-    val counted = matching(q).mapAggregate((row, aggregate) => (row, aggregate.size.over))
-
-    val sorted = q.sort.headOption.fold(counted) {
-      sort =>
-        val ordered = counted.sortBy(row => column(row._1, sort.param))
-        if sort.direction == SortDirection.DESC then ordered.desc else ordered.asc
-    }
-
-    val page = if q.rpp > 0 then sorted.drop((q.page - 1) * q.rpp).take(q.rpp) else sorted
-
-    val rows = Db.read(dialect)(_.run(page))
-    val total: Int = rows.headOption.map(_._2).getOrElse(0)
-    logger.trace(s"Found [$total] records. Retrieved [${rows.length}] records")
-    QueryResult(records = rows.map((row, _) => toModel(row)).toList, total = total, rpp = q.rpp, sort = q.sort)
+    val rows = Db.read(dialect)(_.run(matching(q)))
+    logger.trace(s"Found [${rows.length}] records")
+    QueryResult(records = rows.map(toModel).toList)
 
   protected def addRecord(sql: String, values: List[Any]): Unit =
-    BaseDao.incrWriteQueryCount()
-    logger.trace(s"INSERT SQL: $sql with values: $values")
-    val runner = queryRunner
-    runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
+    trace(s"INSERT SQL: $sql with ${values.length} values")
+    runUpdate(sql, values): Unit
+
+  /**
+   * Runs `sql` once for each row of values, in one batch; answers each run's row count. Every row has as many values as the
+   * statement has placeholders, and a row's values never carry over to the next.
+   */
+  def batchBySql(sql: String, rows: Seq[Seq[Any]]): Array[Int] =
+    if rows.isEmpty then return Array.empty
+
+    trace(s"BATCH SQL: $sql with ${rows.length} rows of values")
+    val width = rows.head.length
+    try
+      val statement = RequestContext.getConn.prepareStatement(sql)
+      try
+        requireValueCount(statement, width)
+        rows.foreach {
+          row =>
+            if row.length != width then throw BaseDao.wrongValueCount(width, row.length)
+            statement.clearParameters()
+            BaseDao.bind(statement, row)
+            statement.addBatch()
+        }
+        statement.executeBatch()
+      finally statement.close()
+    catch case e: SQLException => throw BaseDao.statementFailed(sql, e)
 
   private def executeAndGetMany(sql: String, values: List[Any]): List[Map[String, AnyRef]] =
     BaseDao.incrReadQueryCount()
-    logger.trace(s"SELECT SQL: $sql with values: $values")
-    val res =
-      queryRunner
-        .query(RequestContext.getConn, sql, new MapListHandler(rowProcessor), values.map(_.asInstanceOf[Object])*)
-        .asScala
-        .toList
-    logger.trace(s"Found ${res.length} records")
-    res.map(_.asScala.toMap[String, AnyRef])
+    trace(s"SELECT SQL: $sql with ${values.length} values")
+    val res = runQuery(sql, values) {
+      rs => Iterator.continually(rs).takeWhile(_.next()).map(rowProcessor.toMap(_).asScala.toMap[String, AnyRef]).toList
+    }
+    trace(s"Found ${res.length} records")
+    res
 
   def manyBySqlQuery(sql: String, values: List[Any] = List()): List[Map[String, AnyRef]] =
     executeAndGetMany(sql, values)
 
   /**
    * A read whose rows are judged as they are fetched and mostly dropped: `f` sees each row as [[manyBySqlQuery]] would return it,
-   * and only what it keeps stays in memory, however large the result. A failure is rethrown with the statement and values in the
-   * message, as `QueryRunner` reports it for the other reads.
+   * and only what it keeps stays in memory, however large the result. A failure is rethrown as the other raw statements' are,
+   * naming the statement and not its values.
    */
   def collectBySqlQuery[T](sql: String, values: List[Any] = List())(f: Map[String, AnyRef] => Option[T]): BaseDao.Collected[T] =
+    val kept = List.newBuilder[T]
+    val scanned = foreachBySqlQuery(sql, values)(row => f(row).foreach(kept += _))
+    val collected = BaseDao.Collected(kept.result(), scanned)
+    trace(s"Kept ${collected.kept.length} of them")
+    collected
+
+  /**
+   * A read whose rows `f` takes one at a time as they are fetched, as [[manyBySqlQuery]] would return each, into whatever it
+   * builds (a map), so no list of the rows is held beside it; answers how many rows it read. Fails as [[collectBySqlQuery]].
+   */
+  def foreachBySqlQuery(sql: String, values: List[Any] = List())(f: Map[String, AnyRef] => Unit): Int =
     BaseDao.incrReadQueryCount()
-    logger.trace(s"STREAMING SELECT SQL: $sql with values: $values")
-    try
-      val statement = RequestContext.getConn.prepareStatement(sql)
-      try
-        statement.setFetchSize(BaseDao.STREAMING_FETCH_SIZE)
-        queryRunner.fillStatement(statement, values.map(_.asInstanceOf[Object])*)
-        val rs = statement.executeQuery()
-        try
-          val kept = List.newBuilder[T]
-          var scanned = 0
-          while rs.next() do
-            scanned += 1
-            f(rowProcessor.toMap(rs).asScala.toMap[String, AnyRef]).foreach(kept += _)
-          val collected = BaseDao.Collected(kept.result(), scanned)
-          logger.trace(s"Scanned ${collected.scanned} records, kept ${collected.kept.length}")
-          collected
-        finally rs.close()
-      finally statement.close()
-    catch
-      case e: SQLException =>
-        val message = s"${e.getMessage} Query: $sql Parameters: ${values.mkString(", ")}"
-        throw new SQLException(message, e.getSQLState, e.getErrorCode, e)
+    trace(s"STREAMING SELECT SQL: $sql with ${values.length} values")
+    runQuery(sql, values, fetchSize = BaseDao.STREAMING_FETCH_SIZE) {
+      rs =>
+        var scanned = 0
+        while rs.next() do
+          scanned += 1
+          f(rowProcessor.toMap(rs).asScala.toMap[String, AnyRef])
+        trace(s"Scanned $scanned records")
+        scanned
+    }
 
   def getByIds(ids: Set[String]): List[Model] =
     if ids.isEmpty then return List()
@@ -327,13 +480,28 @@ abstract class BaseDao[Model <: BaseModel]:
     logger.trace(s"Found ${rows.length} records")
     rows.map(toModel).toList
 
+  /**
+   * The name columns whose `SortKey` a `*_sort` column keeps, each to its sort column: every DAO of a table with one declares it.
+   * A generic write of a name writes its key with it ([[updateByQuery]]), so no caller can leave a list's order stale; an insert
+   * or a hand-written write binds it itself.
+   */
+  protected val sortKeyColumns: Map[String, String] = Map.empty
+
   def updateByQuery(q: Query, data: Map[String, Any]): Int =
     import dialect.*
     requireParams(q, "update")
 
+    // A sort column need be in no row class, so its assignment names it on its own: a `SET` renders a column by its name alone
+    val keys = sortKeyColumns.toSeq.collect {
+      case (name, sortColumn) if data.contains(name) =>
+        val key = data(name) match
+          case value: String => Bytes(SortKey.of(value).bytes)
+          case other => throw IllegalArgumentException(s"A name to sort by is text, not [$other]")
+        (_: Row[Column]) => Column.Assignment(Column[Bytes](TableRef(table), sortColumn), Expr[Bytes](implicit ctx => sql"$key"))
+    }
     val assignments = data.toSeq.map {
       (name, value) => (row: Row[Column]) => DynamicAssignments.one(table, writeColumns(row), name, value, dialect)
-    }
+    } ++ keys
 
     val filter = scoped(q)
     val update = table.update(row => DynamicFilter(table, writeColumns(row), filter, dialect)).set(assignments*)
@@ -342,23 +510,14 @@ abstract class BaseDao[Model <: BaseModel]:
     numUpdated
 
   def updateByBySql(sql: String, values: List[Any]): Int =
-    BaseDao.incrWriteQueryCount()
-    logger.trace(s"WRITE SQL: $sql with values: $values")
-    val runner = queryRunner
-    val numAffected = runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
-    logger.trace(s"Affected records: $numAffected")
+    trace(s"WRITE SQL: $sql with ${values.length} values")
+    val numAffected = runUpdate(sql, values)
+    trace(s"Affected records: $numAffected")
     numAffected
 
   def getFloatListByJsonKey(jsonStr: String, key: String): List[Float] =
     val json = ujson.read(jsonStr)
     json(key).arr.map(_.num.toFloat).toList
-
-  def makeCsv[T](values: List[T]): String =
-    values.map(_.toString).mkString(",")
-
-  def loadCsv[T: ClassTag](csv: String): List[T] =
-    if csv == null || csv.isEmpty then return List()
-    csv.split(",").map(_.asInstanceOf[T]).toList
 
   /** Returns the rows changed: 0 for a missing row or, for a scoped DAO, another repository's */
   def increment(id: String, field: String, count: Int = 1): Int =
@@ -375,9 +534,6 @@ abstract class BaseDao[Model <: BaseModel]:
     import dialect.*
     val filter = scoped(q)
     table.select.filter(row => DynamicFilter(table, selectColumns(row), filter, dialect))
-
-  private def column(row: Row[Expr], name: String): Expr[?] =
-    Columns.required(selectColumns(row), table, name)
 
   private def selectColumns(row: Row[Expr]): Map[String, Expr[?]] =
     Columns.byName(table, rowQueryable.walkExprs(row))

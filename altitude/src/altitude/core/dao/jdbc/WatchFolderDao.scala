@@ -2,8 +2,6 @@ package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import java.time.OffsetDateTime
-import java.time.ZoneOffset
-import java.time.temporal.ChronoUnit
 import scalasql.Sc
 import scalasql.Table
 
@@ -12,6 +10,8 @@ import altitude.core.RequestContext
 import altitude.core.dao.WatchFolderDao.Placed
 import altitude.core.dao.sql.tables.WatchFolderRow
 import altitude.core.models.WatchFolder
+import altitude.core.util.SortKey
+import altitude.core.util.Util
 
 abstract class WatchFolderDao(override val config: Config) extends BaseDao[WatchFolder] with altitude.core.dao.WatchFolderDao:
 
@@ -21,12 +21,12 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
   final override protected def table: Table[Row] = WatchFolderRow
 
   private val F = FieldConst.WatchFolder
+
+  // `update` binds the key itself; a generic write of the name writes it too
+  override protected val sortKeyColumns: Map[String, String] = Map(F.NAME -> F.NAME_SORT)
   private val REPOSITORY_NAME = "repository_name"
 
   private def repositoryId: String = RequestContext.getRepository.persistedId
-
-  /** This moment as an instant column takes it: bound in UTC, to the microsecond */
-  private def now: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
 
   override protected def toModel(row: WatchFolderRow[Sc]): WatchFolder =
     WatchFolder(
@@ -62,9 +62,9 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
 
   override def add(model: WatchFolder): WatchFolder =
     val sql = s"""
-        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${F.NAME}, ${F.PATH}, ${F.DEST_FOLDER_ID},
-                                ${F.DELETES_IMPORTED}, ${F.IS_PAUSED}, ${F.ACCOUNT_ID})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${F.NAME}, ${F.NAME_SORT}, ${F.PATH},
+                                ${F.DEST_FOLDER_ID}, ${F.DELETES_IMPORTED}, ${F.IS_PAUSED}, ${F.ACCOUNT_ID})
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
 
     val id = model.id.getOrElse(BaseDao.genId)
@@ -74,18 +74,24 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
         id,
         repositoryId,
         model.name,
+        SortKey.of(model.name).bytes,
         model.path,
         model.destFolderId.orNull,
         nativeBool(model.deletesImported),
         nativeBool(model.isPaused),
-        model.accountId)
+        model.accountId
+      )
     )
     model.copy(id = Some(id))
 
   override def lockPaths(): Unit = advisoryLock(tableName)
 
+  override def lock(id: String): Option[WatchFolder] =
+    val sql = s"SELECT * FROM $tableName WHERE ${FieldConst.ID} = ? AND ${FieldConst.REPO_ID} = ? $forNoKeyUpdate"
+    manyBySqlQuery(sql, List(id, repositoryId)).headOption.map(makeModel)
+
   override def all(): List[WatchFolder] =
-    val sql = s"SELECT * FROM $tableName WHERE ${FieldConst.REPO_ID} = ? ORDER BY ${F.NAME}, ${FieldConst.ID}"
+    val sql = s"SELECT * FROM $tableName WHERE ${FieldConst.REPO_ID} = ? ORDER BY ${F.NAME_SORT}, ${FieldConst.ID}"
     manyBySqlQuery(sql, List(repositoryId)).map(makeModel)
 
   // Across Libraries: a Watch folder's directory may overlap no other's, in any Library
@@ -108,17 +114,17 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
       SELECT *
         FROM $tableName
        WHERE ${FieldConst.REPO_ID} = ?
-         AND ${F.DEST_FOLDER_ID} IN (${folderIds.toList.map(_ => "?").mkString(", ")})
-       ORDER BY ${F.NAME}, ${FieldConst.ID}
+         AND ${F.DEST_FOLDER_ID} $inIdSet
+       ORDER BY ${F.NAME_SORT}, ${FieldConst.ID}
     """
 
-    manyBySqlQuery(sql, repositoryId :: folderIds.toList).map(makeModel)
+    manyBySqlQuery(sql, List(repositoryId, idSet(folderIds))).map(makeModel)
 
   override def update(watchFolder: WatchFolder): Int =
     val sql = s"""
       UPDATE $tableName
-         SET ${F.NAME} = ?, ${F.PATH} = ?, ${F.DEST_FOLDER_ID} = ?, ${F.DELETES_IMPORTED} = ?, ${F.ACCOUNT_ID} = ?,
-             ${FieldConst.UPDATED_AT} = ?
+         SET ${F.NAME} = ?, ${F.NAME_SORT} = ?, ${F.PATH} = ?, ${F.DEST_FOLDER_ID} = ?, ${F.DELETES_IMPORTED} = ?,
+             ${F.ACCOUNT_ID} = ?, ${F.STATUS_REASON} = NULL, ${FieldConst.UPDATED_AT} = ?
        WHERE ${FieldConst.ID} = ?
          AND ${FieldConst.REPO_ID} = ?
     """
@@ -127,11 +133,12 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
       sql,
       List(
         watchFolder.name,
+        SortKey.of(watchFolder.name).bytes,
         watchFolder.path,
         watchFolder.destFolderId.orNull,
         nativeBool(watchFolder.deletesImported),
         watchFolder.accountId,
-        nativeUtcTimestamp(now),
+        nativeUtcTimestamp(Util.utcNow),
         watchFolder.persistedId,
         repositoryId
       )
@@ -145,7 +152,21 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
          AND ${FieldConst.REPO_ID} = ?
     """
 
-    updateByBySql(sql, List(nativeBool(isPaused), reason.orNull, nativeUtcTimestamp(now), id, repositoryId))
+    updateByBySql(sql, List(nativeBool(isPaused), reason.orNull, nativeUtcTimestamp(Util.utcNow), id, repositoryId))
+
+  override def pauseForOwner(id: String, accountId: String, reason: String): Int =
+    val sql = s"""
+      UPDATE $tableName
+         SET ${F.IS_PAUSED} = ?, ${F.STATUS_REASON} = ?, ${FieldConst.UPDATED_AT} = ?
+       WHERE ${FieldConst.ID} = ?
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${F.ACCOUNT_ID} = ?
+         AND ${F.IS_PAUSED} = ?
+    """
+
+    updateByBySql(
+      sql,
+      List(nativeBool(true), reason, nativeUtcTimestamp(Util.utcNow), id, repositoryId, accountId, nativeBool(false)))
 
   override def setOwner(id: String, accountId: String): Int =
     val sql = s"""
@@ -155,16 +176,33 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
          AND ${FieldConst.REPO_ID} = ?
     """
 
-    updateByBySql(sql, List(accountId, nativeUtcTimestamp(now), id, repositoryId))
+    updateByBySql(sql, List(accountId, nativeUtcTimestamp(Util.utcNow), id, repositoryId))
 
-  // What a scan finds is no edit of the Watch folder: `updated_at` stays
+  // What a scan finds is no edit of the Watch folder: `updated_at` stays. The row decides, not the scan's earlier read of it, so a
+  // pause committed since keeps its reason.
   override def setStatusReason(id: String, reason: Option[String]): Int =
-    val sql = s"UPDATE $tableName SET ${F.STATUS_REASON} = ? WHERE ${FieldConst.ID} = ? AND ${FieldConst.REPO_ID} = ?"
-    updateByBySql(sql, List(reason.orNull, id, repositoryId))
+    val sql = s"""
+      UPDATE $tableName
+         SET ${F.STATUS_REASON} = ?
+       WHERE ${FieldConst.ID} = ?
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${F.IS_PAUSED} = ?
+         AND ${F.STATUS_REASON} IS DISTINCT FROM ?
+    """
 
-  override def scanned(id: String, at: OffsetDateTime): Int =
-    val sql = s"UPDATE $tableName SET ${F.LAST_SCAN_AT} = ? WHERE ${FieldConst.ID} = ? AND ${FieldConst.REPO_ID} = ?"
-    updateByBySql(sql, List(nativeUtcTimestamp(at), id, repositoryId))
+    updateByBySql(sql, List(reason.orNull, id, repositoryId, nativeBool(false), reason.orNull))
+
+  // The path as the scan read it: an edit that moved the Watch folder meanwhile forgot the files the scan walked
+  override def scanned(id: String, at: OffsetDateTime, path: String): Int =
+    val sql = s"""
+      UPDATE $tableName
+         SET ${F.LAST_SCAN_AT} = ?
+       WHERE ${FieldConst.ID} = ?
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${F.PATH} = ?
+    """
+
+    updateByBySql(sql, List(nativeUtcTimestamp(at), id, repositoryId, path))
 
   // Across Libraries, by the account, when it is deactivated or demoted
   override def pauseOwnedBy(accountId: String, reason: String): Int =
@@ -174,9 +212,9 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
        WHERE ${F.ACCOUNT_ID} = ?
     """
 
-    updateByBySql(sql, List(nativeBool(true), reason, nativeUtcTimestamp(now), accountId))
+    updateByBySql(sql, List(nativeBool(true), reason, nativeUtcTimestamp(Util.utcNow), accountId))
 
   // Across Libraries, by the account, when it is deleted
   override def reassignOwner(fromAccountId: String, toAccountId: String): Int =
     val sql = s"UPDATE $tableName SET ${F.ACCOUNT_ID} = ?, ${FieldConst.UPDATED_AT} = ? WHERE ${F.ACCOUNT_ID} = ?"
-    updateByBySql(sql, List(toAccountId, nativeUtcTimestamp(now), fromAccountId))
+    updateByBySql(sql, List(toAccountId, nativeUtcTimestamp(Util.utcNow), fromAccountId))

@@ -20,8 +20,7 @@ case class ImportRow[T[_]](
     duplicate: T[Int],
     unsupported: T[Int],
     failed: T[Int],
-    createdAt: T[Option[OffsetDateTime]],
-    updatedAt: T[Option[OffsetDateTime]])
+    createdAt: T[Option[OffsetDateTime]])
 
 object ImportRow extends Table[ImportRow]:
   override def tableName: String = "import"

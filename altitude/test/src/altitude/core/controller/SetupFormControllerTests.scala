@@ -10,25 +10,35 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.routes.decorators
 import altitude.core.routes.web.SessionController
+import altitude.core.util.Query
 
 @DoNotDiscover class SetupFormControllerTests extends ControllerTestCore {
 
-  /** Runs `f` with the server's instance as a new installation, putting its flag back afterwards for the next suites. */
-  private def onNewInstallation[T](f: String => T): T = {
+  /** Runs `f` against the server with its instance's in-memory flag set to `initialized`, putting it back afterwards */
+  private def withServerFlag[T](initialized: Boolean)(f: String => T): T = {
     val wasInitialized = App.altitude.isInitialized
-    uninitializeInstance()
-    App.altitude.isInitialized = false
+    App.altitude.isInitialized = initialized
     try withServer(App)(f)
     finally App.altitude.isInitialized = wasInitialized
   }
 
-  private def postSetup(host: String, libraryName: String, username: String = "admin"): requests.Response = requests.post(
+  /** Runs `f` with the server's instance as a new installation, putting its flag back afterwards for the next suites. */
+  private def onNewInstallation[T](f: String => T): T = {
+    uninitializeInstance()
+    withServerFlag(initialized = false)(f)
+  }
+
+  private def postSetup(
+      host: String,
+      libraryName: String,
+      username: String = "admin",
+      name: String = "Administrator"): requests.Response = requests.post(
     s"$host/htmx/setup",
     headers = Map("Content-Type" -> "application/json"),
     data = ujson.write(
       ujson.Obj(
         Api.Field.Setup.REPOSITORY_NAME -> libraryName,
-        Api.Field.Setup.ADMIN_NAME -> "Administrator",
+        Api.Field.Setup.ADMIN_NAME -> name,
         Api.Field.Setup.ADMIN_USERNAME -> username,
         Api.Field.Setup.ADMIN_EMAIL -> "admin@example.com",
         Api.Field.Setup.PASSWORD -> "password123",
@@ -85,6 +95,36 @@ import altitude.core.routes.web.SessionController
     withServer(App)(refusals)
   }
 
+  test("Setup is refused once the database says the instance is set up, though the server's flag does not yet") {
+
+    /**
+     * Setup:
+     *
+     * An instance set up, as each controller test's is, whose server has its in-memory flag cleared, as a submission racing
+     * another finds it before the other commits; then a valid setup form posted by nobody signed in.
+     *
+     * Assertions:
+     *
+     * The submission is answered 400 with the refusal of an instance already set up, as one the server knows is set up is, and
+     * adds no account and no Library. The server's flag then says the instance is set up.
+     */
+    testApp.service.system.readMetadata.isInitialized shouldBe true
+    val accounts = testApp.service.user.query(new Query()).records.size
+    val libraries = testApp.service.repository.getAll.size
+
+    withServerFlag(initialized = false) {
+      host =>
+        val response = postSetup(host, "Second Library", "second.admin")
+        response.statusCode shouldBe 400
+        response.text() shouldBe Const.Msg.Err.ALREADY_INITIALIZED
+        // The refusal means a Setup has committed, so the server's flag now says so too
+        App.altitude.isInitialized shouldBe true
+    }
+
+    testApp.service.user.query(new Query()).records.size shouldBe accounts
+    testApp.service.repository.getAll.size shouldBe libraries
+  }
+
   test("Setup refuses a Library name the Library name rule refuses, under the field") {
 
     /**
@@ -108,6 +148,33 @@ import altitude.core.routes.web.SessionController
 
         val withControl = postSetup(host, "Client\u0007Smith")
         withControl.text() should include("Remove the control characters")
+
+        testApp.service.repository.getAll shouldBe List()
+        testApp.service.system.readMetadata.isInitialized shouldBe false
+    }
+  }
+
+  test("Setup refuses an Admin name the name rule refuses, under the field") {
+
+    /**
+     * Setup:
+     *
+     * A new installation, and setup forms valid but for the Admin's name: one holding a zero-width space between its words, and
+     * one starting with a byte order mark, both invisible format characters that the request validator lets through.
+     *
+     * Assertions:
+     *
+     * Each submission answers with the setup form carrying the name rule's error under the Admin name field, not a server error;
+     * nothing is created.
+     */
+    onNewInstallation {
+      host =>
+        for (name <- List("Ada\u200BLovelace", "\uFEFFAda Lovelace")) withClue(s"[$name]: ") {
+          val refused = postSetup(host, "My Library", name = name)
+          refused.statusCode shouldBe 200
+          refused.text() should include("""id="setupForm"""")
+          refused.text() should include(s"""<div class="error">${Const.Msg.Err.CONTROL_CHARACTERS}</div>""")
+        }
 
         testApp.service.repository.getAll shouldBe List()
         testApp.service.system.readMetadata.isInitialized shouldBe false

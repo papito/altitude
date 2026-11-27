@@ -2,7 +2,6 @@ package altitude.core.dao.sqlite
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -31,11 +30,11 @@ object SqliteOverrides:
     .optionalEnd()
     .toFormatter
 
-  /** A Scene embedding as its BLOB: raw little-endian float32 values, the layout `vector_as_f32` stores and sqlite-vector scans */
-  def vectorBytes(embedding: SceneEmbedding): Array[Byte] =
-    val buffer = ByteBuffer.allocate(embedding.values.length * java.lang.Float.BYTES).order(ByteOrder.LITTLE_ENDIAN)
+  /** A vector as its BLOB: raw little-endian float32 values, the layout `vector_as_f32` stores and sqlite-vector scans */
+  def vectorBytes(values: IArray[Float]): Array[Byte] =
+    val buffer = ByteBuffer.allocate(values.length * java.lang.Float.BYTES).order(ByteOrder.LITTLE_ENDIAN)
     val floats = buffer.asFloatBuffer
-    embedding.values.foreach(floats.put)
+    values.foreach(floats.put)
     buffer.array
 
 trait SqliteOverrides:
@@ -43,22 +42,18 @@ trait SqliteOverrides:
 
   override protected val dialect: Dialect = AltitudeSqliteDialect
 
-  // An instant is stored as its UTC wall clock and handed back verbatim, as `getDateTimeField` does for the raw paths
-  override protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime = value.toLocalDateTime
-
-  override def instantOf(value: LocalDateTime): Instant = value.toInstant(ZoneOffset.UTC)
-
   override protected def jsonFunc = "?"
 
   override protected def jsonText(column: String, key: String): String = s"json_extract($column, '$$.$key')"
 
+  // A number, as a boolean column stores it: SQLite takes a partial index whose predicate is on a flag only for a bound value
+  // equal to the predicate's, which the text "0" never is
   override protected def nativeBool(value: Boolean): Any =
-    if value then "1" else "0"
+    if value then 1 else 0
 
   override protected val vectorPlaceholder: String = "?"
 
-  override protected def vectorBind(embedding: Option[SceneEmbedding]): Any =
-    embedding.map(SqliteOverrides.vectorBytes).orNull
+  override protected def vectorBind(values: IArray[Float]): Any = SqliteOverrides.vectorBytes(values)
 
   override protected def getVectorField(value: AnyRef): Option[SceneEmbedding] = Option(value).map {
     case bytes: Array[Byte] =>
@@ -86,15 +81,12 @@ trait SqliteOverrides:
 
     Some(LocalDateTime.parse(value.get.asInstanceOf[String], SqliteOverrides.DATETIME_FORMATTER))
 
-  // SQLite has no BOOLEAN type: a boolean column reads back as an INTEGER
+  // A hand-written read's flag (`makeModel`). SQLite has no BOOLEAN type: a boolean column reads back as an INTEGER, 0 or 1.
+  // Anything else, a NULL included, is no flag the app wrote, and fails the read rather than read as false.
   override protected def getBooleanField(value: AnyRef): Boolean = value match
     case b: java.lang.Boolean => b.booleanValue
-    case i: java.lang.Integer =>
-      i.intValue match
-        case 0 => false
-        case 1 => true
-        case _ => false
-    case _ => false
+    case i: java.lang.Integer if i.intValue == 0 || i.intValue == 1 => i.intValue == 1
+    case other => throw IllegalArgumentException(s"Invalid value for a boolean field: $other")
 
   override protected def getNextVal(tableName: String): AnyRef =
     val sql = s"INSERT INTO $tableName DEFAULT VALUES RETURNING id"

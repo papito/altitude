@@ -56,15 +56,10 @@ object SortDirection:
       throw IllegalArgumentException(s"Invalid SortDirection id: $id")
     )
 
-case class Sort(param: String, direction: SortDirection)
-
-class Query(val params: Map[String, Any] = Map(), val rpp: Int = 0, val page: Int = 1, val sort: List[Sort] = List()):
-  if rpp < 0 then throw IllegalArgumentException(s"Invalid results per page value: $rpp")
-  if page < 1 then throw IllegalArgumentException(s"Invalid page value: $page")
-
-  if sort.size > 1 then throw IllegalArgumentException("Only one sort currently supported")
-
-  val isSorted: Boolean = sort.nonEmpty
-
+/**
+ * The parameters of a generic read or write: what the rows match, never their order or a page of them (a search's order and pages
+ * are `SearchQuery`'s)
+ */
+class Query(val params: Map[String, Any] = Map()):
   // A copy with the params added
-  def add(_params: (String, Any)*): Query = Query(params = params ++ _params, rpp = rpp, page = page, sort = sort)
+  def add(_params: (String, Any)*): Query = Query(params = params ++ _params)

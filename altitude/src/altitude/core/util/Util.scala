@@ -2,23 +2,46 @@ package altitude.core.util
 
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.sql.SQLException
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import org.mindrot.jbcrypt.BCrypt
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import altitude.core.Const
-import altitude.core.DuplicateException
 import altitude.core.RequestContext
 import altitude.core.models.Asset
 
 object Util:
+
+  /**
+   * The current moment in UTC to the microsecond, the precision PostgreSQL keeps, so a stamp bound on either engine is the moment
+   * a later read gives back
+   */
+  def utcNow: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
+
+  /**
+   * A set of IDs as a log line names it: how many and one of them, never the whole set, which a Trash emptied of tens of
+   * thousands of assets would make a line of megabytes, built even with the level off
+   */
+  def inBrief(ids: Iterable[String]): String = ids.headOption.fold("none")(one => s"${ids.size} ([$one] among them)")
+
+  /** The instant a model's `LocalDateTime` of an instant column stands for: its UTC wall clock, on both engines */
+  def instantOf(utc: LocalDateTime): Instant = utc.toInstant(ZoneOffset.UTC)
+
+  /**
+   * A model's instant as the server zone's wall clock: the zone a Date Imported range cuts its days in
+   * (`SearchQueries.importedFilter`), so an import time is shown on the day a search by its date finds it. Every other moment a
+   * page shows is a `<time>` in the viewer's zone (`includes/local_time`).
+   */
+  def inServerZone(utc: LocalDateTime): LocalDateTime = instantOf(utc).atZone(ZoneId.systemDefault).toLocalDateTime
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def logStacktrace(e: Exception): String =
@@ -123,12 +146,45 @@ object Util:
       val pre = ("KMGTPE").charAt(exp - 1)
       f"${bytes / Math.pow(unit, exp)}%.1f ${pre}B"
 
+  private val ZERO_WIDTH_NON_JOINER = 0x200c
+  private val ZERO_WIDTH_JOINER = 0x200d
+
   /**
-   * Client-typed text made safe for a log line or an audit record: control characters escaped as `\uXXXX`, so a CR or LF cannot
-   * start a line and a NUL cannot reach PostgreSQL, which refuses it; cut to `maxLength` characters
+   * ISO controls, unpaired surrogates and invisible format characters (Unicode `Cf`: zero-width space, bidi overrides and
+   * isolates, BOM, soft hyphen), which would let two look-alike names differ, reorder the text around a name, or, a NUL, fail
+   * PostgreSQL's text. The two join controls are spelling and stay allowed: ZWJ joins emoji sequences, ZWNJ is part of words in
+   * Persian and the Indic scripts.
+   */
+  def isControlCharacter(codePoint: Int): Boolean =
+    val kind = Character.getType(codePoint)
+    Character.isISOControl(codePoint) || kind == Character.SURROGATE ||
+    (kind == Character.FORMAT && codePoint != ZERO_WIDTH_NON_JOINER && codePoint != ZERO_WIDTH_JOINER)
+
+  def holdsControlCharacter(text: String): Boolean = text.codePoints.anyMatch(isControlCharacter)
+
+  /** A name as received, shown with each control character ([[isControlCharacter]]) replaced by U+FFFD */
+  def withControlCharactersReplaced(text: String): String =
+    text.codePoints
+      .map(codePoint => if isControlCharacter(codePoint) then 0xfffd else codePoint)
+      .collect(() => java.lang.StringBuilder(), _.appendCodePoint(_), _.append(_))
+      .toString
+
+  /**
+   * Client-typed text made safe for a log line, an audit record or a record shown as text: each control character
+   * ([[isControlCharacter]]) and the line and paragraph separators escaped as `\uXXXX`, so a CR, LF, U+2028 or U+2029 cannot
+   * start a line, a bidi override cannot reorder what follows, and a NUL cannot reach PostgreSQL, which refuses it; cut to
+   * `maxLength` characters
    */
   def printable(text: String, maxLength: Int): String =
-    text.flatMap(c => if c.isControl then f"\\u${c.toInt}%04x" else c.toString).take(maxLength)
+    val escaped = StringBuilder()
+    text.codePoints.forEach {
+      codePoint =>
+        val kind = Character.getType(codePoint)
+        if isControlCharacter(codePoint) || kind == Character.LINE_SEPARATOR || kind == Character.PARAGRAPH_SEPARATOR then
+          Character.toChars(codePoint).foreach(c => escaped ++= f"\\u${c.toInt}%04x")
+        else escaped ++= String(Character.toChars(codePoint))
+    }
+    escaped.take(maxLength).toString
 
   def randomStr(size: Int = 10): String = scala.util.Random.alphanumeric.take(size).mkString
 
@@ -137,7 +193,3 @@ object Util:
 
   def checkPassword(password: String, hashedPassword: String): Boolean =
     BCrypt.checkpw(password, hashedPassword)
-
-  def newDuplicateExceptionOrRethrow(e: SQLException, message: Option[String] = None): Exception =
-    if e.getErrorCode == /* SQLITE */ 19 || e.getSQLState == /* POSTGRES */ "23505" then DuplicateException(message = message)
-    else e

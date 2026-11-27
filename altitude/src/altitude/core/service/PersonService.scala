@@ -3,6 +3,8 @@ package altitude.core.service
 import java.sql.SQLException
 import java.text.Normalizer
 
+import scala.annotation.tailrec
+
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
 import altitude.core.Api
@@ -13,6 +15,7 @@ import altitude.core.ValidationException
 import altitude.core.Validators
 import altitude.core.dao.FaceDao
 import altitude.core.dao.PersonDao
+import altitude.core.dao.jdbc.BaseDao.newDuplicateExceptionOrRethrow
 import altitude.core.models.Asset
 import altitude.core.models.CountedAssets
 import altitude.core.models.Face
@@ -23,7 +26,7 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.NameKey
 import altitude.core.util.Query
 import altitude.core.util.SearchQuery
-import altitude.core.util.Util.newDuplicateExceptionOrRethrow
+import altitude.core.util.Util
 
 object PersonService:
   val UNKNOWN_NAME_PREFIX = "Unknown"
@@ -35,12 +38,12 @@ object PersonService:
   /** A name as stored: NFC, so a name typed with a combining accent and the same name typed precomposed are one name */
   def normalizedName(name: String): String = NameKey.normalized(name)
 
-  /** The folded name that `person_01` keeps unique, stored as a named person's `name_for_sort`: "Weiß", "WEISS" are one name */
+  /** The folded name that `person_01` keeps unique, stored as a person's `name_key`: "Weiß", "WEISS" are one name */
   def nameKey(name: String): String = NameKey.of(name)
 
   /**
-   * Whether a name has an unnamed person's form, which no person may take, as their sort name (`unknown 0042`) would collide with
-   * a named person's key. Matched in NFKC, as the key folds it, so a full-width "Ｕnknown 42" is reserved too.
+   * Whether a name has an unnamed person's form, which no person may take, as their name key (`unknown 42`) would
+   * collide with a named person's key. Matched in NFKC, as the key folds it, so a full-width "Ｕnknown 42" is reserved too.
    */
   def isReservedName(name: String): Boolean = RESERVED_NAME.matches(Normalizer.normalize(name, Normalizer.Form.NFKC))
 
@@ -163,9 +166,13 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     purgeFaceFiles(lost)
     merged
 
-  /** [[merge]] in the caller's transaction; also returns the deleted Faces, whose files go once it commits */
+  /**
+   * [[merge]] in the caller's transaction; also returns the deleted Faces, whose files go once it commits. A destination no
+   * longer live (merged away, a bad match) is not found, as a stale view may still offer it: its Faces would be nobody's to see.
+   */
   private def mergeLocked(dest: Person, source: Person): (Person, List[Face]) =
     val liveIds: Set[String] = dao.lockAndGetLive(Set(dest.persistedId, source.persistedId))
+    if !liveIds.contains(dest.persistedId) then throw NotFoundException(s"Person [${dest.persistedId}] is not live")
     val persistedDest: Person = dao.getById(dest.persistedId)
     val persistedSource: Person = dao.getById(source.persistedId)
 
@@ -209,7 +216,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
         logger.debug(s"Person [${persistedDest.persistedId}] takes the name [$name] of the merged person")
         Map(
           FieldConst.Person.NAME -> name,
-          FieldConst.Person.NAME_FOR_SORT -> PersonService.nameKey(name),
+          FieldConst.Person.NAME_KEY -> PersonService.nameKey(name),
           FieldConst.Person.IS_NAMED -> true
         )
       case None => Map.empty
@@ -266,18 +273,18 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    * ([[removeFace]], [[moveFace]]) ends first: read from a snapshot where its Face still existed, the count would drop twice.
    */
   def recycleFacesForAssets(assetIds: Set[String]): Unit =
-    logger.trace(s"Recycling the faces of assets [${assetIds.mkString(",")}]")
+    logger.trace(s"Recycling the faces of assets: ${Util.inBrief(assetIds)}")
 
     txManager.withTransaction {
-      dao.lockAssetPeople(assetIds)
+      lockAssetPeople(assetIds): Unit
       dao.recycleFacesForAssets(assetIds)
     }
 
   def restoreFacesForAssets(assetIds: Set[String]): Unit =
-    logger.trace(s"Restoring the faces of assets [${assetIds.mkString(",")}]")
+    logger.trace(s"Restoring the faces of assets: ${Util.inBrief(assetIds)}")
 
     txManager.withTransaction {
-      dao.lockAssetPeople(assetIds)
+      lockAssetPeople(assetIds): Unit
       dao.restoreFacesForAssets(assetIds)
     }
 
@@ -305,14 +312,57 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     }
 
   /**
-   * Deletes the people who have no Face left and returns their IDs. Only a discarded import that started them, or a correction
-   * taking their last Face, leaves a person faceless.
+   * Deletes the people who have no Face left, named or not, and returns their IDs: a discarded import's people it started, and a
+   * correction's Person whose last Face it took ([[deleteFaceless]])
    */
-  def deletePeopleWithoutFaces(personIds: Set[String]): Set[String] =
+  def deletePeopleWithoutFaces(personIds: Set[String]): Set[String] = deleteFaceless(personIds, keepNamed = false)
+
+  /**
+   * Deletes the unnamed people who have no Face left and returns their IDs: a purge's, which leaves a named person their row and
+   * name with no Face, still someone a Face can be given to ([[deleteFaceless]])
+   */
+  def deleteUnnamedPeopleWithoutFaces(personIds: Set[String]): Set[String] = deleteFaceless(personIds, keepNamed = true)
+
+  /**
+   * Deletes the faceless among the people, or the unnamed faceless with `keepNamed`. They are locked first (in ID order, as every
+   * path locking people does), so a Face given to one of them meanwhile either has committed, and they keep it, or waits and then
+   * finds them gone.
+   */
+  private def deleteFaceless(personIds: Set[String], keepNamed: Boolean): Set[String] =
     txManager.withTransaction {
-      val deleted = dao.deleteFaceless(personIds)
+      lockLive(personIds): Unit
+      val deleted = dao.deleteFaceless(personIds, keepNamed)
       if deleted.nonEmpty then logger.debug(s"Deleted people left without faces [${deleted.mkString(",")}]")
       deleted
+    }
+
+  /**
+   * Locks the people in ID order, as every transaction locking more than one does, and returns the live ones (neither merged away
+   * nor a bad match). The dead are locked too, so the caller waits for whatever is changing them.
+   */
+  def lockLive(personIds: Set[String]): Set[String] =
+    txManager.withTransaction(dao.lockAndGetLive(personIds))
+
+  /**
+   * Locks the people with a Face on the assets, in ID order, and returns their IDs. They are read again once locked: while a Face
+   * of the assets has changed hands meanwhile (a merge gave it to the destination), the locks are given back and taken again over
+   * whoever has the Faces now, so the caller holds every one of them, all taken in ID order, before it touches their Faces.
+   */
+  def lockAssetPeople(assetIds: Set[String]): Set[String] =
+    txManager.withTransaction {
+      @tailrec
+      def locked(): Set[String] =
+        val (held, now) = txManager.undoingIf {
+          val held = dao.lockAssetPeople(assetIds)
+          (held, dao.getAssetPeople(assetIds))
+        } { case (held, now) => !now.subsetOf(held) }
+
+        if now.subsetOf(held) then held
+        else
+          logger.debug(s"Faces of assets (${Util.inBrief(assetIds)}) changed hands while their people were locked; locking again")
+          locked()
+
+      locked()
     }
 
   /**
@@ -328,14 +378,15 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
   /**
    * Moves every cover off the Faces of assets about to go (a purge, a discarded import); run before their rows go. Each cover
-   * holder, live or not, takes their best Face on another asset not marked for purging, or none. The people are locked first, so
-   * a concurrent import, correction or cover change waits; lock order is assets, then people, in every transaction locking both.
+   * holder, live or not, takes their best Face on another asset not marked for purging, or none. The people are locked before
+   * their Faces are read, so a concurrent import, correction or cover change waits. A caller that also locks the assets locks
+   * them first (a discard its unfinished row), as every transaction locking both takes assets before people.
    */
   def moveCoversOff(assetIds: Set[String]): Unit =
     if assetIds.isEmpty then return
 
     txManager.withTransaction {
-      dao.lockAssetPeople(assetIds)
+      lockAssetPeople(assetIds): Unit
 
       val faceIds = faceDao
         .query(new Query().add(FieldConst.Face.ASSET_ID -> Query.IN(assetIds.toSet[Any])))
@@ -622,19 +673,21 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     app.service.asset.queryAll(purging).nonEmpty
 
   /**
-   * Names the person, stored in NFC with its name key as sort name. A name another live person holds in any case or Unicode form
-   * is a `DuplicateException` (`person_01`).
+   * Names the person, stored in NFC with its name key and sort key. A name another live person holds in any case or Unicode form
+   * is a `DuplicateException` (`person_01`). The name's lock comes first, as a move of a Face to a name takes it, so such a move
+   * creating a Person of the name meanwhile waits, then finds this one holding it, instead of failing on `person_01`.
    */
   def updateName(person: Person, newName: String): Person =
     val name = validName(newName)
 
     txManager.withTransaction {
+      dao.lockName(nameKey(name))
       logger.debug(s"Renaming person [${person.persistedId}] to [$name]")
       updateById(
         person.persistedId,
         Map(
           FieldConst.Person.NAME -> name,
-          FieldConst.Person.NAME_FOR_SORT -> PersonService.nameKey(name),
+          FieldConst.Person.NAME_KEY -> PersonService.nameKey(name),
           FieldConst.Person.IS_NAMED -> true
         ))
 

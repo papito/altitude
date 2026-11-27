@@ -74,7 +74,8 @@ object FieldConst:
 
   object Person:
     val NAME = "name"
-    val NAME_FOR_SORT = "name_for_sort"
+    val NAME_KEY = "name_key"
+    val NAME_SORT = "name_sort"
     val COVER_FACE_ID = "cover_face_id"
     val NUM_OF_FACES = "num_of_faces"
     val IS_HIDDEN = "is_hidden"
@@ -94,6 +95,7 @@ object FieldConst:
     val AREA_SIZE = "area_size"
     val SIZE_BYTES = "size_bytes"
     val FILENAME = "filename"
+    val FILENAME_SORT = "filename_sort"
     val EXTRACTED_METADATA = "extracted_metadata"
     val PUBLIC_METADATA = "public_metadata"
     val USER_METADATA = "user_metadata"
@@ -161,6 +163,7 @@ object FieldConst:
   object Album:
     val NAME = "name"
     val NAME_KEY = "name_key"
+    val NAME_SORT = "name_sort"
     val NUM_OF_ASSETS = "num_of_assets"
     val ALBUM_ID = "album_id"
     val ASSET_ID = "asset_id"
@@ -179,6 +182,7 @@ object FieldConst:
   object ImportFile:
     val IMPORT_ID = "import_id"
     val REL_PATH = "rel_path"
+    val REL_PATH_SORT = "rel_path_sort"
     val OUTCOME = "outcome"
     val REASON = "reason"
     val ASSET_ID = "asset_id"
@@ -186,6 +190,7 @@ object FieldConst:
 
   object WatchFolder:
     val NAME = "name"
+    val NAME_SORT = "name_sort"
     val PATH = "path"
     val DEST_FOLDER_ID = "dest_folder_id"
     val DELETES_IMPORTED = "deletes_imported"
@@ -208,6 +213,7 @@ object FieldConst:
     val KIND = "kind"
     val NAME = "name"
     val NAME_KEY = "name_key"
+    val NAME_SORT = "name_sort"
     val LATITUDE = "latitude"
     val LONGITUDE = "longitude"
     val LOCATION_ID = "location_id"

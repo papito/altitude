@@ -1,11 +1,9 @@
 package altitude.core.dao.postgres
 
 import java.sql.ResultSet
-import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
-import java.time.ZoneId
 import org.apache.commons.dbutils.BasicRowProcessor
 import org.apache.commons.dbutils.RowProcessor
 import org.postgresql.util.PGobject
@@ -45,24 +43,17 @@ trait PostgresOverrides:
 
   override protected val dialect: Dialect = AltitudePostgresDialect
 
-  // An instant is shown in the JVM zone, as `getDateTimeField` does for the raw paths
-  override protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime =
-    value.atZoneSameInstant(ZoneId.systemDefault).toLocalDateTime
-
-  override def instantOf(value: LocalDateTime): Instant = value.atZone(ZoneId.systemDefault).toInstant
-
   override protected def jsonFunc = "CAST(? as jsonb)"
 
-  override protected def jsonText(column: String, key: String): String = s"($column->>'$key')"
+  // Under the index's collation: a JSON key's text is of the database's collation, which no index of the schema compares by
+  override protected def jsonText(column: String, key: String): String = s"(($column->>'$key') COLLATE \"C\")"
 
-  override protected def nativeBool(value: Boolean): Any =
-    if value then true else false
+  override protected def nativeBool(value: Boolean): Any = value
 
   override protected val vectorPlaceholder: String = "?::vector"
 
   // Bound as text and cast by the placeholder
-  override protected def vectorBind(embedding: Option[SceneEmbedding]): Any =
-    embedding.map(e => PostgresOverrides.vectorLiteral(e.values)).orNull
+  override protected def vectorBind(values: IArray[Float]): Any = PostgresOverrides.vectorLiteral(values)
 
   // pgJDBC hands a `vector` column out as a PGobject whose value is the literal `vectorLiteral` writes
   override protected def getVectorField(value: AnyRef): Option[SceneEmbedding] = Option(value).map {
@@ -81,17 +72,20 @@ trait PostgresOverrides:
 
   override protected def rowProcessor: RowProcessor = PostgresOverrides.javaTimeRowProcessor
 
-  // A wall-clock `timestamp` is returned as-is; an instant (`timestamptz`) is shown in the JVM zone
+  // A wall-clock `timestamp` is returned as-is; an instant (`timestamptz`) as its UTC wall clock, as `toLocalDateTime` gives it
   override protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime] =
     if value.isEmpty || value.get == null then return None
 
     value.get match
       case dateTime: LocalDateTime => Some(dateTime)
-      case instant: OffsetDateTime => Some(instant.atZoneSameInstant(ZoneId.systemDefault).toLocalDateTime)
-      case timeStamp: java.sql.Timestamp => Some(timeStamp.toLocalDateTime)
+      case instant: OffsetDateTime => Some(toLocalDateTime(instant))
       case other => throw IllegalArgumentException(s"Invalid type for date/time field: $other")
 
-  override protected def getBooleanField(value: AnyRef): Boolean = value.asInstanceOf[Boolean]
+  // A hand-written read's flag (`makeModel`): anything but a boolean fails the read, a NULL included, which `asInstanceOf` would
+  // read as false
+  override protected def getBooleanField(value: AnyRef): Boolean = value match
+    case b: java.lang.Boolean => b.booleanValue
+    case other => throw IllegalArgumentException(s"Invalid value for a boolean field: $other")
 
   override protected def getNextVal(tableName: String): AnyRef =
     val labelSql = f"SELECT nextval('$tableName')"

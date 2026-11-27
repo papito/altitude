@@ -1,9 +1,6 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
-import java.time.temporal.ChronoUnit
 import scalasql.Sc
 import scalasql.Table
 
@@ -13,6 +10,7 @@ import altitude.core.models.AccountSnapshot
 import altitude.core.models.AuditEvent
 import altitude.core.models.AuditEventType
 import altitude.core.util.JsonCodec
+import altitude.core.util.Util
 
 abstract class AuditEventDao(override val config: Config) extends BaseDao[AuditEvent] with altitude.core.dao.AuditEventDao:
 
@@ -60,7 +58,7 @@ abstract class AuditEventDao(override val config: Config) extends BaseDao[AuditE
 
     val id = event.id.getOrElse(BaseDao.genId)
     // Bound in UTC to the microsecond rather than left to the engine default, as `AssetDao.add` binds an asset's
-    val createdAt = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
+    val createdAt = Util.utcNow
 
     addRecord(
       sql,

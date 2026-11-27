@@ -30,8 +30,8 @@ class SequenceService(val app: Altitude, undatedCandidates: Int):
    * asset alone: a lone image is never a Sequence. Matches in several Sequences merge them, since a burst is transitive.
    *
    * It takes its turn among the writers of Sequences (`AssetDao.lockSequences`) before reading, so a resolve is either settled in
-   * what it reads or waits and sees this asset. The candidates are read locked (dated) or re-read locked (undated), so one a
-   * concurrent move sorts is left out and a Sequence is never stamped on the asset alone.
+   * what it reads or waits and sees this asset. The candidates are read unlocked and the matches re-read locked ([[locked]]), so
+   * one a concurrent move sorts is left out and a Sequence is never stamped on the asset alone.
    */
   def assign(asset: Asset): Asset =
     txManager.withTransaction {
@@ -40,18 +40,14 @@ class SequenceService(val app: Altitude, undatedCandidates: Int):
         dao.lockSequences()
         val settings = app.settings.current
         val matches = if SequenceRule.isDated(asset) then datedMatches(asset, settings) else undatedMatches(asset, settings)
-        join(asset, matches)
+        join(asset, locked(matches))
     }
 
   /** The dated candidates of the asset that are frames of its scene */
   private def datedMatches(asset: Asset, settings: Settings): List[Asset] =
     dao.getSequenceCandidates(asset, settings.sequenceMaxGapMs).filter(SequenceRule.matches(asset, _, settings))
 
-  /**
-   * The undated candidates, up to the cap, that are frames of the asset's scene, as their rows stand once locked. The streaming
-   * read takes no row locks, so on PostgreSQL it can return a candidate a concurrent move is sorting; the few matches are re-read
-   * locked, which waits for such a move, keeping those still in triage with the Sequence they carry now.
-   */
+  /** The undated candidates, up to the cap, that are frames of the asset's scene */
   private def undatedMatches(asset: Asset, settings: Settings): List[Asset] =
     val collected = dao.getUndatedSequenceMatches(asset, undatedCandidates)(SequenceRule.matches(asset, _, settings))
     // The cap bounds what one import costs: older undated frames of the size, if any, went uncompared
@@ -59,7 +55,23 @@ class SequenceService(val app: Altitude, undatedCandidates: Int):
       logger.debug(
         s"Asset [${asset.persistedId}] was compared with the $undatedCandidates newest undated frames of " +
           s"${asset.width}x${asset.height}; older undated frames of that size, if any, were not")
-    dao.lockTriaged(collected.kept.map(_.persistedId).toSet)
+    collected.kept
+
+  /**
+   * The matches as their rows stand once locked. The candidates' read takes no row locks, so on PostgreSQL it can return one a
+   * concurrent move is sorting; the re-read waits for such a move, keeping those still in triage with the Sequence they carry
+   * now. When they are in several Sequences, which then merge, the re-read also locks every member the merge repoints, in the
+   * same pass: the rows this writes are locked in one pass in ID order, as a library operation (a recycle, a move, a restore, a
+   * purge) locks the rows it writes, so neither waits on the other in a cycle. The asset itself was locked by its completion,
+   * before any other transaction can see it.
+   */
+  private def locked(matches: List[Asset]): List[Asset] =
+    val matchIds = matches.map(_.persistedId).toSet
+    val sequences = matches.flatMap(_.sequenceId).toSet
+    // Only a Sequence writer gives a match another Sequence, and writers take turns: a move clears it, and the sorted match drops
+    // out
+    val merged = if sequences.size > 1 then sequences else Set.empty[String]
+    dao.lockSequenceFrames(matchIds, merged).filter(frame => matchIds.contains(frame.persistedId))
 
   /** Puts the asset in the Sequence of its matches, if it has any, and returns it with that Sequence */
   private def join(asset: Asset, matches: List[Asset]): Asset =
@@ -69,7 +81,7 @@ class SequenceService(val app: Altitude, undatedCandidates: Int):
       // A match already in the surviving Sequence keeps its row; one in another Sequence was repointed with that Sequence
       val joining = (asset.persistedId :: matches.filter(_.sequenceId.isEmpty).map(_.persistedId)).toSet
       val joined = dao.setSequence(joining, sequenceId)
-      // Every match is locked from its read to this write, so a shortfall is not expected; it is logged rather than failing the
+      // Every match is locked from its re-read to this write, so a shortfall is not expected; it is logged rather than failing the
       // import, as the asset's own row is written either way
       if joined < joining.size then
         logger.debug(s"${joining.size - joined} of ${joining.size} assets left triage before joining Sequence [$sequenceId]")

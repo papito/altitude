@@ -21,6 +21,7 @@ object Const:
     val REL_SQLITE_DB_PATH = "db.sqlite.rel_db_path"
     val SQLITE_URL = "db.sqlite.url"
     val SQLITE_READ_POOL_SIZE = "db.sqlite.read_pool_size"
+    val SQLITE_WRITE_CONNECTION_TIMEOUT = "db.sqlite.write_connection_timeout"
     val DB_POOL_LEAK_DETECTION_THRESHOLD = "db.pool.leak_detection_threshold"
 
     // Dumps detection debug images into the project debug/ folder. Tunable values are Settings (`models.Settings`), not config.
@@ -153,6 +154,11 @@ object Const:
     // A scan reads a file only when an earlier scan, at least this many seconds before, saw the same size and modified time.
     // A shorter rest would take a file a slow copy is still writing.
     val REST_SECONDS = 5
+    // The longest Watch folder path and file path under it, in UTF-8 bytes, that their unique indexes take on PostgreSQL. A btree
+    // row holds at most 2704 bytes: `watch_folder_file_01` spends 8 on the row's header, 40 on the Watch folder's ID (37 and its
+    // padding) and 4 on the path's length, leaving 2652 for `rel_path`; `watch_folder.path`'s index leaves 2692. The index's
+    // compression is no bound to rely on, so the cap leaves a margin below both.
+    val MAX_PATH_BYTES = 2600
 
     // Why a Watch folder is paused, as its card shows it
     val DESTINATION_LOST = "destination folder is in the Trash"
@@ -168,6 +174,15 @@ object Const:
     // The directories a scan could not read and went past: the one, or how many and the first
     val DIRECTORY_UNREADABLE = "a directory could not be read, the rest is scanned: %s"
     val DIRECTORIES_UNREADABLE = "%d directories could not be read, the rest is scanned; the first: %s"
+    // The files a scan skipped for a path too long to remember: the one, or how many and the first, shortened to
+    // SHOWN_PATH_LENGTH characters
+    val PATH_TOO_LONG = "a file's path is longer than %d bytes and is skipped, the rest is scanned: %s"
+    val PATHS_TOO_LONG = "%d files' paths are longer than %d bytes and are skipped, the rest is scanned; the first: %s"
+    val SHOWN_PATH_LENGTH = 100
+    // The files a scan skipped for a name that reads as another file's (bytes no text in the JVM's file name encoding): the one,
+    // or how many and the first, by its path's bytes percent-encoded
+    val NAME_READS_AS_ANOTHER = "a file's name reads as another file's and is skipped, the rest is scanned: %s"
+    val NAMES_READ_AS_OTHERS = "%d files' names read as other files' and are skipped, the rest is scanned; the first: %s"
     val PATH_OVERLAPS = "the path overlaps the Watch folder \"%s\""
     // Why a file of a Watch folder that could not be read failed
     val UNREADABLE_FILE = "Cannot read the file"
@@ -243,6 +258,8 @@ object Const:
       val DUPLICATE = "Duplicate"
       val INCORRECT_VALUE_TYPE = "Incorrect value type"
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
+      // A Setup submission to an instance set up already, refused by the server's flag or by the system row
+      val ALREADY_INITIALIZED = "Instance is already initialized"
       // `User.validUsername`; the bounds are Api.Constraints.MIN_/MAX_USERNAME_LENGTH
       val USERNAME_RULE = "Use 3 to 32 letters, digits, dots, underscores or hyphens"
       // More grants than a login token has room for (`RepositoryService.MAX_GRANTS_PER_ACCOUNT`)
@@ -265,6 +282,8 @@ object Const:
       val PATH_EMPTY_NAME = "The path has an empty name"
       val PATH_PARENT = "The path holds \"..\""
       val PATH_IGNORED = "\"%s\" is a name imports ignore"
+      // Why an uploaded file whose path holds a NUL, which PostgreSQL cannot store in text, is failed on arrival
+      val PATH_HOLDS_NUL = "The path holds a NUL character, which cannot be stored"
       val EMPTY_FILE = "Empty files are not imported"
       // A file sent to, or a close of, an upload's Import by an account other than its opener, or of an Import that is no upload
       val FORBIDDEN_UPLOAD = "an upload takes files from the account that opened it"
@@ -272,6 +291,9 @@ object Const:
       // A file dropped as a duplicate of a copy that is no longer in the Library when it settles: the copy's import failed, or
       // the asset was recycled meanwhile
       val COPY_NOT_IN_LIBRARY = "The copy it matched is not in the Library"
+      // A restore or a move out of the Trash whose content an import committed meanwhile; tried again, the asset stays a duplicate
+      val CONTENT_IMPORTED_MEANWHILE =
+        "An asset with the same content was imported meanwhile, so nothing was taken out of the trash: try again"
       val DESTINATION_IN_TRASH = "The destination folder is in the Trash"
       // A file under a folder name the folder rule refuses, with the rule's own words
       val DESTINATION_FOLDER_NAME = "A folder of the path cannot be created: %s"
@@ -280,6 +302,7 @@ object Const:
       // A Watch folder path the dialog refuses, shown under the path's field
       val WATCH_PATH_INVALID = "This is not a path"
       val WATCH_PATH_RELATIVE = "Enter an absolute path, one that starts at the root of the file system"
+      val WATCH_PATH_TOO_LONG = "This path is longer than %d bytes"
       val WATCH_PATH_MISSING = "There is no such directory on the server"
       val WATCH_PATH_NOT_DIRECTORY = "This is not a directory"
       val WATCH_PATH_UNREADABLE = "The server cannot read this directory"
@@ -311,7 +334,7 @@ object Const:
       val LIBRARY_NAME_REQUIRED = "Enter a name for the library"
       val LIBRARY_NAME_TOO_SHORT = "Use at least %s characters"
       val LIBRARY_NAME_TOO_LONG = "Use at most %s characters"
-      val LIBRARY_NAME_CONTROL_CHARACTERS = "Remove the control characters"
+      val CONTROL_CHARACTERS = "Remove the control characters"
       // A Library name whose name key another Library holds (`repository_01`), shown as submitted, once normalized
       val LIBRARY_NAME_TAKEN = "A library named “%s” already exists"
       // `/` for an account that sees no Library
@@ -361,6 +384,8 @@ object Const:
       val ORIGINAL_UNREADABLE = "The original file of this photo cannot be read"
       // A folder added under a parent that is not a folder of the repository
       val PARENT_FOLDER_NOT_FOUND = "The parent folder does not exist"
+      // A folder added under a parent in the Trash, from a dialog opened before the delete
+      val PARENT_FOLDER_IN_TRASH = "The parent folder is in the Trash"
 
     // What a Face correction did, for the snackbar
     object FaceCorrection:

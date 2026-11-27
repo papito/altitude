@@ -9,10 +9,12 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
+import altitude.core.ForbiddenException
 import altitude.core.IllegalOperationException
 import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.routes.BaseController
+import altitude.core.routes.decorators.forbidden
 import altitude.core.routes.decorators.requireLibraryCreator
 import altitude.core.routes.decorators.requireLogin
 
@@ -56,5 +58,7 @@ class LibraryActionController(using logger: Logger) extends BaseController:
       case ex: DuplicateException => responseWithValidationError(ex.message.getOrElse(C.Msg.Err.LIBRARY_NAME_TAKEN.format(name)))
       // A creator who is not an Admin already holds as many grants as an account may
       case ex: IllegalOperationException => responseWithValidationError(ex.getMessage)
+      // Deactivated, or the Create Libraries flag taken away, since the login token the gate read was made
+      case ex: ForbiddenException => forbidden(ex.getMessage, json = false)
 
   initialize()

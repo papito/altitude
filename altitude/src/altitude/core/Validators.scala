@@ -4,6 +4,7 @@ import scala.util.matching.Regex
 
 import altitude.core.{ Const => C }
 import altitude.core.util.NameKey
+import altitude.core.util.Util
 
 object Validators:
   private val emailRegex: Regex =
@@ -16,16 +17,19 @@ object Validators:
   def isEmail(value: String): Boolean = emailRegex.matches(value)
 
   /**
-   * The name as stored ([[NameKey.normalized]]), or a `ValidationException` on `field`. Lengths are checked after normalization,
-   * since NFC can lengthen a name (U+FB2C is three code points), and counted in code points as the column counts them. A form's
-   * own check counts what was typed; this is the one the stored name is held to.
+   * The name as stored ([[NameKey.normalized]]), or a `ValidationException` on `field`: no control character
+   * (`Util.isControlCharacter`, the rule of a Library's name), then the lengths, checked after normalization, since NFC can
+   * lengthen a name (U+FB2C is three code points), and counted in code points as the column counts them. A form's own check
+   * counts what was typed; this is the one the stored name is held to.
    */
   def validName(name: String, field: String, maxLength: Int, minLength: Int = 0): String =
     val normalized = NameKey.normalized(name)
     val length = normalized.codePointCount(0, normalized.length)
 
     val error: Option[String] =
-      if length < minLength then Some(C.Msg.Err.VALUE_TOO_SHORT.format(minLength))
+      // A name with one would let look-alike names differ, and PostgreSQL refuses a NUL in text as a raw failure
+      if Util.holdsControlCharacter(normalized) then Some(C.Msg.Err.CONTROL_CHARACTERS)
+      else if length < minLength then Some(C.Msg.Err.VALUE_TOO_SHORT.format(minLength))
       else if length > maxLength then Some(C.Msg.Err.VALUE_TOO_LONG.format(maxLength))
       else if !NameKey.keyFits(normalized) then Some(C.Msg.Err.NAME_KEY_TOO_LONG)
       else None

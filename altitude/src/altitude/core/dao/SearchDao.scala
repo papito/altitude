@@ -22,10 +22,10 @@ trait SearchDao:
 
   /**
    * One page of a Describe search: the matches whose SigLIP 2 embedding has a cosine of at least `minCosine` to the
-   * description's, at most `limit`, nearest first, then by ID. The cursor is a row's cosine distance and ID. A counted page also
-   * says where the weaker matches begin (cosine under `weakerRatio` of the nearest's, `SearchPage.weaker`). Sort and grouping are
-   * ignored; an asset with no embedding is in no page. The caller's transaction is set up for the vector search
-   * (`TransactionManager.withVectorSearch`).
+   * description's, at most `limit`, nearest first, then by ID. The cursor is a row's cosine distance and ID. The page that
+   * crosses the line, the first page or a later one, says where the weaker matches begin (cosine under `weakerRatio` of the
+   * nearest's, `SearchPage.weaker`). Sort and grouping are ignored; an asset with no embedding is in no page. The caller's
+   * transaction is set up for the vector search (`TransactionManager.withVectorSearch`).
    */
   def describe(query: SearchQuery, ranking: DescribeRanking): SearchPage
 

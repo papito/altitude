@@ -2,7 +2,6 @@
 @import altitude.core.Const
 @import altitude.core.RequestContext
 @import altitude.core.models.WatchFolderCard
-@import altitude.core.util.Util
 
 @(cards: List[WatchFolderCard], isAdmin: Boolean)
 
@@ -40,7 +39,7 @@
 
 @lastScan(card: WatchFolderCard) = {@card.lastScanAt match {
     case _ if card.isScanning => {<span class="scanning">scanning now</span>}
-    case Some(at) => {scanned <time datetime="@at" x-data="localTime">@Util.utcText(at, withTime = true)</time>}
+    case Some(at) => {scanned @includes.html.local_time(at, withTime = true)}
     case None => {not scanned yet}
 }}
 

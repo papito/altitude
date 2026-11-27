@@ -656,7 +656,7 @@ import altitude.core.service.PersonService.FaceTarget
      *
      * Assertions:
      *
-     * Naming them "Andreea" through one Face names the same Person, sort name included, and all three Faces stay theirs. The
+     * Naming them "Andreea" through one Face names the same Person, name key included, and all three Faces stay theirs. The
      * answer holds the Face and the Person before and after.
      */
     val p = person()
@@ -674,8 +674,8 @@ import altitude.core.service.PersonService.FaceTarget
     named.name shouldBe Some("Andreea")
     named.isNamed shouldBe true
     named.numOfFaces shouldBe 3
-    testApp.txManager.asReadOnly(query("SELECT name_for_sort FROM person WHERE id = ?", p.persistedId).head)(
-      "name_for_sort") shouldBe "andreea"
+    testApp.txManager.asReadOnly(query("SELECT name_key FROM person WHERE id = ?", p.persistedId).head)(
+      "name_key") shouldBe "andreea"
     faceOwners(assets) shouldBe Set(p.persistedId)
   }
 
@@ -1161,6 +1161,38 @@ import altitude.core.service.PersonService.FaceTarget
 
     testApp.service.person.getLiveByNameKey("andreea").map(_.persistedId) shouldBe Some(first.persistedId)
     testApp.service.person.getAll.count(_.name.exists(_.equalsIgnoreCase("andreea"))) shouldBe 1
+    testApp.service.person.getFaceById(secondFace.persistedId).personId shouldBe Some(first.persistedId)
+    getPerson(first.persistedId).numOfFaces shouldBe 2
+  }
+
+  test("A move to a new name waits for a concurrent rename of a Person to it, and joins them") {
+
+    /**
+     * Setup:
+     *
+     * A Person named "Bogdan" and a Person with no name, each with a Face. Renaming Bogdan "Andreea", as the People tab does,
+     * holds its transaction until a move of the second's Face to "andreea" waits.
+     *
+     * Assertions:
+     *
+     * Neither fails: the move finds the renamed Person holding the name, who then holds both Faces and counts two assets.
+     *
+     * Edge cases:
+     *
+     * Without the name's lock in the rename, the move would create a second Person with the name and fail on `person_01` with a
+     * raw `SQLException`.
+     */
+    val first = person(Some("Bogdan"))
+    face(first, testContext.persistAsset())
+    val second = person()
+    val secondFace = face(second, testContext.persistAsset())
+
+    contend(
+      testApp.service.person.updateName(getPerson(first.persistedId), "Andreea"): Unit,
+      testApp.service.person.moveFace(secondFace.persistedId, FaceTarget.Named("andreea")): Unit
+    )
+
+    testApp.service.person.getLiveByNameKey("andreea").map(_.persistedId) shouldBe Some(first.persistedId)
     testApp.service.person.getFaceById(secondFace.persistedId).personId shouldBe Some(first.persistedId)
     getPerson(first.persistedId).numOfFaces shouldBe 2
   }

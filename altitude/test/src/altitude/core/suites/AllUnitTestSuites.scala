@@ -17,6 +17,7 @@ import altitude.core.unit.EditRecipeTests
 import altitude.core.unit.EditRendererTests
 import altitude.core.unit.EnvironmentTests
 import altitude.core.unit.FaceClusteringTests
+import altitude.core.unit.FaceVoteTests
 import altitude.core.unit.FolderModelTests
 import altitude.core.unit.GeocoderServiceTests
 import altitude.core.unit.GeoLocationResolverTests
@@ -64,6 +65,7 @@ abstract class AllUnitTestSuites
   extends Suites(
     new CoreModelTests,
     new FaceClusteringTests,
+    new FaceVoteTests,
     new CaptureDateResolverTests,
     new FolderModelTests,
     new GeoLocationResolverTests,

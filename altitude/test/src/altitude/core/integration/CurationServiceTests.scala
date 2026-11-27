@@ -818,6 +818,75 @@ import altitude.core.service.FaceDetectionService
     (frames, completing, complete)
   }
 
+  test("A resolve and a recycle of frames of its set at once both commit") {
+
+    /**
+     * Setup:
+     *
+     * Three triaged assets: the two of the higher IDs in one Sequence, the other in none. A third transaction holds the lowest;
+     * then a recycle of it and of the highest starts and waits on it; then a selection's resolve keeping the middle one and
+     * recycling the lowest starts and waits; then the lowest is let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither fails. The lowest and the highest are recycled, and the Pick, the one frame of its Sequence left out of the trash,
+     * leaves it.
+     *
+     * Edge cases:
+     *
+     * A resolve that locks the Pick's Sequence and then what it recycles would hold the highest while waiting on the lowest,
+     * which the recycle holds while it waits on the highest: a deadlock PostgreSQL ends by failing one of them.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val List(lowest, pick, highest) = List.fill(3)(testContext.persistAsset(isTriaged = true)).sortBy(_.persistedId)
+    testContext.setAssetSequence(List(pick, highest), UUID.randomUUID.toString)
+
+    whileHolding(query("SELECT id FROM asset WHERE id = ? FOR UPDATE", lowest.persistedId): Unit)(
+      () => testApp.service.library.recycleAssets(ids(List(lowest, highest))),
+      () => curation.resolve(ids(List(pick)), ids(List(lowest))): Unit
+    )
+
+    List(lowest, pick, highest).map(stored(_).isRecycled) shouldBe List(true, false, true)
+    stored(pick).sequenceId shouldBe None
+  }
+
+  test("A reopen and a move of its frames at once both commit") {
+
+    /**
+     * Setup:
+     *
+     * Two triaged assets: the one of the higher ID recycled. A third transaction holds the other; then a move of both into the
+     * root folder starts and waits on it; then a reopen of a set keeping the lower and having recycled the higher, putting the
+     * Pick back in a Sequence, starts and waits; then the lower is let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither fails. The move, first in line, sorts both out of the trash and triage; the reopen then finds nothing to restore
+     * and leaves the sorted Pick out of the Sequence.
+     *
+     * Edge cases:
+     *
+     * A reopen that restores the recycled asset and then stamps the Pick would hold the higher ID while waiting on the lower,
+     * which the move holds while it waits on the higher: a deadlock PostgreSQL ends by failing one of them.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val List(pick, recycled) = List.fill(2)(testContext.persistAsset(isTriaged = true)).sortBy(_.persistedId)
+    testApp.service.library.recycleAssets(ids(List(recycled)))
+    val rootFolderId = RequestContext.getRepository.rootFolderId
+    val reopened = new java.util.concurrent.atomic.AtomicReference[Option[RestoreResult]](None)
+
+    whileHolding(query("SELECT id FROM asset WHERE id = ? FOR UPDATE", pick.persistedId): Unit)(
+      () => testApp.service.library.moveAssetsToFolder(ids(List(pick, recycled)), rootFolderId),
+      () =>
+        reopened.set(
+          Some(curation.reopen(ids(List(pick)), ids(List(recycled)), Map(pick.persistedId -> UUID.randomUUID.toString))))
+    )
+
+    reopened.get shouldBe Some(RestoreResult(restored = Set(), duplicates = Set()))
+    List(pick, recycled).map(stored).map(asset => (asset.isRecycled, asset.isTriaged, asset.sequenceId)) shouldBe
+      List((false, false, None), (false, false, None))
+  }
+
   test("A frame of the burst completing before a resolve commits is seen by it") {
 
     /**

@@ -6,10 +6,11 @@ import altitude.core.FieldConst
 import altitude.core.Validators
 import altitude.core.dao.AlbumDao
 import altitude.core.models.Album
+import altitude.core.util.Util
 
 /**
- * Nothing here touches an asset: album writes change membership rows only. `LibraryService.recycleAssets` drops a recycled asset
- * from every album, and purging cascades the memberships.
+ * Nothing here writes an asset: album writes change membership rows only, an add share-locking the assets it adds. A recycle
+ * (`LibraryService.recycleAssets`) drops a recycled asset from every album, and purging cascades the memberships.
  */
 class AlbumService(val app: Altitude) extends BaseService[Album]:
   override protected val dao: AlbumDao = app.DAO.album
@@ -46,6 +47,9 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
       // Scopes the album to the repository
       getById(albumId)
 
+      // A recycle of one of them meanwhile either waits for this add and then drops the member, or is waited for, and the asset
+      // is then left out
+      app.service.asset.shareLockLive(assetIds)
       val added = dao.addAssets(albumId, assetIds)
       logger.debug(s"Added $added of ${assetIds.size} asset(s) to album [$albumId]")
       added
@@ -77,7 +81,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
 
     txManager.withTransaction {
       val removed = dao.removeAssetsFromAllAlbums(assetIds)
-      logger.trace(s"Removed $removed album membership(s) for assets [${assetIds.mkString(",")}]")
+      logger.trace(s"Removed $removed album membership(s) for assets: ${Util.inBrief(assetIds)}")
       removed
     }
 

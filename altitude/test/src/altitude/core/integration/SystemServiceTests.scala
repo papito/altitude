@@ -6,12 +6,17 @@ import java.util.Base64
 import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.handlers.ScalarHandler
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.shouldBe
+import org.scalatest.matchers.should.Matchers.{ an, shouldBe }
 
+import scala.util.Success
+import scala.util.Try
+
+import altitude.core.AlreadyInitializedException
 import altitude.core.Altitude
 import altitude.core.RequestContext
 import altitude.core.models.AccountType
 import altitude.core.util.Query
+import altitude.core.util.Util
 
 @DoNotDiscover class SystemServiceTests(override val testApp: Altitude) extends IntegrationTestCore with TestFocus {
 
@@ -49,6 +54,93 @@ import altitude.core.util.Query
     val adminUser = RequestContext.account.value
     adminUser.get.email shouldBe userModel.email
     adminUser.get.accountType shouldBe AccountType.Admin
+  }
+
+  /** The number of accounts and of Libraries the database holds */
+  private def accountsAndLibraries: (Int, Int) = testApp.txManager.asReadOnly {
+    def count(table: String) = query(s"SELECT COUNT(*) AS n FROM $table").head("n").toString.toInt
+    (count("account"), count("repository"))
+  }
+
+  /** Sets the instance up with an Admin and a Library of random names */
+  private def setUp(): Unit =
+    testApp.service.system.initializeSystem(
+      repositoryName = s"Set up ${Util.randomStr()}",
+      adminModel = testContext.makeAdminUser(),
+      password = "password3000"): Unit
+
+  test("A second setup is refused and adds nothing") {
+
+    /**
+     * Setup:
+     *
+     * An instance set up once, then set up again with another Admin and Library, as a second submission of the Setup form would.
+     *
+     * Assertions:
+     *
+     * The second setup is refused as already set up, and adds no account and no Library. The instance stays set up.
+     */
+    RequestContext.clear()
+    setUp()
+    val before = accountsAndLibraries
+
+    intercept[AlreadyInitializedException](setUp())
+
+    accountsAndLibraries shouldBe before
+    testApp.service.system.readMetadata.isInitialized shouldBe true
+    testApp.isInitialized shouldBe true
+  }
+
+  test("Of two setups at once, one sets the instance up and the other is refused") {
+
+    /**
+     * Setup:
+     *
+     * An instance not yet set up. One setup holds its transaction open until a second, with another Admin and Library, waits on
+     * it: on PostgreSQL for the system row, on SQLite for the write connection.
+     *
+     * Assertions:
+     *
+     * The second setup is refused as already set up once the first commits. Only the first adds an account and a Library, and the
+     * instance is set up.
+     */
+    RequestContext.clear()
+    val before = accountsAndLibraries
+    var second: Try[Unit] = Success(())
+
+    contend(setUp(), { second = Try(setUp()) })
+
+    second.failed.get shouldBe an[AlreadyInitializedException]
+    accountsAndLibraries shouldBe (before._1 + 1, before._2 + 1)
+    testApp.service.system.readMetadata.isInitialized shouldBe true
+    testApp.isInitialized shouldBe true
+  }
+
+  test("A setup whose transaction fails leaves the instance not set up") {
+
+    /**
+     * Setup:
+     *
+     * An instance not yet set up, and a setup inside a transaction that fails after it.
+     *
+     * Assertions:
+     *
+     * Neither the database nor the instance's flag says the instance is set up, so Setup can run again, and does.
+     */
+    RequestContext.clear()
+
+    intercept[IllegalStateException] {
+      testApp.txManager.withTransaction {
+        setUp()
+        throw IllegalStateException("The commit fails")
+      }
+    }
+
+    testApp.service.system.readMetadata.isInitialized shouldBe false
+    testApp.isInitialized shouldBe false
+
+    setUp()
+    testApp.isInitialized shouldBe true
   }
 
   test("The system table holds exactly one row and rejects a second") {

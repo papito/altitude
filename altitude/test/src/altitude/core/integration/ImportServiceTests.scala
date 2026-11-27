@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.TestContext
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
@@ -20,6 +21,7 @@ import org.scalatest.time.Span
 import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters.*
+import scala.util.Random
 
 import altitude.core.Altitude
 import altitude.core.Const
@@ -48,6 +50,7 @@ import altitude.core.models.Stats
 import altitude.core.service.ImportPipelineService
 import altitude.core.service.ImportService
 import altitude.core.util.Query
+import altitude.core.util.SortKey
 
 /** The Import record: an Import and its Import files, their outcomes, the Import's counters and its closing */
 @DoNotDiscover class ImportServiceTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
@@ -157,6 +160,26 @@ import altitude.core.util.Query
     intercept[NotFoundException](imports.open(ImportSource.Upload, destFolderId = theirFolder.id))
     intercept[NotFoundException](imports.open(ImportSource.Upload, destFolderId = Some("no-such-folder")))
     testContext.imports.size shouldBe 2
+  }
+
+  test("An Import's files are listed by path in natural order on both engines") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import with a file under each of `TestContext.NATURAL_NAMES`, in a folder "Trip 9" and in "trip 10", added in a
+     * shuffled order.
+     *
+     * Assertions:
+     *
+     * The Import's files are listed in natural order of their paths on both engines, the order `SortKey.of` sorts them in memory:
+     * the folders by their numbers, and each folder's files in the order of the names.
+     */
+    val paths = for (folder <- List("Trip 9", "trip 10"); name <- TestContext.NATURAL_NAMES) yield s"$folder/$name"
+    val (opened, _) = importOf(Random.shuffle(paths)*)
+
+    testContext.importFiles(opened.persistedId).map(_.relPath) shouldBe paths
+    Random.shuffle(paths).sortBy(SortKey.of) shouldBe paths
   }
 
   test("A file added to an Import is pending, and the Import counts it") {
@@ -373,7 +396,7 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Four Imports opened in turn, alternately closed and left in progress, and an Import of another repository.
+     * Four Imports opened in turn a minute apart, alternately closed and left in progress, and an Import of another repository.
      *
      * Assertions:
      *
@@ -384,7 +407,10 @@ import altitude.core.util.Query
      *
      * The other repository's Import is in no list and in no total.
      */
-    val List(firstClosed, firstOpen, secondClosed, secondOpen) = List.fill(4)(imports.open(ImportSource.Upload)): @unchecked
+    val opened = List.fill(4)(imports.open(ImportSource.Upload))
+    val List(firstClosed, firstOpen, secondClosed, secondOpen) = opened: @unchecked
+    // A minute apart, oldest first: opened in turn, they can share a clock tick (Windows' clock is coarse), and a tie falls to the ID
+    opened.zipWithIndex.foreach((anImport, i) => age(anImport, days = 0, minutes = opened.size - i))
     imports.close(firstClosed.persistedId)
     imports.close(secondClosed.persistedId)
 
@@ -461,8 +487,8 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A second account's upload into Clients/Wedding left with a pending file, a Watch folder scan closed, then a restart, then
-     * the context account's upload in progress. Another repository has an Import.
+     * A second account's upload into Clients/Wedding left with a pending file, a Watch folder scan closed whose account is gone,
+     * then a restart, then the context account's upload in progress. Another repository has an Import.
      *
      * Assertions:
      *
@@ -474,7 +500,7 @@ import altitude.core.util.Query
      *
      * Once its account is deleted, the folder upload names nobody. Asked for two, the history still counts three.
      */
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val uploader = testContext.persistUser()
     val clients = testApp.service.folder.add("Clients")
     val wedding = testApp.service.folder.add("Wedding", parentId = clients.id)
@@ -485,7 +511,9 @@ import altitude.core.util.Query
     imports.settle(done.persistedId, ImportOutcome.Imported)
     switchContextUser(testContext.users.head)
 
-    val scan = RequestContext.account.withValue(None)(imports.open(ImportSource.WatchFolder, name = Some("Phone sync")))
+    val scan = imports.open(ImportSource.WatchFolder, name = Some("Phone sync"))
+    // Every Import is opened by an account; one whose account was deleted names nobody
+    testApp.txManager.withTransaction(update("UPDATE import SET account_id = NULL WHERE id = ?", scan.persistedId))
     val scanned = imports.addFile(scan.persistedId, "IMG_0001.jpg", sizeBytes = 10)
     imports.settle(scanned.persistedId, ImportOutcome.Imported)
     imports.close(scan.persistedId)
@@ -867,7 +895,7 @@ import altitude.core.util.Query
      *
      * The Import names its account until the account is deleted, and none after; it stays, its file pending and counted.
      */
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val admin = testContext.persistAdmin()
     val uploader = testContext.persistUser()
     switchContextUser(uploader)
     val (opened, List(file)) = importOf("photo.jpg"): @unchecked
@@ -1007,7 +1035,7 @@ import altitude.core.util.Query
       val refusals = List(
         intercept[ForbiddenException](imports.requireTakes(sorting.persistedId, "a.jpg")),
         intercept[ForbiddenException](imports.upload(sorting.persistedId, "New folder/a.jpg", staged)),
-        intercept[ForbiddenException](imports.failForLostDestination(sorting.persistedId, "a.jpg", sizeBytes = 10)),
+        intercept[ForbiddenException](imports.failOnArrival(sorting.persistedId, "a.jpg", sizeBytes = 10)),
         intercept[ForbiddenException](imports.addFailedFile(sorting.persistedId, "a.jpg", sizeBytes = 10))
       )
       refusals.map(_.getMessage).toSet shouldBe Set(Const.Msg.Err.FORBIDDEN_PERMISSION.format(Permission.Organize.label))
@@ -1022,6 +1050,50 @@ import altitude.core.util.Query
     }
   }
 
+  test("An upload's file whose path holds a NUL is recorded failed under its path made printable, and its name is shown clean") {
+
+    /**
+     * Setup:
+     *
+     * An account that holds Import. An upload named with a NUL, a line break, a tab and a right-to-left override, and files of it
+     * whose paths hold a NUL: one announced before its body, one staged, one the page could not send.
+     *
+     * Assertions:
+     *
+     * The upload opens, its name stored with each of those characters replaced by U+FFFD. Each file is recorded failed under its
+     * path with the NUL escaped as `\u0000`, the staged one discarded: the two that arrived for the NUL, the unsent one as an
+     * upload that failed. The Import holds those three files alone.
+     *
+     * Edge cases:
+     *
+     * The check before the body takes a path with a NUL, and a path with a tab, a line break or a C1 control is taken as any
+     * other.
+     */
+    val opened = imports.openUpload(name = Some("Trip\u0000\n2026\tday \u202eone"))
+    imports.getById(opened.persistedId).name shouldBe Some("Trip\ufffd\ufffd2026\ufffdday \ufffdone")
+    val id = opened.persistedId
+    val R = Const.Msg.Err.PATH_HOLDS_NUL
+
+    imports.requireTakes(id, "a\u0000.jpg")
+    imports.failOnArrival(id, "a\u0000.jpg", sizeBytes = 10).map(file => (file.outcome, file.reason)) shouldBe
+      Some((ImportOutcome.Failed, Some(R)))
+    val staged = stagedImage()
+    val uploaded = imports.upload(id, "Day 1/b\u0000.jpg", staged)
+    (uploaded.outcome, uploaded.reason) shouldBe (ImportOutcome.Failed, Some(R))
+    Files.exists(staged) shouldBe false
+    imports.addFailedFile(id, "c\u0000.jpg", sizeBytes = 10).outcome shouldBe ImportOutcome.Failed
+    for (path <- List("Day\t1/d.jpg", "Day 1/e\n.jpg", "f\u0085.jpg")) withClue(s"[${path.map(_.toInt)}]: ") {
+      imports.requireTakes(id, path)
+      imports.failOnArrival(id, path, sizeBytes = 10) shouldBe None
+    }
+
+    testContext.importFiles(id).map(file => (file.relPath, file.outcome, file.reason)).toSet shouldBe Set(
+      ("a\\u0000.jpg", ImportOutcome.Failed, Some(R)),
+      ("Day 1/b\\u0000.jpg", ImportOutcome.Failed, Some(R)),
+      ("c\\u0000.jpg", ImportOutcome.Failed, Some("Upload failed"))
+    )
+  }
+
   test("An upload's name and paths are logged with their control characters escaped, so none starts a log line") {
 
     /**
@@ -1032,7 +1104,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * No logged line holds a control character, and every line naming the Import or a path, at every level, holds the escape.
+     * No logged line holds a control character, and every line naming a path, at every level, holds the escape. The Import's name
+     * is logged as stored, the line break replaced.
      */
     val logger = LoggerFactory.getLogger(classOf[ImportService]).asInstanceOf[Logger]
     val capture = ListAppender[ILoggingEvent]()
@@ -1052,13 +1125,8 @@ import altitude.core.util.Query
 
       val lines = capture.list.asScala.map(_.getFormattedMessage).toList
       lines.filter(_.exists(_.isControl)) shouldBe empty
-      List(
-        "Opened Import",
-        "Added Import file",
-        "is failed on arrival",
-        "is failed",
-        "was settled already",
-        "failed before the pipeline").foreach {
+      lines.exists(line => line.contains("Opened Import") && line.contains("Trip\ufffd2026-11-12 WARN")) shouldBe true
+      List("Added Import file", "is failed on arrival", "is failed", "was settled already", "failed before the pipeline").foreach {
         said => withClue(said)(lines.exists(line => line.contains(said) && line.contains("\\u000a")) shouldBe true)
       }
     } finally {
@@ -1329,11 +1397,11 @@ import altitude.core.util.Query
     val stopped = ImportPipelineService(testApp)
     stopped.shutdown()
 
-    imports.failForLostDestination(opened.persistedId, "early.jpg", sizeBytes = 2048) shouldBe None
+    imports.failOnArrival(opened.persistedId, "early.jpg", sizeBytes = 2048) shouldBe None
     testContext.importFiles(opened.persistedId) shouldBe empty
 
     testApp.service.library.deleteFolderById(sorted.persistedId)
-    val announced = imports.failForLostDestination(opened.persistedId, "Beach/sea.jpg", sizeBytes = 2048)
+    val announced = imports.failOnArrival(opened.persistedId, "Beach/sea.jpg", sizeBytes = 2048)
     val staged = stagedImage()
     val uploaded = imports.upload(opened.persistedId, "sand.jpg", staged, stopped)
 
@@ -1351,8 +1419,8 @@ import altitude.core.util.Query
     testApp.service.asset.getDanglingAssets shouldBe empty
     testApp.service.stats.getStats.getStatValue(Stats.SORTED_ASSETS) shouldBe 0
 
-    imports.failForLostDestination(imports.openUpload().persistedId, "photo.jpg", sizeBytes = 10) shouldBe None
-    intercept[ValidationException](imports.failForLostDestination(opened.persistedId, ".hidden.jpg", sizeBytes = 10))
+    imports.failOnArrival(imports.openUpload().persistedId, "photo.jpg", sizeBytes = 10) shouldBe None
+    intercept[ValidationException](imports.failOnArrival(opened.persistedId, ".hidden.jpg", sizeBytes = 10))
     testContext.importFiles(opened.persistedId).size shouldBe 2
   }
 

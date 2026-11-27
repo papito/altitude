@@ -33,10 +33,8 @@ object Db:
         logger.warn(s"A read statement ran past its time limit: ${ex.getMessage}")
         throw QueryTimeoutException(ex.getMessage)
 
-  /** One write query, counted as the raw paths count theirs */
-  def write[R](dialect: Dialect)(f: scalasql.DbApi => R): R =
-    RequestContext.writeQueryCount.value = RequestContext.writeQueryCount.value + 1
-    f(api(dialect))
+  /** One write query */
+  def write[R](dialect: Dialect)(f: scalasql.DbApi => R): R = f(api(dialect))
 
   /** The context a typed query renders in when it is spliced into a hand-written statement */
   def rootContext(dialect: Dialect): Context =

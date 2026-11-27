@@ -5,7 +5,6 @@ import java.time.LocalDateTime
 abstract class BaseModel:
   val id: Option[String]
   val createdAt: Option[LocalDateTime]
-  val updatedAt: Option[LocalDateTime]
 
   // The ID of a stored model; throws for one not saved yet
   def persistedId: String =

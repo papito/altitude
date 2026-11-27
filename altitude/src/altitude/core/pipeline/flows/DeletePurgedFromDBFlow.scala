@@ -23,7 +23,7 @@ object DeletePurgedFromDBFlow:
           debugInfo(s"\tDeleting purged asset from the database ${asset.persistedId}")
 
           // A failure would end the queue's stream; the row stays marked for purging, for the startup job to queue again
-          try app.service.asset.deleteById(asset.persistedId)
+          try app.service.library.deletePurgedAsset(asset.persistedId)
           catch
             case _: NotFoundException =>
               logger.debug(s"Purged asset ${asset.persistedId} is already gone from the database")

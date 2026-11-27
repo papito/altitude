@@ -9,12 +9,12 @@ import altitude.core.Altitude
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.jdbc.BaseDao.newDuplicateExceptionOrRethrow
 import altitude.core.models.BaseModel
 import altitude.core.models.Repository
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
-import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
 object BaseService:
 

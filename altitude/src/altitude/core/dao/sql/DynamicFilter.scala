@@ -9,7 +9,9 @@ import altitude.core.util.Query.QueryParam
 
 /**
  * A `Query`'s string-keyed parameters as one typed predicate. Only `EQ` and `IN` are supported; anything else throws, `negate`
- * included, rather than be silently dropped (which would turn a `NOT_EQUALS` into an `EQUALS`).
+ * included, rather than be silently dropped (which would turn a `NOT_EQUALS` into an `EQUALS`). An `IN` of strings (the IDs of
+ * every caller) binds its set as one parameter (`Columns.isInSet`), so a selection of any size runs on either engine; an `IN` of
+ * other values binds each one.
  */
 object DynamicFilter:
 
@@ -35,7 +37,10 @@ object DynamicFilter:
 
         param.paramType match
           case Query.ParamType.EQ => Columns.equalTo(column, param.values.head, dialect)
-          case Query.ParamType.IN => Columns.isIn(column, param.values, dialect)
+          case Query.ParamType.IN =>
+            if param.values.forall(_.isInstanceOf[String]) then
+              Columns.isInSet(column, param.values.map(_.asInstanceOf[String]), dialect)
+            else Columns.isIn(column, param.values, dialect)
           case other => throw IllegalArgumentException(s"This type of parameter is not supported: $other")
 
       case other => Columns.equalTo(column, other, dialect)

@@ -185,6 +185,37 @@ import altitude.core.util.Util
     }
   }
 
+  test("A creator whose Create Libraries flag is taken away after its login is refused the create with a 403") {
+
+    /**
+     * Setup:
+     *
+     * A User with the Create Libraries flag, logged in; its flag is then cleared in the database, which leaves its login token as
+     * it was, so the route's gate, which reads the token, still lets it through.
+     *
+     * Assertions:
+     *
+     * The create answers 403 naming the flag, as the creator's row reads under its lock, and adds no Library.
+     */
+    val account = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
+    val repoId = testContext.persistRepository().persistedId
+    testContext.grant(account, testContext.repository, Permissions.of(Permission.Import))
+    login()
+    testApp.txManager.withTransaction {
+      testApp.DAO.user
+        .updateByBySql("UPDATE account SET can_create_libraries = ? WHERE id = ?", List(false, account.persistedId)): Unit
+    }
+    val before = allLibraryNames
+
+    withServer(App) {
+      host =>
+        val refused = create(host, repoId, s"Unflagged ${Util.randomStr(6)}")
+        refused.statusCode shouldBe 403
+        refused.text() should include(C.Msg.Err.FORBIDDEN_LIBRARY_CREATOR)
+        allLibraryNames shouldBe before
+    }
+  }
+
   test("A creator already holding as many grants as an account may re-renders the form with the bound, and creates nothing") {
 
     /**

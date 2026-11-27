@@ -105,19 +105,19 @@ import altitude.core.util.Util
         def offered(typed: String): List[String] = options(host, repoId, "folders", Some(typed)).map(_.id)
 
         val all = options(host, repoId, "folders")
-        // The folder tree's order, by name key: case folded, accents kept
+        // The folder tree's order, natural: case folded, an accented letter beside its base letter
         all.map(_.label) shouldBe List(
           "Archive",
           "beachSunset",
+          "Élodie",
           "Trips",
           "Trips › 2023",
           "Trips › 2024",
           "Trips › 2024 › Lisbon",
           "Work",
-          "Work › Lisbon office",
-          "Élodie")
+          "Work › Lisbon office")
         all.map(_.id) shouldBe
-          List(archive, sunset, trips, year2023, year2024, lisbon, work, office, elodie).map(_.persistedId)
+          List(archive, sunset, elodie, trips, year2023, year2024, lisbon, work, office).map(_.persistedId)
         all.map(_.id) should not contain testContext.repository.rootFolderId
         all.find(_.id == lisbon.persistedId).get.text should include("Lisbon")
 

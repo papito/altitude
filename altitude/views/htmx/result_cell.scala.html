@@ -57,7 +57,7 @@
         </div>
         }
 
-        @defining(Util.humanReadableDateTime(asset.createdAt)) { createdAt =>
+        @defining(Util.humanReadableDateTime(asset.createdAt.map(Util.inServerZone))) { createdAt =>
         <div class="importedAt" title="@{ createdAt }">
             <span>Imported:</span> @{ createdAt }
         </div>

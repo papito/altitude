@@ -4,13 +4,17 @@ import java.sql.SQLException
 
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
+import altitude.core.DuplicateException
 import altitude.core.FieldConst
+import altitude.core.ForbiddenException
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
+import altitude.core.Validators
 import altitude.core.dao.RepositoryDao
 import altitude.core.dao.RepositoryGrantDao
 import altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.jdbc.BaseDao.newDuplicateExceptionOrRethrow
 import altitude.core.models.AccountType
 import altitude.core.models.AuditEventType
 import altitude.core.models.Folder
@@ -19,8 +23,8 @@ import altitude.core.models.Repository
 import altitude.core.models.Stats
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
-import altitude.core.util.NaturalOrder
-import altitude.core.util.Util.newDuplicateExceptionOrRethrow
+import altitude.core.util.SortKey
+import altitude.core.util.Util
 
 object RepositoryService:
 
@@ -70,7 +74,9 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
         catch
           case e: SQLException =>
             logger.debug(s"Adding repository [${repoToSave.name}] failed: ${e.getMessage}")
-            throw newDuplicateExceptionOrRethrow(e, Some(C.Msg.Err.LIBRARY_NAME_TAKEN.format(repoToSave.name)))
+            if BaseDao.violates(e, RepositoryDao.NAME_KEY_INDEX) then
+              throw DuplicateException(Some(C.Msg.Err.LIBRARY_NAME_TAKEN.format(repoToSave.name)))
+            throw newDuplicateExceptionOrRethrow(e)
 
       // The folder and stats writes below act in the context Library
       switchContextToRepository(repo)
@@ -103,6 +109,10 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
    * Grants a new Library: their new-Library Permissions to accounts whose switch is on, and every Permission to a non-Admin
    * creator (by stored type). An account at its grant bound is skipped with a WARN, so another account's bound never fails the
    * add; the creator's does. Each grant is audited as the creator's act (no actor at setup).
+   *
+   * The creator is read as its lock finds it, as `UserService.create` reads its creator: one deactivated or deleted since the
+   * request's login token was made is refused (`FORBIDDEN_INACTIVE`), and so is one that is no Admin and has lost the Create
+   * Libraries flag (`FORBIDDEN_LIBRARY_CREATOR`), failing the add.
    */
   private def grantNewLibrary(repo: Repository, creatorId: Option[String]): Unit =
     // Rows are locked in the order of every account write, so none deadlocks with this: the active Admins first (an Admin's
@@ -110,7 +120,14 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
     // grantees, so without the Admins first it could hold a grantee's row that an Admin's edit of that grantee waits on.
     app.DAO.user.lockActiveAdmins()
     val locked = app.DAO.user.lockGrantees(creatorId)
-    val actor = creatorId.flatMap(id => locked.find(_.id.contains(id)))
+    val actor = creatorId.map {
+      id =>
+        val account = locked.find(_.id.contains(id)).filter(_.isActive)
+        account.getOrElse(throw ForbiddenException(C.Msg.Err.FORBIDDEN_INACTIVE))
+    }
+    actor.filterNot(account => account.accountType == AccountType.Admin || account.canCreateLibraries).foreach {
+      _ => throw ForbiddenException(C.Msg.Err.FORBIDDEN_LIBRARY_CREATOR)
+    }
     val creator = actor.filter(_.accountType != AccountType.Admin)
 
     def grant(account: User, permissions: Permissions): Unit =
@@ -144,7 +161,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       .asReadOnly {
         if account.accountType == AccountType.Admin then dao.getAll else dao.getGrantedTo(account.persistedId)
       }
-      .sortBy(_.name)(using NaturalOrder)
+      .sortBy(repository => (SortKey.of(repository.name), repository.persistedId))
 
   /**
    * Gives the account `permissions` in the Library, replacing what it held there. The account's type is read under its row lock,
@@ -238,9 +255,17 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
     logger.trace(s"Switching the repository context to [${repo.persistedId}]")
     RequestContext.repository.value = Some(repo)
 
+  /**
+   * Sets the Library a request's path names as the repository context, or none for an unknown one. An ID that is no UUID is
+   * refused before any read: PostgreSQL compares a text parameter with a `CHAR(36)` ID as `bpchar`, ignoring trailing spaces, so
+   * an ID padded with them would find its Library, and each such spelling would cost a read and a place in the cache.
+   */
   def setContextFromRequest(repoId: Option[String]): Unit =
-    if repoId.isDefined then
-      try
-        val repo: Repository = getById(repoId.get)
-        RequestContext.repository.value = Some(repo)
-      catch case _: NotFoundException => logger.debug(s"Repository [${repoId.get}] from the request not found; no context set")
+    repoId.foreach {
+      id =>
+        if !Validators.isUuid(id) then
+          logger.debug(s"Repository [${Util.printable(id, 64)}] from the request is no ID; no context set")
+        else
+          try RequestContext.repository.value = Some(getById(id))
+          catch case _: NotFoundException => logger.debug(s"Repository [$id] from the request not found; no context set")
+    }

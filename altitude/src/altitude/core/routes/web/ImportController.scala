@@ -85,7 +85,7 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
 
       // A request that says its length, as a browser's does, is failed for a lost destination before its body is staged
       val length = request.exchange.getRequestContentLength
-      val lost = if length > 0 then imports.failForLostDestination(importId, relPath, length) else None
+      val lost = if length > 0 then imports.failOnArrival(importId, relPath, length) else None
 
       fileResponse(lost.getOrElse(imports.upload(importId, relPath, App.altitude.service.staging.stage(request.data))))
     }

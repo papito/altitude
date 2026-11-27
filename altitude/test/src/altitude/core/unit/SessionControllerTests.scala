@@ -158,16 +158,24 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A login with a carriage return and a line feed before text that reads like a log line, one with a NUL, and one of 100
-     * characters.
+     * A login with a carriage return and a line feed before text that reads like a log line, one with a NUL, one with the line
+     * and paragraph separators, one with a right-to-left override and an isolate, and one of 100 characters.
      *
      * Assertions:
      *
-     * `Util.printable` escapes each control character as `\uXXXX`, so the text cannot start a log line or carry a NUL, and cuts
-     * the result to the given length.
+     * `Util.printable` escapes each control character as `\uXXXX`, the two separators and the invisible format characters
+     * included, so the text cannot start a log line, carry a NUL or reorder what follows it, and cuts the result to the given
+     * length.
+     *
+     * Edge cases:
+     *
+     * An emoji, outside the BMP, and its zero width joiner are kept.
      */
     Util.printable("jane\r\nINFO forged", 64) shouldBe "jane\\u000d\\u000aINFO forged"
     Util.printable("jane\u0000", 64) shouldBe "jane\\u0000"
+    Util.printable("jane\u2028INFO\u2029forged", 64) shouldBe "jane\\u2028INFO\\u2029forged"
+    Util.printable("jane\u202egpj.exe\u2066x\u2069", 64) shouldBe "jane\\u202egpj.exe\\u2066x\\u2069"
+    Util.printable("\ud83d\udc69\u200d\ud83d\udcbb", 64) shouldBe "\ud83d\udc69\u200d\ud83d\udcbb"
     Util.printable("x" * 100, 64) shouldBe "x" * 64
   }
 }

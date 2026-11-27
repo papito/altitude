@@ -121,7 +121,9 @@ disk: on a network share SQLite's database can be corrupted, and a start that re
 warning.
 
 A Watch folder can be any folder of the machine outside the Data directory. The user who starts the jar must be able to
-read it, and to write to it when the Watch folder deletes the files it has imported. Date Imported's day is a day in
+read it, and to write to it when the Watch folder deletes the files it has imported. On Linux, start the jar under a UTF-8
+locale (`LANG=C.UTF-8`, or another UTF-8 one): under the C or POSIX locale Java reads file names as ASCII, so a Watch
+folder takes names that differ only in other characters for one file and skips all but one, and the start logs a warning. Date Imported's day is a day in
 the machine's own time zone, which each start logs.
 
 A newer jar is not promised to open an older version's database: see Data safety in

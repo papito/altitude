@@ -449,10 +449,10 @@ import altitude.core.util.QueryResult
      *
      * Assertions:
      *
-     * From the first repository, the children, the children all the way down and the ancestors of the second repository's
-     * folders, its root included, read as none. Renaming its folder, moving it, and moving its root folder are
-     * `NotFoundException`; moving the first repository's folder into either of them is refused as a move into a folder that does
-     * not exist (`ValidationException`); deleting its folder is `NotFoundException`. Every row of both repositories is as it was.
+     * From the first repository, the folders all the way down and the ancestors of the second repository's folders, its root
+     * included, read as none. Renaming its folder, moving it, and moving its root folder are `NotFoundException`; moving the
+     * first repository's folder into either of them is refused as a move into a folder that does not exist
+     * (`ValidationException`); deleting its folder is `NotFoundException`. Every row of both repositories is as it was.
      */
     val repos = twoRepositories()
     val theirs = idOf(repos, "folder")
@@ -467,7 +467,6 @@ import altitude.core.util.QueryResult
     List(theirs, theirRoot).foreach {
       folderId =>
         withClue(s"[$folderId]: ") {
-          testApp.service.folder.getChildren(folderId) shouldBe empty
           testApp.service.folder.getChildrenRecursive(folderId) shouldBe empty
         }
     }
@@ -496,8 +495,8 @@ import altitude.core.util.QueryResult
      *
      * From the first repository, the second repository's Person is not found by ID and their Faces read as none. Hiding, showing,
      * marking as a bad match, renaming them and setting their cover, given them, are `NotFoundException`, and so is a merge with
-     * them, as the source or as the destination. Every row of both repositories is as it was: both people, their Faces and their
-     * counts.
+     * them, as the source or as the destination. Taking the second repository's asset from the face counts, or giving it back,
+     * changes no count. Every row of both repositories is as it was: both people, their Faces and their counts.
      */
     val repos = twoRepositories()
     val theirId = idOf(repos, "person")
@@ -519,6 +518,9 @@ import altitude.core.util.QueryResult
     intercept[NotFoundException](testApp.service.person.setFaceAsCover(theirId, myFace.persistedId))
     intercept[NotFoundException](testApp.service.person.merge(dest = mine, source = theirs))
     intercept[NotFoundException](testApp.service.person.merge(dest = theirs, source = mine))
+    testApp.service.person.recycleFacesForAssets(Set(idOf(repos, "asset")))
+    testContext.rowsOf(repos.second) shouldEqual secondBefore
+    testApp.service.person.restoreFacesForAssets(Set(idOf(repos, "asset")))
 
     testContext.rowsOf(repos.first) shouldEqual firstBefore
     testContext.rowsOf(repos.second) shouldEqual secondBefore

@@ -1,15 +1,10 @@
 package altitude.core.dao.sqlite
 
 import com.typesafe.config.Config
-import java.sql.PreparedStatement
-import java.sql.Types
 
-import altitude.core.FieldConst
 import altitude.core.RequestContext
-import altitude.core.dao.jdbc.BaseDao
-import altitude.core.models.Asset
 import altitude.core.models.Face
-import altitude.core.models.Person
+import altitude.core.models.FaceMatch
 
 class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with SqliteOverrides:
 
@@ -17,61 +12,25 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     // The bracketed list `vector_as_f32(?)` parses, e.g. '[0.3, 1.0, ...]', bound as a String
     values.mkString("[", ", ", "]")
 
-  override def add(face: Face, asset: Asset, person: Person): Face =
-    val id = BaseDao.genId
-
-    val sql =
-      s"""
-        INSERT INTO face (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Face.X1}, ${FieldConst.Face.Y1}, ${FieldConst.Face.WIDTH}, ${FieldConst.Face.HEIGHT},
-                          ${FieldConst.Face.ASSET_ID}, ${FieldConst.Face.PERSON_ID}, ${FieldConst.Face.DETECTION_SCORE},
-                          ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM}, ${FieldConst.Face.FRAME_TIME_MS},
-                          ${FieldConst.Face.QUALITY}, ${FieldConst.Face.IS_ENROLLED}, ${FieldConst.Face.SHARPNESS})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, vector_as_f32(?), ?, ?, ?, ?, ?)
-    """
-
-    val conn = RequestContext.getConn
-
-    val preparedStatement: PreparedStatement = conn.prepareStatement(sql)
-    preparedStatement.setString(1, id)
-    preparedStatement.setString(2, RequestContext.getRepository.persistedId)
-    preparedStatement.setInt(3, face.x1)
-    preparedStatement.setInt(4, face.y1)
-    preparedStatement.setInt(5, face.width)
-    preparedStatement.setInt(6, face.height)
-    preparedStatement.setString(7, asset.persistedId)
-    preparedStatement.setString(8, person.persistedId)
-    preparedStatement.setDouble(9, face.detectionScore)
-    preparedStatement.setString(10, toVectorAsF32Arg(face.features))
-    preparedStatement.setString(11, face.checksum)
-    face.frameTimeMs match
-      case Some(frameTimeMs) => preparedStatement.setLong(12, frameTimeMs)
-      case None => preparedStatement.setNull(12, Types.BIGINT)
-    preparedStatement.setDouble(13, face.quality)
-    preparedStatement.setBoolean(14, face.isEnrolled)
-    face.sharpness match
-      case Some(sharpness) => preparedStatement.setDouble(15, sharpness)
-      case None => preparedStatement.setNull(15, Types.DOUBLE)
-
-    logger.trace(s"Inserting face [$id] for person [${person.persistedId}] in asset [${asset.persistedId}]")
-    preparedStatement.execute()
-
-    face.copy(id = Some(id), assetId = asset.id, personId = person.id)
-
-  def searchClosestFaceMatches(features: Array[Float], matchCount: Int, distanceThreshold: Double): List[Face] =
-    nearest(features, Nil, matchCount, distanceThreshold)
+  def searchClosestFaceMatches(features: Array[Float], matchCount: Int, distanceThreshold: Double): List[FaceMatch] =
+    nearest(features, Nil, matchCount, distanceThreshold).map(faceMatchOf)
 
   override def searchNearestFacesOfOthers(
       features: Array[Float],
       excludedPersonId: String,
       limit: Int,
       distanceThreshold: Double): List[Face] =
-    nearest(features, List(excludedPersonId), limit, distanceThreshold)
+    nearest(features, List(excludedPersonId), limit, distanceThreshold).map(makeModel)
 
   /**
    * The nearest Faces to a vector by an exact scan of every Face, filtered afterwards. `excludedPersonId` holds at most one
    * Person, whose Faces are left out.
    */
-  private def nearest(features: Array[Float], excludedPersonId: List[String], limit: Int, distanceThreshold: Double): List[Face] =
+  private def nearest(
+      features: Array[Float],
+      excludedPersonId: List[String],
+      limit: Int,
+      distanceThreshold: Double): List[Map[String, AnyRef]] =
     val personFilter = if excludedPersonId.nonEmpty then "AND face.person_id <> ?" else ""
 
     val sql =
@@ -79,7 +38,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
       SELECT
         v.rowid,
         row_number() OVER (ORDER BY v.distance) AS rank_number,
-        v.distance,
+        v.distance AS ${altitude.core.dao.jdbc.FaceDao.DISTANCE},
         face.*
       FROM vector_full_scan('face', 'features', vector_as_f32(?)) AS v
       JOIN face ON face.rowid = v.rowid
@@ -87,6 +46,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
       WHERE face.repository_id = ?
         AND face.is_enrolled = TRUE
         AND person.is_bad_match = FALSE
+        AND person.is_deleted = FALSE
         $personFilter
         AND v.distance < ?
       ORDER BY v.distance
@@ -96,4 +56,4 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     val binds = List(toVectorAsF32Arg(features), RequestContext.getRepository.persistedId) ++ excludedPersonId ++
       List(distanceThreshold, limit)
 
-    manyBySqlQuery(sql, binds).map(makeModel)
+    manyBySqlQuery(sql, binds)

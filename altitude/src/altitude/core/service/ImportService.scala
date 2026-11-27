@@ -77,7 +77,9 @@ class ImportService(val app: Altitude):
 
   /**
    * Opens an Import delivered by the context account, in progress with no files. `name` is the uploaded folder's or the Watch
-   * folder's name; `destFolderId` is none for Triage; `expectedFiles` is how many files are coming, when the opener knows.
+   * folder's name, stored with its control characters replaced (`Util.withControlCharactersReplaced`: PostgreSQL refuses a NUL,
+   * and the history shows the name); `destFolderId` is none for Triage; `expectedFiles` is how many files are coming, when the
+   * opener knows.
    */
   def open(
       source: ImportSource,
@@ -85,7 +87,7 @@ class ImportService(val app: Altitude):
       destFolderId: Option[String] = None,
       watchFolderId: Option[String] = None,
       expectedFiles: Option[Int] = None): Import =
-    // Checked here: SQLite reports the column's CHECK as it reports a duplicate
+    // Checked here: the column's CHECK would refuse it as a raw constraint failure on either engine, a 500 (**Schema guards**)
     if expectedFiles.exists(_ < 0) then throw ValidationException(Const.Msg.Err.EXPECTED_FILES_INVALID)
 
     txManager.withTransaction {
@@ -99,14 +101,15 @@ class ImportService(val app: Altitude):
       val opened = importDao.add(
         Import(
           source = source,
-          name = name,
+          name = name.map(Util.withControlCharactersReplaced),
           watchFolderId = watchFolderId,
-          accountId = RequestContext.account.value.map(_.persistedId),
+          // Every Import is an account's: an upload's, or a Watch folder's owner's
+          accountId = Some(RequestContext.getAccount.persistedId),
           destFolderId = destFolderId,
           expectedFiles = expectedFiles
         ))
       logger.info(
-        s"Opened Import [${opened.persistedId}]: ${source.dbValue}${ImportService.logged(name)}. Repo: ${RequestContext.getRepository.persistedId}")
+        s"Opened Import [${opened.persistedId}]: ${source.dbValue}${ImportService.logged(opened.name)}. Repo: ${RequestContext.getRepository.persistedId}")
       changed(opened.persistedId)
       opened
     }
@@ -183,19 +186,27 @@ class ImportService(val app: Altitude):
     }
 
   /**
-   * Fails a file sent to an upload whose destination is in the Trash, by its path and size alone, so the rest of such an upload
-   * is recorded without staging or queuing anything. None for a live destination or none; [[upload]] then fails the file the same
-   * way should the destination be lost by then.
+   * Fails a file by its path and size alone when it cannot be imported whatever its content: its path holds a NUL, or the
+   * upload's destination is in the Trash, so the rest of such an upload is recorded without staging or queuing anything. None
+   * otherwise; [[upload]] then fails the file the same way should the destination be lost by then.
    */
-  def failForLostDestination(importId: String, relPath: String, sizeBytes: Long): Option[ImportFile] =
+  def failOnArrival(importId: String, relPath: String, sizeBytes: Long): Option[ImportFile] =
     RelPath.segments(relPath): Unit
     txManager.withTransaction {
-      lostDestination(ownUploadTakingFiles(importId)).map(addFailed(importId, relPath, sizeBytes, _))
+      failedOnArrival(ownUploadTakingFiles(importId), relPath).map(addFailed(importId, relPath, sizeBytes, _))
     }
 
-  /** Adds a file to the Import and fails it with the reason, in the caller's transaction */
+  // Why the Import's file under the path fails before its content is read, if it does
+  private def failedOnArrival(anImport: Import, relPath: String): Option[String] =
+    Option.when(relPath.contains('\u0000'))(Const.Msg.Err.PATH_HOLDS_NUL).orElse(lostDestination(anImport))
+
+  /**
+   * Adds a file to the Import and fails it with the reason, in the caller's transaction. A path holding a NUL, which PostgreSQL
+   * cannot store, is recorded with its control characters escaped (`Util.printable`), so the history lists the file.
+   */
   private def addFailed(importId: String, relPath: String, sizeBytes: Long, reason: String): ImportFile =
-    val file = addFile(importId, relPath, sizeBytes)
+    val recorded = if relPath.contains('\u0000') then Util.printable(relPath, Int.MaxValue) else relPath
+    val file = addFile(importId, recorded, sizeBytes)
     settle(file.persistedId, ImportOutcome.Failed, reason = Some(reason))
     logger.info(
       s"Import file [${file.persistedId}] \"${ImportService.logged(relPath)}\" of Import [$importId] is failed on arrival: $reason")
@@ -222,7 +233,7 @@ class ImportService(val app: Altitude):
         val size = Files.size(staged)
         if size == 0 then throw ValidationException(Const.Msg.Err.EMPTY_FILE)
         val file = txManager.withTransaction {
-          lostDestination(ownUploadTakingFiles(importId)) match
+          failedOnArrival(ownUploadTakingFiles(importId), relPath) match
             case Some(reason) => addFailed(importId, relPath, size, reason)
             case None => addFile(importId, relPath, size)
         }
@@ -421,7 +432,7 @@ class ImportService(val app: Altitude):
         anImport =>
           ImportEntry(
             anImport,
-            openedAt = anImport.createdAt.map(importDao.instantOf),
+            openedAt = anImport.createdAt.map(Util.instantOf),
             deliveredBy = anImport.accountId.flatMap(names.get),
             destination = anImport.destFolderId.map(destinations),
             isInterrupted = interrupted.contains(anImport.persistedId)

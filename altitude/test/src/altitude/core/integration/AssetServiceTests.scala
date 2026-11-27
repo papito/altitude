@@ -10,6 +10,7 @@ import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.ImageQuality
 import altitude.core.models.PerceptualHash
+import altitude.core.models.Repository
 import altitude.core.util.Query
 
 @DoNotDiscover class AssetServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
@@ -34,6 +35,31 @@ import altitude.core.util.Query
     val queried = testApp.service.asset.query(new Query()).records.map(asset => asset.persistedId -> asset.durationMs).toMap
     queried(video.persistedId) shouldBe Some(123456789L)
     queried(image.persistedId) shouldBe None
+  }
+
+  test("Completing an asset that is not in the Library is a not-found error, not a silent no-op") {
+
+    /**
+     * Setup:
+     *
+     * An asset never stored, and an asset of another Library, each completed as an import completes them.
+     *
+     * Assertions:
+     *
+     * Each completion fails with `NotFoundException`, as a write by an unknown ID does, rather than answer the asset as
+     * completed; the other Library's asset stays incomplete.
+     */
+    val repository: Repository = testContext.repository
+    val foreignRepository: Repository = testContext.persistRepository()
+    switchContextRepo(foreignRepository)
+    val foreign: Asset = testApp.service.asset.add(testContext.makeAsset(repository = Some(foreignRepository)))
+    switchContextRepo(repository)
+
+    intercept[NotFoundException](
+      testApp.service.asset.markAsCompleted(testContext.makeAsset(repository = Some(repository)).copy(id = Some(BaseDao.genId))))
+    intercept[NotFoundException](testApp.service.asset.markAsCompleted(foreign))
+    switchContextRepo(foreignRepository)
+    testApp.service.asset.getById(foreign.persistedId).isPipelineProcessed shouldBe false
   }
 
   test(
@@ -148,5 +174,43 @@ import altitude.core.util.Query
 
     val recycledOnly = testApp.service.asset.queryAll(new Query(params = Map(FieldConst.Asset.IS_RECYCLED -> true))).records
     recycledOnly.map(_.persistedId) shouldBe List(recycled.persistedId)
+  }
+
+  test("The assets in a set of folders are found by ID, recycled ones included, in the context repository alone") {
+
+    /**
+     * Setup:
+     *
+     * A folder with a child folder, an asset in each, the child's recycled; an asset in another folder and one in the root. A
+     * second repository has a folder of the same name holding an asset.
+     *
+     * Assertions:
+     *
+     * The IDs in the folder, its child and the second repository's folder are those of the two assets in the folder and its
+     * child.
+     *
+     * Edge cases:
+     *
+     * The recycled asset is among them, the second repository's is not, and no folders find no assets.
+     */
+    val repository: Repository = testContext.repository
+    val trips = testApp.service.folder.add("Trips")
+    val rome = testApp.service.folder.add("Rome", Some(trips.persistedId))
+    val other = testApp.service.folder.add("Other")
+    val inTrips = testContext.insertAsset(testContext.makeAsset(folder = Some(trips)))
+    val inRome = testContext.insertAsset(testContext.makeAsset(folder = Some(rome)))
+    testContext.insertAsset(testContext.makeAsset(folder = Some(other)))
+    testContext.insertAsset()
+    testApp.service.library.recycleAssets(Set(inRome.persistedId))
+
+    val secondRepository = testContext.persistRepository()
+    switchContextRepo(secondRepository)
+    val foreignTrips = testApp.service.folder.add("Trips")
+    testContext.insertAsset(testContext.makeAsset(repository = Some(secondRepository), folder = Some(foreignTrips)))
+    switchContextRepo(repository)
+
+    testApp.service.asset.getIdsInFolders(Set(trips.persistedId, rome.persistedId, foreignTrips.persistedId)) shouldBe
+      Set(inTrips.persistedId, inRome.persistedId)
+    testApp.service.asset.getIdsInFolders(Set.empty) shouldBe Set.empty
   }
 }

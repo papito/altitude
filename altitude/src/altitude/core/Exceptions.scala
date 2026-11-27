@@ -23,6 +23,9 @@ case class UnsupportedMediaTypeException(asset: Asset)
 
 case class IllegalOperationException(msg: String) extends IllegalArgumentException(msg)
 
+/** Setup of an instance that a Setup has already set up (`SystemService.initializeSystem`) */
+case class AlreadyInitializedException() extends Exception(Const.Msg.Err.ALREADY_INITIALIZED)
+
 /** A read statement ran past the engine's time limit for reads and was cancelled */
 case class QueryTimeoutException(msg: String) extends Exception(msg)
 

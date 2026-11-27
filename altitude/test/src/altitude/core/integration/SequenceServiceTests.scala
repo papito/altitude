@@ -2,6 +2,10 @@ package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
 import altitude.test.TestVideos
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.util.UUID
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.tagobjects.Slow
@@ -134,6 +138,143 @@ import altitude.core.util.SequenceRule
 
     stored(first).isTriaged shouldBe false
     List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
+  }
+
+  /** A capture time `seconds` after `TAKEN`, as `TestContext.setAssetDates` takes it */
+  private def capturedAt(seconds: Int): Option[LocalDateTime] = Some(LocalDateTime.of(2024, 6, 1, 12, 0, 0).plusSeconds(seconds))
+
+  test("An assignment and a recycle of its candidates at once both commit") {
+
+    /**
+     * Setup:
+     *
+     * Three frames of a burst imported unpaired under strict thresholds; of the first two, the one of the higher ID is captured
+     * first and its row written first. A third transaction holds the other; then a recycle of both starts and waits on it; then,
+     * at the defaults, the third frame is assigned and waits; then the frame is let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither fails. Both frames are recycled, and all three share a Sequence, as frames recycled from triage keep one.
+     *
+     * Edge cases:
+     *
+     * Candidates locked in the order the statement reaches them would hold the higher ID while waiting on the lower, which the
+     * recycle, locking in ID order, holds while it waits on the higher: a deadlock PostgreSQL ends by failing one of them.
+     */
+    assume(testApp.dataSourceType == altitude.core.Const.DbEngineName.POSTGRES)
+    val (frames, next) = withStrictThresholds {
+      (
+        List(importFrame(frame(0)), importFrame(frame(1), taken = Some(takenAt(1)))),
+        importFrame(frame(2), taken = Some(takenAt(2))))
+    }
+    val List(lower, higher) = frames.sortBy(_.persistedId)
+    val now = OffsetDateTime.now(ZoneOffset.UTC)
+    testContext.setAssetDates(higher.persistedId, capturedAt(0), now)
+    testContext.setAssetDates(lower.persistedId, capturedAt(1), now)
+
+    whileHolding(query("SELECT id FROM asset WHERE id = ? FOR UPDATE", lower.persistedId): Unit)(
+      () => testApp.service.library.recycleAssets(frames.map(_.persistedId).toSet),
+      () => testApp.service.sequence.assign(stored(next)): Unit
+    )
+
+    frames.map(stored(_).isRecycled) shouldBe List(true, true)
+    val sequenceId = stored(next).sequenceId
+    sequenceId should not be None
+    frames.map(stored(_).sequenceId) shouldBe List(sequenceId, sequenceId)
+  }
+
+  test("A merge and a recycle of a member outside the frame's window at once both commit") {
+
+    /**
+     * Setup:
+     *
+     * Two frames of a burst, each in a Sequence of its own: the one of the lower ID with two more assets, the other with one
+     * more, of a lower ID than its own and captured nowhere near. A third transaction holds that member; then a recycle of it and
+     * its frame starts and waits on it; then a third frame of the burst is assigned, matching both frames, and waits; then the
+     * member is let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither fails. The member and its frame are recycled, and every asset of both Sequences is in the larger one, with the
+     * third frame.
+     *
+     * Edge cases:
+     *
+     * A merge that locks its candidates and then repoints the members of the smaller Sequence locks the member outside the window
+     * last, after its frame of a higher ID, which the recycle waits on holding the member: a deadlock.
+     */
+    assume(testApp.dataSourceType == altitude.core.Const.DbEngineName.POSTGRES)
+    val (frames, next) = withStrictThresholds {
+      (
+        List(importFrame(frame(0)), importFrame(frame(1), taken = Some(takenAt(1)))),
+        importFrame(frame(2), taken = Some(takenAt(2))))
+    }
+    val List(inLarger, inSmaller) = frames.sortBy(_.persistedId)
+    // Of a lower ID than its frame, so the recycle locks it first
+    val outside = Iterator
+      .continually(testContext.persistAsset(isTriaged = true))
+      .take(40)
+      .find(_.persistedId < inSmaller.persistedId)
+      .getOrElse(fail("No asset of a lower ID than the frame's in 40"))
+    val (larger, smaller) = (UUID.randomUUID.toString, UUID.randomUUID.toString)
+    testContext.setAssetSequence(inLarger :: List.fill(2)(testContext.persistAsset(isTriaged = true)), larger)
+    testContext.setAssetSequence(List(inSmaller, outside), smaller)
+
+    whileHolding(query("SELECT id FROM asset WHERE id = ? FOR UPDATE", outside.persistedId): Unit)(
+      () => testApp.service.library.recycleAssets(Set(outside.persistedId, inSmaller.persistedId)),
+      () => testApp.service.sequence.assign(stored(next)): Unit
+    )
+
+    List(outside, inSmaller).map(stored(_).isRecycled) shouldBe List(true, true)
+    stored(next).sequenceId shouldBe Some(larger)
+    testApp.txManager.asReadOnly(query("SELECT id FROM asset WHERE sequence_id = ?", smaller)) shouldBe empty
+    testApp.txManager.asReadOnly(query("SELECT id FROM asset WHERE sequence_id = ?", larger)).size shouldBe 6
+  }
+
+  test("A completing frame and a rename of its importer at once both commit") {
+
+    /**
+     * Setup:
+     *
+     * A User who imported two frames of a burst, unpaired under strict thresholds; the one of the higher ID is put back to before
+     * its completion. A third transaction holds the repository's turn among Sequence writers; then the frame's completion starts,
+     * at the defaults, and waits on it; then an Admin's rename of the User, which rewrites the importer records of both frames,
+     * starts and waits; then the turn is let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither fails. Both frames are in one Sequence, and both importer records name the User as renamed.
+     *
+     * Edge cases:
+     *
+     * A completion that locks its own row before its importer's account holds that row while the rename, holding the account and
+     * the other frame, waits on it; the completion then waits on the other frame to stamp it: a deadlock PostgreSQL ends by
+     * failing one of them.
+     */
+    assume(testApp.dataSourceType == altitude.core.Const.DbEngineName.POSTGRES)
+    val users = testApp.service.user
+    val admin = testContext.persistAdmin()
+    val grants = Map(testContext.repository.persistedId -> altitude.core.models.Permissions.all)
+    val importer = users.create(admin.persistedId, testContext.makeUser(), "password 1", grants)
+    val actor = RequestContext.account.value.get
+    switchContextUser(importer)
+    val frames = withStrictThresholds(List(importFrame(frame(0)), importFrame(frame(1), taken = Some(takenAt(1)))))
+    switchContextUser(actor)
+    val List(earlier, completing) = frames.sortBy(_.persistedId)
+    testApp.txManager.withTransaction(
+      update("UPDATE asset SET is_pipeline_processed = FALSE WHERE id = ?", completing.persistedId))
+    val renamed = importer.copy(name = s"Renamed ${altitude.core.util.Util.randomStr(6)}")
+    val opened = users.openForEdit(importer.persistedId).state
+
+    whileHolding(testApp.DAO.asset.lockSequences())(
+      () => testApp.service.library.completeImport(stored(completing)): Unit,
+      () => users.update(admin.persistedId, renamed, grants, opened): Unit
+    )
+
+    val sequenceId = stored(completing).sequenceId
+    sequenceId should not be None
+    stored(earlier).sequenceId shouldBe sequenceId
+    frames.map(stored(_).originalOwner.name) shouldBe List(renamed.name, renamed.name)
   }
 
   test("The candidates are read through the triage capture-day index", Slow) {

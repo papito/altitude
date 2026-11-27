@@ -1,12 +1,41 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil.withJvmTimeZone
+import java.lang.reflect.InvocationHandler
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
+import java.lang.reflect.Proxy
+import java.sql.Connection
+import java.sql.PreparedStatement
+import java.sql.SQLException
+import java.time.OffsetDateTime
+import java.util.concurrent.atomic.AtomicInteger
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatest.tagobjects.Slow
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
 
 import altitude.core.Altitude
+import altitude.core.Const
+import altitude.core.FieldConst
+import altitude.core.NotFoundException
 import altitude.core.RequestContext
+import altitude.core.dao.AssetDao
+import altitude.core.dao.RepositoryDao
+import altitude.core.dao.UserDao
+import altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.jdbc.BaseDao.UniqueIndex
+import altitude.core.dao.postgres.PostgresOverrides
+import altitude.core.dao.sqlite.SqliteOverrides
+import altitude.core.models.EditRecipe
+import altitude.core.models.Folder
+import altitude.core.models.Person
+import altitude.core.service.PersonService
+import altitude.core.util.Query
+import altitude.core.util.Util
 
-/** The hand-written SQL reads of `BaseDao` that every DAO shares, on both engines */
+/** The reads and writes of `BaseDao` that every DAO shares, on both engines */
 @DoNotDiscover class BaseDaoTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("The streaming read keeps what the mapper returns and counts every row it scanned") {
@@ -49,5 +78,535 @@ import altitude.core.RequestContext
     }
     none.kept shouldBe empty
     none.scanned shouldBe 5
+  }
+
+  test("A read by more IDs than a statement takes parameters returns the assets among them", Slow) {
+
+    /**
+     * Setup:
+     *
+     * Two assets of the context repository; the first is looked up among 70,000 unknown IDs, more parameters than a PostgreSQL
+     * statement takes.
+     *
+     * Assertions:
+     *
+     * The read by IDs returns the first asset alone, and so does a query by the same IDs.
+     */
+    val asset = testContext.insertAsset()
+    testContext.insertAsset()
+    val ids = amongManyUnknownIds(Set(asset.persistedId))
+
+    testApp.txManager.asReadOnly(testApp.DAO.asset.getByIds(ids)).map(_.persistedId) shouldBe List(asset.persistedId)
+
+    val byQuery = new Query().add(FieldConst.ID -> Query.IN(ids.toSet[Any]))
+    testApp.service.asset.queryAll(byQuery).records.map(_.persistedId) shouldBe List(asset.persistedId)
+  }
+
+  test("A write by more IDs than a statement takes parameters changes the rows among them", Slow) {
+
+    /**
+     * Setup:
+     *
+     * Two assets of the context repository; the first is renamed by a query of its ID among 70,000 unknown IDs, more parameters
+     * than a PostgreSQL statement takes.
+     *
+     * Assertions:
+     *
+     * The write changes one row, the first asset's name is the new one, and the second asset keeps its name.
+     */
+    val asset = testContext.insertAsset()
+    val other = testContext.insertAsset()
+    val byIds = new Query().add(FieldConst.ID -> Query.IN(amongManyUnknownIds(Set(asset.persistedId)).toSet[Any]))
+
+    testApp.txManager.withTransaction {
+      testApp.DAO.asset.updateByQuery(byIds, Map(FieldConst.Asset.FILENAME -> "renamed.jpg"))
+    } shouldBe 1
+
+    testApp.service.asset.getById(asset.persistedId).fileName shouldBe "renamed.jpg"
+    testApp.service.asset.getById(other.persistedId).fileName shouldBe other.fileName
+  }
+
+  test("A NULL bound in a hand-written statement fits a column of any type") {
+
+    /**
+     * Setup:
+     *
+     * A table of a wall-clock timestamp, an instant, an integer, a big integer, a vector, a boolean, a text and a double column,
+     * a row inserted with every value NULL, then updated to NULL again, through the hand-written write.
+     *
+     * Assertions:
+     *
+     * Both statements run and the row reads back with every column NULL: a NULL is bound with no type, which the database takes
+     * from the column, so a hand-written statement needs no type for it and no round trip to ask for one.
+     */
+    val isPostgres = testApp.dataSourceType == Const.DbEngineName.POSTGRES
+    val (vectorType, vectorPlaceholder) = if (isPostgres) ("vector(3)", "?::vector") else ("BLOB", "?")
+    val columns = List(
+      "at_time" -> "TIMESTAMP",
+      "at_instant" -> (if (isPostgres) "TIMESTAMPTZ" else "TEXT"),
+      "n" -> "INTEGER",
+      "big" -> "BIGINT",
+      "embedding" -> vectorType,
+      "flag" -> "BOOLEAN",
+      "label" -> "TEXT",
+      "score" -> "DOUBLE PRECISION"
+    )
+    val placeholders = columns.map((name, _) => if (name == "embedding") vectorPlaceholder else "?")
+    val nulls = List.fill(columns.size)(null)
+    val dao = testApp.DAO.user
+
+    val rows = testApp.txManager.withTransaction {
+      update(s"CREATE TEMP TABLE bound_nulls (${columns.map((name, kind) => s"$name $kind").mkString(", ")})")
+      try {
+        dao.updateByBySql(s"INSERT INTO bound_nulls VALUES (${placeholders.mkString(", ")})", nulls) shouldBe 1
+        val assignments = columns.zip(placeholders).map { case ((name, _), placeholder) => s"$name = $placeholder" }
+        dao.updateByBySql(s"UPDATE bound_nulls SET ${assignments.mkString(", ")}", nulls) shouldBe 1
+        dao.manyBySqlQuery("SELECT * FROM bound_nulls")
+      } finally update("DROP TABLE bound_nulls")
+    }
+
+    rows should have size 1
+    rows.head.values.toList shouldBe nulls
+  }
+
+  /**
+   * Runs `f` in a write transaction over a temporary table of two text columns, which goes in that transaction: a temporary table
+   * is its connection's, and a drop in a transaction of its own may run on another pooled connection, leaving it and its rows to
+   * the next borrower. PostgreSQL drops it at the commit (`ON COMMIT DROP`) and undoes it at a rollback, where a failed statement
+   * leaves the transaction able to run nothing else; SQLite drops it after `f`, its transaction still open after a failed
+   * statement, and undoes the creation at a rollback.
+   */
+  private def withPairTable[T](f: => T): T =
+    testApp.txManager.withTransaction {
+      if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
+        update("CREATE TEMP TABLE pairs (a TEXT, b TEXT) ON COMMIT DROP")
+        f
+      } else {
+        update("CREATE TEMP TABLE pairs (a TEXT, b TEXT)")
+        try f
+        finally update("DROP TABLE pairs")
+      }
+    }
+
+  test("A hand-written statement given fewer or more values than its placeholders fails, as does a batch row of another length") {
+
+    /**
+     * Setup:
+     *
+     * An insert of two placeholders run with one value and with three, and a batch of it whose second row holds one value.
+     *
+     * Assertions:
+     *
+     * Each fails with an `SQLException` naming the statement, rather than binding NULL for a missing value, failing on an index
+     * out of bounds, or keeping the first row's second value for the second row.
+     */
+    val dao = testApp.DAO.user
+    val sql = "INSERT INTO pairs VALUES (?, ?)"
+
+    for (values <- List(List("x"), List("x", "y", "z"))) withClue(s"$values: ") {
+      val error = intercept[SQLException](withPairTable(dao.updateByBySql(sql, values)))
+      error.getMessage should include(sql)
+    }
+    val error = intercept[SQLException](withPairTable(dao.batchBySql(sql, List(List("a", "b"), List("c")))))
+    error.getMessage should include(sql)
+  }
+
+  test("A failed batch names its statement, never the values bound to it") {
+
+    /**
+     * Setup:
+     *
+     * A batch of two inserts of a text and a divisor, the second dividing by zero, on PostgreSQL, whose driver reports a failed
+     * batch with every entry's values inlined into the statement.
+     *
+     * Assertions:
+     *
+     * The batch fails with the server's error and the statement, and neither its message nor that of any exception it chains
+     * holds a bound text.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val sql = "INSERT INTO pairs VALUES (?, (1 / ?)::text)"
+
+    val error = intercept[SQLException] {
+      withPairTable(testApp.DAO.user.batchBySql(sql, List(List("secret-one", 1), List("secret-two", 0))))
+    }
+
+    error.getMessage should include("division by zero")
+    error.getMessage should include(sql)
+    Iterator
+      .iterate[Throwable](error)(e => Option(e.getCause).orNull)
+      .takeWhile(_ != null)
+      .foreach(e => (Option(e.getMessage).getOrElse("") should not).include("secret-"))
+  }
+
+  test("A hand-written statement binds its values, NULL included, without asking the driver for their types") {
+
+    /**
+     * Setup:
+     *
+     * The transaction's connection wrapped so it counts the calls of `getParameterMetaData` on the statements it prepares, and a
+     * hand-written read, write and batch, each binding a NULL, on PostgreSQL, where the call costs a describe round trip.
+     *
+     * Assertions:
+     *
+     * None of them asks for the parameter metadata.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val asked = new AtomicInteger()
+
+    def forward(target: AnyRef, method: Method, args: Array[AnyRef]): AnyRef =
+      try method.invoke(target, Option(args).getOrElse(Array.empty[AnyRef])*)
+      catch { case e: InvocationTargetException => throw e.getCause }
+
+    def proxy[A](interface: Class[A])(handle: (Method, Array[AnyRef]) => AnyRef): A =
+      Proxy
+        .newProxyInstance(
+          getClass.getClassLoader,
+          Array(interface),
+          new InvocationHandler {
+            override def invoke(self: AnyRef, method: Method, args: Array[AnyRef]): AnyRef = handle(method, args)
+          }
+        )
+        .asInstanceOf[A]
+
+    def counting(conn: Connection): Connection = proxy(classOf[Connection]) {
+      (method, args) =>
+        forward(conn, method, args) match {
+          case statement: PreparedStatement =>
+            proxy(classOf[PreparedStatement]) {
+              (method, args) =>
+                if (method.getName == "getParameterMetaData") asked.incrementAndGet()
+                forward(statement, method, args)
+            }
+          case other => other
+        }
+    }
+
+    val dao = testApp.DAO.user
+    withPairTable {
+      RequestContext.conn.withValue(Some(counting(RequestContext.getConn))) {
+        dao.updateByBySql("INSERT INTO pairs VALUES (?, ?)", List("a", null)) shouldBe 1
+        dao.batchBySql("INSERT INTO pairs VALUES (?, ?)", List(List("b", null), List(null, "c"))) shouldBe Array(1, 1)
+        dao.manyBySqlQuery("SELECT a FROM pairs WHERE a = ? AND b IS NOT DISTINCT FROM ?", List("a", null)) should have size 1
+      }
+    }
+
+    asked.get shouldBe 0
+  }
+
+  test("A read by query that finds nothing names the query's fields, never their values") {
+
+    /**
+     * Setup:
+     *
+     * A read of one account by an email address no account has.
+     *
+     * Assertions:
+     *
+     * The `NotFoundException` names the table and the field read by, and not the address.
+     */
+    val email = s"nobody.${Util.randomStr(8)}@example.com"
+    val error = intercept[NotFoundException] {
+      testApp.txManager.asReadOnly(testApp.DAO.user.getOneByQuery(new Query().add(FieldConst.User.EMAIL -> email)))
+    }
+
+    error.getMessage should include("account")
+    error.getMessage should include(FieldConst.User.EMAIL)
+    (error.getMessage should not).include(email)
+  }
+
+  test("A unique violation is told apart by the index it breaks, as the failed statement or the driver reports it") {
+
+    /**
+     * Setup:
+     *
+     * A live asset, and a second asset of the same content added to the same repository, which `asset_01` refuses.
+     *
+     * Assertions:
+     *
+     * The failure is a violation of `asset_01` on its columns, whether read from the failed statement's exception or from the
+     * driver's own, its cause. It is no violation of another index, nor of `asset_01` named with its columns in another order or
+     * one of them alone.
+     */
+    val first = testContext.makeAsset()
+    testApp.txManager.withTransaction(testApp.DAO.asset.add(first))
+    val failed = intercept[SQLException] {
+      testApp.txManager.withTransaction(testApp.DAO.asset.add(testContext.makeAsset().copy(checksum = first.checksum)))
+    }
+    val driver = failed.getCause.asInstanceOf[SQLException]
+
+    for (e <- List(failed, driver)) {
+      BaseDao.violates(e, AssetDao.LIVE_CHECKSUM_INDEX) shouldBe true
+      BaseDao.isUniqueViolation(e) shouldBe true
+      BaseDao.violates(e, UserDao.USERNAME_KEY_INDEX) shouldBe false
+      BaseDao.violates(e, UniqueIndex("asset_01x", "asset.checksum, asset.repository_id")) shouldBe false
+      BaseDao.violates(e, UniqueIndex("asset_0", "asset.checksum")) shouldBe false
+    }
+  }
+
+  test("A unique index on an expression is told apart by its name, which SQLite reports in place of its columns") {
+
+    /**
+     * Setup:
+     *
+     * SQLite's failure of a unique index on an expression, as sqlite-jdbc reports it (`index '<name>'` in place of the columns),
+     * alone and as the cause of a failed statement's exception.
+     *
+     * Assertions:
+     *
+     * Each is a unique violation of the index of that name, whatever columns the index is said to have, and of no other.
+     *
+     * Edge cases:
+     *
+     * Built rather than caused: no schema of the suite has such an index, and a table created for the test would change the
+     * schema under every pooled connection of the suite's shared database.
+     */
+    val driver = new SQLiteException(
+      "[SQLITE_CONSTRAINT_UNIQUE] A UNIQUE constraint failed (UNIQUE constraint failed: index 'scratch_01')",
+      SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE)
+    val failed = BaseDao.statementFailed("INSERT INTO scratch (value) VALUES (?)", driver)
+
+    for (e <- List(driver, failed)) {
+      BaseDao.violates(e, UniqueIndex("scratch_01", "not used")) shouldBe true
+      BaseDao.isUniqueViolation(e) shouldBe true
+      BaseDao.violates(e, UniqueIndex("scratch_02", "scratch.value")) shouldBe false
+    }
+  }
+
+  test("A failure that breaks no unique index is no unique violation") {
+
+    /**
+     * Setup:
+     *
+     * An asset added with no checksum, which the column's NOT NULL refuses.
+     *
+     * Assertions:
+     *
+     * The failure is no unique violation, so no write reports it as a duplicate.
+     *
+     * Edge cases:
+     *
+     * SQLite gives every constraint failure the error code of a unique one (19); only its extended code tells them apart.
+     */
+    val failed = intercept[SQLException] {
+      testApp.txManager.withTransaction(testApp.DAO.asset.add(testContext.makeAsset().copy(checksum = null)))
+    }
+
+    BaseDao.isUniqueViolation(failed) shouldBe false
+    BaseDao.newDuplicateExceptionOrRethrow(failed) shouldBe failed
+  }
+
+  test("Each unique index a violation is told apart by is a unique index of the schema, on the columns it names") {
+
+    /**
+     * Setup:
+     *
+     * Every `UniqueIndex` the DAOs define.
+     *
+     * Assertions:
+     *
+     * Each names a unique index of the schema, on its table's columns in the order it lists them, as the engine's catalog reads
+     * them: `pragma_index_info` on SQLite, `pg_index` on PostgreSQL.
+     */
+    val defined =
+      List(UserDao.EMAIL_KEY_INDEX, UserDao.USERNAME_KEY_INDEX, AssetDao.LIVE_CHECKSUM_INDEX, RepositoryDao.NAME_KEY_INDEX)
+    val isPostgres = testApp.dataSourceType == Const.DbEngineName.POSTGRES
+
+    for (index <- defined) {
+      withClue(s"[${index.name}]: ") {
+        val (columns, isUnique) = testApp.txManager.asReadOnly {
+          if (isPostgres) {
+            val rows = query(
+              """SELECT t.relname || '.' || a.attname AS column_name, i.indisunique AS is_unique
+                |  FROM pg_class ic
+                |  JOIN pg_index i ON i.indexrelid = ic.oid
+                |  JOIN pg_class t ON t.oid = i.indrelid
+                | CROSS JOIN LATERAL unnest(i.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord)
+                |  JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+                | WHERE ic.relname = ? AND ic.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = current_schema())
+                | ORDER BY k.ord""".stripMargin,
+              index.name
+            )
+            (rows.map(_("column_name").toString), rows.forall(_("is_unique") == java.lang.Boolean.TRUE) && rows.nonEmpty)
+          } else {
+            val table = query("SELECT tbl_name FROM sqlite_master WHERE type = 'index' AND name = ?", index.name)
+              .map(_("tbl_name").toString)
+            val columns = query("SELECT name FROM pragma_index_info(?) ORDER BY seqno", index.name)
+              .flatMap(row => table.map(t => s"$t.${row("name")}"))
+            val unique =
+              table.flatMap(t => query("SELECT \"unique\" AS is_unique FROM pragma_index_list(?) WHERE name = ?", t, index.name))
+            (columns, unique.map(_("is_unique").toString) == List("1"))
+          }
+        }
+
+        columns.mkString(", ") shouldBe index.columns
+        isUnique shouldBe true
+      }
+    }
+  }
+
+  test("An instant in the autumn overlap hour reads back as itself, whatever the JVM's zone") {
+
+    /**
+     * Setup:
+     *
+     * The JVM's default zone set to America/New_York, and an account whose last login is stamped at each of the two 01:30s of 1
+     * November 2026 there, when the clocks go back: 05:30 and 06:30 UTC, each with microseconds.
+     *
+     * Assertions:
+     *
+     * Read back by the typed read (`getById`) and by a hand-written one (`shareLock`), the model holds the instant's UTC wall
+     * clock, and `instantOf` gives the stamped instant exactly, the later 01:30 included.
+     */
+    val dao = testApp.DAO.user
+    val isPostgres = testApp.dataSourceType == Const.DbEngineName.POSTGRES
+
+    withJvmTimeZone("America/New_York") {
+      val account = testContext.persistUser()
+
+      for (stamped <- List("2026-11-01T05:30:00.123456Z", "2026-11-01T06:30:00.654321Z").map(OffsetDateTime.parse)) {
+        withClue(s"$stamped: ") {
+          val stored: Any =
+            if (isPostgres) stamped else stamped.toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER)
+          val (typed, handWritten) = testApp.txManager.withTransaction {
+            update("UPDATE account SET last_login_at = ? WHERE id = ?", stored, account.persistedId)
+            (dao.getById(account.persistedId), dao.shareLock(account.persistedId).value)
+          }
+
+          for (read <- List(typed, handWritten)) {
+            read.lastLoginAt shouldBe Some(stamped.toLocalDateTime)
+            read.lastLoginAt.map(Util.instantOf) shouldBe Some(stamped.toInstant)
+          }
+        }
+      }
+    }
+  }
+
+  test("The stamps of an account write and of an Edit save hold microseconds at most, as PostgreSQL keeps them") {
+
+    /**
+     * Setup:
+     *
+     * The context account, whose login is recorded and which is set active, and an asset whose Edit is saved twice: inserted,
+     * then updated.
+     *
+     * Assertions:
+     *
+     * Each stamp, read as stored, has at most six digits of a second, so SQLite stores the moment PostgreSQL would.
+     */
+    val account = testContext.user
+    val asset = testContext.persistAsset()
+    testApp.txManager.withTransaction {
+      testApp.DAO.user.recordLogin(account.persistedId)
+      testApp.DAO.user.setActive(account.persistedId, active = true)
+    }
+    testApp.service.assetEdit.save(asset.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    testApp.service.assetEdit.save(asset.persistedId, 1, EditRecipe.Identity.copy(exposure = 2), testContext.user)
+
+    val stamps = testApp.txManager
+      .asReadOnly {
+        query("SELECT last_login_at, updated_at FROM account WHERE id = ?", account.persistedId) ++
+          query("SELECT created_at, updated_at FROM asset_edit WHERE asset_id = ?", asset.persistedId)
+      }
+      .flatMap(_.values)
+
+    stamps should have size 4
+    stamps.foreach(stamp => withClue(s"$stamp: ")("\\.\\d{7}".r.findFirstIn(stamp.toString) shouldBe None))
+  }
+
+  test("A flag a hand-written statement binds is a number, which a partial index's predicate on the flag matches") {
+
+    /**
+     * Setup:
+     *
+     * On SQLite, the plan of a read of a live person by name key that binds both flags of `person_01`'s predicate as a
+     * hand-written statement binds them (`nativeBool`), and a person matching it.
+     *
+     * Assertions:
+     *
+     * SQLite plans the read through `person_01`: its query planner takes a partial index for a bound value only when the value
+     * equals the predicate's, and a flag bound as the text "0" never equals `FALSE`. The read finds the person, and one binding
+     * the other value of a flag does not.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.SQLITE)
+    val (dao, flags) = (testApp.DAO.person, exposedFolderDao)
+    val person = testApp.service.person.addPerson(Person(name = Some("Flagged")))
+    val sql = "SELECT id FROM person WHERE repository_id = ? AND name_key = ? AND is_deleted = ? AND is_bad_match = ?"
+    def values(isDeleted: Boolean) =
+      List(testContext.repository.persistedId, PersonService.nameKey("Flagged"), flags.flag(isDeleted), flags.flag(false))
+
+    val plan = testApp.txManager.asReadOnly(dao.manyBySqlQuery(s"EXPLAIN QUERY PLAN $sql", values(isDeleted = false)))
+    plan.map(_("detail").toString).mkString("\n") should include("person_01")
+    testApp.txManager.asReadOnly(dao.manyBySqlQuery(sql, values(isDeleted = false))).map(_("id").toString.trim) shouldBe
+      List(person.persistedId)
+    testApp.txManager.asReadOnly(dao.manyBySqlQuery(sql, values(isDeleted = true))) shouldBe empty
+  }
+
+  test("A stored flag that is neither of SQLite's two numbers fails its read rather than read as false") {
+
+    /**
+     * Setup:
+     *
+     * On SQLite, a folder whose recycled flag is set to 2, then to the text "yes", neither of which a write of the app stores.
+     *
+     * Assertions:
+     *
+     * Each read of the folder fails, naming the value, instead of reading the folder as not recycled.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.SQLITE)
+    val folder = testApp.service.folder.add("Flagged")
+
+    try
+      for (value <- List[Any](2, "yes")) withClue(s"$value: ") {
+        testApp.txManager.withTransaction(update("UPDATE folder SET is_recycled = ? WHERE id = ?", value, folder.persistedId))
+        intercept[IllegalArgumentException](testApp.service.folder.getById(folder.persistedId)).getMessage should include(
+          value.toString)
+      }
+    finally testApp.txManager.withTransaction(update("UPDATE folder SET is_recycled = 0 WHERE id = ?", folder.persistedId))
+  }
+
+  test("A flag a hand-written read gets back as NULL, or as no flag of its engine, fails the read rather than read as false") {
+
+    /**
+     * Setup:
+     *
+     * A folder's row as a hand-written read gets it, its recycled flag replaced by a NULL, and by a value of another type than
+     * the engine's flag (a text), as a schema or statement mistake would hand it over.
+     *
+     * Assertions:
+     *
+     * Each fails its read into a folder, naming the value, on both engines: on PostgreSQL a NULL would otherwise read as false.
+     * The row as read reads back as the folder, not recycled.
+     */
+    val folder = testApp.service.folder.add("Flagged")
+    val dao = exposedFolderDao
+    val row = testApp.txManager
+      .asReadOnly(testApp.DAO.folder.manyBySqlQuery("SELECT * FROM folder WHERE id = ?", List(folder.persistedId)))
+      .head
+
+    dao.folderOf(row).isRecycled shouldBe false
+    for (value <- List[AnyRef](null, "yes")) withClue(s"$value: ") {
+      intercept[IllegalArgumentException](dao.folderOf(row + (FieldConst.Folder.IS_RECYCLED -> value))).getMessage should include(
+        String.valueOf(value))
+    }
+  }
+
+  /** The folder DAO of the engine with its flag binding and its hand-written read's model at hand */
+  private def exposedFolderDao: ExposedFolderDao = testApp.dataSourceType match {
+    case Const.DbEngineName.POSTGRES =>
+      new altitude.core.dao.jdbc.FolderDao(testApp.config) with PostgresOverrides with ExposedFolderDao {
+        def flag(value: Boolean): Any = nativeBool(value)
+        def folderOf(row: Map[String, AnyRef]): Folder = makeModel(row)
+      }
+    case _ =>
+      new altitude.core.dao.jdbc.FolderDao(testApp.config) with SqliteOverrides with ExposedFolderDao {
+        def flag(value: Boolean): Any = nativeBool(value)
+        def folderOf(row: Map[String, AnyRef]): Folder = makeModel(row)
+      }
+  }
+
+  private trait ExposedFolderDao {
+    def flag(value: Boolean): Any
+    def folderOf(row: Map[String, AnyRef]): Folder
   }
 }

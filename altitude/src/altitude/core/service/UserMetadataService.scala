@@ -10,6 +10,7 @@ import altitude.core.models._
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.NameKey
 import altitude.core.util.Query
+import altitude.core.util.SortKey
 
 class UserMetadataService(val app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -316,9 +317,9 @@ class UserMetadataService(val app: Altitude):
       val withoutValues =
         allFields.values.filterNot(field => metadata.contains(field.persistedId)).map(_ -> Set.empty[UserMetadataValue])
 
-      // By name key, the order of names, and by ID among fields of one key, so the order is total
+      // In natural order of their names (`SortKey`), as every list of names is, and by ID among fields of one name
       val sorted = (withValues ++ withoutValues)
-        .sortBy((field, _) => (field.nameKey, field.persistedId))
+        .sortBy((field, _) => (SortKey.of(field.name), field.persistedId))
         .map((field, mdVals) => toJsonEntry(field, mdVals))
 
       ujson.Arr(sorted*)

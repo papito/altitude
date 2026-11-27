@@ -70,7 +70,7 @@ class SearchQuery(
     val bbox: Option[BoundingBox] = None,
     // The assets one of the Triage summary's counts shows
     val subset: Option[TriageSubset] = None,
-    rpp: Int = 0,
+    val rpp: Int = 0,
     val searchSort: List[SearchSort] = List(),
     val grouping: Option[SearchGrouping] = None,
     val cursor: Option[SearchCursor] = None,
@@ -87,9 +87,9 @@ class SearchQuery(
     // Set by `SearchService` for a sorted or grouped Describe search; the cursor's fingerprint takes the description and the
     // part instead (`SearchCursor.describeFingerprint`)
     val described: Option[Described] = None)
-  extends Query(params = metadataFilters, rpp = rpp):
+  extends Query(params = metadataFilters):
 
-  if sort.nonEmpty then throw IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
+  if rpp < 0 then throw IllegalArgumentException(s"Invalid results per page value: $rpp")
 
   if searchSort.size > 1 then throw IllegalArgumentException("Only one sort currently supported")
 
@@ -117,7 +117,7 @@ class SearchQuery(
   def isTotalCounted: Boolean = cursor.isEmpty && countsTotal
 
   val isGrouped: Boolean = grouping.isDefined
-  override val isSorted: Boolean = searchSort.nonEmpty
+  val isSorted: Boolean = searchSort.nonEmpty
 
   override def toString: String =
     s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, grouping=$grouping, cursor=${cursor.isDefined}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, peopleMatch=$peopleMatch, albumIds=$albumIds, locationIds=$locationIds, takenRange=$takenRange, importedRange=$importedRange, subset=$subset, bbox=$bbox, rpp=$rpp)"

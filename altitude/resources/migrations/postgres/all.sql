@@ -1,10 +1,15 @@
-DROP SCHEMA IF EXISTS public CASCADE;
-CREATE SCHEMA public;
+-- Runs in one transaction with the version stamp, and only on a database with no table in the schema it creates into, an
+-- extension's aside (MigrationService.requireEmpty): it drops nothing.
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Every ID column (id and every *_id) is CHAR(36) COLLATE "C": byte-wise comparison is about twice as fast as the default
 -- collation, and orders IDs as SQLite does.
+--
+-- Every other text column a list orders by or an index holds is COLLATE "C" too, so it orders by its bytes, as SQLite's binary
+-- collation does, and no locale upgrade can change an index's order under it: a name key (NameKey.of, folded in Scala) or a
+-- path. A list of names orders by a *_sort column instead, BYTEA: the name's SortKey, ICU's collation key, whose bytes give the
+-- order a person reads the names in (the natural order), the same on both engines and in memory.
 --
 -- A repository's table holds repository_id NOT NULL, and a reference between its rows is a foreign key over
 -- (repository_id, <ref>_id), so the database refuses a reference into another repository. Each referenced table has
@@ -12,8 +17,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- are single columns: a person's cover, an Import file's asset and an Import's Watch folder.
 
 CREATE TABLE _core (
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
 CREATE TABLE system (
@@ -24,11 +28,12 @@ CREATE TABLE system (
   signing_key CHAR(44)
 );
 
-INSERT INTO system (version, is_initialized) VALUES (1, False);
+-- Version 0 until the migration stamps the current one (Altitude.schemaVersion) in the script's transaction
+INSERT INTO system (version, is_initialized) VALUES (0, False);
 
 -- The Settings an Admin tunes, seeded with their defaults; the registry is models/Settings.scala
 CREATE TABLE setting (
-  name TEXT NOT NULL PRIMARY KEY,
+  name TEXT COLLATE "C" NOT NULL PRIMARY KEY,
   value TEXT NOT NULL,
   default_value TEXT NOT NULL
 );
@@ -76,9 +81,9 @@ INSERT INTO setting (name, value, default_value) VALUES
 CREATE TABLE account (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   email TEXT NOT NULL,
-  email_key TEXT NOT NULL,
+  email_key TEXT COLLATE "C" NOT NULL,
   username TEXT NOT NULL,
-  username_key TEXT NOT NULL,
+  username_key TEXT COLLATE "C" NOT NULL,
   name TEXT NOT NULL,
   account_type TEXT NOT NULL
     CHECK (account_type IN ('Admin', 'User', 'Guest')),
@@ -93,21 +98,26 @@ CREATE TABLE account (
   -- The account that created this one; NULL for the setup Admin, and once the creator is deleted
   created_by_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE SET NULL,
   last_login_at TIMESTAMP WITH TIME ZONE,
-  last_active_repo_id CHAR(36) COLLATE "C"
+  last_active_repo_id CHAR(36) COLLATE "C",
+  -- The last account change (an Admin's edit, a deactivation or reactivation, a password change); a login and the last active
+  -- Library are none
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL
 ) INHERITS (_core);
 
 -- One account per email address and per username, in any case or Unicode form; a login compares the key column
 CREATE UNIQUE INDEX account_01 ON account (email_key);
 CREATE UNIQUE INDEX account_02 ON account (username_key);
+-- The accounts an account created, whose creator its delete clears
+CREATE INDEX account_03 ON account (created_by_account_id) WHERE created_by_account_id IS NOT NULL;
 
 CREATE TABLE repository (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   name TEXT NOT NULL,
-  name_key TEXT NOT NULL,
+  name_key TEXT COLLATE "C" NOT NULL,
   description TEXT,
   root_folder_id CHAR(36) COLLATE "C" NOT NULL,
   file_store_type VARCHAR NOT NULL,
-  file_store_config jsonb
+  file_store_config jsonb NOT NULL
 ) INHERITS (_core);
 
 -- A Library's name is unique instance-wide under its name key (Repository.nameKey, folded in Scala as account's keys are)
@@ -142,7 +152,8 @@ CREATE INDEX audit_event_01 ON audit_event (created_at);
 
 CREATE TABLE stats (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
-  dimension VARCHAR(60) NOT NULL,
+  -- In code point order, as StatsService writes the rows and StatDao.reconcile locks them
+  dimension VARCHAR(60) COLLATE "C" NOT NULL,
   dim_val BIGINT NOT NULL DEFAULT 0 CHECK (dim_val >= 0)
 );
 
@@ -152,7 +163,7 @@ CREATE TABLE folder (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
-  name_key TEXT NOT NULL,
+  name_key TEXT COLLATE "C" NOT NULL,
   -- The root folder is its own parent, which its insert satisfies: the key is checked once the row is in. No delete action: a
   -- folder is recycled, never deleted on its own.
   parent_id CHAR(36) COLLATE "C" NOT NULL,
@@ -184,14 +195,16 @@ CREATE TABLE asset (
   mime_type VARCHAR(64) NOT NULL,
   width INT NOT NULL DEFAULT 0,
   height INT NOT NULL DEFAULT 0,
-  -- area size of the image in pixels (width * height)
-  area_size INT NOT NULL,
+  -- area size of the image in pixels (width * height), past 2^31 for an image over 46,341 × 46,341
+  area_size BIGINT NOT NULL,
   user_metadata jsonb,
   public_metadata jsonb,
   extracted_metadata jsonb,
   -- NULL for an asset in no folder: a triaged one
   folder_id CHAR(36) COLLATE "C",
   filename TEXT NOT NULL,
+  -- SortKey.of(filename), which the file name sort orders by: natural order (SortKey), case and accents aside
+  filename_sort BYTEA NOT NULL,
   size_bytes BIGINT NOT NULL,
   is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -271,7 +284,8 @@ CREATE INDEX asset_sequence ON asset (sequence_id) WHERE sequence_id IS NOT NULL
 -- An account's assets in every Library, for the account key's check on delete
 CREATE INDEX asset_owner ON asset (owner_user_id);
 -- The assets an account imported, in every Library, by importer record ID: rewriting the records when the account changes
-CREATE INDEX asset_importer ON asset ((original_owner->>'id'));
+-- Under COLLATE "C" as every text key an index holds; BaseDao.jsonText spells the same expression
+CREATE INDEX asset_importer ON asset (((original_owner->>'id') COLLATE "C"));
 -- The still images nearest a description, for a Describe search: SigLIP 2 embeddings at half precision, which halves the index;
 -- PostgresSearchDialect.rankedByIndex writes the same cast. An asset with no embedding is not in it.
 CREATE INDEX asset_describe ON asset USING hnsw ((siglip2_embedding::halfvec(768)) halfvec_cosine_ops);
@@ -295,6 +309,8 @@ CREATE TABLE asset_edit (
   width INT NOT NULL,
   height INT NOT NULL,
   updated_by_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE SET NULL,
+  -- When the Edit was last saved
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
   FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
 ) INHERITS (_core);
 
@@ -310,7 +326,9 @@ CREATE TABLE person (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   -- An unnamed person's is "Unknown <n>", n drawn from person_label
   name TEXT NOT NULL,
-  name_for_sort TEXT NOT NULL,
+  name_key TEXT COLLATE "C" NOT NULL,
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
+  name_sort BYTEA NOT NULL,
   -- One of the person's own Faces, which the code checks; its key (person_cover_face, after the face table) refuses a non-Face.
   -- NULL for a person with no Face.
   cover_face_id CHAR(36) COLLATE "C",
@@ -326,15 +344,15 @@ CREATE TABLE person (
 
 -- The partial person indexes cover the live people, which every person query reads; a merged-away person keeps its name and
 -- cover face, which another person may take.
--- person_01: name_for_sort is a named person's name key (PersonService.nameKey, folded in Scala) or "unknown 0042", so a live
--- name is unique under that fold: case in any script, canonical and compatibility forms
-CREATE UNIQUE INDEX person_01 ON person (repository_id, name_for_sort)
+-- person_01: name_key is the person's name key (PersonService.nameKey, folded in Scala), an unnamed person's "unknown 42", so a
+-- live name is unique under that fold: case in any script, canonical and compatibility forms
+CREATE UNIQUE INDEX person_01 ON person (repository_id, name_key)
     WHERE is_deleted = FALSE AND is_bad_match = FALSE;
 
 CREATE UNIQUE INDEX person_02 ON person (cover_face_id)
     WHERE is_deleted = FALSE;
 
-CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
+CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named)
     WHERE is_deleted = FALSE;
 -- Every person whose cover is a Face, a merged-away one included, for the cover's key when the Face is deleted
 CREATE INDEX person_04 ON person (cover_face_id);
@@ -384,7 +402,7 @@ CREATE TABLE metadata_field (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
-  name_key TEXT NOT NULL,
+  name_key TEXT COLLATE "C" NOT NULL,
   field_type VARCHAR(255) NOT NULL,
   UNIQUE (id, repository_id)
 ) INHERITS (_core);
@@ -395,7 +413,9 @@ CREATE TABLE album (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
-  name_key TEXT NOT NULL,
+  name_key TEXT COLLATE "C" NOT NULL,
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
+  name_sort BYTEA NOT NULL,
   UNIQUE (id, repository_id)
 ) INHERITS (_core);
 
@@ -422,7 +442,9 @@ CREATE TABLE location (
   category_id CHAR(36) COLLATE "C",
   kind VARCHAR(16) NOT NULL,
   name VARCHAR(255) NOT NULL,
-  name_key TEXT NOT NULL,
+  name_key TEXT COLLATE "C" NOT NULL,
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
+  name_sort BYTEA NOT NULL,
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
   CHECK (kind IN ('category', 'location')),
@@ -452,9 +474,9 @@ CREATE INDEX location_asset_02 ON location_asset (asset_id, location_id);
 
 CREATE TABLE metadata_parameter (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
-  asset_id CHAR(36) COLLATE "C",
-  field_id CHAR(36) COLLATE "C",
-  field_value_kw TEXT NULL,
+  asset_id CHAR(36) COLLATE "C" NOT NULL,
+  field_id CHAR(36) COLLATE "C" NOT NULL,
+  field_value_kw TEXT COLLATE "C" NULL,
   field_value_num DECIMAL,
   field_value_bool BOOLEAN,
   field_value_dt TIMESTAMP WITH TIME ZONE,
@@ -487,8 +509,10 @@ CREATE TABLE watch_folder (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   name TEXT NOT NULL,
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
+  name_sort BYTEA NOT NULL,
   -- The absolute path as entered. Unique in the instance; the code also refuses an overlap by real path, in any Library
-  path TEXT NOT NULL UNIQUE,
+  path TEXT COLLATE "C" NOT NULL UNIQUE,
   -- The folder its files go into, the directory's tree mirrored under it; NULL = Triage
   dest_folder_id CHAR(36) COLLATE "C",
   -- Whether a file is deleted from the directory once it is imported, or is a duplicate of an asset of the Library
@@ -502,6 +526,8 @@ CREATE TABLE watch_folder (
   status_reason TEXT,
   -- When its directory was last walked; NULL until the first scan that finds it available
   last_scan_at TIMESTAMP WITH TIME ZONE,
+  -- When an edit, a pause or a resume, or a change of owner last wrote it; what a scan finds (its reason, its time) leaves it
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
   UNIQUE (id, repository_id),
   -- No delete action: a folder is recycled, never deleted on its own
   FOREIGN KEY (repository_id, dest_folder_id) REFERENCES folder (repository_id, id)
@@ -509,6 +535,8 @@ CREATE TABLE watch_folder (
 
 -- A Library's Watch folders: its list, and the cascade from a deleted Library
 CREATE INDEX watch_folder_01 ON watch_folder (repository_id);
+-- An Admin's Watch folders in every Library: pausing them, passing them on when the Admin is deleted, and the key's check
+CREATE INDEX watch_folder_02 ON watch_folder (account_id);
 
 -- A Watch folder's memory of a file, by its path: what the last scan saw and what became of it. A file is read once a scan
 -- finds the size and modified time a scan saw at least 5 seconds before, and not again while they stay.
@@ -517,7 +545,7 @@ CREATE TABLE watch_folder_file (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   watch_folder_id CHAR(36) COLLATE "C" NOT NULL,
   -- The file's path under the watched directory, its names separated by "/"
-  rel_path TEXT NOT NULL,
+  rel_path TEXT COLLATE "C" NOT NULL,
   size_bytes BIGINT NOT NULL,
   -- The file's modified time in milliseconds since the epoch: compared for equality, never shown
   modified_at BIGINT NOT NULL,
@@ -574,6 +602,8 @@ CREATE INDEX import_02 ON import (watch_folder_id) WHERE watch_folder_id IS NOT 
 -- A Library's Imports in progress, read without the history: few, they head the listing, and a start closes them
 -- (ImportDao.closeInterrupted)
 CREATE INDEX import_03 ON import (repository_id, created_at) WHERE closed_at IS NULL;
+-- An account's Imports in every Library, for the key's delete action when the account is deleted
+CREATE INDEX import_04 ON import (account_id) WHERE account_id IS NOT NULL;
 
 -- An Import file: one file of an Import with its outcome. rel_path is the file's path as it was delivered, its name for an
 -- upload of files.
@@ -581,8 +611,11 @@ CREATE TABLE import_file (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   import_id CHAR(36) COLLATE "C" NOT NULL,
-  rel_path TEXT NOT NULL,
-  outcome TEXT NOT NULL DEFAULT 'pending'
+  rel_path TEXT COLLATE "C" NOT NULL,
+  -- SortKey.of(rel_path), which an Import's files are listed by. Indexed by nothing, as no *_sort column is: a long path's key
+  -- could pass a btree row's size
+  rel_path_sort BYTEA NOT NULL,
+  outcome TEXT COLLATE "C" NOT NULL DEFAULT 'pending'
     CHECK (outcome IN ('pending', 'imported', 'duplicate', 'unsupported', 'failed')),
   -- Why the file has its outcome, where there is something to say: where the asset a duplicate matches is, why a file failed
   reason TEXT,

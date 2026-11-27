@@ -658,6 +658,42 @@ object ImportControllerTests {
     }
   }
 
+  test("A file whose path holds a NUL is answered and recorded as failed, and an Import's name is stored clean") {
+
+    /**
+     * Setup:
+     *
+     * A User logged in with Import in a Library. An Import named with a NUL and a line break is opened over HTTP, and sent an
+     * image under a path holding a NUL and one under a path holding a tab.
+     *
+     * Assertions:
+     *
+     * The Import opens with its name's two characters replaced by U+FFFD. The file under the NUL is answered 200 as failed, with
+     * the reason, and recorded so under its path with the NUL escaped as `\u0000`, so the Import history lists it; the file under
+     * the tab is taken as any file, pending.
+     */
+    val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
+
+    withServer(App) {
+      host =>
+        val importId = openedImport(host, repoId, ujson.Obj(Api.Field.Import.NAME -> "Al\u0000b\num"))
+        imports.getById(importId).name shouldBe Some("Al\ufffdb\ufffdum")
+
+        val refused = sendFile(host, repoId, importId, "Album/a\u0000.jpg", imageBytes())
+        refused.statusCode shouldBe 200
+        val answer = ujson.read(refused.text())
+        (answer(Api.Field.Import.OUTCOME).str, answer(Api.Field.Import.REASON).str) shouldBe
+          ("failed", Const.Msg.Err.PATH_HOLDS_NUL)
+        val tabbed = sendFile(host, repoId, importId, "Album/a\tb.jpg", imageBytes())
+        (tabbed.statusCode, ujson.read(tabbed.text())(Api.Field.Import.OUTCOME).str) shouldBe (200, "pending")
+
+        testContext.importFiles(importId).map(file => (file.relPath, file.outcome, file.reason)) should contain(
+          ("Album/a\\u0000.jpg", ImportOutcome.Failed, Some(Const.Msg.Err.PATH_HOLDS_NUL)))
+        val files = partial(host, s"$repoId/imports/$importId/files").text()
+        files should include("Album/a\\u0000.jpg")
+    }
+  }
+
   test("A file the page could not send is recorded failed, and a closed or unknown Import takes no file") {
 
     /**
@@ -723,8 +759,8 @@ object ImportControllerTests {
      * Setup:
      *
      * A User logged in with Import in a Library with the folder Clients/Wedding. Closed: the User's upload "Wedding 2026" into
-     * Wedding (two imported, one duplicate, one failed) and a Watch folder's scan "Phone sync" (one imported, no account). In
-     * progress: the User's upload of files (one imported, one pending). Another Library has an Import "Theirs".
+     * Wedding (two imported, one duplicate, one failed) and a Watch folder's scan "Phone sync" (one imported, its account gone).
+     * In progress: the User's upload of files (one imported, one pending). Another Library has an Import "Theirs".
      *
      * Assertions:
      *
@@ -750,8 +786,10 @@ object ImportControllerTests {
     fileOf(folderUpload, "d.jpg", ImportOutcome.Failed, Some("Cannot decode image"))
     imports.close(folderUpload)
 
-    val scan =
-      RequestContext.account.withValue(None)(imports.open(ImportSource.WatchFolder, name = Some("Phone sync")).persistedId)
+    val scan = imports.open(ImportSource.WatchFolder, name = Some("Phone sync")).persistedId
+    // Every Import is opened by an account; one whose account was deleted names nobody
+    testApp.txManager.withTransaction(
+      testApp.DAO.user.updateByBySql("UPDATE import SET account_id = NULL WHERE id = ?", List(scan)): Unit)
     fileOf(scan, "IMG_0001.jpg", ImportOutcome.Imported)
     imports.close(scan)
 

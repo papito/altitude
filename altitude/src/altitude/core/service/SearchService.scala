@@ -8,6 +8,7 @@ import scala.collection.mutable
 
 import altitude.core.Altitude
 import altitude.core.Const
+import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
 import altitude.core.RequestContext
 import altitude.core.SearchCursorException
@@ -29,7 +30,6 @@ import altitude.core.util.DescribedPart
 import altitude.core.util.DescribeRanking
 import altitude.core.util.GroupedSearchResult
 import altitude.core.util.GroupedSearchRow
-import altitude.core.util.NameKey
 import altitude.core.util.ResolvedSearchGroup
 import altitude.core.util.ResolvedSearchTerm
 import altitude.core.util.ResolvedSearchText
@@ -45,6 +45,7 @@ import altitude.core.util.SearchSource
 import altitude.core.util.SearchTerm
 import altitude.core.util.SearchText
 import altitude.core.util.SearchWords
+import altitude.core.util.SortKey
 import altitude.core.util.SortValue
 import altitude.core.util.Util
 import altitude.core.util.WeakerMatches
@@ -214,9 +215,9 @@ class SearchService(val app: Altitude):
 
   /**
    * The first `Const.Search.MAX_FILTER_OPTIONS` names that have the typed text, ordered by `sortKey` segment by segment, compared
-   * by name key. The text is matched as a Search text matches a name ([[SearchTerm.isIn]]): every group must be in the name, an
-   * excluded term must not, and text with no usable term is in every name. The first are picked without sorting the rest
-   * ([[firstOf]]), so a Library's whole folder tree, which an empty text matches, costs one pass.
+   * in natural order (`SortKey`). The text is matched as a Search text matches a name ([[SearchTerm.isIn]]): every group must be
+   * in the name, an excluded term must not, and text with no usable term is in every name. The first are picked without sorting
+   * the rest ([[firstOf]]), so a Library's whole folder tree, which an empty text matches, costs one pass.
    */
   private def offered(names: Seq[SearchName], typed: String)(sortKey: SearchName => List[String]): List[SearchName] =
     val started = System.currentTimeMillis
@@ -228,11 +229,11 @@ class SearchService(val app: Altitude):
             expression.groups.forall(_.alternatives.exists(term => term.isIn(readings) != term.isExcluded))
         }
     }
-    // A segment's name key is computed once, however many paths it is a segment of
-    val segmentKeys = mutable.Map.empty[String, String]
+    // A segment's sort key is computed once, however many paths it is a segment of
+    val segmentKeys = mutable.Map.empty[String, SortKey]
     val keyed =
-      matching.map(name => sortKey(name).map(segment => segmentKeys.getOrElseUpdate(segment, NameKey.of(segment))) -> name)
-    val byKey = Ordering.by[(List[String], SearchName), List[String]](_._1)(using Ordering.Implicits.seqOrdering)
+      matching.map(name => sortKey(name).map(segment => segmentKeys.getOrElseUpdate(segment, SortKey.of(segment))) -> name)
+    val byKey = Ordering.by[(List[SortKey], SearchName), List[SortKey]](_._1)(using Ordering.Implicits.seqOrdering)
     val options = firstOf(keyed, Const.Search.MAX_FILTER_OPTIONS)(using byKey).map(_._2)
     logger.trace(
       s"Advanced search options: ${options.size} offered of ${matching.size} matching among ${names.size} names, " +
@@ -521,7 +522,10 @@ class SearchService(val app: Altitude):
     SearchCursor(
       key = key,
       groupId = groupId,
-      sortValue = sortValue,
+      // A file name sort reads the name's key, many times the name's size: the cursor carries the name
+      sortValue =
+        if query.searchSort.headOption.exists(_.field == FieldConst.Asset.FILENAME) then SortValue.Text(asset.fileName)
+        else sortValue,
       id = asset.persistedId,
       scope = scopeFingerprint,
       secondSortValue = Option.when(query.searchSort.exists(_.isScored))(secondSortValue)

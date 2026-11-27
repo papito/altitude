@@ -12,8 +12,8 @@ import altitude.core.transactions.SqlExplainer.Bind
 
 /**
  * Wraps a connection so each DML statement prepared on it is offered to a [[SqlExplainer]] just before it first runs.
- * `createStatement` passes through untouched, so transaction housekeeping, DDL, and the bind-less statements ScalaSql and
- * commons-dbutils send that way are never explained.
+ * `createStatement` passes through untouched, so transaction housekeeping, DDL, and the bind-less statements ScalaSql (an update)
+ * and the raw helpers of `BaseDao` send that way are never explained: a `SELECT nextval(...)` that an explain ran would advance.
  */
 object ExplainingConnection:
 

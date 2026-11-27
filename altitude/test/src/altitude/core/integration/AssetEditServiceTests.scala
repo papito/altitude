@@ -17,8 +17,10 @@ import altitude.core.NotFoundException
 import altitude.core.models.Asset
 import altitude.core.models.EditCrop
 import altitude.core.models.EditRecipe
+import altitude.core.models.Permissions
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.sinks.VoidAssetSink
+import altitude.core.util.Util
 
 @DoNotDiscover class AssetEditServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -324,6 +326,44 @@ import altitude.core.pipeline.sinks.VoidAssetSink
       stored.editVersion shouldBe base + 1
       stored.recipe shouldBe warmer
     }
+  }
+
+  test("An Edit save and an Admin's change of the saving account at once both commit") {
+
+    /**
+     * Setup:
+     *
+     * An Admin, and a User holding a grant who imported a still image. A third transaction holds the User's grant while the
+     * Admin's rename of the User locks the account and waits on it; then the User's save of an Edit of the image starts and
+     * waits; then the grant is let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither fails. The Edit is stored as version 1, saved by the User, and the image's importer record names the User as
+     * renamed.
+     *
+     * Edge cases:
+     *
+     * A save that locks the image before the account would hold the image while waiting on the rename's lock of the account, and
+     * the rename then waits on the image to rewrite its importer record: a deadlock PostgreSQL ends by failing one of them.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val users = testApp.service.user
+    val admin = testContext.persistAdmin()
+    val grants = Map(testContext.repository.persistedId -> Permissions.all)
+    val account = users.create(admin.persistedId, testContext.makeUser(), "password 1", grants)
+    val asset = testContext.persistAsset(user = Some(account))
+    val renamed = account.copy(name = s"Renamed ${Util.randomStr(6)}")
+    val opened = users.openForEdit(account.persistedId).state
+
+    whileHolding(query("SELECT account_id FROM repository_grant WHERE account_id = ? FOR UPDATE", account.persistedId): Unit)(
+      () => users.update(admin.persistedId, renamed, grants, opened): Unit,
+      () => edits.save(asset.persistedId, 0, brighter, account): Unit
+    )
+
+    edits.get(asset.persistedId).editVersion shouldBe 1
+    storedRow(asset.persistedId).get("updated_by_account_id") shouldBe account.persistedId
+    testApp.service.asset.getById(asset.persistedId).originalOwner.name shouldBe renamed.name
   }
 
   test("Purging an asset removes its Edit and its edited images") {

@@ -10,16 +10,16 @@ import scalasql.dialects.Dialect
 import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.DynamicFilter
+import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
-import altitude.core.util.Sort
-import altitude.core.util.SortDirection
 
 /**
  * The string-keyed `Query` turned into a typed predicate. The assertions are structural rather than exact SQL: values are bound,
- * one placeholder per value, and a parameter the layer cannot honor is an error rather than a quietly different query.
+ * a set of strings as one placeholder and any other value one per value, and a parameter the layer cannot honor is an error
+ * rather than a quietly different query.
  */
 @DoNotDiscover class DynamicFilterTests extends funsuite.AnyFunSuite with TestFocus {
 
@@ -43,22 +43,46 @@ import altitude.core.util.SortDirection
     placeholders(sql) shouldBe 2
   }
 
-  test("An IN parameter binds every value") {
+  test("An IN parameter of strings binds its set as one value") {
 
     /**
      * Setup:
      *
-     * A query with an IN parameter of three IDs.
+     * A query with an IN parameter of three IDs, rendered for each engine.
      *
      * Assertions:
      *
-     * The parameter renders as an IN list with one placeholder per value.
+     * The parameter renders as the column tested against one bound set: an array on PostgreSQL, a JSON array read through
+     * `json_each` on SQLite. Each statement has a single placeholder.
      */
     val query = new Query(params = Map("id" -> Query.IN(Set[Any]("a", "b", "c"))))
-    val sql = render(query)
+    val sqlite = render(query)
+    val postgres = render(query, AltitudePostgresDialect)
 
-    sql.contains("asset0.id IN (?, ?, ?)") shouldBe true
-    placeholders(sql) shouldBe 3
+    sqlite.contains("asset0.id IN (SELECT value FROM json_each(?))") shouldBe true
+    placeholders(sqlite) shouldBe 1
+    postgres.contains("asset0.id = ANY(?)") shouldBe true
+    placeholders(postgres) shouldBe 1
+  }
+
+  test("An IN parameter of other values binds every value") {
+
+    /**
+     * Setup:
+     *
+     * A query with an IN parameter of three widths, and one of a string and a number.
+     *
+     * Assertions:
+     *
+     * Each renders as an IN list with one placeholder per value.
+     */
+    val widths = render(new Query(params = Map("width" -> Query.IN(Set[Any](10, 20, 30)))))
+    widths.contains("asset0.width IN (?, ?, ?)") shouldBe true
+    placeholders(widths) shouldBe 3
+
+    val mixed = render(new Query(params = Map("filename" -> Query.IN(Set[Any]("a.jpg", 1)))))
+    mixed.contains("asset0.filename IN (?, ?)") shouldBe true
+    placeholders(mixed) shouldBe 2
   }
 
   test("A single-value IN collapses to an equality, as the query model defines it") {
@@ -93,34 +117,6 @@ import altitude.core.util.SortDirection
 
     sql.contains("WHERE") shouldBe false
     placeholders(sql) shouldBe 0
-  }
-
-  test("Sorting and paging bind rather than inline, and the window count spans the whole match") {
-
-    /**
-     * Setup:
-     *
-     * A query for non-recycled assets sorted by file name descending, second page of ten, rendered as a paged read is built: a
-     * window count over the filtered rows, the sort, then offset and limit.
-     *
-     * Assertions:
-     *
-     * The count is a window in a single SELECT rather than a wrapped subquery, the sort orders by the column's alias, and the
-     * limit and offset are bound.
-     */
-    val query =
-      new Query(params = Map("is_recycled" -> false), rpp = 10, page = 2, sort = List(Sort("filename", SortDirection.DESC)))
-    val sql = renderPage(query)
-
-    withClue(sql) {
-      sql.contains("COUNT(1) OVER ()") shouldBe true
-      // Both engines order by the column's select-list alias
-      "ORDER BY \\S*filename DESC".r.findFirstIn(sql).isDefined shouldBe true
-      sql.contains("LIMIT ?") shouldBe true
-      sql.contains("OFFSET ?") shouldBe true
-
-      "SELECT".r.findAllIn(sql).size shouldBe 1
-    }
   }
 
   test("An unknown column is an error") {
@@ -183,31 +179,16 @@ import altitude.core.util.SortDirection
     intercept[IllegalArgumentException](render(new Query(params = Map("folder_id" -> BigInt(1)))))
   }
 
-  private def render(query: Query): String = {
-    import dialect._
-    DbApi.renderSql(matching(query), Db.config, dialect)
+  private def render(query: Query, engine: Dialect = dialect): String =
+    DbApi.renderSql(matching(query, engine), Db.config, engine)
+
+  private def matching(query: Query, engine: Dialect = dialect) = {
+    import engine._
+    AssetRow.select.filter(row => DynamicFilter(AssetRow, columns(row, engine), query, engine))
   }
 
-  private def renderPage(query: Query): String = {
-    import dialect._
-
-    val counted = matching(query).mapAggregate((row, aggregate) => (row, aggregate.size.over))
-    val sorted = query.sort.headOption.fold(counted) {
-      sort =>
-        val ordered = counted.sortBy(row => Columns.required(columns(row._1), AssetRow, sort.param))
-        if (sort.direction == SortDirection.DESC) ordered.desc else ordered.asc
-    }
-
-    DbApi.renderSql(sorted.drop((query.page - 1) * query.rpp).take(query.rpp), Db.config, dialect)
-  }
-
-  private def matching(query: Query) = {
-    import dialect._
-    AssetRow.select.filter(row => DynamicFilter(AssetRow, columns(row), query, dialect))
-  }
-
-  private def columns(row: AssetRow[scalasql.core.Expr]) =
-    Columns.byName(AssetRow, AssetRow.containerQr(using dialect).walkExprs(row))
+  private def columns(row: AssetRow[scalasql.core.Expr], engine: Dialect = dialect) =
+    Columns.byName(AssetRow, AssetRow.containerQr(using engine).walkExprs(row))
 
   private def placeholders(sql: String): Int = sql.count(_ == '?')
 }

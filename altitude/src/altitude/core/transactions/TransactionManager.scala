@@ -29,6 +29,9 @@ object TransactionManager:
   /** The most candidates pgvector lets a scan of an HNSW index keep (`hnsw.ef_search`) */
   private val HNSW_MAX_EF_SEARCH = 1000
 
+  /** How long a SQLite connection waits on a lock another connection of the file holds before it fails with `SQLITE_BUSY` */
+  private val SQLITE_BUSY_TIMEOUT_MS = 10000
+
   /** `hnsw.max_scan_tuples` at its highest: no cap on the tuples a scan visits */
   private val HNSW_UNCAPPED_SCAN_TUPLES = Int.MaxValue
 
@@ -39,6 +42,9 @@ object TransactionManager:
    * of them. At 8 (512 MB) the read statement timeout ends such a scan long before its memory does.
    */
   private val HNSW_SCAN_MEM_MULTIPLIER = 8
+
+  /** A wait for a pooled connection longer than this, HikariCP's own timeout, is logged */
+  private val SLOW_CONNECTION_WAIT_MS = 30000L
 
   /**
    * The system property naming a folder that holds this platform's sqlite-vector build. The Docker image sets it to the folder
@@ -94,8 +100,9 @@ object TransactionManager:
  * timeout Setting; a write is the default `READ COMMITTED`.
  *
  * SQLite has a read pool and a one-connection write pool over the same file. Writes begin `IMMEDIATE`, so the single write
- * connection queues writers in the process instead of failing them with `SQLITE_BUSY`. Read connections refuse writes
- * (`query_only`): a write nested in a read transaction would otherwise be discarded by its closing rollback.
+ * connection queues writers in the process instead of failing them with `SQLITE_BUSY`; a writer that waits longer than
+ * `db.sqlite.write_connection_timeout` for it fails. Read connections refuse writes (`query_only`): a write nested in a read
+ * transaction would otherwise be discarded by its closing rollback. Only the write connection refreshes the statistics.
  *
  * Read transactions end with a rollback. An `explainer` (development only) wraps each connection in an [[ExplainingConnection]].
  * `settings` is read as each transaction begins; it is None before the first load, when a fresh database's migration runs without
@@ -115,6 +122,12 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
 
   // Whether the pools were opened, so that a manager that never ran a transaction has nothing to close
   @volatile private var isOpen = false
+
+  // The SQLite connections, as opened, whose vector columns are registered ([[registerVectorColumns]]). Weak, so a connection its
+  // pool closes leaves it.
+  private val vectorReady =
+    java.util.Collections.synchronizedSet(
+      java.util.Collections.newSetFromMap(java.util.WeakHashMap[Connection, java.lang.Boolean]()))
 
   /**
    * The read pool and the write pool, the same one on PostgreSQL. Opened on first use: the folder of a SQLite database is created
@@ -138,22 +151,31 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
    */
   def connection(readOnly: Boolean): Connection =
     val (readPool, writePool) = pools
-    val conn = (if readOnly then readPool else writePool).getConnection
+    val pool = if readOnly then readPool else writePool
+    val waitStarted = System.nanoTime
+    val conn = pool.getConnection
+    val waitedMs = (System.nanoTime - waitStarted) / 1000000
+    // SQLite's writers queue for the one write connection, so a long write holds up every writer behind it
+    if waitedMs > TransactionManager.SLOW_CONNECTION_WAIT_MS then
+      logger.warn(s"Waited ${waitedMs / 1000} s for a connection of the ${pool.getPoolName} pool")
     logger.trace(s"Borrowed connection $conn. Read-only: $readOnly")
 
     try
       // On SQLite this begins the transaction, IMMEDIATE on the write connection
       conn.setAutoCommit(false)
       if readOnly && engine == Const.DbEngineName.POSTGRES then beginPostgresRead(conn)
+      if engine == Const.DbEngineName.SQLITE then registerVectorColumns(conn.unwrap(classOf[SQLiteConnection]))
       explainer.fold(conn)(ExplainingConnection(conn, _))
     catch
       case ex: Exception =>
-        conn.close()
+        // Closed and replaced rather than returned: a connection whose setup failed (a vector column it cannot register) would
+        // fail every transaction it is lent to
+        pool.evictConnection(conn)
         throw ex
 
   /** The transaction's own settings, before its first statement; `SET LOCAL` ends with the transaction */
   private def beginPostgresRead(conn: Connection): Unit =
-    val timeLimit = settings().map(s => s"; SET LOCAL statement_timeout = ${s.dbPostgresReadStatementTimeout * 1000}")
+    val timeLimit = settings().map(s => s"; SET LOCAL statement_timeout = ${s.dbPostgresReadStatementTimeout * 1000L}")
     val statement = conn.createStatement()
     try statement.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY" + timeLimit.getOrElse(""))
     finally statement.close()
@@ -162,8 +184,8 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
     if isInTransaction then f else transaction(readOnly = false)(f)
 
   /**
-   * A write transaction set up to search face vectors ([[vectorSearchSetup]]). On SQLite, whose connections are set up as they
-   * open, it is a plain write transaction.
+   * A write transaction set up to search face vectors ([[vectorSearchSetup]]). On SQLite, whose connections register the vector
+   * columns themselves ([[registerVectorColumns]]), it is a plain write transaction.
    */
   def withFaceVector[A](f: => A): A = withTransaction(settingUpVectorSearch(limit = 0)(f))
 
@@ -219,30 +241,34 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
       candidates.map(count => s"SET LOCAL hnsw.ef_search = ${count.min(TransactionManager.HNSW_MAX_EF_SEARCH)}").toList ++
         ("SET LOCAL hnsw.iterative_scan = relaxed_order" :: uncapped)
 
-  /**
-   * Replaces the pooled SQLite connections once a fresh database has its schema: those opened before it missed the per-table
-   * setup ([[setUpSqliteConnection]]), so each is closed as it returns to its pool, which opens a replacement. PostgreSQL
-   * connections need nothing of the schema.
-   */
-  def schemaCreated(): Unit =
-    if engine != Const.DbEngineName.SQLITE then return
-
-    val (readPool, writePool) = pools
-    Set(readPool, writePool).foreach(_.getHikariPoolMXBean.softEvictConnections())
-    logger.debug("Replacing the SQLite connections opened before the schema existed")
-
   def asReadOnly[A](f: => A): A =
     if isInTransaction then f else transaction(readOnly = true)(f)
 
   /**
+   * Runs `f` under a savepoint of the thread's transaction and answers what it returns. When `undo` holds of that, the
+   * transaction is rolled back to the savepoint first, undoing what `f` did, the row locks it took on PostgreSQL included, so a
+   * caller that locked the wrong rows can take them again in its order rather than add to what it holds. On SQLite, whose one
+   * write connection serializes the writers, there are no row locks to give back.
+   */
+  def undoingIf[A](f: => A)(undo: A => Boolean): A =
+    require(isInTransaction, "A savepoint needs a transaction")
+    val conn = RequestContext.getConn
+    val savepoint = conn.setSavepoint()
+    val result = f
+    if undo(result) then conn.rollback(savepoint)
+    conn.releaseSavepoint(savepoint)
+    result
+
+  /**
    * Runs `action` once the thread's outermost transaction has committed, with no connection held, or at once outside a
    * transaction; a rollback (as every read transaction ends) drops it. For what must not happen unless the change does, such as a
-   * log line. A throwing action is logged and fails neither the transaction nor the actions after it.
+   * log line. A throwing action is logged, never thrown: it fails neither its caller, nor the transaction, nor the actions after
+   * it.
    */
   def afterCommit(action: => Unit): Unit =
     afterCommitActions.value match
       case Some(actions) => actions += (() => action)
-      case None => action
+      case None => runAfterCommit(List(() => action))
 
   /**
    * Runs `f` in a transaction of its own, on a connection the thread holds until `f` ends. A write is committed; a read has
@@ -339,7 +365,7 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
     sqliteConfig.setJournalMode(SQLiteConfig.JournalMode.WAL)
     sqliteConfig.setSynchronous(SQLiteConfig.SynchronousMode.NORMAL)
     sqliteConfig.enforceForeignKeys(true)
-    sqliteConfig.setBusyTimeout(10000)
+    sqliteConfig.setBusyTimeout(TransactionManager.SQLITE_BUSY_TIMEOUT_MS)
     sqliteConfig.setTempStore(SQLiteConfig.TempStore.MEMORY)
     // Negative: 64 MiB, in kibibytes rather than pages
     sqliteConfig.setCacheSize(-65536)
@@ -357,29 +383,71 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
 
     val hikari = poolConfig(name, size)
     hikari.setDataSource(dataSource)
+    // The writers queue for the one write connection, so a writer waits for every write ahead of it, not for HikariCP's 30 s
+    if !isReadPool then hikari.setConnectionTimeout(config.getDuration(Const.Conf.SQLITE_WRITE_CONNECTION_TIMEOUT).toMillis)
     logger.trace(s"Opening a SQLite pool [$name] of $size connections")
     new HikariDataSource(hikari)
 
   /**
-   * Sets a SQLite connection up past its PRAGMAs: loads the vector extension and registers the columns it scans when their tables
-   * exist (a database being created has none yet; see [[schemaCreated]]), and refreshes stale statistics, cheaply, before the
-   * connection plans anything. The write connection checkpoints the WAL every 500 pages; read connections refuse writes.
+   * Sets a SQLite connection up past its PRAGMAs: loads the vector extension and registers the columns it scans
+   * ([[registerVectorColumns]]). The write connection refreshes stale statistics, cheaply, before it plans anything, and
+   * checkpoints the WAL every 500 pages. A read connection refreshes none: a refresh writes the statistics, which on a read
+   * connection would be a write outside the one write connection, waiting out the busy timeout behind a writer and then failing
+   * the connection; under `query_only`, which a read connection then sets, it is refused.
    */
-  private def setUpSqliteConnection(conn: Connection, isReadPool: Boolean): Unit =
+  private def setUpSqliteConnection(conn: SQLiteConnection, isReadPool: Boolean): Unit =
+    // Bound, never spliced into the statement: a native jar unpacks it under the home folder, whose name may hold a quote
+    // (`C:\Users\O'Brien`)
+    val loading = conn.prepareStatement("SELECT load_extension(?)")
+    try
+      loading.setString(1, vectorExtensionPath)
+      loading.execute()
+    finally loading.close()
+
+    registerVectorColumns(conn)
     val statement = conn.createStatement()
     try
-      statement.execute(s"SELECT load_extension('$vectorExtensionPath')")
-      if hasTable(statement, "face") then
-        statement.execute("SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')")
-      if hasTable(statement, "asset") then
+      if isReadPool then statement.execute("PRAGMA query_only=1")
+      else
+        refreshStatisticsAtOpen(statement)
+        statement.execute("PRAGMA wal_autocheckpoint=500")
+    finally statement.close()
+    logger.trace(s"SQLite connection set up. Read pool: $isReadPool")
+
+  /**
+   * Registers the vector columns a scan reads (`face.features`, `asset.siglip2_embedding`) with sqlite-vector, which keeps them
+   * per connection, once their tables exist. A connection opened before them (a fresh database's, opened before or while its
+   * schema is created) registers them at its first transaction that finds them, so none is left that cannot scan them. A
+   * connection already set up costs a lookup.
+   */
+  private def registerVectorColumns(conn: SQLiteConnection): Unit =
+    if vectorReady.contains(conn) then return
+
+    val statement = conn.createStatement()
+    try
+      val hasFace = hasTable(statement, "face")
+      val hasAsset = hasTable(statement, "asset")
+      if hasFace then statement.execute("SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')")
+      if hasAsset then
         statement.execute(
           s"SELECT vector_init('asset', '${SceneModel.Siglip2.column}', " +
             s"'dimension=${SceneModel.Siglip2.dimensions},type=FLOAT32,distance=cosine')")
-      statement.execute("PRAGMA optimize=0x10002")
-      if isReadPool then statement.execute("PRAGMA query_only=1")
-      else statement.execute("PRAGMA wal_autocheckpoint=500")
+      if hasFace && hasAsset then
+        vectorReady.add(conn): Unit
+        logger.trace("SQLite connection's vector columns registered")
     finally statement.close()
-    logger.trace(s"SQLite connection set up. Read pool: $isReadPool")
+
+  /**
+   * `PRAGMA optimize=0x10002`, what SQLite advises a long-lived connection to run as it opens: every table checked, since the
+   * connection has no history of its own. It gives up at once on a file another connection holds the write lock of (another
+   * process; a second instance over the file, as the controller tests run), rather than wait out the busy timeout: the statistics
+   * are a planner's aid, and the hourly [[optimize]] refreshes them.
+   */
+  private def refreshStatisticsAtOpen(statement: Statement): Unit =
+    statement.execute("PRAGMA busy_timeout=0")
+    try statement.execute("PRAGMA optimize=0x10002")
+    catch case NonFatal(ex) => logger.debug(s"SQLite statistics not refreshed as the write connection opened: ${ex.getMessage}")
+    finally statement.execute(s"PRAGMA busy_timeout=${TransactionManager.SQLITE_BUSY_TIMEOUT_MS}")
 
   private def hasTable(statement: Statement, name: String): Boolean =
     val tables = statement.executeQuery(s"SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '$name'")

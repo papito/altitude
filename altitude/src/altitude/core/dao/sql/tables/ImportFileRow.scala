@@ -12,8 +12,7 @@ case class ImportFileRow[T[_]](
     reason: T[Option[String]],
     assetId: T[Option[String]],
     sizeBytes: T[Long],
-    createdAt: T[Option[OffsetDateTime]],
-    updatedAt: T[Option[OffsetDateTime]])
+    createdAt: T[Option[OffsetDateTime]])
 
 object ImportFileRow extends Table[ImportFileRow]:
   override def tableName: String = "import_file"

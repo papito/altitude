@@ -15,6 +15,7 @@ import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.models.Person
 import altitude.core.service.PersonService
+import altitude.core.util.SortKey
 
 abstract class PersonDao(override val config: Config) extends BaseDao[Person] with altitude.core.dao.PersonDao:
 
@@ -22,6 +23,8 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
 
   final override type Row[T[_]] = PersonRow[T]
   final override protected def table: Table[Row] = PersonRow
+
+  override protected val sortKeyColumns: Map[String, String] = Map(FieldConst.Person.NAME -> FieldConst.Person.NAME_SORT)
 
   override protected def toModel(row: PersonRow[Sc]): Person =
     Person(
@@ -46,22 +49,21 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     )
 
   override def add(person: Person): Person =
-    val personSeqNum = getDataSourceType match
-      case C.DbEngineName.POSTGRES => getNextVal("person_label").asInstanceOf[Long]
-      case C.DbEngineName.SQLITE => getNextVal("person_label").asInstanceOf[Int].toLong
+    // A Long on PostgreSQL; on SQLite an Integer until the label outgrows one
+    val personSeqNum = getNextVal("person_label").asInstanceOf[Number].longValue
 
     val sql =
       s"""
         INSERT INTO person (${FieldConst.ID},
                             ${FieldConst.REPO_ID},
                             ${FieldConst.Person.NAME},
-                            ${FieldConst.Person.NAME_FOR_SORT},
+                            ${FieldConst.Person.NAME_KEY},
+                            ${FieldConst.Person.NAME_SORT},
                             ${FieldConst.Person.IS_NAMED})
-              VALUES (?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?)
    """
 
     val personName = getPersonName(person, personSeqNum)
-    val personSortName = getPersonSortName(person, personSeqNum)
     val isNamed = person.name.isDefined
 
     val id = BaseDao.genId
@@ -70,7 +72,10 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
       id,
       RequestContext.getRepository.persistedId,
       personName,
-      personSortName,
+      // An unnamed person's is the key of "Unknown 42": the reserved-name rule (PersonService.isReservedName) keeps every named
+      // person's key apart from it, and the label sequence makes it unique
+      PersonService.nameKey(personName),
+      SortKey.of(personName).bytes,
       isNamed
     )
 
@@ -81,12 +86,6 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
   protected def getPersonName(person: Person, sequenceNum: Long): String =
     if person.name.isDefined then PersonService.normalizedName(person.name.get)
     else s"${PersonService.UNKNOWN_NAME_PREFIX} $sequenceNum"
-
-  // The name key, or "unknown 0042" etc: the name key of the prefix, so the reserved-name rule (PersonService.isReservedName)
-  // keeps every named person's key apart from it
-  protected def getPersonSortName(person: Person, sequenceNum: Long): String =
-    if person.name.isDefined then PersonService.nameKey(person.name.get)
-    else f"${PersonService.nameKey(PersonService.UNKNOWN_NAME_PREFIX)} $sequenceNum%04d"
 
   def getAll: Map[String, Person] =
     val sql = """SELECT *
@@ -133,7 +132,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
                      AND num_of_faces > 0
                      AND is_deleted = FALSE
                      AND (${bucketClauses.map(_._1).mkString(" OR ")})
-                ORDER BY is_named DESC, name_for_sort
+                ORDER BY is_named DESC, name_sort, id
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, RequestContext.getRepository.persistedId :: bucketClauses.flatMap(_._2))
@@ -181,7 +180,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
                   WHERE repository_id = ?
                     AND is_deleted = FALSE
                     AND is_bad_match = FALSE
-               ORDER BY is_named DESC, name_for_sort
+               ORDER BY is_named DESC, name_sort, id
               """
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
 
@@ -192,36 +191,50 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
   /**
    * Adds to (or with `-`, takes from) each person's face count the given assets they have a Face on; an asset with two of their
    * Faces counts once. The people come from one uncorrelated read of the assets' Faces by the asset index, rather than testing
-   * every person.
+   * every person. Another repository's asset counts for nobody.
    */
   private def addFacesOfAssets(assetIds: Set[String], sign: String): Unit =
+    val repositoryId = RequestContext.getRepository.persistedId
     val sql = s"""
       UPDATE person
          SET num_of_faces = num_of_faces $sign (
             SELECT COUNT(DISTINCT f.asset_id)
               FROM face f
-             WHERE f.person_id = person.id
+             WHERE f.repository_id = ?
+               AND f.person_id = person.id
                AND f.asset_id $inIdSet)
-       WHERE id IN (SELECT person_id FROM face WHERE asset_id $inIdSet)
+       WHERE repository_id = ?
+         AND id IN (SELECT person_id FROM face WHERE repository_id = ? AND asset_id $inIdSet)
     """
-    updateByBySql(sql, List(idSet(assetIds), idSet(assetIds)))
+    updateByBySql(sql, List(repositoryId, idSet(assetIds), repositoryId, repositoryId, idSet(assetIds)))
 
   // Locks on PostgreSQL only; SQLite's one write connection serializes the writers
-  override def lockAssetPeople(assetIds: Set[String]): Unit =
-    if assetIds.isEmpty then return
+  override def lockAssetPeople(assetIds: Set[String]): Set[String] =
+    if assetIds.isEmpty then return Set.empty
 
     val sql = s"""
       SELECT id
         FROM person
        WHERE repository_id = ?
-         AND id IN (SELECT person_id FROM face WHERE asset_id $inIdSet)
+         AND id IN (SELECT person_id FROM face WHERE repository_id = ? AND asset_id $inIdSet)
     ORDER BY id
       $forUpdate
     """
+    val repositoryId = RequestContext.getRepository.persistedId
+    manyBySqlQuery(sql, List(repositoryId, repositoryId, idSet(assetIds))).map(_(FieldConst.ID).asInstanceOf[String]).toSet
+
+  override def getAssetPeople(assetIds: Set[String]): Set[String] =
+    if assetIds.isEmpty then return Set.empty
+
+    val sql = s"SELECT DISTINCT person_id FROM face WHERE repository_id = ? AND asset_id $inIdSet"
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(assetIds)))
+      .map(_(FieldConst.Face.PERSON_ID).asInstanceOf[String])
+      .toSet
 
   // The dead are locked too and left out afterwards, so a caller waits for whatever is changing them
   override def lockAndGetLive(personIds: Set[String]): Set[String] =
+    if personIds.isEmpty then return Set.empty
+
     val sql = s"""
       SELECT id, is_deleted, is_bad_match
         FROM person
@@ -236,35 +249,38 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
       .map(_(FieldConst.ID).asInstanceOf[String])
       .toSet
 
-  override def deleteFaceless(personIds: Set[String]): Set[String] =
+  override def deleteFaceless(personIds: Set[String], keepNamed: Boolean): Set[String] =
     if personIds.isEmpty then return Set.empty
 
+    val repositoryId = RequestContext.getRepository.persistedId
+    val namedTest = if keepNamed then s"AND ${FieldConst.Person.IS_NAMED} = FALSE" else ""
     val sql = s"""
       SELECT id
         FROM person
        WHERE repository_id = ?
          AND id $inIdSet
-         AND NOT EXISTS (SELECT 1 FROM face WHERE face.person_id = person.id)
+         $namedTest
+         AND NOT EXISTS (SELECT 1 FROM face WHERE face.repository_id = person.repository_id AND face.person_id = person.id)
     """
-    val faceless = manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(personIds)))
+    val faceless = manyBySqlQuery(sql, List(repositoryId, idSet(personIds)))
       .map(_(FieldConst.ID).asInstanceOf[String])
       .toSet
 
-    if faceless.nonEmpty then updateByBySql(s"DELETE FROM person WHERE id $inIdSet", List(idSet(faceless)))
+    if faceless.nonEmpty then
+      updateByBySql(s"DELETE FROM person WHERE repository_id = ? AND id $inIdSet", List(repositoryId, idSet(faceless)))
     faceless
 
 object PersonDao:
 
   /**
-   * The live person with that name key. The predicate is `person_01`'s, typed so ScalaSql binds the flags as numbers: SQLite uses
-   * a partial index only when the query's terms imply its predicate, which a flag bound as text (`nativeBool` on SQLite) does
-   * not.
+   * The live person with that name key. The predicate is `person_01`'s, its flags bound as numbers: SQLite uses a partial index
+   * only when the query's terms imply its predicate, which a flag bound as text would not.
    */
   def liveByNameKey(dialect: Dialect, repositoryId: String, nameKey: String): Select[PersonRow[Expr], PersonRow[Sc]] =
     import dialect.*
 
     PersonRow.select.filter {
       person =>
-        (person.repositoryId `=` repositoryId) && (person.nameForSort `=` nameKey) && (person.isDeleted `=` false) &&
+        (person.repositoryId `=` repositoryId) && (person.nameKey `=` nameKey) && (person.isDeleted `=` false) &&
         (person.isBadMatch `=` false)
     }

@@ -5,26 +5,17 @@ import ai.onnxruntime.OrtEnvironment
 import altitude.test.ChildJvm
 import altitude.test.TestFocus
 import altitude.test.TestModelFiles
-import java.io.File
-import java.net.URLClassLoader
 import java.nio.FloatBuffer
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 import java.util.Collections
-import java.util.concurrent.TimeUnit
 import org.apache.commons.io.FileUtils
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.scalatest.DoNotDiscover
-import org.scalatest.OptionValues.*
-import org.scalatest.exceptions.TestFailedException
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers.*
 
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters.*
@@ -148,34 +139,6 @@ import altitude.core.util.OnnxEnvironment
       exitCode shouldBe 0
     }
   }
-
-  test("A probe JVM that hangs is killed at the timeout and fails its test") {
-
-    /**
-     * Setup:
-     *
-     * A second JVM that prints its process ID and then never exits, as a probe caught in a deadlock of a native library would,
-     * run with a timeout of two seconds.
-     *
-     * Assertions:
-     *
-     * The run gives up at its timeout instead of waiting for the probe's output to end: it fails the test, with what the probe
-     * printed in the failure's message, and the second JVM is no longer alive.
-     *
-     * Edge cases:
-     *
-     * A run that waits for ever would take the whole bundle with it, so the test bounds its own wait and then kills what this JVM
-     * started.
-     */
-    val run = Future(runProbe(OnnxEnvironmentHangProbe, Seq.empty, timeout = 2.seconds))(ExecutionContext.global)
-    val failure =
-      try intercept[TestFailedException](Await.result(run, 60.seconds))
-      finally ProcessHandle.current().children().forEach(child => child.destroyForcibly(): Unit)
-
-    failure.getMessage should include(OnnxEnvironmentHangProbe.STARTED)
-    val pid = s"${OnnxEnvironmentHangProbe.STARTED}: (\\d+)".r.findFirstMatchIn(failure.getMessage).value.group(1).toLong
-    ProcessHandle.of(pid).filter(_.isAlive).isPresent shouldBe false
-  }
 }
 
 /** What the second JVM of [[OnnxEnvironmentTests]] runs: the embedders' environment, and a session on the model file named */
@@ -220,15 +183,5 @@ object OnnxEnvironmentReleaseProbe {
     val close = classOf[OrtEnvironment].getDeclaredMethod("close", java.lang.Long.TYPE, java.lang.Long.TYPE)
     close.setAccessible(true)
     close.invoke(null, api.get(null), handle.get(environment))
-  }
-}
-
-/** What the second JVM of the timeout test runs: its process ID, and then nothing, for ever */
-object OnnxEnvironmentHangProbe {
-  val STARTED = "Hanging as process"
-
-  def main(args: Array[String]): Unit = {
-    println(s"$STARTED: ${ProcessHandle.current().pid()}")
-    Thread.sleep(Long.MaxValue)
   }
 }

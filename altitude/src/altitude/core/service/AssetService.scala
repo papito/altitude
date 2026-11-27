@@ -46,6 +46,15 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       if existing.nonEmpty then Some(existing.records.head) else None
     }
 
+  /** Which of these contents a live asset holds (`asset_01` allows one each), read in one statement whatever their number */
+  def liveChecksums(checksums: Set[String]): Set[String] =
+    if checksums.isEmpty then Set()
+    else
+      txManager.asReadOnly {
+        val q = new Query(params = Map(FieldConst.Asset.CHECKSUM -> Query.IN(checksums.toSet[Any])))
+        dao.queryNotRecycled(q).records.map(_.checksum).toSet
+      }
+
   def rename(assetId: String, newFilename: String): Asset =
     txManager.withTransaction {
       val asset: Asset = getById(assetId)
@@ -53,13 +62,11 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       if asset.isRecycled then throw IllegalOperationException(s"Cannot rename a recycled asset: [$asset]")
       logger.debug(s"Renaming asset [${asset.persistedId}] from [${asset.fileName}] to [$newFilename]")
 
-      val data = Map(
-        FieldConst.Asset.FILENAME -> newFilename
-      )
-      updateById(asset.persistedId, data)
+      // The DAO writes the name's sort key with it
+      updateById(asset.persistedId, Map(FieldConst.Asset.FILENAME -> newFilename))
+      val renamed = asset.copy(fileName = newFilename)
 
       // The Search document holds the words of the file name
-      val renamed = asset.copy(fileName = newFilename)
       app.service.search.reindexAsset(renamed)
       renamed
     }
@@ -87,11 +94,12 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
 
   /**
    * Stores the pipeline's measurements and embeddings in the same update that marks the import complete, so an asset is never
-   * complete without them. Each stays NULL where the pipeline did not measure or embed.
+   * complete without them. Each stays NULL where the pipeline did not measure or embed. An asset not in the context Library is a
+   * `NotFoundException`, never completed silently.
    */
   def markAsCompleted(asset: Asset): Asset =
     txManager.withTransaction {
-      dao.markAsCompleted(asset): Unit
+      BaseService.requireFound(dao.tableName, asset.persistedId, dao.markAsCompleted(asset)): Unit
       asset.copy(isPipelineProcessed = true)
     }
 
@@ -233,6 +241,21 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       )
     }
 
+  def lockPurged(assetId: String): Boolean =
+    txManager.withTransaction {
+      dao.lockPurged(assetId)
+    }
+
+  def lockUnfinished(assetId: String): Boolean =
+    txManager.withTransaction {
+      dao.lockUnfinished(assetId)
+    }
+
+  def shareLockLive(assetIds: Set[String]): Unit =
+    txManager.withTransaction {
+      dao.shareLockLive(assetIds)
+    }
+
   def getAssetsToRecycle(assetIds: Set[String]): List[Asset] =
     txManager.withTransaction {
       dao.getAssetsToRecycle(assetIds)
@@ -251,4 +274,14 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
   def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset] =
     txManager.withTransaction {
       dao.getAssetsToPurge(assetIds)
+    }
+
+  def getIdsInFolders(folderIds: Set[String]): Set[String] =
+    txManager.asReadOnly {
+      dao.getIdsInFolders(folderIds)
+    }
+
+  def getPurgePending: List[Asset] =
+    txManager.asReadOnly {
+      dao.getPurgePending
     }

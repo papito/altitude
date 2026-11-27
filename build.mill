@@ -92,6 +92,10 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     mvn"org.xerial:sqlite-jdbc:3.51.2.0",
     mvn"com.zaxxer:HikariCP:7.1.0",
 
+    // ICU's root collation behind SortKey, the stored order of every list of names: a new version can reorder names, and a
+    // stored key is then stale until the database is recreated (SortKey's scaladoc)
+    mvn"com.ibm.icu:icu4j:79.1",
+
     mvn"com.drewnoakes:metadata-extractor:2.19.0",
     mvn"org.apache.tika:tika-core:3.0.0",
     mvn"org.apache.tika:tika-parsers:3.0.0",

@@ -2,6 +2,15 @@
 -- (repository_id, <ref>_id), so the database refuses a reference into another repository. Each referenced table has
 -- UNIQUE (id, repository_id), led by the ID so it never competes with the indexes that lead with the repository. The exceptions
 -- are single columns: a person's cover, an Import file's asset and an Import's Watch folder.
+--
+-- Where this schema keeps less than PostgreSQL's, the code keeps it:
+-- - A created_at default (datetime('now'), UTC) is whole seconds at the statement's time, PostgreSQL's now() microseconds at
+--   the transaction's start. An insert whose time is listed or compared binds it to the microsecond itself (AssetDao.add,
+--   ImportDao.add, AuditEventDao.add), in the canonical form SqliteOverrides.DATETIME_FORMATTER writes.
+-- - A VARCHAR(n) holds any length and a boolean column any value, with no CHECK: the services hold names to their lengths
+--   (Validators.validName), and the writes bind a boolean as 0 or 1.
+-- - Text compares and orders by its bytes, as PostgreSQL's COLLATE "C" columns do, and a BLOB by memcmp, as PostgreSQL's BYTEA
+--   does: a *_sort column, the SortKey of a name a list shows, orders alike on both engines.
 
 CREATE TABLE system (
   id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1), -- the one and only row: the key rejects a second, the check pins its id
@@ -11,6 +20,7 @@ CREATE TABLE system (
   signing_key CHAR(44)
 );
 
+-- Version 0 until the migration stamps the current one (Altitude.schemaVersion) in the script's transaction
 INSERT INTO system (version, is_initialized) VALUES (0, 0);
 
 -- The Settings an Admin tunes, seeded with their defaults; the registry is models/Settings.scala
@@ -81,13 +91,17 @@ CREATE TABLE account (
   created_by_account_id CHAR(36) REFERENCES account (id) ON DELETE SET NULL,
   last_login_at DATETIME,
   last_active_repo_id CHAR(36),
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+  -- The last account change (an Admin's edit, a deactivation or reactivation, a password change); a login and the last active
+  -- Library are none
   updated_at DATETIME DEFAULT NULL
 );
 
 -- One account per email address and per username, in any case or Unicode form; a login compares the key column
 CREATE UNIQUE INDEX account_01 ON account (email_key);
 CREATE UNIQUE INDEX account_02 ON account (username_key);
+-- The accounts an account created, whose creator its delete clears
+CREATE INDEX account_03 ON account (created_by_account_id) WHERE created_by_account_id IS NOT NULL;
 
 CREATE TABLE repository (
   id CHAR(36) PRIMARY KEY,
@@ -97,8 +111,7 @@ CREATE TABLE repository (
   root_folder_id CHAR(36) NOT NULL,
   file_store_type VARCHAR NOT NULL,
   file_store_config TEXT NOT NULL,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
-  updated_at DATETIME DEFAULT NULL
+  created_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );
 
 -- A Library's name is unique instance-wide under its name key (Repository.nameKey, folded in Scala as account's keys are)
@@ -126,7 +139,7 @@ CREATE TABLE audit_event (
   target TEXT,
   detail TEXT,
   client_ip TEXT,
-  created_at DATETIME NOT NULL DEFAULT (datetime('now', 'utc'))
+  created_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX audit_event_01 ON audit_event (created_at);
@@ -153,7 +166,7 @@ CREATE TABLE asset (
   mime_type VARCHAR(64) NOT NULL,
   width INT NOT NULL DEFAULT 0,
   height INT NOT NULL DEFAULT 0,
-  -- area size of the image in pixels (width * height)
+  -- area size of the image in pixels (width * height), past 2^31 for an image over 46,341 × 46,341: an INT is 64 bits here
   area_size INT NOT NULL,
   -- NULL for an asset in no folder: a triaged one
   folder_id CHAR(36),
@@ -189,8 +202,10 @@ CREATE TABLE asset (
   edit_rev INTEGER NOT NULL DEFAULT 0,
   -- The importer record (AccountSnapshot) as JSON, written at import, which outlives the account
   original_owner TEXT NOT NULL,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
-  updated_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+  -- SortKey.of(filename), which the file name sort orders by: natural order (SortKey). Read by that sort alone, so after
+  -- the columns every read selects, ahead of the bulky ones
+  filename_sort BLOB NOT NULL,
   -- The bulky columns come last, the most read first: a row past the page size (4 KB) spills into overflow pages, and reading
   -- a column walks the overflow of every large value before it. So: the two metadata JSON columns every general read selects,
   -- the Histogram (1 KB, read only for a Curation set), the Scene embeddings (about 6 KB, read by the Sequence candidates and a
@@ -275,7 +290,8 @@ CREATE TABLE asset_edit (
   width INTEGER NOT NULL,
   height INTEGER NOT NULL,
   updated_by_account_id CHAR(36) REFERENCES account (id) ON DELETE SET NULL,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+  -- When the Edit was last saved
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
@@ -295,7 +311,9 @@ CREATE TABLE person (
   repository_id CHAR(36) NOT NULL,
   -- An unnamed person's is "Unknown <n>", n drawn from person_label
   name TEXT NOT NULL,
-  name_for_sort TEXT NOT NULL,
+  name_key TEXT NOT NULL,
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
+  name_sort BLOB NOT NULL,
   -- One of the person's own Faces, which the code checks; the key refuses a non-Face. NULL for a person with no Face. A single
   -- column: a composite key's SET NULL would clear the person's repository_id too. Every path that deletes a cover Face picks
   -- another cover first, so the delete action only backs that up.
@@ -307,8 +325,7 @@ CREATE TABLE person (
   is_hidden TINYINT NOT NULL DEFAULT 0,
   is_bad_match TINYINT NOT NULL DEFAULT 0,
   is_deleted TINYINT NOT NULL DEFAULT 0,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
-  updated_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
   UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
@@ -316,15 +333,15 @@ CREATE TABLE person (
 -- The partial person indexes cover the live people, which every person query reads; a merged-away person keeps its name and
 -- cover face, which another person may take. The predicates are written as the queries write them: SQLite uses a partial index
 -- only for a query whose own terms imply it, and `is_deleted = FALSE` does not imply `is_deleted = 0`.
--- person_01: name_for_sort is a named person's name key (PersonService.nameKey, folded in Scala) or "unknown 0042", so a live
--- name is unique under that fold: case in any script, canonical and compatibility forms
-CREATE UNIQUE INDEX person_01 ON person (repository_id, name_for_sort)
+-- person_01: name_key is the person's name key (PersonService.nameKey, folded in Scala), an unnamed person's "unknown 42", so a
+-- live name is unique under that fold: case in any script, canonical and compatibility forms
+CREATE UNIQUE INDEX person_01 ON person (repository_id, name_key)
     WHERE is_deleted = FALSE AND is_bad_match = FALSE;
 
 CREATE UNIQUE INDEX person_02 ON person (cover_face_id)
     WHERE is_deleted = FALSE;
 
-CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
+CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named)
     WHERE is_deleted = FALSE;
 -- Every person whose cover is a Face, a merged-away one included, for the cover's key when the Face is deleted
 CREATE INDEX person_04 ON person (cover_face_id);
@@ -351,18 +368,20 @@ CREATE TABLE face (
   -- How much fine detail the box holds at the measurement scale (ImageMeasurement), comparable only between Faces of one Person
   -- at a similar size; NULL for a Face in a Video, a box too small to say, or an image that could not be measured
   sharpness REAL,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
-  updated_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (repository_id, person_id) REFERENCES person (repository_id, id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
 -- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed video copy, a re-exported photo).
--- Leading with the asset, it serves the purge cascade and the per-asset probes of Search text.
+-- Leading with the asset, it serves the purge cascade.
 CREATE UNIQUE INDEX face_01 ON face (asset_id, repository_id, checksum);
 -- A person's faces, best first; the asset rides along, so the person source of Search text reads the index alone
 CREATE INDEX face_02 ON face (person_id, detection_score, asset_id);
+-- An asset's people, read from the index alone: the per-asset probes of Search text. PostgreSQL's face_01 includes the person;
+-- here a trailing column of face_01 would make the crop unique per person instead of per asset.
+CREATE INDEX face_04 ON face (asset_id, repository_id, person_id);
 
 CREATE TABLE metadata_field (
   id CHAR(36) PRIMARY KEY,
@@ -370,8 +389,7 @@ CREATE TABLE metadata_field (
   name VARCHAR(255) NOT NULL,
   name_key TEXT NOT NULL,
   field_type VARCHAR(255) NOT NULL,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
-  updated_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
   UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
@@ -387,8 +405,7 @@ CREATE TABLE folder (
   -- folder is recycled, never deleted on its own.
   parent_id CHAR(36) NOT NULL,
   is_recycled TINYINT NOT NULL DEFAULT 0,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
-  updated_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
   UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id, parent_id) REFERENCES folder (repository_id, id)
@@ -404,8 +421,9 @@ CREATE TABLE album (
   repository_id CHAR(36) NOT NULL,
   name VARCHAR(255) NOT NULL,
   name_key TEXT NOT NULL,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
-  updated_at DATETIME DEFAULT NULL,
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
+  name_sort BLOB NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
   UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
@@ -416,7 +434,7 @@ CREATE TABLE album_asset (
   repository_id CHAR(36) NOT NULL,
   album_id CHAR(36) NOT NULL,
   asset_id CHAR(36) NOT NULL,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id, album_id) REFERENCES album (repository_id, id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
@@ -436,10 +454,11 @@ CREATE TABLE location (
   kind VARCHAR(16) NOT NULL,
   name VARCHAR(255) NOT NULL,
   name_key TEXT NOT NULL,
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
+  name_sort BLOB NOT NULL,
   latitude REAL,
   longitude REAL,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
-  updated_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
   CHECK (kind IN ('category', 'location')),
   CHECK (kind <> 'category' OR (category_id IS NULL AND latitude IS NULL AND longitude IS NULL)),
   CHECK (kind <> 'location' OR (latitude IS NOT NULL AND longitude IS NOT NULL)),
@@ -458,7 +477,7 @@ CREATE TABLE location_asset (
   repository_id CHAR(36) NOT NULL,
   location_id CHAR(36) NOT NULL,
   asset_id CHAR(36) NOT NULL,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id, location_id) REFERENCES location (repository_id, id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
@@ -530,6 +549,8 @@ CREATE TABLE watch_folder (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) NOT NULL,
   name TEXT NOT NULL,
+  -- SortKey.of(name), which the list orders by: natural order (SortKey), case and accents aside
+  name_sort BLOB NOT NULL,
   -- The absolute path as entered. Unique in the instance; the code also refuses an overlap by real path, in any Library
   path TEXT NOT NULL UNIQUE,
   -- The folder its files go into, the directory's tree mirrored under it; NULL = Triage
@@ -545,7 +566,8 @@ CREATE TABLE watch_folder (
   status_reason TEXT,
   -- When its directory was last walked; NULL until the first scan that finds it available
   last_scan_at DATETIME,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+  -- When an edit, a pause or a resume, or a change of owner last wrote it; what a scan finds (its reason, its time) leaves it
   updated_at DATETIME DEFAULT NULL,
   UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
@@ -555,6 +577,8 @@ CREATE TABLE watch_folder (
 
 -- A Library's Watch folders: its list, and the cascade from a deleted Library
 CREATE INDEX watch_folder_01 ON watch_folder (repository_id);
+-- An Admin's Watch folders in every Library: pausing them, passing them on when the Admin is deleted, and the key's check
+CREATE INDEX watch_folder_02 ON watch_folder (account_id);
 
 -- A Watch folder's memory of a file, by its path: what the last scan saw and what became of it. A file is read once a scan
 -- finds the size and modified time a scan saw at least 5 seconds before, and not again while they stay.
@@ -575,8 +599,7 @@ CREATE TABLE watch_folder_file (
   -- When a scan last found the file, to the day (a scan moves it once it is a day old); an absent file is forgotten once this
   -- passes the retention period. For a file not read yet, when it was first seen as it is, from which its rest is counted
   last_seen_at DATETIME NOT NULL,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
-  updated_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id, watch_folder_id) REFERENCES watch_folder (repository_id, id) ON DELETE CASCADE
 );
@@ -611,8 +634,7 @@ CREATE TABLE import (
   duplicate INT NOT NULL DEFAULT 0 CHECK (duplicate >= 0),
   unsupported INT NOT NULL DEFAULT 0 CHECK (unsupported >= 0),
   failed INT NOT NULL DEFAULT 0 CHECK (failed >= 0),
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
-  updated_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
   UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
   -- No delete action: a folder is recycled, never deleted on its own
@@ -626,6 +648,8 @@ CREATE INDEX import_02 ON import (watch_folder_id) WHERE watch_folder_id IS NOT 
 -- A Library's Imports in progress, read without the history: few, they head the listing, and a start closes them
 -- (ImportDao.closeInterrupted)
 CREATE INDEX import_03 ON import (repository_id, created_at) WHERE closed_at IS NULL;
+-- An account's Imports in every Library, for the key's delete action when the account is deleted
+CREATE INDEX import_04 ON import (account_id) WHERE account_id IS NOT NULL;
 
 -- An Import file: one file of an Import with its outcome. rel_path is the file's path as it was delivered, its name for an
 -- upload of files.
@@ -634,6 +658,8 @@ CREATE TABLE import_file (
   repository_id CHAR(36) NOT NULL,
   import_id CHAR(36) NOT NULL,
   rel_path TEXT NOT NULL,
+  -- SortKey.of(rel_path), which an Import's files are listed by
+  rel_path_sort BLOB NOT NULL,
   outcome TEXT NOT NULL DEFAULT 'pending'
     CHECK (outcome IN ('pending', 'imported', 'duplicate', 'unsupported', 'failed')),
   -- Why the file has its outcome, where there is something to say: where the asset a duplicate matches is, why a file failed
@@ -642,8 +668,7 @@ CREATE TABLE import_file (
   -- SET NULL would clear repository_id too, so the code checks that the asset is the Library's.
   asset_id CHAR(36) REFERENCES asset (id) ON DELETE SET NULL,
   size_bytes BIGINT NOT NULL,
-  created_at DATETIME DEFAULT (datetime('now', 'utc')),
-  updated_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id, import_id) REFERENCES import (repository_id, id) ON DELETE CASCADE
 );

@@ -13,8 +13,7 @@ case class WatchFolderFileRow[T[_]](
     state: T[String],
     attempts: T[Int],
     lastSeenAt: T[OffsetDateTime],
-    createdAt: T[Option[OffsetDateTime]],
-    updatedAt: T[Option[OffsetDateTime]])
+    createdAt: T[Option[OffsetDateTime]])
 
 object WatchFolderFileRow extends Table[WatchFolderFileRow]:
   override def tableName: String = "watch_folder_file"

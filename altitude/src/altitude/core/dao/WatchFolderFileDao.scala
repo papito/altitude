@@ -8,15 +8,16 @@ import altitude.core.models.WatchFolderFile
 
 /** The Watch folders' memory of the files of their directories, in the context repository */
 trait WatchFolderFileDao extends BaseDao[WatchFolderFile]:
-  def ofWatchFolder(watchFolderId: String): List[WatchFolderFile]
+  /** Its whole memory, by path */
+  def memoryOf(watchFolderId: String): Map[String, WatchFolderFile]
 
   /** Files a scan saw for the first time */
   def addAll(files: Seq[WatchFolderFile], seenAt: OffsetDateTime): Unit
 
-  /** A file a scan found changed is a new file: its new size and modified time, never tried */
-  def changed(watchFolderId: String, relPath: String, sizeBytes: Long, modifiedAt: Long, seenAt: OffsetDateTime): Int
+  /** Files a scan found changed are new files, each with its new size and modified time, never tried: one batch */
+  def changed(watchFolderId: String, files: Seq[WatchFolderFile], seenAt: OffsetDateTime): Unit
 
-  /** Returns how many rows changed */
+  /** Stamps the files a scan found unchanged as seen at `seenAt`, in one statement however many; how many rows changed */
   def seenAgain(watchFolderId: String, relPaths: Seq[String], seenAt: OffsetDateTime): Int
 
   /** Only while the file is remembered with that size and modified time: one changed since keeps its state. How many rows changed. */

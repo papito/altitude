@@ -37,7 +37,6 @@ case class Face(
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   override val createdAt: Option[LocalDateTime] = None
-  override val updatedAt: Option[LocalDateTime] = None
 
   override def toString: String =
     f"FACE $id. Label: $personLabel. Score: $detectionScore, quality $quality%.1f ${if isEnrolled then "enrolled" else "match-only"}, " +

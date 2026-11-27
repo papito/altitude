@@ -12,20 +12,30 @@ import { decrementDateGroupOf } from "../search-results/date-groups.js"
 
 /** An asset whose content was imported again after it was recycled stays in the trash; the server names both */
 export function reportRestore({ restored, duplicates }) {
-    const restoredMessage = `${
-        restored.length > 1 ? `${restored.length} assets` : "Asset"
-    } restored`
+    reportLeftInTrash({
+        doneMessage: `${
+            restored.length > 1 ? `${restored.length} assets` : "Asset"
+        } restored`,
+        doneCount: restored.length,
+        duplicates,
+        notDone: "not restored",
+    })
+}
 
+/**
+ * Wherever assets leave the trash (a restore, a move), those whose content is live again stay
+ * there: a success with none, else a warning naming how many stayed, after what was done if
+ * anything was
+ */
+function reportLeftInTrash({ doneMessage, doneCount, duplicates, notDone }) {
     if (duplicates.length === 0) {
-        showSuccessSnackBar(restoredMessage)
+        showSuccessSnackBar(doneMessage)
         return
     }
 
-    const skippedMessage = `${duplicates.length} not restored: an asset with the same content exists`
+    const skippedMessage = `${duplicates.length} ${notDone}: an asset with the same content exists`
     showWarningSnackBar(
-        restored.length > 0
-            ? `${restoredMessage}; ${skippedMessage}`
-            : skippedMessage,
+        doneCount > 0 ? `${doneMessage}; ${skippedMessage}` : skippedMessage,
     )
 }
 
@@ -99,7 +109,9 @@ export function createAssetActions({
     }
 
     function shouldRemoveFromGrid(destinationFolderId) {
-        if (Alpine.store(Const.state.currentView).isTriageView()) {
+        // A move takes an asset out of Triage and out of the Trash alike
+        const currentView = Alpine.store(Const.state.currentView)
+        if (currentView.isTriageView() || currentView.isTrashBinView()) {
             return true
         }
 
@@ -126,6 +138,11 @@ export function createAssetActions({
         )
     }
 
+    /**
+     * A move out of the trash answers as a restore does (`{restored, duplicates}`): an asset whose
+     * content was imported again after it was recycled stays in the trash, so its cell stays too,
+     * and stays selected
+     */
     async function moveAssets({ folderId, assetIds }) {
         const newParentFolderName = Folder.find(folderId)?.name() ?? folderId
         const payload = { assetIds, folderId }
@@ -135,20 +152,32 @@ export function createAssetActions({
         setMovePending(assetIds, true)
 
         try {
-            await http.put(`/api/asset/r/${context.getRepoId()}/move`, payload)
+            const response = await http.put(
+                `/api/asset/r/${context.getRepoId()}/move`,
+                payload,
+            )
+            const { duplicates } = response.data
+            const moved = assetIds.filter((id) => !duplicates.includes(id))
 
-            const successMessage = `${
-                assetIds.length > 1 ? "Assets" : "Asset"
-            } moved to folder "${newParentFolderName}"`
-            showSuccessSnackBar(successMessage)
+            reportLeftInTrash({
+                doneMessage: `${
+                    moved.length > 1 ? "Assets" : "Asset"
+                } moved to folder "${newParentFolderName}"`,
+                doneCount: moved.length,
+                duplicates,
+                notDone: "not moved",
+            })
 
-            removeTriageStyling(assetIds)
+            removeTriageStyling(moved)
 
             if (shouldRemoveFromGrid(folderId)) {
-                removeAssetsFromGrid(assetIds)
+                removeAssetsFromGrid(moved)
             }
 
-            if (shouldResetSelectedAssets(assetIds)) {
+            // The duplicates stay in the trash and stay selected, to be dealt with next
+            if (duplicates.length > 0) {
+                moved.forEach((id) => selectedAssets().deselect(id))
+            } else if (shouldResetSelectedAssets(assetIds)) {
                 selectedAssets().reset()
             }
 

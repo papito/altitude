@@ -22,8 +22,7 @@ case class FaceRow[T[_]](
     isEnrolled: T[Boolean],
     frameTimeMs: T[Option[Long]],
     sharpness: T[Option[Double]],
-    createdAt: T[Option[OffsetDateTime]],
-    updatedAt: T[Option[OffsetDateTime]])
+    createdAt: T[Option[OffsetDateTime]])
 
 object FaceRow extends Table[FaceRow]:
   override def tableName: String = "face"

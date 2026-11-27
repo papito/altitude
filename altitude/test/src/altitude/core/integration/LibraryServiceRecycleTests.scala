@@ -1,14 +1,19 @@
 package altitude.core.integration
 
 import org.scalatest.DoNotDiscover
+import org.scalatest.LoneElement.convertToCollectionLoneElementWrapper
+import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers.shouldBe
 import org.scalatest.tagobjects.Slow
+import org.scalatest.time.Minutes
+import org.scalatest.time.Seconds
+import org.scalatest.time.Span
 
 import altitude.core.*
 import altitude.core.models.*
 import altitude.core.util.Query
 
-@DoNotDiscover class LibraryServiceRecycleTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class LibraryServiceRecycleTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
   test("Recycle multiple assets") {
 
     /**
@@ -185,30 +190,117 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * A Person with a Face on each of two assets, selected among 70,000 unknown IDs, more parameters than a PostgreSQL statement
-     * takes. The selection is recycled, moved into a folder, then its face counts recycled and restored directly.
+     * A Person with a Face on each of two assets, and 66,000 copies of the first asset, more than a PostgreSQL statement takes
+     * parameters, with the stats reconciled to count them. Every asset is selected among 70,000 unknown IDs. The selection is
+     * recycled, moved into a folder, then its face counts recycled and restored directly, in one transaction that is rolled back.
      *
      * Assertions:
      *
-     * Recycling takes both Faces from the person and the move gives them back; the direct recycle and restore do the same.
+     * Recycling puts every asset in the Trash and takes both Faces from the person; the move takes every asset out of it and
+     * gives the Faces back; the direct recycle and restore do the same.
      */
     val person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(person, assetCount = 2)
-    val selection = amongManyUnknownIds(testApp.service.asset.query(new Query()).records.map(_.persistedId).toSet)
+    val template = testApp.service.asset.query(new Query()).records.head
     val folder: Folder = testApp.service.folder.add("folder1")
     def numOfFaces: Int = testApp.service.person.getById(person.persistedId).numOfFaces
+    def numRecycled: Long = countAssets("is_recycled = TRUE")
 
-    testApp.service.library.recycleAssets(selection)
-    numOfFaces shouldBe 0
+    atScale {
+      seedCopies(template.persistedId, copies = 66000, folders = 1)
+      testApp.service.stats.reconcile(): Unit
+    } {
+      val assetIds =
+        query("SELECT id FROM asset WHERE repository_id = ?", RequestContext.getRepository.persistedId)
+          .map(_("id").toString)
+          .toSet
+      assetIds.size shouldBe 66002
+      val selection = amongManyUnknownIds(assetIds)
 
-    testApp.service.library.moveAssetsToFolder(selection, folder.persistedId)
-    numOfFaces shouldBe 2
+      testApp.service.library.recycleAssets(selection)
+      numRecycled shouldBe 66002
+      numOfFaces shouldBe 0
 
-    testApp.service.person.recycleFacesForAssets(selection)
-    numOfFaces shouldBe 0
+      testApp.service.library.moveAssetsToFolder(selection, folder.persistedId)
+      numRecycled shouldBe 0
+      numOfFaces shouldBe 2
 
-    testApp.service.person.restoreFacesForAssets(selection)
-    numOfFaces shouldBe 2
+      testApp.service.person.recycleFacesForAssets(selection)
+      numOfFaces shouldBe 0
+
+      testApp.service.person.restoreFacesForAssets(selection)
+      numOfFaces shouldBe 2
+    }
+  }
+
+  test("A folder holding more assets than a statement takes parameters is deleted", Slow) {
+
+    /**
+     * Setup:
+     *
+     * An asset in the root folder and 66,000 copies of it in a new folder, more than a PostgreSQL statement takes parameters,
+     * with the stats reconciled to count them. The folder is deleted, in one transaction that is rolled back.
+     *
+     * Assertions:
+     *
+     * The folder is recycled and so is every copy, and the recycled stats count them.
+     *
+     * Edge cases:
+     *
+     * The asset in the root folder stays live.
+     */
+    val template = testContext.insertAsset()
+
+    atScale {
+      seedCopies(template.persistedId, copies = 66000, folders = 1)
+      testApp.service.stats.reconcile(): Unit
+    } {
+      val seeded = query("SELECT id FROM folder WHERE repository_id = ? AND id LIKE 'seeded-folder-%'", repositoryId)
+      val folderId = seeded.map(_("id").toString).loneElement
+
+      testApp.service.library.deleteFolderById(folderId)
+
+      testApp.service.folder.getById(folderId).isRecycled shouldBe true
+      countAssets("is_recycled = TRUE") shouldBe 66000
+      testApp.service.stats.getStats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 66000
+      testApp.service.asset.getById(template.persistedId).isRecycled shouldBe false
+    }
+  }
+
+  test("A Trash larger than a statement's parameter limit is emptied", Slow) {
+
+    /**
+     * Setup:
+     *
+     * A recycled asset and 66,000 recycled copies of it, more than a PostgreSQL statement takes parameters, with the stats
+     * reconciled to count them. The Trash is emptied. The copies are committed, since the purge queue reads them on its own
+     * threads, and whatever is left of them is deleted at the end.
+     *
+     * Assertions:
+     *
+     * Emptying the Trash marks every asset for purging and takes them all out of the recycled stats; the purge queue then deletes
+     * every one.
+     */
+    val template = testContext.insertAsset()
+    testApp.service.library.recycleAssets(Set(template.persistedId))
+
+    try {
+      testApp.txManager.withTransaction(seedCopies(template.persistedId, copies = 66000, folders = 1))
+      testApp.service.stats.reconcile(): Unit
+      testApp.service.stats.getStats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 66001
+
+      testApp.service.library.purgeRecycleBin()
+
+      val stats = testApp.service.stats.getStats
+      stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 0
+      stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe 0
+      testApp.txManager.asReadOnly(countAssets("is_purged = FALSE")) shouldBe 0
+
+      // Waited out, so no purge of this test's runs into the next ones
+      Eventually.eventually(Eventually.timeout(Span(10, Minutes)), Eventually.interval(Span(1, Seconds))) {
+        testApp.txManager.asReadOnly(countAssets("TRUE")) shouldBe 0
+      }
+    } finally removeCopies()
   }
 
   test("Moving recycled and live assets together into a folder restores the recycled ones' face counts") {
@@ -356,4 +448,13 @@ import altitude.core.util.Query
     stillRecycled.isRecycled shouldBe true
     stillRecycled.folderId shouldBe secondRepo.rootFolderId
   }
+
+  private def repositoryId: String = RequestContext.getRepository.persistedId
+
+  /** The context repository's assets that meet the condition, counted in the caller's transaction */
+  private def countAssets(condition: String): Long =
+    query(s"SELECT COUNT(*) AS n FROM asset WHERE repository_id = ? AND $condition", repositoryId)
+      .head("n")
+      .toString
+      .toLong
 }

@@ -11,9 +11,16 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import javax.imageio.ImageIO
 import org.scalatest.DoNotDiscover
+import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatest.time.Millis
+import org.scalatest.time.Seconds
+import org.scalatest.time.Span
 
 import scala.jdk.CollectionConverters.*
 
@@ -24,8 +31,10 @@ import altitude.core.dao.postgres.FaceDao as PostgresFaceDao
 import altitude.core.dao.postgres.PostgresOverrides
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
+import altitude.core.models.DetectedFaces
 import altitude.core.models.Face
 import altitude.core.models.Person
+import altitude.core.models.Settings
 import altitude.core.service.FaceRecognitionService
 
 @DoNotDiscover class FaceRecognitionServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
@@ -84,13 +93,217 @@ import altitude.core.service.FaceRecognitionService
     testApp.service.person.markAsBadMatch(badMatch)
 
     testApp.service.faceRecognition
-      .recognizeFace(query(vector, isEnrolled = true))
+      .recognizeFace(TestContext.detectedFace(vector, isEnrolled = true))
       .value
       .persistedId shouldBe enrolled.persistedId
     testApp.service.faceRecognition
-      .recognizeFace(query(vector, isEnrolled = false))
+      .recognizeFace(TestContext.detectedFace(vector, isEnrolled = false))
       .value
       .persistedId shouldBe enrolled.persistedId
+  }
+
+  test("A Face of a Person merged away is not a match candidate") {
+
+    /**
+     * Setup:
+     *
+     * A Person with an enrolled Face, soft-deleted by hand as a merge leaves its source, with the Face left on them, and a query
+     * at the Face's embedding.
+     *
+     * Assertions:
+     *
+     * The query matches nobody and starts a new Person.
+     */
+    val vector = unitVector(1)
+    val mergedAway = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(mergedAway, testContext.insertAsset(), vector)
+    testApp.txManager.withTransaction {
+      update("UPDATE person SET is_deleted = ? WHERE id = ?", true, mergedAway.persistedId)
+    }
+
+    val recognized = testApp.service.faceRecognition.recognizeFace(TestContext.detectedFace(vector, isEnrolled = true)).value
+
+    recognized.persistedId should not be mergedAway.persistedId
+  }
+
+  test("A Face recognized while its Person is merged away goes to the Person they were merged into") {
+
+    /**
+     * Setup:
+     *
+     * Persons X and Y with an enrolled Face each, far apart, and an asset with one detection near X's Face. A merge of X into Y
+     * holds its transaction open until the recognition of the asset's Faces waits on it: on PostgreSQL the recognition has
+     * searched by then, finding X's Face still X's.
+     *
+     * Assertions:
+     *
+     * Both finish, and the new Face is Y's, who counts all three assets; X, merged away, counts none. No Face of the repository
+     * belongs to a Person merged away.
+     */
+    val x = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(x, testContext.insertAsset(), unitVector(1))
+    val y = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(y, testContext.insertAsset(), unitVector(2))
+    val asset = testContext.insertAsset()
+
+    contend(
+      first = testApp.service.person.merge(dest = y, source = x): Unit,
+      second =
+        testApp.service.faceRecognition.recognizeAndStore(asset, detected(TestContext.between(unitVector(1), unitVector(3), 3)))
+    )
+
+    testApp.service.person.getAllAssetFaces(asset.persistedId).map(_.personId.value) shouldBe List(y.persistedId)
+    testApp.service.person.getById(y.persistedId).numOfFaces shouldBe 3
+    testApp.service.person.getById(x.persistedId).numOfFaces shouldBe 0
+    facesOfPeopleMergedAway shouldBe empty
+  }
+
+  test("An import storing two people's Faces and a recycle of an asset both are on both finish") {
+
+    /**
+     * Setup:
+     *
+     * Persons A, B and C, in ID order. A and B have a Face on a shared asset, C one on another. A new asset's detections are near
+     * B's Face, then C's, then A's. A third transaction locks C. The asset's Faces are recognized and stored until they wait on
+     * it; then a recycle of the shared asset starts and waits; then C is let go (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither the import nor the recycle fails: the new asset has a Face of each of the three, the shared asset is recycled, and
+     * A and B count the new asset alone, C both of theirs.
+     *
+     * Edge cases:
+     *
+     * Storing the Faces in detection order would lock B, then wait on C; the recycle would lock A and wait on B, and the import's
+     * Face of A would then wait on the recycle, a deadlock PostgreSQL ends by failing one of them.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+
+    val List(a, b, c) = List.fill(3)(testApp.service.person.addPerson(Person())).sortBy(_.persistedId)
+    val shared = testContext.insertAsset()
+    testContext.addTestFace(a, shared, unitVector(1))
+    testContext.addTestFace(b, shared, unitVector(2), x1 = 50)
+    testContext.addTestFace(c, testContext.insertAsset(), unitVector(3))
+    val asset = testContext.insertAsset()
+    val detections =
+      DetectedFaces(List(2, 3, 1).map(seed => TestContext.detection(TestContext.between(unitVector(seed), unitVector(9), 3))))
+
+    whileHolding(query("SELECT id FROM person WHERE id = ? FOR UPDATE", c.persistedId): Unit)(
+      () => testApp.service.faceRecognition.recognizeAndStore(asset, detections),
+      () => testApp.service.library.recycleAssets(Set(shared.persistedId))
+    )
+
+    testApp.service.person.getAllAssetFaces(asset.persistedId).map(_.personId.value).toSet shouldBe
+      Set(a, b, c).map(_.persistedId)
+    testApp.service.asset.getById(shared.persistedId).isRecycled shouldBe true
+    List(a, b, c).map(person => testApp.service.person.getById(person.persistedId).numOfFaces) shouldBe List(1, 1, 2)
+  }
+
+  test("A recognition that searches again gives its locks back and takes them again in ID order") {
+
+    /**
+     * Setup:
+     *
+     * Persons D, A and X, in ID order. D and A have a Face on a shared asset, X one on another. A new asset's detections are near
+     * A's Face and near X's. A merge of X into D holds its transaction open while the asset's Faces are recognized, which lock A
+     * and wait on X; then a recycle of the shared asset starts, which waits on D; then the merge commits (`whileHolding`).
+     *
+     * Assertions:
+     *
+     * Neither the import nor the recycle fails. The new asset's Faces are A's and D's, the Face near X's going to D, who has X's
+     * Faces now; the shared asset is recycled, A counts the new asset, D the new asset and X's.
+     *
+     * Edge cases:
+     *
+     * Once X is found merged away, the import holds A and must lock D, whom the recycle took as the merge let go and who then
+     * waits on A: taking D on top of A would be a deadlock, which giving A back before locking A and D again avoids.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+
+    val List(d, a, x) = List.fill(3)(testApp.service.person.addPerson(Person())).sortBy(_.persistedId)
+    val shared = testContext.insertAsset()
+    testContext.addTestFace(d, shared, unitVector(1))
+    testContext.addTestFace(a, shared, unitVector(2), x1 = 50)
+    testContext.addTestFace(x, testContext.insertAsset(), unitVector(3))
+    val asset = testContext.insertAsset()
+    val detections =
+      DetectedFaces(List(2, 3).map(seed => TestContext.detection(TestContext.between(unitVector(seed), unitVector(9), 3))))
+
+    whileHolding(testApp.service.person.merge(dest = d, source = x): Unit)(
+      () => testApp.service.faceRecognition.recognizeAndStore(asset, detections),
+      () => testApp.service.library.recycleAssets(Set(shared.persistedId))
+    )
+
+    testApp.service.person.getAllAssetFaces(asset.persistedId).map(_.personId.value).toSet shouldBe
+      Set(a, d).map(_.persistedId)
+    testApp.service.asset.getById(shared.persistedId).isRecycled shouldBe true
+    List(d, a, x).map(person => testApp.service.person.getById(person.persistedId).numOfFaces) shouldBe List(2, 1, 0)
+    facesOfPeopleMergedAway shouldBe empty
+  }
+
+  test("A match-only detection joins a Person, and is no candidate for the asset's next detection") {
+
+    /**
+     * Setup:
+     *
+     * A Person P with an enrolled Face. A new asset's first detection is match-only and near P's Face; its second is enrolled,
+     * near the first and far from P's Face.
+     *
+     * Assertions:
+     *
+     * The first detection is P's Face. The second starts a new Person: an asset's own match-only Face does not vote, as it would
+     * not once stored.
+     */
+    val p = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(p, testContext.insertAsset(), unitVector(1))
+    val asset = testContext.insertAsset()
+    val first = TestContext.detection(TestContext.between(unitVector(1), unitVector(2), 1), isEnrolled = false)
+    val second = TestContext.detection(TestContext.between(unitVector(2), unitVector(3), 4))
+
+    testApp.service.faceRecognition.recognizeAndStore(asset, DetectedFaces(List(first, second)))
+
+    val owners =
+      testApp.service.person.getAllAssetFaces(asset.persistedId).map(face => face.checksum -> face.personId.value).toMap
+    owners(first._1.checksum) shouldBe p.persistedId
+    owners(second._1.checksum) should not be p.persistedId
+  }
+
+  test("With one Face voting, a detection goes to the nearer of a stored Face and the asset's own earlier one") {
+
+    /**
+     * Setup:
+     *
+     * One Face votes (`face.recognition.match_count` 1). A Person Q with an enrolled Face. Two new assets, each with a first
+     * detection far from everyone, which starts a Person, and a second within the threshold of both that Person's detection and
+     * Q's Face: on the first asset nearer Q's Face, on the second nearer its own first detection.
+     *
+     * Assertions:
+     *
+     * On the first asset the second detection is Q's; on the second it is the Person the first detection started.
+     */
+    def mix(near: Array[Float], far: Array[Float]): Array[Float] =
+      FaceRecognitionService.meanNormalized(Seq(near, near, near, far, far))
+
+    val q = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(q, testContext.insertAsset(), unitVector(5))
+
+    withSetting(Settings.FACE_RECOGNITION_MATCH_COUNT, "1") {
+      List((unitVector(6), true), (unitVector(7), false)).foreach {
+        case (alone, nearerQ) =>
+          val asset = testContext.insertAsset()
+          val first = TestContext.detection(alone)
+          val second = TestContext.detection(if (nearerQ) mix(unitVector(5), alone) else mix(alone, unitVector(5)))
+
+          testApp.service.faceRecognition.recognizeAndStore(asset, DetectedFaces(List(first, second)))
+
+          val owners =
+            testApp.service.person.getAllAssetFaces(asset.persistedId).map(face => face.checksum -> face.personId.value).toMap
+          withClue(s"nearer Q: $nearerQ") {
+            (owners(first._1.checksum) should not).be(q.persistedId)
+            owners(second._1.checksum) shouldBe (if (nearerQ) q.persistedId else owners(first._1.checksum))
+          }
+      }
+    }
   }
 
   test("A Face's sharpness is stored, and a Face without one reads back without one") {
@@ -134,7 +347,7 @@ import altitude.core.service.FaceRecognitionService
     testContext.addTestFace(elsewhere, testContext.persistAsset(repository = Some(secondRepo)), vector)
 
     switchContextRepo(firstRepo)
-    val recognized = testApp.service.faceRecognition.recognizeFace(query(vector, isEnrolled = true)).value
+    val recognized = testApp.service.faceRecognition.recognizeFace(TestContext.detectedFace(vector, isEnrolled = true)).value
 
     recognized.persistedId should not be elsewhere.persistedId
   }
@@ -248,37 +461,37 @@ import altitude.core.service.FaceRecognitionService
     nearest.map(_.persistedId) shouldBe List(nearbyFace.persistedId)
   }
 
-  if (testApp.dataSourceType == Const.DbEngineName.POSTGRES)
-    test("On PostgreSQL the nearest Faces are found through the vector index of the enrolled Faces") {
+  test("On PostgreSQL the nearest Faces are found through the vector index of the enrolled Faces") {
 
-      /**
-       * Setup:
-       *
-       * The nearest-Faces statements explained with the table scan and the sort ruled out, since over a handful of Faces the
-       * planner would otherwise scan and sort them all.
-       *
-       * Assertions:
-       *
-       * Both the recognition statement and the Suggested one, which leaves a Person out, read the partial HNSW index `face_03`,
-       * so their order and predicates match the index's declaration.
-       */
-      val vector = PostgresOverrides.vectorLiteral(unitVector(1))
+    /**
+     * Setup:
+     *
+     * The nearest-Faces statements explained with the table scan and the sort ruled out, since over a handful of Faces the
+     * planner would otherwise scan and sort them all.
+     *
+     * Assertions:
+     *
+     * Both the recognition statement and the Suggested one, which leaves a Person out, read the partial HNSW index `face_03`, so
+     * their order and predicates match the index's declaration.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val vector = PostgresOverrides.vectorLiteral(unitVector(1))
 
-      def plan(sql: String, filterBinds: Any*): String =
-        testApp.txManager.withTransaction {
-          List("seqscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
-          query(
-            s"EXPLAIN $sql",
-            (List(vector, testContext.repository.persistedId) ++ filterBinds ++ List(vector, 20, vector, 0.55, 5))*)
-            .map(_.values.head.toString)
-            .mkString("\n")
-        }
+    def plan(sql: String, filterBinds: Any*): String =
+      testApp.txManager.withTransaction {
+        List("seqscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
+        query(
+          s"EXPLAIN $sql",
+          (List(vector, testContext.repository.persistedId) ++ filterBinds ++ List(vector, 20, vector, 0.55, 5))*)
+          .map(_.values.head.toString)
+          .mkString("\n")
+      }
 
-      val matchesPlan = plan(PostgresFaceDao.CLOSEST_MATCHES_SQL)
-      withClue(matchesPlan)(matchesPlan should include("Index Scan using face_03"))
-      val othersPlan = plan(PostgresFaceDao.CLOSEST_OF_OTHERS_SQL, "no-such-person")
-      withClue(othersPlan)(othersPlan should include("Index Scan using face_03"))
-    }
+    val matchesPlan = plan(PostgresFaceDao.CLOSEST_MATCHES_SQL)
+    withClue(matchesPlan)(matchesPlan should include("Index Scan using face_03"))
+    val othersPlan = plan(PostgresFaceDao.CLOSEST_OF_OTHERS_SQL, "no-such-person")
+    withClue(othersPlan)(othersPlan should include("Index Scan using face_03"))
+  }
 
   test("With no candidate, an enrolled Face starts a Person and a match-only Face is nobody's") {
 
@@ -296,8 +509,8 @@ import altitude.core.service.FaceRecognitionService
     val matchOnly = testApp.service.person.addPerson(Person())
     testContext.addTestFace(matchOnly, asset, vector, isEnrolled = false)
 
-    testApp.service.faceRecognition.recognizeFace(query(vector, isEnrolled = false)) shouldBe None
-    val started = testApp.service.faceRecognition.recognizeFace(query(vector, isEnrolled = true)).value
+    testApp.service.faceRecognition.recognizeFace(TestContext.detectedFace(vector, isEnrolled = false)) shouldBe None
+    val started = testApp.service.faceRecognition.recognizeFace(TestContext.detectedFace(vector, isEnrolled = true)).value
     started.persistedId should not be matchOnly.persistedId
   }
 
@@ -321,11 +534,11 @@ import altitude.core.service.FaceRecognitionService
     testContext.addTestFace(personNearby, asset, nearby)
 
     testApp.service.faceRecognition
-      .recognizeFace(query(vector, isEnrolled = true))
+      .recognizeFace(TestContext.detectedFace(vector, isEnrolled = true))
       .value
       .persistedId shouldBe personAtVector.persistedId
     testApp.service.faceRecognition
-      .recognizeFace(query(nearby, isEnrolled = true))
+      .recognizeFace(TestContext.detectedFace(nearby, isEnrolled = true))
       .value
       .persistedId shouldBe personNearby.persistedId
   }
@@ -572,16 +785,6 @@ import altitude.core.service.FaceRecognitionService
 
   private def unitVector(seed: Int): Array[Float] = TestContext.unitVector(seed)
 
-  /** An unsaved detection with the given embedding, as recognition receives it */
-  private def query(features: Array[Float], isEnrolled: Boolean): Face =
-    Face(
-      x1 = 0,
-      y1 = 0,
-      width = 10,
-      height = 10,
-      detectionScore = 0.9,
-      checksum = TestContext.randomChecksum,
-      features = features,
-      quality = 20.0,
-      isEnrolled = isEnrolled)
+  /** An image's one detection */
+  private def detected(features: Array[Float]): DetectedFaces = DetectedFaces(List(TestContext.detection(features)))
 }

@@ -1,7 +1,9 @@
 package altitude.core.unit
 
+import altitude.test.IntegrationTestUtil.withJvmTimeZone
 import altitude.test.TestFocus
 import java.time.LocalDate
+import java.time.LocalDateTime
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.shouldEqual
@@ -9,6 +11,24 @@ import org.scalatest.matchers.should.Matchers.shouldEqual
 import altitude.core.util.Util
 
 @DoNotDiscover class UtilTests extends funsuite.AnyFunSuite with TestFocus {
+
+  test("A stored moment is shown in the server's zone, on the day a Date Imported range finds it") {
+
+    /**
+     * Setup:
+     *
+     * The JVM's zone set to America/New_York, and two stored moments (their UTC wall clocks): 03:30 UTC on 2 November 2026, and
+     * 05:30 UTC on 1 November 2026, the first 01:30 of that night's repeated hour.
+     *
+     * Assertions:
+     *
+     * The first shows as 22:30 on 1 November, the day a Date Imported range cuts in that zone; the second as 01:30.
+     */
+    withJvmTimeZone("America/New_York") {
+      Util.inServerZone(LocalDateTime.parse("2026-11-02T03:30:00")) shouldEqual LocalDateTime.parse("2026-11-01T22:30:00")
+      Util.inServerZone(LocalDateTime.parse("2026-11-01T05:30:00")) shouldEqual LocalDateTime.parse("2026-11-01T01:30:00")
+    }
+  }
 
   test("A calendar day reads as weekday, month, day and year, with no zero padding") {
 

@@ -8,8 +8,11 @@ object SystemMetadataDao:
   val SYSTEM_RECORD_ID = 1
 
 trait SystemMetadataDao extends BaseDao[SystemMetadata]:
+  /** Stamps the schema version on the system row; `IllegalStateException` when there is no row to stamp */
   def updateVersion(toVersion: Int): Unit
-  def setInitialized(): Unit
+
+  /** Marks the instance set up unless it is already; whether this call marked it */
+  def setInitialized(): Boolean
 
   /** The Base64 key of signed content URLs */
   def getSigningKey: Option[String]

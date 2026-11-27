@@ -11,6 +11,8 @@ import org.slf4j.MDC
 import altitude.core._
 import altitude.core.dao.RepositoryGrantDao
 import altitude.core.dao.UserDao
+import altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.jdbc.BaseDao.newDuplicateExceptionOrRethrow
 import altitude.core.models.AccountSnapshot
 import altitude.core.models.AccountType
 import altitude.core.models.AuditEventType
@@ -21,9 +23,8 @@ import altitude.core.models.TokenClaims
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.NameKey
-import altitude.core.util.NaturalOrder
+import altitude.core.util.SortKey
 import altitude.core.util.Util
-import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
 object UserService:
 
@@ -368,7 +369,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
   def accountTimes(accountId: String): UserService.AccountTimes =
     txManager.asReadOnly {
       val account = dao.getById(accountId)
-      UserService.AccountTimes(account.createdAt.map(dao.instantOf), account.lastLoginAt.map(dao.instantOf))
+      UserService.AccountTimes(account.createdAt.map(Util.instantOf), account.lastLoginAt.map(Util.instantOf))
     }
 
   /** The account as an Admin's edit form opens it, with its grants and their state, read in one transaction */
@@ -445,10 +446,33 @@ class UserService(val app: Altitude) extends BaseService[User]:
    */
   def lockImporter(accountId: String): User =
     txManager.withTransaction {
-      dao.lockAsImporter(accountId) match
+      dao.shareLock(accountId) match
         case None => throw ImporterUnavailableException(Const.Msg.Err.IMPORTER_GONE)
         case Some(account) if !account.isActive => throw ImporterUnavailableException(Const.Msg.Err.IMPORTER_DEACTIVATED)
         case Some(account) => account
+    }
+
+  /**
+   * Share-locks the account, whatever its state, for a write of rows an account write of it rewrites (an import's completion of
+   * an asset it owns), taken before them as an account write takes the account before them; nothing for an account gone
+   */
+  def shareLock(accountId: String): Unit =
+    txManager.withTransaction {
+      dao.shareLock(accountId): Unit
+    }
+
+  /**
+   * The acting account of a write that stores a reference to it (an Edit's saver, a Watch folder's owner), share-locked as
+   * [[lockImporter]] locks an importer. Taken before the write's first row: an account write locks the account before the rows it
+   * changes, so the two then take turns rather than each holding what the other waits on. An account deleted or deactivated since
+   * its login is refused, and with `mustBeAdmin` one that is no Admin by then (a Watch folder's owner must be an active Admin).
+   */
+  def lockActor(accountId: String, mustBeAdmin: Boolean = false): User =
+    txManager.withTransaction {
+      val actor =
+        dao.shareLock(accountId).filter(_.isActive).getOrElse(throw ForbiddenException(Const.Msg.Err.FORBIDDEN_INACTIVE))
+      if mustBeAdmin && actor.accountType != AccountType.Admin then throw ForbiddenException(Const.Msg.Err.FORBIDDEN_ADMIN)
+      actor
     }
 
   /** How many assets the account owns, in every Library: what deleting it moves to the Admin */
@@ -527,7 +551,10 @@ class UserService(val app: Altitude) extends BaseService[User]:
         .filter(grant => visible.forall(_.contains(grant.repositoryId)))
         .groupBy(_.accountId)
 
-      accounts.sortBy(_.name)(using NaturalOrder).map(account => account -> grants.getOrElse(account.persistedId, Nil))
+      // In natural order, each name's key computed once; two accounts may share a name, which their IDs order
+      accounts
+        .sortBy(account => (SortKey.of(account.name), account.persistedId))
+        .map(account => account -> grants.getOrElse(account.persistedId, Nil))
     }
 
   /** The account and grants held to its type and the account rules, or a `ValidationException` with each failing field's error */
@@ -635,20 +662,15 @@ class UserService(val app: Altitude) extends BaseService[User]:
 
   /**
    * Runs an insert or update of an account, turning a unique violation of its email address's or its username's name key
-   * (`account_01`, `account_02`) into a `ValidationException` on that field
+   * (`account_01`, `account_02`) into a `ValidationException` on that field. Any other failure is rethrown as it is.
    */
   private def whileKeysFree[A](write: => A): A =
     try write
     catch
-      case e: SQLException =>
-        newDuplicateExceptionOrRethrow(e) match
-          case _: DuplicateException =>
-            // QueryRunner rethrows the driver's exception with the statement in its message, the driver's as the next one
-            val message = Option(e.getNextException).getOrElse(e).getMessage
-            if message.contains("username_key") || message.contains("account_02") then
-              throw fieldError(FieldConst.User.USERNAME, Const.Msg.Err.USERNAME_TAKEN)
-            else throw fieldError(FieldConst.User.EMAIL, Const.Msg.Err.EMAIL_TAKEN)
-          case other => throw other
+      case e: SQLException if BaseDao.violates(e, UserDao.EMAIL_KEY_INDEX) =>
+        throw fieldError(FieldConst.User.EMAIL, Const.Msg.Err.EMAIL_TAKEN)
+      case e: SQLException if BaseDao.violates(e, UserDao.USERNAME_KEY_INDEX) =>
+        throw fieldError(FieldConst.User.USERNAME, Const.Msg.Err.USERNAME_TAKEN)
 
   private def grantsJson(grants: Map[String, Permissions]): ujson.Obj =
     ujson.Obj.from(grants.toSeq.sortBy(_._1).map((repositoryId, permissions) => repositoryId -> permissionsJson(permissions)))

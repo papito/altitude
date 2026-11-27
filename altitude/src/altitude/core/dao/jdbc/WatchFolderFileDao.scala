@@ -9,10 +9,11 @@ import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.sql.tables.WatchFolderFileRow
 import altitude.core.models.WatchFileState
+import altitude.core.models.WatchFolder
 import altitude.core.models.WatchFolderFile
 
 object WatchFolderFileDao:
-  // How many rows one statement inserts, or names by path: 7 values a row, well within what either engine binds
+  // How many rows one statement inserts: 7 values a row, well within what either engine binds
   private val CHUNK = 500
 
 abstract class WatchFolderFileDao(override val config: Config)
@@ -48,8 +49,7 @@ abstract class WatchFolderFileDao(override val config: Config)
       state = WatchFileState.fromDbValue(row.state),
       attempts = row.attempts,
       lastSeenAt = Some(toLocalDateTime(row.lastSeenAt)),
-      createdAt = row.createdAt.map(toLocalDateTime),
-      updatedAt = row.updatedAt.map(toLocalDateTime)
+      createdAt = row.createdAt.map(toLocalDateTime)
     )
 
   override protected def makeModel(rec: Map[String, AnyRef]): WatchFolderFile =
@@ -62,16 +62,24 @@ abstract class WatchFolderFileDao(override val config: Config)
       state = WatchFileState.fromDbValue(rec(F.STATE).asInstanceOf[String]),
       attempts = getIntField(rec(F.ATTEMPTS)),
       lastSeenAt = getDateTimeField(rec.get(F.LAST_SEEN_AT)),
-      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
-      updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
+      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT))
     )
 
-  override def ofWatchFolder(watchFolderId: String): List[WatchFolderFile] =
+  // Streamed, each row straight into the map, so a memory of many files is never also held as a list of rows
+  override def memoryOf(watchFolderId: String): Map[String, WatchFolderFile] =
     val sql = s"SELECT * FROM $tableName WHERE ${FieldConst.REPO_ID} = ? AND ${F.WATCH_FOLDER_ID} = ?"
-    manyBySqlQuery(sql, List(repositoryId, watchFolderId)).map(makeModel)
+    val memory = Map.newBuilder[String, WatchFolderFile]
+    foreachBySqlQuery(sql, List(repositoryId, watchFolderId)) {
+      rec =>
+        val file = makeModel(rec)
+        memory += file.relPath -> file
+    }: Unit
+    memory.result()
 
   // A new file is `seen` and never tried, by the columns' defaults; several rows a statement, since a first scan may find many
   override def addAll(files: Seq[WatchFolderFile], seenAt: OffsetDateTime): Unit =
+    // A scan skips such a file (`WatchFolderService.walk`); PostgreSQL's index would refuse the whole statement
+    require(!files.exists(file => WatchFolder.isPathTooLong(file.relPath)), "A file path too long for the memory")
     files.grouped(WatchFolderFileDao.CHUNK).foreach {
       chunk =>
         val sql = s"""
@@ -97,7 +105,7 @@ abstract class WatchFolderFileDao(override val config: Config)
         )
     }
 
-  override def changed(watchFolderId: String, relPath: String, sizeBytes: Long, modifiedAt: Long, seenAt: OffsetDateTime): Int =
+  override def changed(watchFolderId: String, files: Seq[WatchFolderFile], seenAt: OffsetDateTime): Unit =
     val sql = s"""
       UPDATE $tableName
          SET ${F.SIZE_BYTES} = ?, ${F.MODIFIED_AT} = ?, ${F.STATE} = ?, ${F.ATTEMPTS} = 0, ${F.LAST_SEEN_AT} = ?
@@ -106,24 +114,24 @@ abstract class WatchFolderFileDao(override val config: Config)
          AND ${F.REL_PATH} = ?
     """
 
-    updateByBySql(sql, List(sizeBytes, modifiedAt, SEEN, nativeUtcTimestamp(seenAt), repositoryId, watchFolderId, relPath))
+    val seen = nativeUtcTimestamp(seenAt)
+    batchBySql(
+      sql,
+      files.map(file => List(file.sizeBytes, file.modifiedAt, SEEN, seen, repositoryId, watchFolderId, file.relPath))): Unit
 
+  // The paths bound as one set parameter, as a set of IDs is (`inIdSet`), however many a scan finds unchanged
   override def seenAgain(watchFolderId: String, relPaths: Seq[String], seenAt: OffsetDateTime): Int =
-    relPaths
-      .grouped(WatchFolderFileDao.CHUNK)
-      .map {
-        chunk =>
-          val sql = s"""
-            UPDATE $tableName
-               SET ${F.LAST_SEEN_AT} = ?
-             WHERE ${FieldConst.REPO_ID} = ?
-               AND ${F.WATCH_FOLDER_ID} = ?
-               AND ${F.REL_PATH} IN (${chunk.map(_ => "?").mkString(", ")})
-          """
+    if relPaths.isEmpty then return 0
 
-          updateByBySql(sql, List(nativeUtcTimestamp(seenAt), repositoryId, watchFolderId) ++ chunk)
-      }
-      .sum
+    val sql = s"""
+      UPDATE $tableName
+         SET ${F.LAST_SEEN_AT} = ?
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${F.WATCH_FOLDER_ID} = ?
+         AND ${F.REL_PATH} $inIdSet
+    """
+
+    updateByBySql(sql, List(nativeUtcTimestamp(seenAt), repositoryId, watchFolderId, idSet(relPaths.toSet)))
 
   override def setState(watchFolderId: String, relPath: String, sizeBytes: Long, modifiedAt: Long, state: WatchFileState): Int =
     val sql = s"UPDATE $tableName SET ${F.STATE} = ? $ASIS"

@@ -4,7 +4,9 @@
 #
 # Every step runs in bash (Git Bash on Windows) and calls Mill itself with the arguments and environment of the Makefile's
 # targets, since Windows has no make and the Makefile calls ./mill, whose launcher has no Windows build: matrix.mill is ./mill
-# on Linux and macOS and ./mill.bat on Windows.
+# on Linux and macOS and ./mill.bat on Windows. Both run with --no-daemon: each step calls Mill once, so a background server buys
+# nothing, and its launch wait is a fixed 10 s (MillServerLauncher.serverInitWaitMillis, not configurable in Mill 1.0.6) that a
+# cold Windows runner can miss.
 
 name: Native jars
 
@@ -29,16 +31,16 @@ jobs:
         include:
           - runner: ubuntu-24.04
             platform: linux-x86_64
-            mill: ./mill
+            mill: ./mill --no-daemon
           - runner: ubuntu-24.04-arm
             platform: linux-arm64
-            mill: ./mill
+            mill: ./mill --no-daemon
           - runner: macos-15
             platform: macosx-arm64
-            mill: ./mill
+            mill: ./mill --no-daemon
           - runner: windows-2025
             platform: windows-x86_64
-            mill: ./mill.bat
+            mill: ./mill.bat --no-daemon
     defaults:
       run:
         shell: bash

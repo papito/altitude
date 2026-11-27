@@ -135,7 +135,7 @@ cap, the other predicates heap checks over those rows alone, so an import never 
 stream through the DAO (`BaseDao.collectBySqlQuery`): each candidate is judged by the rule as it is fetched and dropped
 unless it matches, so no more than the matches' embeddings are held, and the read takes no row locks, since the
 writers' lock already makes the assignments take turns; the matches, a few rows, are then re-read locked
-(`AssetDao.lockTriaged`), and only those still in triage go on, with the Sequence each carries now. The cap is
+(`AssetDao.lockSequenceFrames`), and only those still in triage go on, with the Sequence each carries now. The cap is
 `Const.Sequence.UNDATED_CANDIDATES_PER_CORE` (5,000) per CPU core (`Altitude.undatedSequenceCandidates`, computed once
 at startup and logged at INFO with the core count; a constructor parameter of `SequenceService`, so a test can build
 the service with a cap of its own): a candidate costs about 6 KB to read, its two Scene embeddings, so a core's share is

@@ -2127,7 +2127,10 @@ popover host, right-aligned below the trigger (`htmx/account_info_dialog.css`). 
 
 - Each time is a `<time datetime>` holding UTC text (`Util.utcText`), shown in the viewer's zone and locale by the
   `localTime` component (`js/alpine/components/local-time.js`), registered in both `alpine/components/index.js` (the
-  main app) and `nav-page.js` (the nav pages).
+  main app) and `nav-page.js` (the nav pages). Every moment a page shows is written so, through `includes/local_time`
+  (an account card's and an album's creation too), but an import time: the grid's "Imported:" and the Detail panel's
+  "Date Imported" are text in the server's zone (`Util.inServerZone`), the zone a Date Imported search cuts its days in,
+  so an import shows on the day that search finds it.
 - "Change password…" requests `htmx/own_password_dialog` (`GET /htmx/account/dialogs/password`) into the same host;
   it sends JSON to `PUT /htmx/account/password` (`OwnPasswordController`). A refusal returns the form with the error
   under its field and nothing typed kept. A change answers with the session's new cookie and `PASSWORD_CHANGED_EVENT`,
@@ -2224,7 +2227,9 @@ rename, move, delete) use `reloadFolderTree`, which rebuilds with fresh counts.
 interact.js bindings; listeners reach them through `app.assetActions` / `app.searchDetailCoordinator`, and `FrontendApp`
 is the composition root that wires them. A restore answers `{restored, duplicates}`: an asset whose content was imported
 again after it was recycled stays in the Trash, so only the `restored` cells leave the grid and the snackbar warns about
-the rest.
+the rest. A move answers the same, since it takes an asset out of the Trash too: every cell but the `duplicates`' is
+moved (and leaves the grid in Triage, the Trash or a folder the destination is outside of), the duplicates stay
+selected while the moved ones are deselected, and `reportLeftInTrash` words both snackbars.
 
 **Control states** — The action buttons, a toggle group's segments, the filter chip, the menu trigger, a context menu's
 actions and the switch share one transition rule in the DEFAULT CORE section of `core.css`. The hover lift and the press

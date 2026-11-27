@@ -86,16 +86,28 @@ trait SearchPlans { self: IntegrationTestCore =>
       s"""WITH RECURSIVE g (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM g WHERE n < $copies)
          |INSERT INTO asset (id, repository_id, owner_user_id, original_owner, checksum, media_type, media_subtype, mime_type,
          |                   width, height, area_size,
-         |                   folder_id, filename, size_bytes, is_triaged, is_recycled, is_purged, is_pipeline_processed,
-         |                   original_created_at, created_at)
+         |                   folder_id, filename, filename_sort, size_bytes, is_triaged, is_recycled, is_purged,
+         |                   is_pipeline_processed, original_created_at, created_at)
          |SELECT $copyId, repository_id, owner_user_id, original_owner, $checksum, media_type, media_subtype, mime_type,
          |       width, height, area_size,
-         |       ${folderId(s"g.n % $folders")}, filename, size_bytes, is_triaged, is_recycled, is_purged, is_pipeline_processed,
-         |       original_created_at, $createdAt
+         |       ${folderId(s"g.n % $folders")}, filename, filename_sort, size_bytes, is_triaged, is_recycled, is_purged,
+         |       is_pipeline_processed, original_created_at, $createdAt
          |  FROM asset CROSS JOIN g
          | WHERE asset.id = ?""".stripMargin,
       templateId
     )
+  }
+
+  /**
+   * Deletes the context repository's rows [[seedCopies]] added (the copies, whose IDs have no dash, then the folders), for a test
+   * that commits its seed: the copies' and folders' IDs are the same in every test, so a row left behind fails a later seed.
+   */
+  protected def removeCopies(): Unit = {
+    val repositoryId = RequestContext.getRepository.persistedId
+    testApp.txManager.withTransaction {
+      update("DELETE FROM asset WHERE repository_id = ? AND id NOT LIKE '%-%'", repositoryId)
+      update("DELETE FROM folder WHERE repository_id = ? AND id LIKE 'seeded-folder-%'", repositoryId)
+    }
   }
 
   /**
