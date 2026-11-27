@@ -42,7 +42,7 @@ object PersonService:
   def nameKey(name: String): String = NameKey.of(name)
 
   /**
-   * Whether a name has an unnamed person's form, which no person may take, as their sort name (`unknown 0000000042`) would
+   * Whether a name has an unnamed person's form, which no person may take, as their name key (`unknown 42`) would
    * collide with a named person's key. Matched in NFKC, as the key folds it, so a full-width "Ｕnknown 42" is reserved too.
    */
   def isReservedName(name: String): Boolean = RESERVED_NAME.matches(Normalizer.normalize(name, Normalizer.Form.NFKC))
@@ -673,7 +673,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     app.service.asset.queryAll(purging).nonEmpty
 
   /**
-   * Names the person, stored in NFC with its name key as sort name. A name another live person holds in any case or Unicode form
+   * Names the person, stored in NFC with its name key and sort key. A name another live person holds in any case or Unicode form
    * is a `DuplicateException` (`person_01`). The name's lock comes first, as a move of a Face to a name takes it, so such a move
    * creating a Person of the name meanwhile waits, then finds this one holding it, instead of failing on `person_01`.
    */
