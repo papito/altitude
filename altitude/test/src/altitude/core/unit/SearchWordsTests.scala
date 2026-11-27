@@ -58,6 +58,44 @@ import altitude.core.util.SearchWords
     SearchWords.of("İstanbul") shouldBe Seq("istanbul")
   }
 
+  test("A sigma is one letter at a word's end and inside it, typed in either case") {
+
+    /**
+     * Setup:
+     *
+     * "ΟΔΟΣ" in capitals, "οδος" with a final sigma, "οδοσ" with a medial one last, and "ΟΔΟΣΗΜΑΝΣΗ".
+     *
+     * Assertions:
+     *
+     * Each comes out with the medial sigma, so the three are one word and the first is a prefix of the last.
+     */
+    SearchWords.of("ΟΔΟΣ οδος οδοσ") shouldBe Seq("οδοσ", "οδοσ", "οδοσ")
+    SearchWords.of("ΟΔΟΣΗΜΑΝΣΗ") shouldBe Seq("οδοσημανση")
+  }
+
+  test("A letter with two lower-case forms comes out in one, whatever the case it is typed in") {
+
+    /**
+     * Setup:
+     *
+     * The micro sign and the Greek mu, the long s, the Greek symbol forms of beta, theta, phi, pi, kappa, rho and epsilon, and
+     * the dotless i.
+     *
+     * Assertions:
+     *
+     * Each comes out as the plain lower-case letter its capital lower-cases to, as the same word typed in capitals does.
+     *
+     * Edge cases:
+     *
+     * The dotless i becomes an i, since its capital is I: a fold the engines would not make themselves, which holds because the
+     * document, the names and the typed text all go through these words.
+     */
+    SearchWords.of("µm μm ΜM") shouldBe Seq("μm", "μm", "μm")
+    SearchWords.of("ſun") shouldBe Seq("sun")
+    SearchWords.of("ϐϑϕϖϰϱϵ") shouldBe Seq("βθφπκρε")
+    SearchWords.of("ışık") shouldBe Seq("isik")
+  }
+
   test("Letters and digits split from each other in both directions") {
 
     /**

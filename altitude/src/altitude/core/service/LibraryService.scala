@@ -2,6 +2,7 @@ package altitude.core.service
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.sql.SQLException
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.slf4j.Logger
@@ -272,30 +273,22 @@ class LibraryService(val app: Altitude):
 
   /**
    * Restores recycled assets in one transaction. An asset whose content is live again (imported anew since) stays in the Trash
-   * and is reported; any other failure restores nothing. A live or purge-marked asset is ignored. Restoring takes what recycling
-   * would, checked after the read, so another repository's asset is not found rather than refused.
+   * and is reported ([[leavingTheTrash]]); any other failure restores nothing. A live or purge-marked asset is ignored. Restoring
+   * takes what recycling would, checked after the read, so another repository's asset is not found rather than refused.
    */
   def restoreRecycledAssets(assetIds: Set[String]): RestoreResult =
     logger.debug(s"Restoring recycled assets [${assetIds.mkString(",")}]")
 
     val result = txManager.withTransaction {
-      // Before the reads and row locks, as a folder delete takes it: a delete under way is seen done, and restores take their
-      // folders' name locks one at a time
+      // Before the reads and row locks, as a folder delete takes it: a delete under way is seen done, restores take their
+      // folders' name locks one at a time, and of two restores or moves of copies of one content the second sees the first's
       app.service.folder.lockTree()
       val recycled = app.service.asset.getAssetsToRestore(assetIds)
       requireAssets(assetIds -- recycled.map(_.persistedId))
       AssetRules.requireRecycle(recycled, action = "restore")
 
-      // One at a time: a restored asset makes a recycled copy of its content a duplicate
-      val (restored, duplicates) = recycled.foldLeft((List.empty[Asset], List.empty[Asset])) {
-        case ((restored, duplicates), asset) =>
-          if app.service.asset.getByChecksum(asset.checksum).isDefined then
-            logger.debug(s"Not restoring asset [${asset.persistedId}]: an asset with the same content is live")
-            (restored, asset :: duplicates)
-          else
-            restoreRecycledAsset(asset)
-            (asset :: restored, duplicates)
-      }
+      val TrashExit(restored, duplicates) = leavingTheTrash(recycled)
+      refusingAContentImportedMeanwhile(restored.foreach(restoreRecycledAsset))
 
       if restored.nonEmpty then
         app.service.stats.transition(before = restored, after = restored.map(_.copy(isRecycled = false)))
@@ -306,6 +299,39 @@ class LibraryService(val app: Altitude):
 
     logger.debug(s"Restored ${result.restored.size} assets; ${result.duplicates.size} left in the trash as duplicates")
     result
+
+  /** The recycled assets of a restore or a move that leave the Trash, and the `duplicates` that stay */
+  private case class TrashExit(leaving: List[Asset], duplicates: List[Asset])
+
+  /**
+   * Which recycled assets may leave the Trash: `asset_01` allows one live copy of a content, so an asset stays when its content
+   * is live (imported anew since it was recycled) or leaves earlier in the same operation, whose rows are in ID order. The live
+   * contents are read in one statement. Reads only: the caller writes the assets that leave, under the tree's turn, which every
+   * restore and move takes first, so a second operation reads what the first left live.
+   */
+  private def leavingTheTrash(recycled: List[Asset]): TrashExit =
+    val live = app.service.asset.liveChecksums(recycled.map(_.checksum).toSet)
+    val (leaving, duplicates, _) = recycled.foldLeft((List.empty[Asset], List.empty[Asset], live)) {
+      case ((leaving, duplicates, taken), asset) =>
+        if taken.contains(asset.checksum) then
+          logger.debug(s"Leaving asset [${asset.persistedId}] in the trash: an asset with the same content is live")
+          (leaving, asset :: duplicates, taken)
+        else (asset :: leaving, duplicates, taken + asset.checksum)
+    }
+    TrashExit(leaving.reverse, duplicates.reverse)
+
+  /**
+   * Writes assets out of the Trash. An import is the one writer of a content that takes no turn with them: on PostgreSQL its row,
+   * inserted but not committed when [[leavingTheTrash]] read the live contents, makes the write fail on `asset_01` once it
+   * commits. The operation is then refused whole, as one to try again, which then leaves that asset in the Trash. (On SQLite the
+   * one write connection serializes the two.)
+   */
+  private def refusingAContentImportedMeanwhile[T](write: => T): T =
+    try write
+    catch
+      case ex: SQLException if ex.getSQLState == "23505" && Option(ex.getMessage).exists(_.contains("asset_01")) =>
+        logger.info(s"An asset with the content of one leaving the trash was imported meanwhile: ${ex.getMessage}")
+        throw IllegalOperationException(altitude.core.Const.Msg.Err.CONTENT_IMPORTED_MEANWHILE)
 
   /** Fails with NotFoundException when an ID is no asset of the context repository */
   private def requireAssets(assetIds: Set[String]): Unit =
@@ -331,28 +357,36 @@ class LibraryService(val app: Altitude):
   /**
    * Moves assets into a folder, which also takes them out of the Trash or Triage. The update clears every moved asset's Sequence:
    * a sorted asset never carries one, so a Sequence whose last member moves is gone, and an asset recycled from Triage keeps its
-   * Sequence until moved into a folder. An asset moved out of the Trash is restored, taking what recycling it would.
+   * Sequence until moved into a folder. An asset moved out of the Trash is restored, taking what recycling it would; as in
+   * [[restoreRecycledAssets]], one whose content is live again stays in the Trash and is reported among the `duplicates`, and the
+   * rest move ([[leavingTheTrash]]). It takes the tree's turn first, as a restore does, so of two restores or moves of copies of
+   * one content the second sees the first's.
    */
-  def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit =
+  def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): RestoreResult =
     if destFolderId == null then throw IllegalOperationException("Destination folder ID cannot be null")
 
-    txManager.withTransaction {
+    val result = txManager.withTransaction {
+      // Before the reads and row locks (**Lock order**)
+      app.service.folder.lockTree()
       app.service.folder.getById(destFolderId): Unit
-      val assetsToMove = app.service.asset.getAssetsToMove(assetIds)
-      AssetRules.requireRecycle(assetsToMove.filter(_.isRecycled), action = "restore")
+      val (recycled, live) = app.service.asset.getAssetsToMove(assetIds).partition(_.isRecycled)
+      AssetRules.requireRecycle(recycled, action = "restore")
+      val TrashExit(restored, duplicates) = leavingTheTrash(recycled)
+      val assetsToMove = live ++ restored
 
       logger.debug(s"Moving assets [${assetIds.mkString(",")}] to folder [$destFolderId] " + assetsToMove.length)
       if assetsToMove.nonEmpty then
         val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToMove.map(_.persistedId).toSet[Any]))
 
-        app.service.asset.updateByQuery(
-          query = assetQuery,
-          data = Map(
-            FieldConst.Asset.FOLDER_ID -> destFolderId,
-            FieldConst.Asset.IS_RECYCLED -> false,
-            FieldConst.Asset.IS_TRIAGED -> false,
-            FieldConst.Asset.SEQUENCE_ID -> None)
-        )
+        refusingAContentImportedMeanwhile(
+          app.service.asset.updateByQuery(
+            query = assetQuery,
+            data = Map(
+              FieldConst.Asset.FOLDER_ID -> destFolderId,
+              FieldConst.Asset.IS_RECYCLED -> false,
+              FieldConst.Asset.IS_TRIAGED -> false,
+              FieldConst.Asset.SEQUENCE_ID -> None)
+          ))
 
         // A recycled asset counts as recycled even when it was recycled from triage and keeps its triage flag, and an asset moved
         // from one folder to another stays sorted
@@ -360,9 +394,13 @@ class LibraryService(val app: Altitude):
           .transition(before = assetsToMove, after = assetsToMove.map(_.copy(isRecycled = false, isTriaged = false)))
 
         // Only the assets coming out of recycle give their faces back; triage and folder moves leave face counts alone
-        val restoredIds = assetsToMove.filter(_.isRecycled).map(_.persistedId).toSet
-        if restoredIds.nonEmpty then app.service.person.restoreFacesForAssets(restoredIds)
+        if restored.nonEmpty then app.service.person.restoreFacesForAssets(restored.map(_.persistedId).toSet)
+
+      RestoreResult(restored = restored.map(_.persistedId).toSet, duplicates = duplicates.map(_.persistedId).toSet)
     }
+
+    if result.duplicates.nonEmpty then logger.debug(s"Moving assets left ${result.duplicates.size} in the trash as duplicates")
+    result
 
   /**
    * Recycles the live assets among the IDs in one transaction, leaving out the rest; one asset the account may not recycle

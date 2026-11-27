@@ -2224,7 +2224,9 @@ rename, move, delete) use `reloadFolderTree`, which rebuilds with fresh counts.
 interact.js bindings; listeners reach them through `app.assetActions` / `app.searchDetailCoordinator`, and `FrontendApp`
 is the composition root that wires them. A restore answers `{restored, duplicates}`: an asset whose content was imported
 again after it was recycled stays in the Trash, so only the `restored` cells leave the grid and the snackbar warns about
-the rest.
+the rest. A move answers the same, since it takes an asset out of the Trash too: every cell but the `duplicates`' is
+moved (and leaves the grid in Triage, the Trash or a folder the destination is outside of), the duplicates stay
+selected while the moved ones are deselected, and `reportLeftInTrash` words both snackbars.
 
 **Control states** — The action buttons, a toggle group's segments, the filter chip, the menu trigger, a context menu's
 actions and the switch share one transition rule in the DEFAULT CORE section of `core.css`. The hover lift and the press

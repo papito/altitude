@@ -18,13 +18,8 @@ import altitude.core.util.*
   /** What a fixture asset was given, so the expected order can be computed independently of SQL */
   private case class Dated(id: String, taken: Option[LocalDateTime], imported: OffsetDateTime, filename: String)
 
-  private val sortFields =
-    List(
-      FieldConst.Asset.ORIGINAL_CREATED_AT,
-      FieldConst.CREATED_AT,
-      FieldConst.Asset.FILENAME,
-      FieldConst.Asset.SIZE_BYTES,
-      FieldConst.Asset.AREA_SIZE)
+  // Every field a search may sort by, so a field added there is walked here too
+  private val sortFields = Const.Search.SORT_FIELDS.toList.sorted
 
   private def persistDated(taken: String, filename: String): Dated = {
     val asset = testContext.persistAsset()
@@ -504,6 +499,62 @@ import altitude.core.util.*
     intercept[SearchCursorException](SearchCursor.decode(""))
 
     ids(continue(cursor, grouping, sort, rpp = 5)).length shouldBe 5
+  }
+
+  test("A cursor whose values were edited is refused for the search it names") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture, named "img…", and a cursor from the first page of five of each ordering: grouped by Date Taken, by
+     * Location and by Sequence and sorted by file name, flat by capture time, and flat under the Relevance sort for "img". Each
+     * is edited and keeps its fingerprint, as a client could edit the token.
+     *
+     * Assertions:
+     *
+     * A group key that is not what the grouping writes (a day, a first capture, a Location's path key with its ID), a sort value
+     * of another kind than the sort's, and a capture time of another kind under the Relevance sort are each refused as a
+     * malformed cursor, a 400 at the route, on both engines, before a statement compares them.
+     *
+     * Edge cases:
+     *
+     * The unedited cursors still continue their searches.
+     */
+    fixture()
+    val sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
+    val byDay = SearchGrouping(GroupBy.DateTaken)
+    val byLocation = SearchGrouping(GroupBy.Location)
+    val bySequence = SearchGrouping(GroupBy.Sequence)
+    val byCapture = SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.DESC)
+    val img = Some("img")
+
+    def refused(page: => Any): Unit =
+      intercept[SearchCursorException](page).getMessage shouldBe "Malformed cursor"
+
+    val dayCursor = firstPage(byDay, sort, rpp = 5).nextCursor.get
+    refused(continue(dayCursor.copy(key = Some("not a day")), byDay, sort, rpp = 5))
+    refused(continue(dayCursor.copy(sortValue = SortValue.Num(5)), byDay, sort, rpp = 5))
+    refused(continue(dayCursor.copy(sortValue = SortValue.Real(0.5)), byDay, sort, rpp = 5))
+    ids(continue(dayCursor, byDay, sort, rpp = 5)).length shouldBe 5
+
+    // The fixture is in no Location and no Sequence, so the first page's cursor is in the trailing group
+    val locationCursor = firstPage(byLocation, sort, rpp = 5).nextCursor.get
+    refused(continue(locationCursor.copy(key = Some("rome")), byLocation, sort, rpp = 5))
+    ids(continue(locationCursor, byLocation, sort, rpp = 5)).length shouldBe 5
+
+    val sequenceCursor = firstPage(bySequence, sort, rpp = 5).nextCursor.get
+    refused(continue(sequenceCursor.copy(key = Some("2026-09-06"), groupId = Some(sequenceCursor.id)), bySequence, sort, rpp = 5))
+    ids(continue(sequenceCursor, bySequence, sort, rpp = 5)).length shouldBe 5
+
+    val flatCursor = flatPage(byCapture, rpp = 5).nextCursor.get
+    refused(flatPage(byCapture, 5, Some(flatCursor.copy(key = Some("2026-02-30")))))
+    refused(flatPage(byCapture, 5, Some(flatCursor.copy(sortValue = SortValue.Num(5)))))
+    flatPage(byCapture, 5, Some(flatCursor)).records.length shouldBe 5
+
+    val relevanceCursor = flatPage(SearchSort.Relevance, rpp = 5, text = img).nextCursor.get
+    refused(flatPage(SearchSort.Relevance, 5, Some(relevanceCursor.copy(sortValue = SortValue.Text("1"))), img))
+    refused(flatPage(SearchSort.Relevance, 5, Some(relevanceCursor.copy(secondSortValue = Some(SortValue.Num(1)))), img))
+    flatPage(SearchSort.Relevance, 5, Some(relevanceCursor), img).records.length shouldBe 5
   }
 
   if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {

@@ -9,6 +9,8 @@ import scalasql.core.TypeMapper
 import scalasql.dialects.Dialect
 import scalasql.query.Select
 
+import altitude.core.Const
+import altitude.core.FieldConst
 import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
@@ -76,3 +78,22 @@ trait SearchDialect:
 
   /** Reads a sort key exactly as the engine stores it, and binds it back the same way for a cursor comparison */
   def sortValueMapper: TypeMapper[SortValue]
+
+  /**
+   * Whether a cursor's sort value is of the kind [[sortValueMapper]] reads this sort's values as, so a statement can compare it
+   * with them. A null is any sort's: a row with no value, or a page with no sort. The rule names every field of
+   * `Const.Search.SORT_FIELDS` and both scored sorts; any other field is an `IllegalArgumentException`, so a sort field added
+   * without its rule fails its first cursor loudly rather than have every cursor refused.
+   */
+  def readsAs(field: String, value: SortValue): Boolean =
+    val ofKind: SortValue => Boolean = field match
+      case FieldConst.CREATED_AT | FieldConst.Asset.ORIGINAL_CREATED_AT => readsTimestampAs(field, _)
+      case FieldConst.Asset.FILENAME => _.isInstanceOf[SortValue.Text]
+      case FieldConst.Asset.SIZE_BYTES | FieldConst.Asset.AREA_SIZE | Const.Search.SORT_RELEVANCE =>
+        _.isInstanceOf[SortValue.Num]
+      case Const.Search.SORT_SIMILARITY => _.isInstanceOf[SortValue.Real]
+      case other => throw IllegalArgumentException(s"No search sorts by [$other]")
+    value == SortValue.Null || ofKind(value)
+
+  /** Whether [[sortValueMapper]] reads this timestamp column's values as this kind of sort value */
+  protected def readsTimestampAs(field: String, value: SortValue): Boolean

@@ -46,6 +46,15 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       if existing.nonEmpty then Some(existing.records.head) else None
     }
 
+  /** Which of these contents a live asset holds (`asset_01` allows one each), read in one statement whatever their number */
+  def liveChecksums(checksums: Set[String]): Set[String] =
+    if checksums.isEmpty then Set()
+    else
+      txManager.asReadOnly {
+        val q = new Query(params = Map(FieldConst.Asset.CHECKSUM -> Query.IN(checksums.toSet[Any])))
+        dao.queryNotRecycled(q).records.map(_.checksum).toSet
+      }
+
   def rename(assetId: String, newFilename: String): Asset =
     txManager.withTransaction {
       val asset: Asset = getById(assetId)

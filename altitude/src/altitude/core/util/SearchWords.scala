@@ -1,7 +1,6 @@
 package altitude.core.util
 
 import java.text.Normalizer
-import java.util.Locale
 
 import scala.util.matching.Regex
 
@@ -51,5 +50,18 @@ object SearchWords:
   private def unmarked(text: String): String =
     CombiningMarks.replaceAllIn(Normalizer.normalize(text, Normalizer.Form.NFD), "")
 
+  /**
+   * Lower case, letter by letter and with no context: each code point becomes the lower case of its capital. A letter with two
+   * lower-case forms thus comes out in one, whatever case it was typed in: the final sigma ς and σ (which `String.toLowerCase`
+   * writes for a capital sigma ending a word), the micro sign µ and μ, the long s ſ and s, the Greek symbol forms ϐ ϑ ϕ ϖ ϰ ϱ ϵ
+   * and their letters, the dotless ı and i. FTS5 folds some of those itself and PostgreSQL's `simple` configuration none, so
+   * without this a word would be two words on PostgreSQL. The fold need not match an engine's own: the document, every name and
+   * the typed text all go through it.
+   */
   private def words(unmarked: String, boundary: Regex): Seq[String] =
-    boundary.split(unmarked).toSeq.filter(_.nonEmpty).map(_.toLowerCase(Locale.ROOT))
+    boundary.split(unmarked).toSeq.filter(_.nonEmpty).map(folded)
+
+  private def folded(word: String): String =
+    val out = new java.lang.StringBuilder(word.length)
+    word.codePoints.forEach(letter => out.appendCodePoint(Character.toLowerCase(Character.toUpperCase(letter)))): Unit
+    out.toString

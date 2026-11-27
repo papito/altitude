@@ -1,7 +1,7 @@
 package altitude.core.integration
 
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ empty, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ empty, include, should, shouldBe }
 
 import altitude.core.*
 import altitude.core.models.*
@@ -158,6 +158,175 @@ import altitude.core.util.Query
     stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 1
     // the restored asset and the copy imported again
     stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 2
+  }
+
+  test("A move out of the trash skips an asset whose content is live again, or comes back in the same move") {
+
+    /**
+     * Setup:
+     *
+     * Two assets in a folder, both recycled, after which a second copy of one of them is imported; and two recycled copies of a
+     * third content with no live copy. All four are moved into another folder together.
+     *
+     * Assertions:
+     *
+     * The move is partial, as a restore is: the asset with no live copy and one of the two copies are moved and restored, the
+     * asset whose content is live and the other copy are reported as duplicates and stay in the recycle bin, and the stats count
+     * two recycled and three sorted assets.
+     *
+     * Edge cases:
+     *
+     * The second of two copies moved together is a duplicate of the first, which this very move makes live.
+     */
+    val folder1: Folder = testApp.service.folder.add("folder1")
+    val folder2: Folder = testApp.service.folder.add("folder2")
+    val restorable: Asset = testContext.persistAsset(folder = Some(folder1))
+
+    def withCopy(): (Asset, AssetWithData) = {
+      val dataAsset = testContext.makeAssetWithData(asset = Some(testContext.makeAsset(folder = Some(folder1))))
+      val copy = dataAsset.copy(path = testApp.service.staging.stageCopy(dataAsset.path))
+      (testApp.service.library.addAsset(dataAsset), copy)
+    }
+
+    val (duplicate, secondCopy) = withCopy()
+    val (copyA, copyB) = withCopy()
+    testApp.service.library.recycleAssets(Set(restorable.persistedId, duplicate.persistedId, copyA.persistedId))
+    testApp.service.library.addAsset(secondCopy)
+    val recycledCopyB: Asset = testApp.service.library.addAsset(copyB)
+    testApp.service.library.recycleAssets(Set(recycledCopyB.persistedId))
+    val copies = Set(copyA.persistedId, recycledCopyB.persistedId)
+
+    val result = testApp.service.library
+      .moveAssetsToFolder(Set(restorable.persistedId, duplicate.persistedId) ++ copies, folder2.persistedId)
+
+    result.restored.size shouldBe 2
+    result.restored.contains(restorable.persistedId) shouldBe true
+    result.duplicates.size shouldBe 2
+    result.duplicates.contains(duplicate.persistedId) shouldBe true
+    (result.restored ++ result.duplicates).intersect(copies) shouldBe copies
+    result.restored.foreach {
+      id =>
+        val moved: Asset = testApp.service.asset.getById(id)
+        moved.isRecycled shouldBe false
+        moved.folderId shouldBe folder2.persistedId
+    }
+    result.duplicates.foreach {
+      id =>
+        val left: Asset = testApp.service.asset.getById(id)
+        left.isRecycled shouldBe true
+        left.folderId shouldBe folder1.persistedId
+    }
+
+    val stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 2
+    // the two moved, and the copy imported again
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 3
+  }
+
+  /** Two recycled copies of one content in a new folder, with no live copy: either may leave the Trash, not both */
+  private def recycledCopies(): (Asset, Asset, Folder) = {
+    val folder: Folder = testApp.service.folder.add(s"copies-${java.util.UUID.randomUUID()}")
+    val first = testContext.insertAsset(testContext.makeAsset(folder = Some(folder)))
+    testApp.service.library.recycleAssets(Set(first.persistedId))
+    val second = testContext.insertAsset(testContext.makeAsset(folder = Some(folder)).copy(checksum = first.checksum))
+    testApp.service.library.recycleAssets(Set(second.persistedId))
+    (first, second, folder)
+  }
+
+  private def isRecycled(asset: Asset): Boolean = (testApp.service.asset.getById(asset.persistedId): Asset).isRecycled
+
+  test("Two moves out of the trash of copies of one content take turns, and the second leaves its copy") {
+
+    /**
+     * Setup:
+     *
+     * Two recycled copies of one content, each moved into the root folder by its own transaction, the second while the first
+     * holds its transaction open.
+     *
+     * Assertions:
+     *
+     * The second move waits for the first, then sees the first copy live and leaves its own in the Trash as a duplicate, where on
+     * PostgreSQL both would see no live copy and the second fail on `asset_01`.
+     */
+    val (first, second, _) = recycledCopies()
+    val root = RequestContext.getRepository.rootFolderId
+    var secondResult: Option[RestoreResult] = None
+
+    contend(
+      first = testApp.service.library.moveAssetsToFolder(Set(first.persistedId), root): Unit,
+      second = secondResult = Some(testApp.service.library.moveAssetsToFolder(Set(second.persistedId), root))
+    )
+
+    secondResult.map(_.duplicates) shouldBe Some(Set(second.persistedId))
+    isRecycled(first) shouldBe false
+    isRecycled(second) shouldBe true
+  }
+
+  test("A restore and a move out of the trash of copies of one content take turns, in either order") {
+
+    /**
+     * Setup:
+     *
+     * Two pairs of recycled copies of one content: a restore of one copy holds its transaction open while a move of the other
+     * waits, and a move holds while a restore waits.
+     *
+     * Assertions:
+     *
+     * In both orders the second waits for the first, then leaves its copy in the Trash as a duplicate.
+     */
+    val root = RequestContext.getRepository.rootFolderId
+
+    val (restored, moved, _) = recycledCopies()
+    var moveResult: Option[RestoreResult] = None
+    contend(
+      first = testApp.service.library.restoreRecycledAssets(Set(restored.persistedId)): Unit,
+      second = moveResult = Some(testApp.service.library.moveAssetsToFolder(Set(moved.persistedId), root))
+    )
+    moveResult.map(_.duplicates) shouldBe Some(Set(moved.persistedId))
+    isRecycled(restored) shouldBe false
+
+    val (movedFirst, restoredSecond, _) = recycledCopies()
+    var restoreResult: Option[RestoreResult] = None
+    contend(
+      first = testApp.service.library.moveAssetsToFolder(Set(movedFirst.persistedId), root): Unit,
+      second = restoreResult = Some(testApp.service.library.restoreRecycledAssets(Set(restoredSecond.persistedId)))
+    )
+    restoreResult.map(_.duplicates) shouldBe Some(Set(restoredSecond.persistedId))
+    isRecycled(movedFirst) shouldBe false
+  }
+
+  if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
+    test("A copy imported while a move or a restore takes its content out of the trash refuses that operation") {
+
+      /**
+       * Setup:
+       *
+       * A recycled asset, and an import of the same content whose transaction holds its new row uncommitted while a move of the
+       * recycled asset into the root folder waits on it; then the same with a restore.
+       *
+       * Assertions:
+       *
+       * Neither saw the import's row when it read the live copies, so PostgreSQL refuses its write on `asset_01`: the move and
+       * the restore each fail with an `IllegalOperationException` that says to try again, and the recycled asset stays in the
+       * Trash.
+       */
+      val root = RequestContext.getRepository.rootFolderId
+
+      def importedDuring(operation: Asset => Any): Unit = {
+        val recycled = testContext.insertAsset()
+        testApp.service.library.recycleAssets(Set(recycled.persistedId))
+        val refused = intercept[IllegalOperationException] {
+          contend(
+            first = testContext.insertAsset(testContext.makeAsset().copy(checksum = recycled.checksum)): Unit,
+            second = operation(recycled): Unit)
+        }
+        refused.getMessage should include("try again")
+        isRecycled(recycled) shouldBe true
+      }
+
+      importedDuring(asset => testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), root))
+      importedDuring(asset => testApp.service.library.restoreRecycledAssets(Set(asset.persistedId)))
+    }
   }
 
   test("A restore that fails restores nothing") {

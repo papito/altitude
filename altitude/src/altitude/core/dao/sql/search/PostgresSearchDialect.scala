@@ -107,6 +107,12 @@ object PostgresSearchDialect extends SearchDialect:
   // PostgreSQL orders NULL after every value
   override def nullsFirst(direction: SortDirection): Boolean = direction == SortDirection.DESC
 
+  // Read by the column's type: the capture time a wall-clock `timestamp`, the import time a `timestamptz`
+  override protected def readsTimestampAs(field: String, value: SortValue): Boolean = value match
+    case SortValue.LocalTimestamp(_) => field == FieldConst.Asset.ORIGINAL_CREATED_AT
+    case SortValue.UtcInstant(_) => field == FieldConst.CREATED_AT
+    case _ => false
+
   override val sortValueMapper: TypeMapper[SortValue] = new TypeMapper[SortValue]:
     def jdbcType: JDBCType = JDBCType.OTHER
 

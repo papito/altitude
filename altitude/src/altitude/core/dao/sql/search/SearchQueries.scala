@@ -1,5 +1,6 @@
 package altitude.core.dao.sql.search
 
+import java.time.DateTimeException
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -17,7 +18,6 @@ import scalasql.query.Select
 import scalasql.query.TableRef
 
 import altitude.core.FieldConst
-import altitude.core.SearchCursorException
 import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.DynamicFilter
@@ -249,7 +249,7 @@ object SearchQueries:
     val sort = query.searchSort.head
     val asset = WithSqlExpr.get(base)
     val scored = ScoredRow.select
-    val cursorDay = query.cursor.flatMap(_.key).map(LocalDate.parse)
+    val cursorDay = cursorKey(query)(LocalDate.parse)
 
     /** The narrow candidate relation, ordered and sliced in the context that names its own columns */
     def slice[Q, R](relation: Select[Q, R], position: Position, extra: Option[Position => Expr[Boolean]], limit: SqlStr): SqlStr =
@@ -410,7 +410,7 @@ object SearchQueries:
       /** Rows strictly after the anchor: a later path key, or the anchor's own Location's rows after it by sort */
       def afterLocation(cursor: SearchCursor): Expr[Boolean] =
         val key = cursor.key.get
-        val groupId = cursor.groupId.getOrElse(throw IllegalArgumentException("A Location cursor needs its group ID"))
+        val groupId = cursor.groupId.getOrElse(throw SearchCursor.malformed)
         val after = afterBySort(engine, query, position, idOnly = false)
         Expr[Boolean] {
           implicit ctx =>
@@ -575,7 +575,7 @@ object SearchQueries:
       val sequenceId = cursor.groupId.get
       val after = afterBySort(engine, query, framePosition, idOnly = false)
       val first = frame.firstCapturedAt
-      val anchorCapture = cursor.key.map(LocalDateTime.parse)
+      val anchorCapture = cursorKey(query)(LocalDateTime.parse)
       Expr[Boolean] {
         implicit ctx =>
           val laterGroup = anchorCapture.fold(sql"($first IS NULL AND ${frame.sequenceId} > $sequenceId)") {
@@ -709,7 +709,7 @@ object SearchQueries:
       cursor =>
         cursor.sortValue match
           case SortValue.Real(distance) => sql"WHERE (distance, id) > ($distance, ${cursor.id})"
-          case _ => throw SearchCursorException("Malformed cursor")
+          case _ => throw SearchCursor.malformed
     }
     val total = if query.isTotalCounted then SqlStr.raw(", (SELECT count(*) FROM ranked) AS total") else SqlStr.empty
 
@@ -807,7 +807,7 @@ object SearchQueries:
       query,
       repositoryId,
       Seq(
-        sql"matched (id) AS MATERIALIZED (${matchingIds(engine, matching(engine, query, repositoryId), Some(asset => membersOfLocationsIn(engine, bbox).contains(asset.id)))})"),
+        sql"matched (id) AS MATERIALIZED (${matchingIds(engine, matching(engine, query, repositoryId), Some(asset => membersOfLocationsIn(engine, bbox, repositoryId).contains(asset.id)))})"),
       sql"""
       SELECT location.id, location.name, category.name, location.latitude, location.longitude, count(*)
         FROM location
@@ -845,7 +845,8 @@ object SearchQueries:
 
   /**
    * The one way a statement over a search is built: the Search text's CTEs, the description's, the shell's own, then the body.
-   * [[matching]] names the text's CTEs and `described`, so a statement built any other way would not run.
+   * [[matching]] names the text's CTEs and `described`, so a statement built any other way would not run. So no statement binds a
+   * cursor's values unchecked ([[requireCursorFits]]).
    */
   private def statement(
       engine: SearchDialect,
@@ -853,9 +854,35 @@ object SearchQueries:
       repositoryId: String,
       ctes: Seq[SqlStr],
       body: SqlStr): SqlStr =
+    requireCursorFits(engine, query)
     textCtes(engine, query) ++ describedCtes(engine, query, repositoryId) ++ ctes match
       case Seq() => body
       case all => sql"WITH " + SqlStr.join(all, SqlStr.raw(", ")) + sql" " + body
+
+  /**
+   * Refuses a cursor holding values its search could not have written, before a statement binds them. The fingerprint says which
+   * search a cursor is of, but the values travel in the token, and one edited by hand would otherwise fail its statement or be
+   * compared across types: a malformed cursor, a 400. The sort value must be of the kind the engine reads the sort's values as,
+   * and under a scored sort the capture time beside it of the capture time's. The group key is read where a statement orders by
+   * it ([[cursorKey]]); a Describe ranking's cursor, which no sort names, in [[described]].
+   */
+  private def requireCursorFits(engine: SearchDialect, query: SearchQuery): Unit =
+    for cursor <- query.cursor; sort <- query.searchSort.headOption do
+      if !engine.readsAs(sort.field, cursor.sortValue) then throw SearchCursor.malformed
+      if sort.isScored && !engine.readsAs(FieldConst.Asset.ORIGINAL_CREATED_AT, cursor.requireSecondSortValue) then
+        throw SearchCursor.malformed
+
+  /**
+   * The cursor's group key read as its statement orders the groups (`SearchGroupKey.cursorKey` writes it): a day, or a Sequence's
+   * first capture. A key that does not read is a malformed cursor.
+   */
+  private def cursorKey[K](query: SearchQuery)(read: String => K): Option[K] =
+    query.cursor
+      .flatMap(_.key)
+      .map(
+        key =>
+          try read(key)
+          catch case _: DateTimeException => throw SearchCursor.malformed)
 
   /**
    * The CTEs of a description's ranking: the engine's sources, `ranked (id, distance)` (the matches of `filters` as the engine
@@ -1229,7 +1256,7 @@ object SearchQueries:
 
     def inSet(column: Expr[String]): Expr[Boolean] = Columns.isInSet(column, source.ids, engine.dialect)
 
-    if source.isAssetColumn then folderFilter(engine, asset, source.ids)
+    if source.isAssetColumn then inFolders(engine, asset, source.ids)
     else if text.candidates.isEmpty then
       Expr[Boolean](implicit ctx => sql"(${asset.id} IN (SELECT asset_id FROM ${SqlStr.raw(source.name)}))")
     else
@@ -1249,9 +1276,9 @@ object SearchQueries:
 
   /**
    * Assets that satisfy every group of the Search text by any of its alternatives. An excluded term is satisfied by none of its
-   * sources, so an asset without a document satisfies an exclusion. On the broad path a group of one excluded term is an
-   * anti-join, which the engine plans as such. On the selective path the candidates already satisfy every complete group, and
-   * only the other groups are tested.
+   * sources, so an asset without a document, or in no folder, satisfies an exclusion. On the broad path a group of one excluded
+   * term is an anti-join, which the engine plans as such. On the selective path the candidates already satisfy every complete
+   * group, and only the other groups are tested.
    */
   private def textFilter(engine: SearchDialect, asset: AssetRow[Expr], text: ResolvedSearchText): Expr[Boolean] =
     import engine.dialect.*
@@ -1348,6 +1375,14 @@ object SearchQueries:
   /** Assets in any of the given folders themselves; a subtree is the caller's to expand */
   private def folderFilter(engine: SearchDialect, asset: AssetRow[Expr], folderIds: Set[String]): Expr[Boolean] =
     Columns.isInSet(asset.folderId, folderIds, engine.dialect)
+
+  /**
+   * [[folderFilter]] as a source of the Search text: false, never NULL, for an asset in no folder (a triaged one), since the text
+   * negates its sources and a NULL negated would drop the asset from an exclusion of a folder's name
+   */
+  private def inFolders(engine: SearchDialect, asset: AssetRow[Expr], folderIds: Set[String]): Expr[Boolean] =
+    val inAny = folderFilter(engine, asset, folderIds)
+    Expr[Boolean](implicit ctx => sql"(${asset.folderId} IS NOT NULL AND $inAny)")
 
   /**
    * Assets captured on a day of the range, by the camera's wall clock. The day is the expression `asset_search_date_taken` is
@@ -1475,7 +1510,7 @@ object SearchQueries:
       .filter(own => inBox(engine, bbox, own.latitude, own.longitude))
       .map(_.id)
 
-    val pinned = membersOfLocationsIn(engine, bbox)
+    val pinned = membersOfLocationsIn(engine, bbox, repositoryId)
       .join(AssetRow)((memberId, member) => memberId `=` member.id)
       .filter((_, member) => member.latitude.isEmpty)
       .map((memberId, _) => memberId)
@@ -1485,13 +1520,18 @@ object SearchQueries:
         sql"(${asset.id} IN (${Db.render(located, engine.dialect).withCompleteQuery(false)} UNION ALL ${Db.render(pinned, engine.dialect).withCompleteQuery(false)}))"
     }
 
-  /** The IDs of the assets in the Locations pinned inside the box, an asset once per such Location */
-  private def membersOfLocationsIn(engine: SearchDialect, bbox: BoundingBox): Select[Expr[String], String] =
+  /**
+   * The IDs of the repository's assets in its Locations pinned inside the box, an asset once per such Location. The caller's
+   * asset is scoped already; the repository here keeps the read to the repository's Locations (`location_01`), not every
+   * instance's.
+   */
+  private def membersOfLocationsIn(engine: SearchDialect, bbox: BoundingBox, repositoryId: String): Select[Expr[String], String] =
     import engine.dialect.*
 
     LocationAssetRow.select
       .join(LocationRow)((link, location) => link.locationId `=` location.id)
-      .filter((_, location) => inBox(engine, bbox, location.latitude, location.longitude))
+      .filter(
+        (_, location) => (location.repositoryId `=` repositoryId) && inBox(engine, bbox, location.latitude, location.longitude))
       .map((link, _) => link.assetId)
 
   /** A point inside the box; a box across the antimeridian covers both sides of it */

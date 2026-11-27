@@ -193,6 +193,64 @@ import altitude.core.models.Asset
     }
   }
 
+  test("Moving assets out of the trash reports the restored ones and the ones whose content is live again") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a live asset and two recycled ones: one whose content exists nowhere else, and one whose
+     * same file is imported again after it was recycled. All three are moved into the folder "target-folder".
+     *
+     * Assertions:
+     *
+     * The move endpoint answers as the restore does: the IDs it restored out of the trash, and apart from them the IDs it left
+     * there because their content is live again, which stay out of the folder.
+     *
+     * Edge cases:
+     *
+     * The live asset moves and is in neither list.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val live = testContext.persistAsset()
+        val restorable = testContext.persistAsset()
+
+        val dataAsset = testContext.makeAssetWithData()
+        val secondCopy = dataAsset.copy(path = testApp.service.staging.stageCopy(dataAsset.path))
+        val duplicate: Asset = testApp.service.library.addAsset(dataAsset)
+
+        testApp.service.library.recycleAssets(Set(restorable.persistedId, duplicate.persistedId))
+        testApp.service.library.addAsset(secondCopy)
+        val targetFolder = testApp.service.folder.add("target-folder")
+
+        val payload = ujson.Obj(
+          Api.Field.FOLDER_ID -> targetFolder.persistedId,
+          Api.Field.ASSET_IDS -> Seq(live.persistedId, restorable.persistedId, duplicate.persistedId))
+
+        val response = requests.put(
+          s"$host/api/asset/r/$repoId/move",
+          cookies = testContext.cookies,
+          headers = Map("Content-Type" -> "application/json"),
+          data = ujson.write(payload),
+          check = false
+        )
+
+        response.statusCode.shouldBe(200)
+        val json = ujson.read(response.text())
+        json(Api.Field.Asset.RESTORED).arr.map(_.str).toList.shouldBe(List(restorable.persistedId))
+        json(Api.Field.Asset.DUPLICATES).arr.map(_.str).toList.shouldBe(List(duplicate.persistedId))
+        List(live, restorable).foreach(
+          asset =>
+            (testApp.service.asset.getById(asset.persistedId): Asset).folderId shouldBe
+              targetFolder.persistedId)
+        (testApp.service.asset.getById(duplicate.persistedId): Asset).isRecycled.shouldBe(true)
+    }
+  }
+
   test("Assets in a repository the user cannot see cannot be recycled") {
 
     /**

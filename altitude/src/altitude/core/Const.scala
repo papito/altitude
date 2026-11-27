@@ -272,6 +272,9 @@ object Const:
       // A file dropped as a duplicate of a copy that is no longer in the Library when it settles: the copy's import failed, or
       // the asset was recycled meanwhile
       val COPY_NOT_IN_LIBRARY = "The copy it matched is not in the Library"
+      // A restore or a move out of the Trash whose content an import committed meanwhile; tried again, the asset stays a duplicate
+      val CONTENT_IMPORTED_MEANWHILE =
+        "An asset with the same content was imported meanwhile, so nothing was taken out of the trash: try again"
       val DESTINATION_IN_TRASH = "The destination folder is in the Trash"
       // A file under a folder name the folder rule refuses, with the rule's own words
       val DESTINATION_FOLDER_NAME = "A folder of the path cannot be created: %s"

@@ -4,6 +4,7 @@ import altitude.test.IntegrationTestUtil.withJvmTimeZone
 import altitude.test.TestFocus
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
@@ -48,6 +49,26 @@ import altitude.core.util.SortValue
 @DoNotDiscover class SearchSqlTests extends funsuite.AnyFunSuite with TestFocus {
 
   private val engines = List("postgres" -> PostgresSearchDialect, "sqlite" -> SqliteSearchDialect)
+
+  test("A cursor's sort value is checked for every sort field and both scored sorts, and an unknown field is refused") {
+
+    /**
+     * Setup:
+     *
+     * Every field of `Const.Search.SORT_FIELDS`, the Relevance and the similarity, on both dialects.
+     *
+     * Assertions:
+     *
+     * Each takes a null sort value, so no field a search sorts by has its cursors refused for want of a rule, and a field no
+     * search sorts by is an `IllegalArgumentException`, not a refusal of every cursor.
+     */
+    for ((engine, dialect) <- engines) withClue(s"$engine: ") {
+      (Const.Search.SORT_FIELDS + Const.Search.SORT_RELEVANCE + Const.Search.SORT_SIMILARITY).foreach {
+        field => withClue(s"$field: ")(dialect.readsAs(field, SortValue.Null) shouldBe true)
+      }
+      intercept[IllegalArgumentException](dialect.readsAs("checksum", SortValue.Null))
+    }
+  }
 
   test("Every search is scoped to its repository and to processed assets alone") {
 
@@ -248,7 +269,8 @@ import altitude.core.util.SortValue
      * Assertions:
      *
      * The term ORs one membership test per source in declaration order, each a CTE except the folder, which is the asset's own
-     * column. The person CTE reads faces by person ID, and each ID set is bound as one parameter.
+     * column, tested two-valued (not NULL first). The person CTE reads faces by person ID, and each ID set is bound as one
+     * parameter.
      */
     val ids = Map(
       SearchSource.Album -> Set("a1"),
@@ -265,7 +287,7 @@ import altitude.core.util.SortValue
 
       withClue(s"$engine: $sql") {
         // Person, Location, Category (as its Locations), folder, album, document
-        (raw"${in("person")}\)* OR ${in("location")}\)* OR ${in("category")}\)* OR \(?asset0\.folder_id $inSet\)* OR " +
+        (raw"${in("person")}\)* OR ${in("location")}\)* OR ${in("category")}\)* OR \(asset0\.folder_id IS NOT NULL AND \(?asset0\.folder_id $inSet\)* OR " +
           raw"${in("album")}\)* OR ${in("document")}").r.findFirstIn(sql).isDefined shouldBe true
         raw"text_0_0_person \(asset_id\) AS MATERIALIZED \(SELECT face\d\.asset_id AS \w+ FROM face face\d WHERE \(?face\d\.person_id $inSet".r
           .findFirstIn(sql)
@@ -643,8 +665,8 @@ import altitude.core.util.SortValue
      * Assertions:
      *
      * The Location filter is a semi-join over the memberships, its ID set bound as one parameter. The box is one semi-join over
-     * the union of the assets with their own point in the box and the pointless members of a Location pinned in it, every edge
-     * bound.
+     * the union of the assets with their own point in the box and the pointless members of a repository's Location pinned in it,
+     * the repository and every edge bound.
      *
      * Edge cases:
      *
@@ -669,11 +691,11 @@ import altitude.core.util.SortValue
           "(asset0.latitude BETWEEN ? AND ? AND asset0.longitude BETWEEN ? AND ?) UNION ALL SELECT") shouldBe true
       box.contains("FROM location_asset location_asset0 JOIN location location1 ON") shouldBe true
       box.contains(
-        "(location1.latitude BETWEEN ? AND ? AND location1.longitude BETWEEN ? AND ?) AND (asset2.latitude IS NULL)") shouldBe
-        true
+        "((location1.repository_id = ?) AND (location1.latitude BETWEEN ? AND ? AND location1.longitude BETWEEN ? AND ?)) AND " +
+          "(asset2.latitude IS NULL)") shouldBe true
       box.contains(" OR ") shouldBe false
-      // repository, pipeline flag and recycled flag, twice; four edges for the asset and four for the Location pin
-      placeholders(box) shouldBe 14
+      // repository, pipeline flag and recycled flag, twice; four edges for the asset, the Location's repository and four for its pin
+      placeholders(box) shouldBe 15
     }
 
     val across = matchingSql(SqliteSearchDialect, new SearchQuery(bbox = Some(BoundingBox(-1.0, 179.0, 1.0, -179.0))))
@@ -1105,8 +1127,14 @@ import altitude.core.util.SortValue
     for {
       (engine, dialect) <- engines
       by <- GroupBy.values.toList
-      second <- List(SortValue.Text("2026-09-06 10:00:00"), SortValue.Null)
+      second <- List(Some("2026-09-06T10:00:00"), None)
     } {
+      // A capture time as the engine reads one: stored text on SQLite, a wall-clock timestamp on PostgreSQL
+      val taken = second.fold(SortValue.Null) {
+        iso =>
+          if (dialect == PostgresSearchDialect) SortValue.LocalTimestamp(LocalDateTime.parse(iso))
+          else SortValue.Text(iso.replace('T', ' '))
+      }
       // A day's anchor, or one in the trailing "No location" or "No sequence" group
       val cursor = SearchCursor(
         key = Option.when(by == GroupBy.DateTaken)("2026-09-06"),
@@ -1114,7 +1142,7 @@ import altitude.core.util.SortValue
         sortValue = SortValue.Num(1),
         id = "id",
         scope = "scope",
-        secondSortValue = Some(second))
+        secondSortValue = Some(taken))
       def page(cursor: SearchCursor): SqlStr =
         val query = new SearchQuery(
           rpp = 50,
@@ -1137,7 +1165,7 @@ import altitude.core.util.SortValue
         "CASE WHEN \\(asset0".r.findAllIn(text).size shouldBe 1
         // Among the anchor's Relevance an older capture follows it, and so does every asset with none: they are last
         val afterTie =
-          if (second == SortValue.Null) s"\\($scored\\.second_sort_value IS NULL AND $scored\\.id > \\?\\)"
+          if (taken == SortValue.Null) s"\\($scored\\.second_sort_value IS NULL AND $scored\\.id > \\?\\)"
           else
             s"\\($scored\\.second_sort_value < \\? OR $scored\\.second_sort_value IS NULL OR " +
               s"\\($scored\\.second_sort_value = \\? AND $scored\\.id > \\?\\)\\)"

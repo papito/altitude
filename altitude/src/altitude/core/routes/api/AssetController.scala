@@ -23,10 +23,8 @@ class AssetController(using logger: Logger) extends BaseController:
     val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
     logger.trace(s"Moving assets ${assetIdSet.mkString(", ")} to $folderId")
 
-    answeringJson {
-      App.altitude.service.library.moveAssetsToFolder(assetIdSet, folderId)
-      jsonResponse(ujson.Obj())
-    }
+    // A move out of the trash leaves an asset whose content is live again, as a restore does
+    answeringJson(restoreResponse(App.altitude.service.library.moveAssetsToFolder(assetIdSet, folderId)))
 
   @requireLogin()
   @requirePermission(Permission.Recycle, Permission.CurateOwn, Permission.CurateAll)

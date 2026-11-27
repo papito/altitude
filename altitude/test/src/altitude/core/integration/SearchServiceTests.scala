@@ -1959,6 +1959,57 @@ import altitude.core.util.*
     found("-golden OR gate") shouldBe Set(f.beach, f.lake)
   }
 
+  test("Search text: a sigma at a word's end matches in either form, typed in either case") {
+
+    /**
+     * Setup:
+     *
+     * Assets named "ΟΔΟΣ.jpg" (capitals), "οδος.jpg" (a final sigma, ς), "οδοσ.jpg" (a medial sigma at the end, σ) and
+     * "ΟΔΟΣΗΜΑΝΣΗ.jpg", a word that starts with the first, and a folder "Οδός" holding one more asset.
+     *
+     * Assertions:
+     *
+     * The word typed in capitals, with a final sigma or with a medial one finds the same assets on both engines: the three
+     * spellings, the longer word by its start, and the folder's asset by the folder's name.
+     *
+     * Edge cases:
+     *
+     * Lower-casing a capital sigma at a word's end gives the final form, which a document, a name and the typed text must not
+     * tell from the medial one.
+     */
+    val folder: Folder = testApp.service.folder.add("Οδός")
+    val spellings = List("ΟΔΟΣ.jpg", "οδος.jpg", "οδοσ.jpg").map(importAsset(_).persistedId)
+    val longer = importAsset("ΟΔΟΣΗΜΑΝΣΗ.jpg").persistedId
+    val inFolder = importAsset("one.jpg", Some(folder)).persistedId
+    importAsset("two.jpg")
+
+    List("ΟΔΟΣ", "οδος", "οδοσ").foreach {
+      typed => withClue(s"$typed: ")(found(typed) shouldBe (spellings :+ longer :+ inFolder).toSet)
+    }
+  }
+
+  test("Search text: a letter with two lower-case forms matches in either") {
+
+    /**
+     * Setup:
+     *
+     * Assets named "µm.jpg" (the micro sign) and "μm.jpg" (the Greek small mu), and a folder "ϕως" (the Greek phi symbol) holding
+     * an asset named "one.jpg", beside an asset named "two.jpg".
+     *
+     * Assertions:
+     *
+     * The word typed with either mu finds both assets on both engines, and the folder's name typed with the plain phi, or in
+     * capitals, finds its asset.
+     */
+    val folder: Folder = testApp.service.folder.add("ϕως")
+    val mus = List("µm.jpg", "μm.jpg").map(importAsset(_).persistedId).toSet
+    val inFolder = importAsset("one.jpg", Some(folder)).persistedId
+    importAsset("two.jpg")
+
+    List("µm", "μm", "ΜM").foreach(typed => withClue(s"$typed: ")(found(typed) shouldBe mus))
+    List("φως", "ΦΩΣ", "ϕως").foreach(typed => withClue(s"$typed: ")(found(typed) shouldBe Set(inFolder)))
+  }
+
   test("Search text: nothing typed is query syntax, and text without a word is no text") {
 
     /**
@@ -2377,6 +2428,55 @@ import altitude.core.util.*
     found("alice -rome") shouldBe Set(aliceAlone.persistedId)
     found("-alice") shouldBe Set(romeFile)
     found("-alice OR three") shouldBe Set(romeFile, aliceAlone.persistedId)
+  }
+
+  test("Search names: an excluded folder name keeps the assets in no folder") {
+
+    /**
+     * Setup:
+     *
+     * A folder "Rome trip" with a sorted asset in it, and a triaged asset, which is in no folder, with coordinates and no "rome"
+     * in its document.
+     *
+     * Assertions:
+     *
+     * In the Triage view, "-rome", "-rome OR nothing" and "three -rome" find the triaged asset, and the count, the grouped page
+     * and the map agree. The first two have no positive group and read the broad path whatever the probe limit; "three" is
+     * probed, so that text reads both paths, the selective one testing the exclusion on the asset's own row.
+     *
+     * Edge cases:
+     *
+     * In the repository view "-rome" still leaves out the asset in the folder.
+     */
+    val folder: Folder = testApp.service.folder.add("Rome trip")
+    importAsset("one.jpg", Some(folder))
+    val elsewhere = importAsset("two.jpg").persistedId
+    val triaged = testContext.insertAsset(testContext.makeAsset(filename = "three.jpg", isTriaged = true)).persistedId
+    testContext.setAssetCoordinates(triaged, latitude = 41.9, longitude = 12.5)
+
+    List("-rome", "-rome OR nothing", "three -rome").foreach {
+      text =>
+        withClue(s"$text: ") {
+          val query = new SearchQuery(params = triageView, text = Some(text), rpp = PAGE_SIZE)
+          search(query).records.map(_.persistedId) shouldBe List(triaged)
+          count(query) shouldBe 1
+          val grouped = searchGrouped(
+            new SearchQuery(
+              params = triageView,
+              text = Some(text),
+              rpp = PAGE_SIZE,
+              searchSort = List(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)),
+              grouping = Some(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))
+            ))
+          grouped.assets.map(_.persistedId) shouldBe List(triaged)
+          onBothPaths(query)(testApp.service.library.mapBounds)(_.map(_.count)).map(_.count) shouldBe Some(1)
+          onBothPaths(query)(testApp.service.library.mapCells(_, BoundingBox(-90, -180, 90, 180), zoom = 0))(
+            _.cells.map(_.count).sum).cells.map(_.count).sum shouldBe 1
+        }
+    }
+
+    search(new SearchQuery(params = browsingView, text = Some("-rome"), rpp = PAGE_SIZE)).records.map(_.persistedId) shouldBe
+      List(elsewhere)
   }
 
   test("Search names: counts and grouped pages follow the names, resolved afresh for every page") {

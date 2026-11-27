@@ -26,6 +26,7 @@ import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneEmbeddings
 import altitude.core.models.Settings
 import altitude.core.service.SearchService
+import altitude.core.util.SearchCursor
 import altitude.core.util.TriageSubset
 import altitude.core.util.Util
 
@@ -859,7 +860,8 @@ import altitude.core.util.Util
      * Assertions:
      *
      * Every malformed or contradictory grouping, direction, cursor, page size or sort is a plain-text 400 naming the parameter at
-     * fault. A cursor is refused for another search but accepted with another page size.
+     * fault. A cursor is refused for another search but accepted with another page size, and refused for its search once its
+     * group key is edited.
      *
      * Edge cases:
      *
@@ -912,6 +914,10 @@ import altitude.core.util.Util
             (Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true"))
         otherPageSize.statusCode shouldBe 200
 
+        // A cursor edited by hand keeps its search's fingerprint, and is refused for the value it carries
+        val edited = SearchCursor.decode(cursor).copy(key = Some("not a day")).encode
+        rejected(grouped + (Api.Field.Search.AFTER -> edited) + (Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")) should
+          include("cursor")
     }
   }
 

@@ -91,6 +91,9 @@ object SqliteSearchDialect extends SearchDialect:
   // SQLite orders NULL before every value
   override def nullsFirst(direction: SortDirection): Boolean = direction == SortDirection.ASC
 
+  // Both are stored as text, read as it is
+  override protected def readsTimestampAs(field: String, value: SortValue): Boolean = value.isInstanceOf[SortValue.Text]
+
   /** Timestamps stay in their stored text form so a cursor compares them exactly as the column stores them */
   override val sortValueMapper: TypeMapper[SortValue] = new TypeMapper[SortValue]:
     def jdbcType: JDBCType = JDBCType.OTHER
