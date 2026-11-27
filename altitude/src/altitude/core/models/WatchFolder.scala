@@ -1,7 +1,10 @@
 package altitude.core.models
 
+import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.LocalDateTime
+
+import altitude.core.Const
 
 /**
  * A directory on the server (`path`, absolute) scanned for one Library, importing the files that arrive. Files are sorted into
@@ -23,6 +26,15 @@ case class WatchFolder(
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)
   extends BaseModel
+
+object WatchFolder:
+  /**
+   * Whether a path, a Watch folder's or a file's under it, passes `Const.WatchFolder.MAX_PATH_BYTES` in UTF-8, past what its
+   * unique index takes on PostgreSQL. A UTF-16 unit is at most 3 bytes, so a short path is not encoded to tell.
+   */
+  def isPathTooLong(path: String): Boolean =
+    path.length * 3 > Const.WatchFolder.MAX_PATH_BYTES &&
+      path.getBytes(StandardCharsets.UTF_8).length > Const.WatchFolder.MAX_PATH_BYTES
 
 /** What an Admin enters to add or edit a Watch folder */
 case class WatchFolderSpec(name: String, path: String, destFolderId: Option[String] = None, deletesImported: Boolean = false)

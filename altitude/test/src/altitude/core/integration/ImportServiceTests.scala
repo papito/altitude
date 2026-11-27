@@ -1030,7 +1030,7 @@ import altitude.core.util.Query
       val refusals = List(
         intercept[ForbiddenException](imports.requireTakes(sorting.persistedId, "a.jpg")),
         intercept[ForbiddenException](imports.upload(sorting.persistedId, "New folder/a.jpg", staged)),
-        intercept[ForbiddenException](imports.failForLostDestination(sorting.persistedId, "a.jpg", sizeBytes = 10)),
+        intercept[ForbiddenException](imports.failOnArrival(sorting.persistedId, "a.jpg", sizeBytes = 10)),
         intercept[ForbiddenException](imports.addFailedFile(sorting.persistedId, "a.jpg", sizeBytes = 10))
       )
       refusals.map(_.getMessage).toSet shouldBe Set(Const.Msg.Err.FORBIDDEN_PERMISSION.format(Permission.Organize.label))
@@ -1045,6 +1045,50 @@ import altitude.core.util.Query
     }
   }
 
+  test("An upload's file whose path holds a NUL is recorded failed under its path made printable, and its name is shown clean") {
+
+    /**
+     * Setup:
+     *
+     * An account that holds Import. An upload named with a NUL, a line break, a tab and a right-to-left override, and files of it
+     * whose paths hold a NUL: one announced before its body, one staged, one the page could not send.
+     *
+     * Assertions:
+     *
+     * The upload opens, its name stored with each of those characters replaced by U+FFFD. Each file is recorded failed under its
+     * path with the NUL escaped as `\u0000`, the staged one discarded: the two that arrived for the NUL, the unsent one as an
+     * upload that failed. The Import holds those three files alone.
+     *
+     * Edge cases:
+     *
+     * The check before the body takes a path with a NUL, and a path with a tab, a line break or a C1 control is taken as any
+     * other.
+     */
+    val opened = imports.openUpload(name = Some("Trip\u0000\n2026\tday \u202eone"))
+    imports.getById(opened.persistedId).name shouldBe Some("Trip\ufffd\ufffd2026\ufffdday \ufffdone")
+    val id = opened.persistedId
+    val R = Const.Msg.Err.PATH_HOLDS_NUL
+
+    imports.requireTakes(id, "a\u0000.jpg")
+    imports.failOnArrival(id, "a\u0000.jpg", sizeBytes = 10).map(file => (file.outcome, file.reason)) shouldBe
+      Some((ImportOutcome.Failed, Some(R)))
+    val staged = stagedImage()
+    val uploaded = imports.upload(id, "Day 1/b\u0000.jpg", staged)
+    (uploaded.outcome, uploaded.reason) shouldBe (ImportOutcome.Failed, Some(R))
+    Files.exists(staged) shouldBe false
+    imports.addFailedFile(id, "c\u0000.jpg", sizeBytes = 10).outcome shouldBe ImportOutcome.Failed
+    for (path <- List("Day\t1/d.jpg", "Day 1/e\n.jpg", "f\u0085.jpg")) withClue(s"[${path.map(_.toInt)}]: ") {
+      imports.requireTakes(id, path)
+      imports.failOnArrival(id, path, sizeBytes = 10) shouldBe None
+    }
+
+    testContext.importFiles(id).map(file => (file.relPath, file.outcome, file.reason)).toSet shouldBe Set(
+      ("a\\u0000.jpg", ImportOutcome.Failed, Some(R)),
+      ("Day 1/b\\u0000.jpg", ImportOutcome.Failed, Some(R)),
+      ("c\\u0000.jpg", ImportOutcome.Failed, Some("Upload failed"))
+    )
+  }
+
   test("An upload's name and paths are logged with their control characters escaped, so none starts a log line") {
 
     /**
@@ -1055,7 +1099,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * No logged line holds a control character, and every line naming the Import or a path, at every level, holds the escape.
+     * No logged line holds a control character, and every line naming a path, at every level, holds the escape. The Import's name
+     * is logged as stored, the line break replaced.
      */
     val logger = LoggerFactory.getLogger(classOf[ImportService]).asInstanceOf[Logger]
     val capture = ListAppender[ILoggingEvent]()
@@ -1075,13 +1120,8 @@ import altitude.core.util.Query
 
       val lines = capture.list.asScala.map(_.getFormattedMessage).toList
       lines.filter(_.exists(_.isControl)) shouldBe empty
-      List(
-        "Opened Import",
-        "Added Import file",
-        "is failed on arrival",
-        "is failed",
-        "was settled already",
-        "failed before the pipeline").foreach {
+      lines.exists(line => line.contains("Opened Import") && line.contains("Trip\ufffd2026-11-12 WARN")) shouldBe true
+      List("Added Import file", "is failed on arrival", "is failed", "was settled already", "failed before the pipeline").foreach {
         said => withClue(said)(lines.exists(line => line.contains(said) && line.contains("\\u000a")) shouldBe true)
       }
     } finally {
@@ -1352,11 +1392,11 @@ import altitude.core.util.Query
     val stopped = ImportPipelineService(testApp)
     stopped.shutdown()
 
-    imports.failForLostDestination(opened.persistedId, "early.jpg", sizeBytes = 2048) shouldBe None
+    imports.failOnArrival(opened.persistedId, "early.jpg", sizeBytes = 2048) shouldBe None
     testContext.importFiles(opened.persistedId) shouldBe empty
 
     testApp.service.library.deleteFolderById(sorted.persistedId)
-    val announced = imports.failForLostDestination(opened.persistedId, "Beach/sea.jpg", sizeBytes = 2048)
+    val announced = imports.failOnArrival(opened.persistedId, "Beach/sea.jpg", sizeBytes = 2048)
     val staged = stagedImage()
     val uploaded = imports.upload(opened.persistedId, "sand.jpg", staged, stopped)
 
@@ -1374,8 +1414,8 @@ import altitude.core.util.Query
     testApp.service.asset.getDanglingAssets shouldBe empty
     testApp.service.stats.getStats.getStatValue(Stats.SORTED_ASSETS) shouldBe 0
 
-    imports.failForLostDestination(imports.openUpload().persistedId, "photo.jpg", sizeBytes = 10) shouldBe None
-    intercept[ValidationException](imports.failForLostDestination(opened.persistedId, ".hidden.jpg", sizeBytes = 10))
+    imports.failOnArrival(imports.openUpload().persistedId, "photo.jpg", sizeBytes = 10) shouldBe None
+    intercept[ValidationException](imports.failOnArrival(opened.persistedId, ".hidden.jpg", sizeBytes = 10))
     testContext.importFiles(opened.persistedId).size shouldBe 2
   }
 

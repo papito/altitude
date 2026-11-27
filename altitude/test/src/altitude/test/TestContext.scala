@@ -337,7 +337,7 @@ class TestContext(val testApp: Altitude) {
 
   /** What a Watch folder of the context repository remembers of the files of its directory */
   def watchFolderMemory(watchFolderId: String): List[WatchFolderFile] =
-    testApp.txManager.asReadOnly(testApp.DAO.watchFolderFile.ofWatchFolder(watchFolderId))
+    testApp.txManager.asReadOnly(testApp.DAO.watchFolderFile.memoryOf(watchFolderId).values.toList)
 
   /**
    * Whether `service` is scanning the Watch folder or still has a file of it in the import pipeline, not yet settled. Both live

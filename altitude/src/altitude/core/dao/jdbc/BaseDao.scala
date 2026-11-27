@@ -469,18 +469,27 @@ abstract class BaseDao[Model <: BaseModel]:
    * naming the statement and not its values.
    */
   def collectBySqlQuery[T](sql: String, values: List[Any] = List())(f: Map[String, AnyRef] => Option[T]): BaseDao.Collected[T] =
+    val kept = List.newBuilder[T]
+    val scanned = foreachBySqlQuery(sql, values)(row => f(row).foreach(kept += _))
+    val collected = BaseDao.Collected(kept.result(), scanned)
+    trace(s"Kept ${collected.kept.length} of them")
+    collected
+
+  /**
+   * A read whose rows `f` takes one at a time as they are fetched, as [[manyBySqlQuery]] would return each, into whatever it
+   * builds (a map), so no list of the rows is held beside it; answers how many rows it read. Fails as [[collectBySqlQuery]].
+   */
+  def foreachBySqlQuery(sql: String, values: List[Any] = List())(f: Map[String, AnyRef] => Unit): Int =
     BaseDao.incrReadQueryCount()
     trace(s"STREAMING SELECT SQL: $sql with ${values.length} values")
     runQuery(sql, values, fetchSize = BaseDao.STREAMING_FETCH_SIZE) {
       rs =>
-        val kept = List.newBuilder[T]
         var scanned = 0
         while rs.next() do
           scanned += 1
-          f(rowProcessor.toMap(rs).asScala.toMap[String, AnyRef]).foreach(kept += _)
-        val collected = BaseDao.Collected(kept.result(), scanned)
-        trace(s"Scanned ${collected.scanned} records, kept ${collected.kept.length}")
-        collected
+          f(rowProcessor.toMap(rs).asScala.toMap[String, AnyRef])
+        trace(s"Scanned $scanned records")
+        scanned
     }
 
   def getByIds(ids: Set[String]): List[Model] =

@@ -356,6 +356,50 @@ import altitude.core.util.Sha256
     }
   }
 
+  test("A Watch folder's path is refused past a length in bytes, and its name with a control character") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder on a directory, and paths under the suite's temporary directory of `Const.WatchFolder.MAX_PATH_BYTES` bytes
+     * and of one byte more, neither of which exists.
+     *
+     * Assertions:
+     *
+     * An add or an edit onto the longer path is refused on the path's field for its length, and one with a name holding a NUL, a
+     * line break or a right-to-left override on the name's field. Nothing is added and the Watch folder keeps its name and path.
+     *
+     * Edge cases:
+     *
+     * The path of the most bytes the rule takes is refused only as missing.
+     */
+    val dir = directory()
+    val watchFolder = watch(dir)
+    val max = Const.WatchFolder.MAX_PATH_BYTES
+
+    // A path under the suite's temporary directory of `bytes` bytes, in names of one or two letters
+    def pathOf(bytes: Int): String = {
+      val left = bytes - tempRoot.toString.length
+      val names = if (left % 2 == 1) "dd" :: List.fill((left - 3) / 2)("d") else List.fill(left / 2)("d")
+      (tempRoot.toString :: names).mkString("/")
+    }
+
+    pathOf(max + 1).getBytes(java.nio.charset.StandardCharsets.UTF_8).length shouldBe max + 1
+    val tooLong = Map(F.PATH -> E.WATCH_PATH_TOO_LONG.format(max))
+    refusal(watchFolders.add(WatchFolderSpec("Long", pathOf(max + 1)))) shouldBe tooLong
+    refusal(watchFolders.update(watchFolder.persistedId, WatchFolderSpec("Long", pathOf(max + 1)))) shouldBe tooLong
+    refusal(watchFolders.add(WatchFolderSpec("Long", pathOf(max)))) shouldBe Map(F.PATH -> E.WATCH_PATH_MISSING)
+
+    for (name <- List("Phone\u0000sync", "Phone\nsync", "Phone\u202esync")) withClue(s"[${name.map(_.toInt)}]: ") {
+      refusal(watchFolders.add(WatchFolderSpec(name, directory().toString))) shouldBe Map(F.NAME -> E.CONTROL_CHARACTERS)
+      refusal(watchFolders.update(watchFolder.persistedId, WatchFolderSpec(name, dir.toString))) shouldBe
+        Map(F.NAME -> E.CONTROL_CHARACTERS)
+    }
+
+    watchFolders.cards().map(card => (card.watchFolder.name, card.watchFolder.path)) shouldBe List(
+      (watchFolder.name, dir.toString))
+  }
+
   test("No two Watch folders overlap, in any Library, nor does one overlap the app's data directory") {
 
     /**
@@ -1043,6 +1087,163 @@ import altitude.core.util.Sha256
     importsOf(watchFolder) shouldBe empty
   }
 
+  test("A scan that finds its directory back keeps the reason of the pause its owner's deactivation made meanwhile") {
+
+    /**
+     * Setup:
+     *
+     * A second Admin's Watch folder, whose last scan found its directory missing; the directory is back since. The suite's Admin
+     * deactivates the owner, which pauses the Watch folder, and holds that transaction open while a scan, which read the Watch
+     * folder before the pause, reaches its memory write and waits; then the deactivation commits.
+     *
+     * Assertions:
+     *
+     * The Watch folder stays paused with the deactivation's reason: the scan finds the directory available again but clears no
+     * reason of a pause.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val owner = persistAdmin()
+    val dir = directory()
+    switchContextUser(owner)
+    val watchFolder = watch(dir)
+    switchContextUser(admin)
+    val away = tempRoot.resolve(s"away-${java.util.UUID.randomUUID}")
+    Files.move(dir, away)
+    scanAndSettle(watchFolder) shouldBe ScanResult.Blocked(Const.WatchFolder.PATH_MISSING)
+    Files.move(away, dir)
+
+    val (result, _) =
+      scanWhileHolding(watchFolder)(testApp.service.user.deactivate(admin.persistedId, owner.persistedId))()
+
+    result shouldBe ScanResult.Scanned(0)
+    val stored = watchFolders.getById(watchFolder.persistedId)
+    (stored.isPaused, stored.statusReason) shouldBe (true, Some(Const.WatchFolder.OWNER_DEACTIVATED))
+  }
+
+  test("An edit of a paused Watch folder made while it is resumed leaves it resumed") {
+
+    /**
+     * Setup:
+     *
+     * A paused Watch folder. Its resume holds its transaction open while an edit of its name, which reads it paused, waits on it;
+     * then the resume commits.
+     *
+     * Assertions:
+     *
+     * The Watch folder is resumed and has the edit's name: an edit writes no pause of its own.
+     */
+    val dir = directory()
+    val watchFolder = watch(dir)
+    watchFolders.pause(watchFolder.persistedId)
+    val repository = testContext.repository
+
+    contend(
+      asAdmin(repository)(watchFolders.resume(watchFolder.persistedId)),
+      asAdmin(repository)(watchFolders.update(watchFolder.persistedId, WatchFolderSpec("Edited", dir.toString)): Unit)
+    )
+
+    val stored = watchFolders.getById(watchFolder.persistedId)
+    (stored.name, stored.isPaused) shouldBe ("Edited", false)
+  }
+
+  test("A scan pauses no Watch folder for an owner an Admin's edit has replaced meanwhile") {
+
+    /**
+     * Setup:
+     *
+     * A second Admin's Watch folder, unpaused though its owner was deactivated, as a scan finds one whose deactivation did not
+     * pause it. The suite's Admin edits it, which makes them its owner, and holds that transaction open while a scan, which read
+     * the deactivated owner, pauses it and waits; then the edit commits.
+     *
+     * Assertions:
+     *
+     * The scan does not start, rather than be blocked for the owner it read, and the Watch folder is not paused and has no
+     * reason: it is the editing Admin's, with the edit's name.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val owner = persistAdmin()
+    val dir = directory()
+    switchContextUser(owner)
+    val watchFolder = watch(dir)
+    switchContextUser(admin)
+    testApp.service.user.deactivate(admin.persistedId, owner.persistedId)
+    testApp.txManager.withTransaction(
+      update("UPDATE watch_folder SET is_paused = FALSE, status_reason = NULL WHERE id = ?", watchFolder.persistedId))
+
+    val (result, _) =
+      scanWhileHolding(watchFolder)(watchFolders.update(watchFolder.persistedId, WatchFolderSpec("Edited", dir.toString)): Unit)()
+
+    result shouldBe ScanResult.NotStarted
+    val stored = watchFolders.getById(watchFolder.persistedId)
+    (stored.name, stored.isPaused, stored.statusReason, stored.accountId) shouldBe ("Edited", false, None, admin.persistedId)
+  }
+
+  test("A scan pauses no Watch folder for an owner reactivated meanwhile") {
+
+    /**
+     * Setup:
+     *
+     * A second Admin's Watch folder, unpaused though its owner was deactivated, as a scan finds one whose deactivation did not
+     * pause it. The suite's Admin reactivates the owner and, in the same transaction, holds the Watch folder's row, while a scan
+     * that read the deactivated owner goes to pause it and waits; then the reactivation commits.
+     *
+     * Assertions:
+     *
+     * The scan does not start, and the Watch folder is not paused and has no reason: its owner is an active Admin again.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val owner = persistAdmin()
+    val dir = directory()
+    switchContextUser(owner)
+    val watchFolder = watch(dir)
+    switchContextUser(admin)
+    testApp.service.user.deactivate(admin.persistedId, owner.persistedId)
+    testApp.txManager.withTransaction(
+      update("UPDATE watch_folder SET is_paused = FALSE, status_reason = NULL WHERE id = ?", watchFolder.persistedId))
+
+    val (result, _) = scanWhileHolding(watchFolder) {
+      testApp.service.user.reactivate(admin.persistedId, owner.persistedId)
+      query("SELECT id FROM watch_folder WHERE id = ? FOR UPDATE", watchFolder.persistedId): Unit
+    }()
+
+    result shouldBe ScanResult.NotStarted
+    val stored = watchFolders.getById(watchFolder.persistedId)
+    (stored.isPaused, stored.statusReason, stored.accountId) shouldBe (false, None, owner.persistedId)
+  }
+
+  test("A scan whose Watch folder is moved to another directory meanwhile remembers nothing of the old one") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder on a directory with an image it has not seen, and a second, empty directory. An edit moving the Watch folder
+     * to the second directory holds its transaction open while a scan, which read the first, reaches its memory write and waits;
+     * then the edit commits.
+     *
+     * Assertions:
+     *
+     * The scan ends as blocked by the change of path, remembering nothing, and the Watch folder is on the second directory with
+     * no status reason.
+     *
+     * Edge cases:
+     *
+     * A memory write that went on would remember the first directory's image in the memory the edit had cleared for the second.
+     */
+    assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    val dir = directory()
+    image(dir, "old.png")
+    val moved = directory("moved")
+    val watchFolder = watch(dir)
+
+    val (result, _) = scanWhileHolding(watchFolder)(
+      watchFolders.update(watchFolder.persistedId, WatchFolderSpec(watchFolder.name, moved.toString)): Unit)()
+
+    result shouldBe ScanResult.Blocked(altitude.core.service.WatchFolderService.PATH_CHANGED)
+    memory(watchFolder) shouldBe empty
+    val stored = watchFolders.getById(watchFolder.persistedId)
+    (stored.path, stored.statusReason) shouldBe (moved.toString, None)
+  }
+
   test("A Watch folder whose directory is unavailable says why, keeps what it remembers, and scans again once it is back") {
 
     /**
@@ -1146,6 +1347,83 @@ import altitude.core.util.Sha256
     (card.status, card.reason) shouldBe (WatchFolderStatus.Watching, None)
     scanAndSettle(watchFolder) shouldBe ScanResult.Scanned(1)
     assetOf(hidden) shouldBe defined
+  }
+
+  test("A file whose path under its Watch folder is too long to remember is skipped and named on the card") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder on a directory with an image at its top and one so deep that its path under the directory passes
+     * `Const.WatchFolder.MAX_PATH_BYTES`, and past the 2652 bytes PostgreSQL's index on the memory takes. A file system that
+     * cannot hold so long a path cancels the test.
+     *
+     * Assertions:
+     *
+     * Two scans import the top image and skip the deep one, which is neither remembered nor recorded. The stored status reason,
+     * shown on the Unavailable card, names the deep file's path, shortened, and says the rest is scanned.
+     */
+    val dir = directory()
+    image(dir, "top.png")
+    // Random names, which PostgreSQL's compression of an index row does not shrink below its limit
+    val deepPath = (List.fill(14)(Random.alphanumeric.take(200).mkString) :+ "deep.png").mkString("/")
+    deepPath.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 2652
+    val deep =
+      try Some(image(dir, deepPath))
+      catch { case _: java.io.IOException => None }
+    assume(deep.isDefined)
+    val watchFolder = watch(dir)
+    val shown = deepPath.take(Const.WatchFolder.SHOWN_PATH_LENGTH) + "…"
+    val reason = Const.WatchFolder.PATH_TOO_LONG.format(Const.WatchFolder.MAX_PATH_BYTES, shown)
+
+    scanTwice(watchFolder) shouldBe ScanResult.Scanned(1)
+    recorded(watchFolder) shouldBe List(("top.png", ImportOutcome.Imported, None))
+    memory(watchFolder).keySet shouldBe Set("top.png")
+    watchFolders.getById(watchFolder.persistedId).statusReason shouldBe Some(reason)
+    val card = watchFolders.cards().head
+    (card.status, card.reason) shouldBe (WatchFolderStatus.Unavailable, Some(reason))
+  }
+
+  test("Two files whose names read as one path are one file to a scan, which names the other on the card") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder on a directory with an image, and two more images whose names hold a byte that is no character in the JVM's
+     * file name encoding, a different byte each, so both names read as one. Only Linux lets a test write such names; elsewhere
+     * the test is cancelled.
+     *
+     * Assertions:
+     *
+     * Two scans import the image and the one of the two whose name's bytes sort first, and the memory holds one file for their
+     * path. The stored status reason, shown on the Unavailable card, names the other by its bytes, percent-encoded, and says the
+     * rest is scanned. A third scan reads nothing.
+     */
+    assume(System.getProperty("os.name") == "Linux")
+    val dir = directory()
+    image(dir, "plain.png")
+    image(dir, "first.png")
+    image(dir, "second.png")
+    // Neither 0xFF nor 0xFE is a byte of UTF-8 text, or of ASCII: each name reads with U+FFFD in its place
+    val renamed =
+      new ProcessBuilder("sh", "-c", """mv first.png "$(printf 'odd\377.png')" && mv second.png "$(printf 'odd\376.png')"""")
+        .directory(dir.toFile)
+        .start()
+        .waitFor()
+    renamed shouldBe 0
+    val odd = tree(dir).filter(_.startsWith("odd"))
+    assume(odd.size == 1)
+
+    val watchFolder = watch(dir)
+    scanTwice(watchFolder) shouldBe ScanResult.Scanned(2)
+    recorded(watchFolder).map(file => (file._1, file._2)).toSet shouldBe
+      Set(("plain.png", ImportOutcome.Imported), (odd.head, ImportOutcome.Imported))
+    memory(watchFolder).keySet shouldBe Set("plain.png", odd.head)
+    val reason = Const.WatchFolder.NAME_READS_AS_ANOTHER.format("odd%FF.png")
+    watchFolders.getById(watchFolder.persistedId).statusReason shouldBe Some(reason)
+    val card = watchFolders.cards().head
+    (card.status, card.reason) shouldBe (WatchFolderStatus.Unavailable, Some(reason))
+    scanAndSettle(watchFolder) shouldBe ScanResult.Scanned(0)
   }
 
   test("A Watch folder whose destination folder is in the Trash is paused, its files untouched, until the folder is back") {
@@ -1360,6 +1638,52 @@ import altitude.core.util.Sha256
       settle(watchFolder)
     }
     rounds.map(_._1).toList shouldBe List(10.minutes, 10.minutes, 90.minutes)
+  }
+
+  test("Scanning starts with a warning when the JVM reads file names in another encoding than UTF-8") {
+
+    /**
+     * Setup:
+     *
+     * The Watch folder service's log captured at WARN, and `sun.jnu.encoding`, the JVM's file name encoding, read as ASCII, as a
+     * start under the C locale reads it; then as UTF-8. Scans are started each time with a schedule that runs no round.
+     *
+     * Assertions:
+     *
+     * The start under ASCII logs a WARN naming the encoding and a UTF-8 locale; the one under UTF-8 logs none.
+     *
+     * Edge cases:
+     *
+     * Windows reads file names as UTF-16 whatever the property says, so there the test is cancelled.
+     */
+    assume(!System.getProperty("os.name").startsWith("Windows"))
+    val logger = org.slf4j.LoggerFactory
+      .getLogger(classOf[altitude.core.service.WatchFolderService])
+      .asInstanceOf[ch.qos.logback.classic.Logger]
+    val capture = new ch.qos.logback.core.read.ListAppender[ch.qos.logback.classic.spi.ILoggingEvent]()
+    // Test logging is off, so the level is raised for the test
+    val level = logger.getLevel
+    val encoding = System.getProperty("sun.jnu.encoding")
+    capture.start()
+    logger.addAppender(capture)
+    logger.setLevel(ch.qos.logback.classic.Level.WARN)
+
+    def warnings(read: String): List[String] = {
+      capture.list.clear()
+      System.setProperty("sun.jnu.encoding", read)
+      watchFolders.start((_, _) => Cancellable.alreadyCancelled)
+      capture.list.asScala.map(_.getFormattedMessage).toList
+    }
+
+    try {
+      val ascii = warnings("ANSI_X3.4-1968")
+      ascii.exists(line => line.contains("ANSI_X3.4-1968") && line.contains("UTF-8")) shouldBe true
+      warnings("UTF-8") shouldBe empty
+    } finally {
+      System.setProperty("sun.jnu.encoding", encoding)
+      logger.detachAppender(capture)
+      logger.setLevel(level)
+    }
   }
 
   test("A deactivated or demoted Admin's Watch folders pause, and a deleted Admin's pass to the Admin who deletes it") {

@@ -120,7 +120,7 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
     val sql = s"""
       UPDATE $tableName
          SET ${F.NAME} = ?, ${F.NAME_SORT} = ?, ${F.PATH} = ?, ${F.DEST_FOLDER_ID} = ?, ${F.DELETES_IMPORTED} = ?,
-             ${F.ACCOUNT_ID} = ?, ${FieldConst.UPDATED_AT} = ?
+             ${F.ACCOUNT_ID} = ?, ${F.STATUS_REASON} = NULL, ${FieldConst.UPDATED_AT} = ?
        WHERE ${FieldConst.ID} = ?
          AND ${FieldConst.REPO_ID} = ?
     """
@@ -150,6 +150,20 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
 
     updateByBySql(sql, List(nativeBool(isPaused), reason.orNull, nativeUtcTimestamp(Util.utcNow), id, repositoryId))
 
+  override def pauseForOwner(id: String, accountId: String, reason: String): Int =
+    val sql = s"""
+      UPDATE $tableName
+         SET ${F.IS_PAUSED} = ?, ${F.STATUS_REASON} = ?, ${FieldConst.UPDATED_AT} = ?
+       WHERE ${FieldConst.ID} = ?
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${F.ACCOUNT_ID} = ?
+         AND ${F.IS_PAUSED} = ?
+    """
+
+    updateByBySql(
+      sql,
+      List(nativeBool(true), reason, nativeUtcTimestamp(Util.utcNow), id, repositoryId, accountId, nativeBool(false)))
+
   override def setOwner(id: String, accountId: String): Int =
     val sql = s"""
       UPDATE $tableName
@@ -160,14 +174,31 @@ abstract class WatchFolderDao(override val config: Config) extends BaseDao[Watch
 
     updateByBySql(sql, List(accountId, nativeUtcTimestamp(Util.utcNow), id, repositoryId))
 
-  // What a scan finds is no edit of the Watch folder: `updated_at` stays
+  // What a scan finds is no edit of the Watch folder: `updated_at` stays. The row decides, not the scan's earlier read of it, so a
+  // pause committed since keeps its reason.
   override def setStatusReason(id: String, reason: Option[String]): Int =
-    val sql = s"UPDATE $tableName SET ${F.STATUS_REASON} = ? WHERE ${FieldConst.ID} = ? AND ${FieldConst.REPO_ID} = ?"
-    updateByBySql(sql, List(reason.orNull, id, repositoryId))
+    val sql = s"""
+      UPDATE $tableName
+         SET ${F.STATUS_REASON} = ?
+       WHERE ${FieldConst.ID} = ?
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${F.IS_PAUSED} = ?
+         AND ${F.STATUS_REASON} IS DISTINCT FROM ?
+    """
 
-  override def scanned(id: String, at: OffsetDateTime): Int =
-    val sql = s"UPDATE $tableName SET ${F.LAST_SCAN_AT} = ? WHERE ${FieldConst.ID} = ? AND ${FieldConst.REPO_ID} = ?"
-    updateByBySql(sql, List(nativeUtcTimestamp(at), id, repositoryId))
+    updateByBySql(sql, List(reason.orNull, id, repositoryId, nativeBool(false), reason.orNull))
+
+  // The path as the scan read it: an edit that moved the Watch folder meanwhile forgot the files the scan walked
+  override def scanned(id: String, at: OffsetDateTime, path: String): Int =
+    val sql = s"""
+      UPDATE $tableName
+         SET ${F.LAST_SCAN_AT} = ?
+       WHERE ${FieldConst.ID} = ?
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${F.PATH} = ?
+    """
+
+    updateByBySql(sql, List(nativeUtcTimestamp(at), id, repositoryId, path))
 
   // Across Libraries, by the account, when it is deactivated or demoted
   override def pauseOwnedBy(accountId: String, reason: String): Int =

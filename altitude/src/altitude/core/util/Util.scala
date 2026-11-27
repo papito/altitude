@@ -140,12 +140,45 @@ object Util:
       val pre = ("KMGTPE").charAt(exp - 1)
       f"${bytes / Math.pow(unit, exp)}%.1f ${pre}B"
 
+  private val ZERO_WIDTH_NON_JOINER = 0x200c
+  private val ZERO_WIDTH_JOINER = 0x200d
+
   /**
-   * Client-typed text made safe for a log line or an audit record: control characters escaped as `\uXXXX`, so a CR or LF cannot
-   * start a line and a NUL cannot reach PostgreSQL, which refuses it; cut to `maxLength` characters
+   * ISO controls, unpaired surrogates and invisible format characters (Unicode `Cf`: zero-width space, bidi overrides and
+   * isolates, BOM, soft hyphen), which would let two look-alike names differ, reorder the text around a name, or, a NUL, fail
+   * PostgreSQL's text. The two join controls are spelling and stay allowed: ZWJ joins emoji sequences, ZWNJ is part of words in
+   * Persian and the Indic scripts.
+   */
+  def isControlCharacter(codePoint: Int): Boolean =
+    val kind = Character.getType(codePoint)
+    Character.isISOControl(codePoint) || kind == Character.SURROGATE ||
+    (kind == Character.FORMAT && codePoint != ZERO_WIDTH_NON_JOINER && codePoint != ZERO_WIDTH_JOINER)
+
+  def holdsControlCharacter(text: String): Boolean = text.codePoints.anyMatch(isControlCharacter)
+
+  /** A name as received, shown with each control character ([[isControlCharacter]]) replaced by U+FFFD */
+  def withControlCharactersReplaced(text: String): String =
+    text.codePoints
+      .map(codePoint => if isControlCharacter(codePoint) then 0xfffd else codePoint)
+      .collect(() => java.lang.StringBuilder(), _.appendCodePoint(_), _.append(_))
+      .toString
+
+  /**
+   * Client-typed text made safe for a log line, an audit record or a record shown as text: each control character
+   * ([[isControlCharacter]]) and the line and paragraph separators escaped as `\uXXXX`, so a CR, LF, U+2028 or U+2029 cannot
+   * start a line, a bidi override cannot reorder what follows, and a NUL cannot reach PostgreSQL, which refuses it; cut to
+   * `maxLength` characters
    */
   def printable(text: String, maxLength: Int): String =
-    text.flatMap(c => if c.isControl then f"\\u${c.toInt}%04x" else c.toString).take(maxLength)
+    val escaped = StringBuilder()
+    text.codePoints.forEach {
+      codePoint =>
+        val kind = Character.getType(codePoint)
+        if isControlCharacter(codePoint) || kind == Character.LINE_SEPARATOR || kind == Character.PARAGRAPH_SEPARATOR then
+          Character.toChars(codePoint).foreach(c => escaped ++= f"\\u${c.toInt}%04x")
+        else escaped ++= String(Character.toChars(codePoint))
+    }
+    escaped.take(maxLength).toString
 
   def randomStr(size: Int = 10): String = scala.util.Random.alphanumeric.take(size).mkString
 
