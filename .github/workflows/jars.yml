@@ -10,14 +10,23 @@
 
 name: Native jars
 
+# On every push to trunk, and by hand on any branch (Actions > Native jars > Run workflow, or gh workflow run jars.yml --ref
+# <branch>); not on pull requests, whose pushes would each run all four systems. Trunk's runs also keep the caches that every
+# branch restores from.
 on:
   push:
     branches: [trunk]
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# One run at a time per branch and trigger. A run started by hand cancels the one before it on that branch, whose result the
+# new one replaces; a push to trunk waits for the one before it instead, so each merge's jars are built and tested. A push
+# waiting behind another still gives way to a newer push.
+concurrency:
+  group: jars-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
   jar:
