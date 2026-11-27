@@ -1670,6 +1670,10 @@ import altitude.core.util.*
      * Assertions:
      *
      * Each plan seeks the table's `_01` index by `asset_id`, not a pass over an index that happens to hold the column.
+     *
+     * Edge cases:
+     *
+     * SQLite's `face` may be sought through `face_04` instead, which leads with the asset too and carries the person.
      */
     val engine = searchDialect
     import engine.dialect.*
@@ -1677,7 +1681,7 @@ import altitude.core.util.*
 
     for (
       (table, index) <- List(
-        "face" -> "face_01",
+        "face" -> (if (isPostgres) "face_01" else "face_0[14]"),
         "search_document" -> "search_document_01",
         "metadata_parameter" -> "metadata_parameter_01")
     ) {
@@ -1817,8 +1821,8 @@ import altitude.core.util.*
      * Assertions:
      *
      * The probe reads each name source from the index that leads with it, and the search tests the candidate's memberships and
-     * faces through an index that leads with the asset, never reading a table. SQLite's `face_01` cannot carry the person, so
-     * only PostgreSQL is checked for it.
+     * faces through an index that leads with the asset, never reading a table: `face_01`, which carries the person on PostgreSQL,
+     * and on SQLite, which has no included columns, `face_04`.
      */
     val alice = addPerson("Alice")
     val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, None)
@@ -1853,7 +1857,7 @@ import altitude.core.util.*
     reads(probePlan, "album_asset", "album_asset_01")
     reads(searchPlan, "location_asset", "location_asset_02")
     reads(searchPlan, "album_asset", "album_asset_02")
-    if (isPostgres) reads(searchPlan, "face", "face_01")
+    reads(searchPlan, "face", if (isPostgres) "face_01" else "face_04")
   }
 
   /** Three assets whose file names and "place" metadata values share words in different orders */

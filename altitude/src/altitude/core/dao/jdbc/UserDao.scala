@@ -1,8 +1,6 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import scalasql.Sc
 import scalasql.Table
 
@@ -12,6 +10,7 @@ import altitude.core.dao.sql.tables.AccountRow
 import altitude.core.models.AccountType
 import altitude.core.models.Permissions
 import altitude.core.models.User
+import altitude.core.util.Util
 
 abstract class UserDao(override val config: Config) extends BaseDao[User] with altitude.core.dao.UserDao:
   final override val tableName = "account"
@@ -99,24 +98,22 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
         nativeBool(account.canCreateLibraries),
         nativeBool(account.grantsNewLibraries),
         account.newLibraryPermissions.mask,
-        now,
+        nativeUtcTimestamp(Util.utcNow),
         account.persistedId
       )
     )
 
   override def setActive(id: String, active: Boolean): Int =
     val sql = s"UPDATE account SET ${FieldConst.User.IS_ACTIVE} = ?, ${FieldConst.UPDATED_AT} = ? WHERE ${FieldConst.ID} = ?"
-    updateByBySql(sql, List(nativeBool(active), now, id))
+    updateByBySql(sql, List(nativeBool(active), nativeUtcTimestamp(Util.utcNow), id))
 
   override def setPasswordHash(id: String, passwordHash: String): Int =
     val sql = s"UPDATE account SET ${FieldConst.User.PASSWORD_HASH} = ?, ${FieldConst.UPDATED_AT} = ? WHERE ${FieldConst.ID} = ?"
-    updateByBySql(sql, List(passwordHash, now, id))
-
-  private def now: Any = nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC))
+    updateByBySql(sql, List(passwordHash, nativeUtcTimestamp(Util.utcNow), id))
 
   override def recordLogin(id: String): Unit =
     val sql = s"UPDATE account SET ${FieldConst.User.LAST_LOGIN_AT} = ? WHERE ${FieldConst.ID} = ?"
-    updateByBySql(sql, List(now, id)): Unit
+    updateByBySql(sql, List(nativeUtcTimestamp(Util.utcNow), id)): Unit
 
   override protected def makeModel(rec: Map[String, AnyRef]): User =
     User(

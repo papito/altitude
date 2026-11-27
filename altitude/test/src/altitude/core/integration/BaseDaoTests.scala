@@ -1,5 +1,6 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil.withJvmTimeZone
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
@@ -7,6 +8,7 @@ import java.lang.reflect.Proxy
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.SQLException
+import java.time.OffsetDateTime
 import java.util.concurrent.atomic.AtomicInteger
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
@@ -24,6 +26,8 @@ import altitude.core.dao.RepositoryDao
 import altitude.core.dao.UserDao
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.dao.jdbc.BaseDao.UniqueIndex
+import altitude.core.dao.sqlite.SqliteOverrides
+import altitude.core.models.EditRecipe
 import altitude.core.util.Query
 import altitude.core.util.Util
 
@@ -425,5 +429,74 @@ import altitude.core.util.Util
         isUnique shouldBe true
       }
     }
+  }
+
+  test("An instant in the autumn overlap hour reads back as itself, whatever the JVM's zone") {
+
+    /**
+     * Setup:
+     *
+     * The JVM's default zone set to America/New_York, and an account whose last login is stamped at each of the two 01:30s of 1
+     * November 2026 there, when the clocks go back: 05:30 and 06:30 UTC, each with microseconds.
+     *
+     * Assertions:
+     *
+     * Read back by the typed read (`getById`) and by a hand-written one (`shareLock`), the model holds the instant's UTC wall
+     * clock, and `instantOf` gives the stamped instant exactly, the later 01:30 included.
+     */
+    val dao = testApp.DAO.user
+    val isPostgres = testApp.dataSourceType == Const.DbEngineName.POSTGRES
+
+    withJvmTimeZone("America/New_York") {
+      val account = testContext.persistUser()
+
+      for (stamped <- List("2026-11-01T05:30:00.123456Z", "2026-11-01T06:30:00.654321Z").map(OffsetDateTime.parse)) {
+        withClue(s"$stamped: ") {
+          val stored: Any =
+            if (isPostgres) stamped else stamped.toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER)
+          val (typed, handWritten) = testApp.txManager.withTransaction {
+            update("UPDATE account SET last_login_at = ? WHERE id = ?", stored, account.persistedId)
+            (dao.getById(account.persistedId), dao.shareLock(account.persistedId).value)
+          }
+
+          for (read <- List(typed, handWritten)) {
+            read.lastLoginAt shouldBe Some(stamped.toLocalDateTime)
+            read.lastLoginAt.map(dao.instantOf) shouldBe Some(stamped.toInstant)
+          }
+        }
+      }
+    }
+  }
+
+  test("The stamps of an account write and of an Edit save hold microseconds at most, as PostgreSQL keeps them") {
+
+    /**
+     * Setup:
+     *
+     * The context account, whose login is recorded and which is set active, and an asset whose Edit is saved twice: inserted,
+     * then updated.
+     *
+     * Assertions:
+     *
+     * Each stamp, read as stored, has at most six digits of a second, so SQLite stores the moment PostgreSQL would.
+     */
+    val account = testContext.user
+    val asset = testContext.persistAsset()
+    testApp.txManager.withTransaction {
+      testApp.DAO.user.recordLogin(account.persistedId)
+      testApp.DAO.user.setActive(account.persistedId, active = true)
+    }
+    testApp.service.assetEdit.save(asset.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    testApp.service.assetEdit.save(asset.persistedId, 1, EditRecipe.Identity.copy(exposure = 2), testContext.user)
+
+    val stamps = testApp.txManager
+      .asReadOnly {
+        query("SELECT last_login_at, updated_at FROM account WHERE id = ?", account.persistedId) ++
+          query("SELECT created_at, updated_at FROM asset_edit WHERE asset_id = ?", asset.persistedId)
+      }
+      .flatMap(_.values)
+
+    stamps should have size 4
+    stamps.foreach(stamp => withClue(s"$stamp: ")("\\.\\d{7}".r.findFirstIn(stamp.toString) shouldBe None))
   }
 }

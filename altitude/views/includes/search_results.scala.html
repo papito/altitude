@@ -1,3 +1,4 @@
+@import play.twirl.api.HtmlFormat
 @import altitude.core.Const
 @import altitude.core.RequestContext
 @import altitude.core.models.Permission
@@ -55,11 +56,11 @@
 <span class="crumbs">@for(ancestor <- folderPath.init) {<a href="#" class="crumb" data-app-search="click" data-app-search-folder-id="@{ancestor.persistedId}">@{ancestor.name}</a><i class="fas fa-chevron-right sep" aria-hidden="true"></i>}<span class="leaf">@{folderPath.last.name}</span></span>
 }
 } else if (album.isDefined) {
-@includes.html.results_title("fa-images", subtitle = album.get.createdAt.map(d => s"Created ${Util.humanReadableDate(d.toLocalDate)}")) {
+@includes.html.results_title("fa-images", subtitle = album.get.createdAt.map(created => Html(s"Created ${includes.html.local_time(Util.instantOf(created), withTime = false)}"))) {
 <span class="name">@{album.get.name}</span>
 }
 } else if (location.isDefined) {
-@includes.html.results_title("fa-map-marker-alt", subtitle = location.get.categoryName) {
+@includes.html.results_title("fa-map-marker-alt", subtitle = location.get.categoryName.map(HtmlFormat.escape)) {
 <span class="name">@{location.get.name}</span>
 }
 } else if (subset.contains(TriageSubset.UnknownPeople)) {
@@ -72,7 +73,7 @@
 <span class="name">No Location</span>
 }
 } else if (text.isDefined) {
-@includes.html.results_title("fa-search", subtitle = Some(if (view == Const.Search.View.TRIAGE) "in Triage" else "in this library")) {
+@includes.html.results_title("fa-search", subtitle = Some(Html(if (view == Const.Search.View.TRIAGE) "in Triage" else "in this library"))) {
 <span class="query">@{text.get}</span>
 }
 }

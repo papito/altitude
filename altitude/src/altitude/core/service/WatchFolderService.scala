@@ -14,7 +14,6 @@ import java.nio.file.attribute.FileTime
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
-import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
@@ -774,7 +773,7 @@ class WatchFolderService(val app: Altitude):
       walkStarted: Instant,
       problem: Option[String]): Option[List[Found]] =
     val id = watchFolder.persistedId
-    val now = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
+    val now = Util.utcNow
     if dao.scanned(id, now) == 0 then return None
 
     val stale = now.minus(LAST_SEEN_STEP).toInstant

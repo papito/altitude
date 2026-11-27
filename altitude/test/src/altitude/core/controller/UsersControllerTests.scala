@@ -1,5 +1,6 @@
 package altitude.core.controller
 
+import altitude.test.IntegrationTestUtil.withJvmTimeZone
 import java.net.HttpCookie
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
@@ -110,6 +111,33 @@ import altitude.core.util.Util
         (ownMenu should not).include(">Delete…</button>")
         (ownMenu should not).include(">Deactivate</button>")
         page should include("""data-app-start-tab="Admin"""")
+    }
+  }
+
+  test("An account card shows when the account was created as a time the viewer's browser shows in its own zone") {
+
+    /**
+     * Setup:
+     *
+     * An Admin logged in to a Library, and a User the Admin created, served with the JVM's zone set to America/New_York.
+     *
+     * Assertions:
+     *
+     * The User's card holds its creation as a `<time>` of the UTC instant, for the `localTime` component to show in the viewer's
+     * zone, with the UTC day as its text until then: the server's zone plays no part.
+     */
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
+    val admin = testContext.user
+    val user = created(admin, AccountType.User, Map(repoId -> Permissions.none))
+    val createdAt = users.accountTimes(user.persistedId).createdAt.get
+
+    withJvmTimeZone("America/New_York") {
+      withServer(App) {
+        host =>
+          val page = get(s"$host/users/r/$repoId").text()
+          page should include(
+            s"""<time datetime="$createdAt" x-data="localTime" data-app-time-style="date">${Util.utcText(createdAt, false)}</time>""")
+      }
     }
   }
 

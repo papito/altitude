@@ -1,5 +1,6 @@
 package altitude.core.controller
 
+import altitude.test.IntegrationTestUtil.withJvmTimeZone
 import altitude.test.TestContext
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
@@ -673,11 +674,11 @@ import altitude.core.util.Util
     run(
       s"""WITH RECURSIVE g (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM g WHERE n < $copies)
          |INSERT INTO asset (id, repository_id, owner_user_id, original_owner, checksum, media_type, media_subtype, mime_type,
-         |                   width, height, area_size, folder_id, filename, size_bytes, is_triaged, is_recycled, is_purged,
-         |                   is_pipeline_processed, original_created_at, created_at)
+         |                   width, height, area_size, folder_id, filename, filename_sort, size_bytes, is_triaged, is_recycled,
+         |                   is_purged, is_pipeline_processed, original_created_at, created_at)
          |SELECT $id, repository_id, owner_user_id, original_owner, $checksum, media_type, media_subtype, mime_type,
-         |       width, height, area_size, folder_id, filename, size_bytes, is_triaged, is_recycled, is_purged,
-         |       is_pipeline_processed, original_created_at, created_at
+         |       width, height, area_size, folder_id, filename, filename_sort, size_bytes, is_triaged, is_recycled,
+         |       is_purged, is_pipeline_processed, original_created_at, created_at
          |  FROM asset CROSS JOIN g
          | WHERE asset.id = ?""".stripMargin,
       template.persistedId
@@ -1463,7 +1464,8 @@ import altitude.core.util.Util
         albumPage should include("fa-images")
         albumPage should include("Best of Iceland")
         val createdAt = testApp.service.album.getById(album.persistedId).createdAt.get
-        albumPage should include(s"Created ${Util.humanReadableDate(createdAt.toLocalDate)}")
+        // A moment the viewer's browser shows in its own zone
+        albumPage should include(s"""Created <time datetime="${Util.instantOf(createdAt)}" x-data="localTime"""")
 
         val locationPage = htmlSearch(host, repoId, Map(Api.Field.Search.LOCATION_ID -> reykjavik.persistedId)).text()
         locationPage should include("fa-map-marker-alt")
@@ -1969,6 +1971,42 @@ import altitude.core.util.Util
           for (other <- others) (response.text() should not).include(cell(other))
         }
         htmlSearch(host, repoId, filters ++ mapLayout).text() should include("""data-results-total="1"""")
+    }
+  }
+
+  test("An import time shows in the server's zone, on the day a Date Imported search finds it, in the grid and Detail panel") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with one asset imported at 03:30 UTC on 2 November 2026, served with the JVM's zone set to
+     * America/New_York, where that is 22:30 on 1 November.
+     *
+     * Assertions:
+     *
+     * A Date Imported search of 1 November renders it, and its grid cell's "Imported:" and its Detail panel's "Date Imported"
+     * both read 1 November, 10:30PM; a search of 2 November renders nothing.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    val asset = testContext.persistAsset()
+    testContext.setAssetDates(asset.persistedId, None, OffsetDateTime.of(2026, 11, 2, 3, 30, 0, 0, ZoneOffset.UTC))
+
+    withJvmTimeZone("America/New_York") {
+      withServer(App) {
+        host =>
+          def onDay(day: String) =
+            htmlSearch(host, repoId, Map(Api.Field.Search.IMPORTED_FROM -> day, Api.Field.Search.IMPORTED_TO -> day)).text()
+
+          val found = onDay("2026-11-01")
+          found should include(cell(asset))
+          found should include("<span>Imported:</span> Nov 1 2026, 10:30PM")
+          (onDay("2026-11-02") should not).include(cell(asset))
+
+          val panel = requests.get(s"$host/htmx/asset/r/$repoId/detail-panel/${asset.persistedId}", cookies = testContext.cookies)
+          panel.text() should include("Nov 1 2026, 10:30PM")
+      }
     }
   }
 

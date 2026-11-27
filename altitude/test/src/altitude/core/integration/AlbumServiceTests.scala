@@ -1,9 +1,12 @@
 package altitude.core.integration
 
+import altitude.test.TestContext
 import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldEqual }
 import org.scalatest.tagobjects.Slow
+
+import scala.util.Random
 
 import altitude.core.Altitude
 import altitude.core.Api
@@ -203,6 +206,26 @@ import altitude.core.util.SearchQuery
     counts(beach.persistedId) shouldEqual 2
     counts(alps.persistedId) shouldEqual 1
     counts(empty.persistedId) shouldEqual 0
+  }
+
+  test("Albums are listed in natural order on both engines, a renamed one by its new name") {
+
+    /**
+     * Setup:
+     *
+     * An album under each of `TestContext.NATURAL_NAMES`, added in a shuffled order, the first of the names added as "zzz" and
+     * renamed, so a key left stale would list it last.
+     *
+     * Assertions:
+     *
+     * They are listed in that order on both engines, the order `NaturalOrder` sorts the names in memory: case ignored, an
+     * accented letter beside its base letter, a run of digits by its number.
+     */
+    val names = TestContext.NATURAL_NAMES
+    testApp.service.album.rename(testApp.service.album.add("zzz").persistedId, names.head)
+    Random.shuffle(names.tail).foreach(testApp.service.album.add)
+
+    testApp.service.album.getAll.map(_.name) shouldEqual TestContext.NATURAL_NAMES
   }
 
   test("An asset's albums are read by name, and an asset in none has none") {

@@ -11,6 +11,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 import org.apache.commons.dbutils.BasicRowProcessor
 import org.apache.commons.dbutils.RowProcessor
@@ -19,12 +20,15 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
+import scalasql.Bytes
 import scalasql.Column
 import scalasql.Sc
 import scalasql.Table
 import scalasql.core.Expr
 import scalasql.core.Queryable
+import scalasql.core.SqlStr.SqlStringSyntax
 import scalasql.dialects.Dialect
+import scalasql.query.TableRef
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -44,6 +48,8 @@ import altitude.core.models.SceneEmbedding
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SortDirection
+import altitude.core.util.SortKey
+import altitude.core.util.Util
 
 object BaseDao:
   final def genId: String = UUID.randomUUID.toString
@@ -224,16 +230,18 @@ abstract class BaseDao[Model <: BaseModel]:
   protected val dialect: Dialect
 
   /**
-   * An instant column as the model's `LocalDateTime`. The engines differ: PostgreSQL stores a `timestamptz` and shows it in the
-   * JVM zone, SQLite stores UTC wall-clock text verbatim. The engine decides here, as `getDateTimeField` does for the raw paths.
+   * An instant column as the model's `LocalDateTime`: its UTC wall clock on both engines, whatever the JVM's zone, so a time in a
+   * zone's repeated autumn hour reads back as itself. PostgreSQL reads a `timestamptz` as an offset date-time, SQLite stores the
+   * UTC text; `getDateTimeField` reads the raw paths alike.
    */
-  protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime
+  final protected[dao] def toLocalDateTime(value: OffsetDateTime): LocalDateTime =
+    value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime
 
   /**
-   * The instant a model's `LocalDateTime` stands for, read the way this engine wrote it: in the JVM zone on PostgreSQL, as UTC on
-   * SQLite. Needed before a moment leaves the server, which shows it in the viewer's zone.
+   * The instant a model's `LocalDateTime` of an instant column stands for: the UTC wall clock [[toLocalDateTime]] gives. Needed
+   * before a moment leaves the server, which shows it in the viewer's zone.
    */
-  def instantOf(value: LocalDateTime): Instant
+  final def instantOf(value: LocalDateTime): Instant = Util.instantOf(value)
 
   // Aggregates such as COUNT(*) come back as Long on Postgres and Integer on SQLite
   protected def getIntField(value: AnyRef): Int = value match
@@ -483,13 +491,28 @@ abstract class BaseDao[Model <: BaseModel]:
     logger.trace(s"Found ${rows.length} records")
     rows.map(toModel).toList
 
+  /**
+   * The name columns whose `SortKey` a `*_sort` column keeps, each to its sort column: every DAO of a table with one declares it.
+   * A generic write of a name writes its key with it ([[updateByQuery]]), so no caller can leave a list's order stale; an insert
+   * or a hand-written write binds it itself.
+   */
+  protected val sortKeyColumns: Map[String, String] = Map.empty
+
   def updateByQuery(q: Query, data: Map[String, Any]): Int =
     import dialect.*
     requireParams(q, "update")
 
+    // A sort column need be in no row class, so its assignment names it on its own: a `SET` renders a column by its name alone
+    val keys = sortKeyColumns.toSeq.collect {
+      case (name, sortColumn) if data.contains(name) =>
+        val key = data(name) match
+          case value: String => Bytes(SortKey.of(value).bytes)
+          case other => throw IllegalArgumentException(s"A name to sort by is text, not [$other]")
+        (_: Row[Column]) => Column.Assignment(Column[Bytes](TableRef(table), sortColumn), Expr[Bytes](implicit ctx => sql"$key"))
+    }
     val assignments = data.toSeq.map {
       (name, value) => (row: Row[Column]) => DynamicAssignments.one(table, writeColumns(row), name, value, dialect)
-    }
+    } ++ keys
 
     val filter = scoped(q)
     val update = table.update(row => DynamicFilter(table, writeColumns(row), filter, dialect)).set(assignments*)

@@ -53,7 +53,7 @@
             @row("File Type") {@fileType}
             }
             @row("Size") {@{Util.humanReadableByteCount(asset.sizeBytes)}}
-            @row("Date Imported") {@{Util.humanReadableDateTime(asset.createdAt)}}
+            @row("Date Imported") {@{Util.humanReadableDateTime(asset.createdAt.map(Util.inServerZone))}}
             @for(latitude <- asset.latitude; longitude <- asset.longitude) {
             @row("Position") {@{"%.5f, %.5f".formatLocal(Locale.ROOT, latitude, longitude)}}
             }

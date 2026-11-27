@@ -15,6 +15,7 @@ import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.models.Person
 import altitude.core.service.PersonService
+import altitude.core.util.SortKey
 
 abstract class PersonDao(override val config: Config) extends BaseDao[Person] with altitude.core.dao.PersonDao:
 
@@ -22,6 +23,8 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
 
   final override type Row[T[_]] = PersonRow[T]
   final override protected def table: Table[Row] = PersonRow
+
+  override protected val sortKeyColumns: Map[String, String] = Map(FieldConst.Person.NAME -> FieldConst.Person.NAME_SORT)
 
   override protected def toModel(row: PersonRow[Sc]): Person =
     Person(
@@ -55,8 +58,9 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
                             ${FieldConst.REPO_ID},
                             ${FieldConst.Person.NAME},
                             ${FieldConst.Person.NAME_FOR_SORT},
+                            ${FieldConst.Person.NAME_SORT},
                             ${FieldConst.Person.IS_NAMED})
-              VALUES (?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?)
    """
 
     val personName = getPersonName(person, personSeqNum)
@@ -70,6 +74,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
       RequestContext.getRepository.persistedId,
       personName,
       personSortName,
+      SortKey.of(personName).bytes,
       isNamed
     )
 
@@ -133,7 +138,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
                      AND num_of_faces > 0
                      AND is_deleted = FALSE
                      AND (${bucketClauses.map(_._1).mkString(" OR ")})
-                ORDER BY is_named DESC, name_for_sort
+                ORDER BY is_named DESC, name_sort, id
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, RequestContext.getRepository.persistedId :: bucketClauses.flatMap(_._2))
@@ -181,7 +186,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
                   WHERE repository_id = ?
                     AND is_deleted = FALSE
                     AND is_bad_match = FALSE
-               ORDER BY is_named DESC, name_for_sort
+               ORDER BY is_named DESC, name_sort, id
               """
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
 

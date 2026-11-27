@@ -2127,7 +2127,10 @@ popover host, right-aligned below the trigger (`htmx/account_info_dialog.css`). 
 
 - Each time is a `<time datetime>` holding UTC text (`Util.utcText`), shown in the viewer's zone and locale by the
   `localTime` component (`js/alpine/components/local-time.js`), registered in both `alpine/components/index.js` (the
-  main app) and `nav-page.js` (the nav pages).
+  main app) and `nav-page.js` (the nav pages). Every moment a page shows is written so, through `includes/local_time`
+  (an account card's and an album's creation too), but an import time: the grid's "Imported:" and the Detail panel's
+  "Date Imported" are text in the server's zone (`Util.inServerZone`), the zone a Date Imported search cuts its days in,
+  so an import shows on the day that search finds it.
 - "Change password…" requests `htmx/own_password_dialog` (`GET /htmx/account/dialogs/password`) into the same host;
   it sends JSON to `PUT /htmx/account/password` (`OwnPasswordController`). A refusal returns the form with the error
   under its field and nothing typed kept. A change answers with the session's new cookie and `PASSWORD_CHANGED_EVENT`,

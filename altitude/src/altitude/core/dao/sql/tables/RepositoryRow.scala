@@ -15,7 +15,7 @@ case class RepositoryRow[T[_]](
     description: T[Option[String]],
     rootFolderId: T[String],
     fileStoreType: T[String],
-    fileStoreConfig: T[Option[String]],
+    fileStoreConfig: T[String],
     createdAt: T[Option[OffsetDateTime]],
     updatedAt: T[Option[OffsetDateTime]])
 

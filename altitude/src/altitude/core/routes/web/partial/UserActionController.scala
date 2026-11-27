@@ -23,7 +23,7 @@ import altitude.core.routes.decorators.requireAdmin
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.service.RepositoryService
 import altitude.core.service.UserService
-import altitude.core.util.NaturalOrder
+import altitude.core.util.SortKey
 import altitude.core.util.Util
 
 object UserActionController:
@@ -200,7 +200,7 @@ object UserActionController:
     val cards = App.altitude.service.user.accountsVisibleTo(viewer).map {
       (account, grants) =>
         val held = grants.flatMap(grant => libraries.get(grant.repositoryId).map(_ -> grant.permissions))
-        AccountCard(account, held.sortBy(_._1.name)(using NaturalOrder))
+        AccountCard(account, held.sortBy((repository, _) => (SortKey.of(repository.name), repository.persistedId)))
     }
     htmx.html.user_accounts(cards, viewer, startTab(cards))
 

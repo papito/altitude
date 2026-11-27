@@ -2,8 +2,6 @@ package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import java.time.OffsetDateTime
-import java.time.ZoneOffset
-import java.time.temporal.ChronoUnit
 import scalasql.Sc
 import scalasql.Table
 
@@ -14,6 +12,7 @@ import altitude.core.models.Import
 import altitude.core.models.ImportOutcome
 import altitude.core.models.ImportSource
 import altitude.core.util.QueryResult
+import altitude.core.util.Util
 
 abstract class ImportDao(override val config: Config) extends BaseDao[Import] with altitude.core.dao.ImportDao:
 
@@ -27,9 +26,6 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
   private val FAILED = ImportOutcome.Failed.dbValue
 
   private def repositoryId: String = RequestContext.getRepository.persistedId
-
-  /** This moment as an instant column takes it: in UTC, to the microsecond */
-  private def now: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
 
   override protected def toModel(row: ImportRow[Sc]): Import =
     Import(
@@ -83,7 +79,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
 
     val id = model.id.getOrElse(BaseDao.genId)
     // Bound rather than left to the engine default: the history is listed and pruned by it
-    val createdAt = now
+    val createdAt = Util.utcNow
 
     addRecord(
       sql,
@@ -159,7 +155,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
          AND ${FieldConst.REPO_ID} = ?
     """
 
-    updateByBySql(sql, List(nativeBool(true), nativeUtcTimestamp(now), importId, repositoryId))
+    updateByBySql(sql, List(nativeBool(true), nativeUtcTimestamp(Util.utcNow), importId, repositoryId))
 
   // An Import closed already keeps the moment it closed at
   override def markComplete(importId: String): Int =
@@ -172,7 +168,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
          AND ${FieldConst.REPO_ID} = ?
     """
 
-    updateByBySql(sql, List(nativeBool(true), nativeUtcTimestamp(now), importId, repositoryId))
+    updateByBySql(sql, List(nativeBool(true), nativeUtcTimestamp(Util.utcNow), importId, repositoryId))
 
   override def closeInterrupted(): Int =
     val sql = s"""
@@ -185,7 +181,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
          AND ${FieldConst.Import.CLOSED_AT} IS NULL
     """
 
-    updateByBySql(sql, List(nativeBool(true), nativeUtcTimestamp(now), repositoryId))
+    updateByBySql(sql, List(nativeBool(true), nativeUtcTimestamp(Util.utcNow), repositoryId))
 
   // Watch folder Imports only, by `import_02`
   override def countsByWatchFolder(): Map[String, (Int, Int)] =

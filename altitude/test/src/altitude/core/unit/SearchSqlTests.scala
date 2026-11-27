@@ -37,6 +37,7 @@ import altitude.core.util.SearchSort
 import altitude.core.util.SearchSource
 import altitude.core.util.SearchText
 import altitude.core.util.SortDirection
+import altitude.core.util.SortKey
 import altitude.core.util.SortValue
 
 /**
@@ -122,9 +123,14 @@ import altitude.core.util.SortValue
         text.contains(
           "WITH candidates (id, day, sort_value, second_sort_value) AS MATERIALIZED (SELECT asset0.id AS ") shouldBe true
         // After the anchor, in the sort's order and then the ID's, one row past the page
-        text.contains("asset0.filename <= ? AND (asset0.filename < ? OR (asset0.filename = ? AND asset0.id > ?))") shouldBe true
-        text.contains("ORDER BY asset0.filename DESC, asset0.id ASC LIMIT 26)") shouldBe true
-        bound(continued).takeRight(4) shouldBe List.fill(3)(SortValue.Text("m.jpg")) :+ "asset-1"
+        text.contains(
+          "asset0.filename_sort <= ? AND (asset0.filename_sort < ? OR (asset0.filename_sort = ? AND asset0.id > ?))") shouldBe true
+        text.contains("ORDER BY asset0.filename_sort DESC, asset0.id ASC LIMIT 26)") shouldBe true
+        // The cursor carries the file name, and the statement compares its sort key
+        bound(continued).takeRight(4).map {
+          case SortValue.Bytes(bytes) => bytes.toSeq
+          case other => other
+        } shouldBe List.fill(3)(SortKey.of("m.jpg").bytes.toSeq) :+ "asset-1"
         text.contains("OFFSET") shouldBe false
         text.contains("COUNT(1) OVER") shouldBe false
         // Only the page's own rows are read in full, in the same order
@@ -846,11 +852,11 @@ import altitude.core.util.SortValue
 
     // The ID is always the last, deterministic term
     slice(PostgresSearchDialect, "filename").contains(
-      "ORDER BY asset0.original_created_at::date DESC, asset0.filename ASC, asset0.id ASC LIMIT 51") shouldBe true
+      "ORDER BY asset0.original_created_at::date DESC, asset0.filename_sort ASC, asset0.id ASC LIMIT 51") shouldBe true
 
     // Kept off a non-grouping sort term's index, SQLite stays on the day index
     slice(SqliteSearchDialect, "filename").contains(
-      "ORDER BY date(asset0.original_created_at) DESC, +asset0.filename ASC, asset0.id ASC LIMIT 51") shouldBe true
+      "ORDER BY date(asset0.original_created_at) DESC, +asset0.filename_sort ASC, asset0.id ASC LIMIT 51") shouldBe true
     slice(SqliteSearchDialect, "original_created_at").contains(
       "ORDER BY date(asset0.original_created_at) DESC, asset0.original_created_at ASC, asset0.id ASC LIMIT 51") shouldBe true
   }
@@ -877,7 +883,7 @@ import altitude.core.util.SortValue
     withClue(text) {
       text.contains("asset0.original_created_at::date <= ?") shouldBe true
       text.contains(
-        "(asset0.original_created_at::date < ? OR (asset0.filename > ? OR (asset0.filename = ? AND asset0.id > ?)))") shouldBe true
+        "(asset0.original_created_at::date < ? OR (asset0.filename_sort > ? OR (asset0.filename_sort = ? AND asset0.id > ?)))") shouldBe true
     }
   }
 
@@ -1005,7 +1011,7 @@ import altitude.core.util.SortValue
           (if (position == "unlocated") 3 else if (position == "first") 5 else 4)
 
         if (position == "located") {
-          val pathKey = "COALESCE\\(location3\\.name_key \\|\\| \\?, ''\\) \\|\\| location2\\.name_key"
+          val pathKey = java.util.regex.Pattern.quote(pathKeyOf(dialect))
           s"\\($pathKey > \\? OR \\($pathKey = \\? AND \\(location2\\.id > \\? OR \\(location2\\.id = \\? AND ".r
             .findFirstIn(text)
             .isDefined shouldBe true
@@ -1033,12 +1039,13 @@ import altitude.core.util.SortValue
         grouping = Some(SearchGrouping(GroupBy.Location)))
       SearchQueries.groupedByLocation(dialect, query, "repo-1").toString.replaceAll("\\s+", " ")
 
-    val pathKey = "COALESCE(location3.name_key || ?, '') || location2.name_key"
     slice(PostgresSearchDialect).contains(
-      s"ORDER BY $pathKey ASC, location2.id ASC, asset0.filename DESC, asset0.id ASC LIMIT 51") shouldBe true
-    slice(PostgresSearchDialect).contains("ORDER BY asset0.filename DESC, asset0.id ASC LIMIT CASE") shouldBe true
+      s"ORDER BY ${pathKeyOf(PostgresSearchDialect)} ASC, location2.id ASC, asset0.filename_sort DESC, asset0.id ASC LIMIT 51") shouldBe
+      true
+    slice(PostgresSearchDialect).contains("ORDER BY asset0.filename_sort DESC, asset0.id ASC LIMIT CASE") shouldBe true
     slice(SqliteSearchDialect).contains(
-      s"ORDER BY $pathKey ASC, location2.id ASC, +asset0.filename DESC, asset0.id ASC LIMIT 51") shouldBe true
+      s"ORDER BY ${pathKeyOf(SqliteSearchDialect)} ASC, location2.id ASC, +asset0.filename_sort DESC, asset0.id ASC LIMIT 51") shouldBe
+      true
   }
 
   test("The Location statement selects the asset columns its row class reads, then the group columns") {
@@ -1348,6 +1355,12 @@ import altitude.core.util.SortValue
     bound(SearchQueries.count(engine, textQuery(text), "repo-1")).collect { case value: String if value != "repo-1" => value }
 
   /** Every value a statement binds, in order */
+  /** A Location group's path key as the engine renders it over the located slice's Location and its category */
+  private def pathKeyOf(dialect: SearchDialect): String =
+    if (dialect == PostgresSearchDialect)
+      """((COALESCE(encode(location3.name_sort, 'hex'), '') || encode(location2.name_sort, 'hex')) COLLATE "C")"""
+    else "(COALESCE(hex(location3.name_sort), '') || hex(location2.name_sort))"
+
   private def bound(statement: SqlStr): List[Any] = SqlStr.flatten(statement).interpsIterator.map(_.value).toList
 
   /** Every value the search's matching relation binds, in order */

@@ -1166,12 +1166,12 @@ object DescribeSearchTests {
     def seedEmbedded(templateId: String, count: Int, prefix: String): Unit =
       update(
         s"""INSERT INTO asset (id, repository_id, owner_user_id, original_owner, checksum, media_type, media_subtype, mime_type,
-           |                   width, height, area_size, folder_id, filename, size_bytes, is_triaged, is_recycled, is_purged,
-           |                   is_pipeline_processed, created_at, siglip2_embedding)
+           |                   width, height, area_size, folder_id, filename, filename_sort, size_bytes, is_triaged, is_recycled,
+           |                   is_purged, is_pipeline_processed, created_at, siglip2_embedding)
            |SELECT '$prefix' || lpad(g.n::text, ${36 - prefix.length}, '0'), repository_id, owner_user_id, original_owner,
            |       '$prefix' || lpad(g.n::text, ${64 - prefix.length}, '0'), media_type, media_subtype, mime_type,
-           |       width, height, area_size, folder_id, filename, size_bytes, is_triaged, is_recycled, is_purged,
-           |       is_pipeline_processed, created_at,
+           |       width, height, area_size, folder_id, filename, filename_sort, size_bytes, is_triaged, is_recycled,
+           |       is_purged, is_pipeline_processed, created_at,
            |       l2_normalize((SELECT array_agg(random() - 0.5 + (s + g.n) * 0) FROM generate_series(1, 768) AS s)::real[]::vector)
            |  FROM asset CROSS JOIN generate_series(1, $count) AS g (n)
            | WHERE asset.id = ?""".stripMargin,

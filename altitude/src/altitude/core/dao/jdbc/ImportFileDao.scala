@@ -9,6 +9,7 @@ import altitude.core.RequestContext
 import altitude.core.dao.sql.tables.ImportFileRow
 import altitude.core.models.ImportFile
 import altitude.core.models.ImportOutcome
+import altitude.core.util.SortKey
 
 abstract class ImportFileDao(override val config: Config) extends BaseDao[ImportFile] with altitude.core.dao.ImportFileDao:
 
@@ -45,16 +46,20 @@ abstract class ImportFileDao(override val config: Config) extends BaseDao[Import
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT))
     )
 
+  override protected val sortKeyColumns: Map[String, String] =
+    Map(FieldConst.ImportFile.REL_PATH -> FieldConst.ImportFile.REL_PATH_SORT)
+
   // A new file is pending, by the column's default
   override def add(file: ImportFile): ImportFile =
     val sql = s"""
         INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.ImportFile.IMPORT_ID},
-                                ${FieldConst.ImportFile.REL_PATH}, ${FieldConst.ImportFile.SIZE_BYTES})
-             VALUES (?, ?, ?, ?, ?)
+                                ${FieldConst.ImportFile.REL_PATH}, ${FieldConst.ImportFile.REL_PATH_SORT},
+                                ${FieldConst.ImportFile.SIZE_BYTES})
+             VALUES (?, ?, ?, ?, ?, ?)
     """
 
     val id = file.id.getOrElse(BaseDao.genId)
-    addRecord(sql, List(id, repositoryId, file.importId, file.relPath, file.sizeBytes))
+    addRecord(sql, List(id, repositoryId, file.importId, file.relPath, SortKey.of(file.relPath).bytes, file.sizeBytes))
     file.copy(id = Some(id))
 
   override def ofImport(importId: String, outcome: Option[ImportOutcome], limit: Int): List[ImportFile] =
@@ -64,7 +69,7 @@ abstract class ImportFileDao(override val config: Config) extends BaseDao[Import
        WHERE ${FieldConst.REPO_ID} = ?
          AND ${FieldConst.ImportFile.IMPORT_ID} = ?
          ${outcome.fold("")(_ => s"AND ${FieldConst.ImportFile.OUTCOME} = ?")}
-       ORDER BY ${FieldConst.ImportFile.REL_PATH}, ${FieldConst.ID}
+       ORDER BY ${FieldConst.ImportFile.REL_PATH_SORT}, ${FieldConst.ID}
        LIMIT ?
     """
 

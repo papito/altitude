@@ -24,12 +24,13 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao[Reposi
       name = row.name,
       rootFolderId = row.rootFolderId,
       fileStoreType = row.fileStoreType,
-      fileStoreConfig = fileStoreConfigOf(row.fileStoreConfig.orNull),
+      fileStoreConfig = fileStoreConfigOf(row.fileStoreConfig),
       createdAt = row.createdAt.map(toLocalDateTime)
     )
 
+  // `jsonb` reads as a PGobject on the raw path, whose text is the JSON
   private def fileStoreConfigOf(column: AnyRef): Map[String, String] =
-    val json = ujson.read(if column == null then "{}" else column.toString).asInstanceOf[ujson.Obj]
+    val json = ujson.read(column.toString).asInstanceOf[ujson.Obj]
     json.obj.map { case (k, v) => k -> v.str }.toMap
 
   override protected def makeModel(rec: Map[String, AnyRef]): Repository =

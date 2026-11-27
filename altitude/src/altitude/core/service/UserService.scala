@@ -23,7 +23,7 @@ import altitude.core.models.TokenClaims
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.NameKey
-import altitude.core.util.NaturalOrder
+import altitude.core.util.SortKey
 import altitude.core.util.Util
 
 object UserService:
@@ -551,7 +551,10 @@ class UserService(val app: Altitude) extends BaseService[User]:
         .filter(grant => visible.forall(_.contains(grant.repositoryId)))
         .groupBy(_.accountId)
 
-      accounts.sortBy(_.name)(using NaturalOrder).map(account => account -> grants.getOrElse(account.persistedId, Nil))
+      // In natural order, each name's key computed once; two accounts may share a name, which their IDs order
+      accounts
+        .sortBy(account => (SortKey.of(account.name), account.persistedId))
+        .map(account => account -> grants.getOrElse(account.persistedId, Nil))
     }
 
   /** The account and grants held to its type and the account rules, or a `ValidationException` with each failing field's error */

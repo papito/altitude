@@ -48,6 +48,7 @@ import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
 import altitude.core.util.SearchSource
 import altitude.core.util.SortDirection
+import altitude.core.util.SortKey
 import altitude.core.util.SortValue
 import altitude.core.util.TriageSubset
 
@@ -63,12 +64,6 @@ import altitude.core.util.TriageSubset
  * Imported range begin.
  */
 object SearchQueries:
-
-  /**
-   * Separates a category's name from its Location's in a path key. U+0001 sorts below every printable character, so the key
-   * orders as the pair (category, Location) would, and a Location's key cannot collide with a top-level one.
-   */
-  private val PATH_SEPARATOR: String = 1.toChar.toString
 
   /**
    * Every asset a search matches, unordered and unpaged. It may refer to the Search text's CTEs and to the `described` CTE, which
@@ -169,29 +164,23 @@ object SearchQueries:
     val byCaptureDay = sort.filter(_.field == FieldConst.Asset.ORIGINAL_CREATED_AT)
     val isScored = sort.exists(_.isScored)
 
-    // Where the sort puts the rows without a value last, a continuation from a row that has one reads them in a second slice
-    val needsNullSlice = query.cursor.exists(_.sortValue != SortValue.Null) &&
-      sort.exists(by => engine.isNullableTimestamp(by.field) && !engine.nullsFirst(by.direction))
-
-    /** The candidates of a sort that is not by capture time: after the cursor's anchor, in the sort's order, then the ID's */
+    /**
+     * The candidates of a sort that is not by capture time: after the cursor's anchor, in the sort's order, then the ID's. Every
+     * such sort has a value on every row, so one slice reads them.
+     */
     def candidatesOf[Q, R](relation: Select[Q, R], position: Position): SqlStr =
-      def slice(filter: Option[Expr[Boolean]], limit: SqlStr): SqlStr =
+      val after = query.cursor.map(_ => afterBySort(engine, query, position, idOnly = sort.isEmpty, seeks = true))
+      candidatesCte(
         sliced(
           engine,
-          filter
-            .fold(relation)(isIn => relation.filter(_ => isIn))
+          after
+            .fold(relation)(isAfter => relation.filter(_ => isAfter))
             .map(
               _ => (position.id, position.day, sortValueOf(position), sort.fold(nullSortValue)(secondSortValueOf(_, position)))),
           sort.fold(sql"${position.id} ASC")(_ => orderWithinGroup(engine, query, position)),
-          limit
-        )
-
-      candidatesCte(
-        slice(
-          query.cursor.map(_ => afterBySort(engine, query, position, idOnly = sort.isEmpty, seeks = true)),
-          SqlStr.raw(s" LIMIT ${query.rpp + 1}")),
-        Option.when(needsNullSlice)(
-          slice(Some(Expr[Boolean](implicit ctx => sql"${position.sortValue} IS NULL")), guardedLimit(LEADING_SLICE, query.rpp)))
+          SqlStr.raw(s" LIMIT ${query.rpp + 1}")
+        ),
+        None
       )
 
     val candidates = byCaptureDay match
@@ -380,7 +369,7 @@ object SearchQueries:
    * their Locations (an asset in two Locations appears under both); `unlocated` is the matches in no Location, always the last
    * group.
    *
-   * Locations are in the sidebar's path order (the path key, see [[PATH_SEPARATOR]]), then by ID, then the sort, then the asset
+   * Locations are in the sidebar's path order (the path key, `SearchDialect.pathKey`), then by ID, then the sort, then the asset
    * ID. A cursor in a Location slices `located` after it and lets `unlocated` fill the page only once `located` runs out, through
    * the same guarded `LIMIT CASE`. A group's count is its matching assets, so the group counts may sum to more than the total.
    */
@@ -404,8 +393,7 @@ object SearchQueries:
         location: LocationRow[Expr],
         category: JoinNullable[LocationRow[Expr]]): SqlStr =
       val categoryName: Expr[Option[String]] = category.map(_.name)
-      val pathKey =
-        Expr[String](implicit ctx => sql"COALESCE(${category.get.nameKey} || $PATH_SEPARATOR, '') || ${location.nameKey}")
+      val pathKey = engine.pathKey(category.get.nameSort, location.nameSort)
 
       /** Rows strictly after the anchor: a later path key, or the anchor's own Location's rows after it by sort */
       def afterLocation(cursor: SearchCursor): Expr[Boolean] =
@@ -1019,7 +1007,7 @@ object SearchQueries:
       val sortOp = SqlStr.raw(if sort.direction == SortDirection.DESC then "<" else ">")
       val column = position.sortValue
 
-      cursor.sortValue match
+      cursorSortValue(sort, cursor.sortValue) match
         case SortValue.Null if engine.nullsFirst(sort.direction) =>
           Expr[Boolean](implicit ctx => sql"($column IS NOT NULL OR $afterById)")
         case SortValue.Null =>
@@ -1124,14 +1112,38 @@ object SearchQueries:
     else TotalFragments(None, SqlStr.empty, SqlStr.empty)
 
   /**
-   * What a search sorts by: the sort's column or the Relevance. The similarity is not an expression of the asset's row and is
-   * read from `scored` ([[scoredCte]]).
+   * What a search sorts by: the sort's column or the Relevance. The file name sorts by its stored `SortKey` (`filename_sort`), so
+   * both engines order it as `NaturalOrder` does; the key is in no row class, so no asset read carries it
+   * ([[unmappedAssetColumn]]), and a cursor carries the file name, whose key the continuation binds ([[cursorSortValue]]). The
+   * similarity is not an expression of the asset's row and is read from `scored` ([[scoredCte]]).
    */
   private def sortColumn(engine: SearchDialect, query: SearchQuery, row: AssetRow[Expr]): Expr[?] =
     val sort = query.searchSort.head
     if sort.isSimilarity then throw IllegalStateException("The similarity is read from the scored matches")
     if sort.isRelevance then relevance(engine, row, query.requireResolvedText)
+    else if sort.field == FieldConst.Asset.FILENAME then unmappedAssetColumn(FieldConst.Asset.FILENAME_SORT)
     else Columns.required(AssetRow, row, sort.field, engine.dialect)
+
+  /**
+   * An asset column no row class maps, under the name the rendering context gives the one asset table it reads: the table
+   * reference the row's own columns render with, so it sits among them wherever they are rendered
+   */
+  private def unmappedAssetColumn(name: String): Expr[Any] =
+    Expr[Any] {
+      implicit ctx =>
+        ctx.fromNaming.toList.collect { case (asset: TableRef, alias) if asset.value == AssetRow => alias } match
+          case List(alias) => SqlStr.raw(if alias.isEmpty then name else s"$alias.$name")
+          case aliases =>
+            throw IllegalStateException(s"An asset column needs one asset table in its context, not ${aliases.size}")
+    }
+
+  /**
+   * The cursor's sort value as the statement compares it with the sort's column. A file name sort's cursor carries the anchor's
+   * file name, a short text, and is compared by the name's `SortKey`, the bytes `filename_sort` holds.
+   */
+  private def cursorSortValue(sort: SearchSort, value: SortValue): SortValue = value match
+    case SortValue.Text(name) if sort.field == FieldConst.Asset.FILENAME => SortValue.Bytes(SortKey.of(name).bytes)
+    case other => other
 
   /** What a row is sorted by, read as the engine stores it, so a cursor can bind it back unchanged */
   private def sortValueOf(position: Position)(using TypeMapper[SortValue]): Expr[SortValue] =
@@ -1401,7 +1413,7 @@ object SearchQueries:
   /**
    * Assets imported on a day of the range, the days being those of `zone`, so a day the clocks change is as long as the zone
    * makes it. The import time is compared bare, so a range is a seek in `asset_search_created`, and `asset_search_date_taken`
-   * carries it, so a Date Taken page tests the range on its index. A legacy SQLite row with no import time is in no range.
+   * carries it, so a Date Taken page tests the range on its index.
    *
    * A range ending on the last day of year 9999 is open at that end: the next day begins in a five-digit year, which SQLite's
    * text writes with a sign and so orders before every other, and no import is that late.

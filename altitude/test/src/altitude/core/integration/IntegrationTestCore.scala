@@ -8,6 +8,7 @@ import altitude.test.{
   TestContext,
   TestFocus
 }
+import java.util.HexFormat
 import java.util.Locale
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 import java.util.concurrent.atomic.AtomicReference
@@ -30,6 +31,7 @@ import scala.language.implicitConversions
 import altitude.core.*
 import altitude.core.dao.sqlite.SqliteOverrides
 import altitude.core.models.*
+import altitude.core.util.SortKey
 
 abstract class IntegrationTestCore
   extends funsuite.AnyFunSuite
@@ -396,6 +398,15 @@ abstract class IntegrationTestCore
     testApp.settings.save(Map(name -> value))
     try f
     finally testApp.settings.save(Map(name -> testApp.settings.current.default(name)))
+  }
+
+  /**
+   * A Location group's path key as the engine spells it (`SearchDialect.pathKey`): the sort keys of its category's name and its
+   * own, or its own alone, in the engine's hex
+   */
+  def pathKeyOf(names: String*): String = {
+    val hex = if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) HexFormat.of() else HexFormat.of().withUpperCase()
+    names.map(name => hex.formatHex(SortKey.of(name).bytes)).mkString
   }
 
   /** Runs `f` with the JVM's default locale set to `locale`, and sets the previous one back afterwards */

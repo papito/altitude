@@ -1,8 +1,6 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import scalasql.Sc
 import scalasql.Table
@@ -30,12 +28,17 @@ import altitude.core.util.JsonCodec
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SequenceRule
+import altitude.core.util.SortKey
+import altitude.core.util.Util
 
 abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude.core.dao.AssetDao:
   final override val tableName = "asset"
 
   final override type Row[T[_]] = AssetRow[T]
   final override protected def table: Table[Row] = AssetRow
+
+  // The key is in no row class: the file name sort addresses it beside `filename` (`SearchQueries.sortColumn`)
+  override protected val sortKeyColumns: Map[String, String] = Map(FieldConst.Asset.FILENAME -> FieldConst.Asset.FILENAME_SORT)
 
   override protected def toModel(row: AssetRow[Sc]): Asset =
     val assetType = AssetType(mediaType = row.mediaType, mediaSubtype = row.mediaSubtype, mime = row.mimeType)
@@ -144,14 +147,14 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
         INSERT INTO asset (
              ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Asset.OWNER_USER_ID}, ${FieldConst.Asset.ORIGINAL_OWNER},
              ${FieldConst.Asset.CHECKSUM},
-             ${FieldConst.Asset.FILENAME}, ${FieldConst.Asset.SIZE_BYTES},
+             ${FieldConst.Asset.FILENAME}, ${FieldConst.Asset.FILENAME_SORT}, ${FieldConst.Asset.SIZE_BYTES},
              ${FieldConst.AssetType.MEDIA_TYPE}, ${FieldConst.AssetType.MEDIA_SUBTYPE}, ${FieldConst.AssetType.MIME_TYPE},
              ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED}, ${FieldConst.Asset.ORIGINAL_CREATED_AT}, ${FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE},
              ${FieldConst.Asset.LATITUDE}, ${FieldConst.Asset.LONGITUDE},
              ${FieldConst.CREATED_AT},
              ${FieldConst.Asset.WIDTH}, ${FieldConst.Asset.HEIGHT}, ${FieldConst.Asset.AREA_SIZE}, ${FieldConst.Asset.DURATION_MS},
              ${FieldConst.Asset.USER_METADATA}, ${FieldConst.Asset.EXTRACTED_METADATA}, ${FieldConst.Asset.PUBLIC_METADATA})
-            VALUES(?, ?, ?, $jsonFunc, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
+            VALUES(?, ?, ?, $jsonFunc, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
     """
 
     val id = asset.id match
@@ -172,6 +175,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       asset.originalOwner.toJson.toString,
       asset.checksum,
       asset.fileName,
+      SortKey.of(asset.fileName).bytes,
       asset.sizeBytes.asInstanceOf[Object],
       asset.assetType.mediaType,
       asset.assetType.mediaSubtype,
@@ -185,7 +189,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       longitude,
       // Bound explicitly in UTC rather than left to the engine default, whose value depends on the server zone, and to the
       // microsecond, the precision PostgreSQL keeps, so SQLite's text stores the same value
-      nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)),
+      nativeUtcTimestamp(Util.utcNow),
       asset.width,
       asset.height,
       // In 64 bits: an image over 2^31 pixels (46,341 × 46,341) overflows an Int

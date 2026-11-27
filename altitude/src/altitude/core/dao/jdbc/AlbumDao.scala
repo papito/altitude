@@ -8,6 +8,7 @@ import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.sql.tables.AlbumRow
 import altitude.core.models.Album
+import altitude.core.util.SortKey
 
 abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with altitude.core.dao.AlbumDao:
   final override val tableName = "album"
@@ -15,6 +16,8 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
 
   final override type Row[T[_]] = AlbumRow[T]
   final override protected def table: Table[Row] = AlbumRow
+
+  override protected val sortKeyColumns: Map[String, String] = Map(FieldConst.Album.NAME -> FieldConst.Album.NAME_SORT)
 
   // `numOfAssets` is counted only by `getAll`'s hand-written query
   override protected def toModel(row: AlbumRow[Sc]): Album =
@@ -32,11 +35,12 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
     val id = album.id.getOrElse(BaseDao.genId)
 
     val sql = s"""
-        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Album.NAME}, ${FieldConst.Album.NAME_KEY})
-             VALUES (?, ?, ?, ?)
+        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Album.NAME}, ${FieldConst.Album.NAME_KEY},
+                                ${FieldConst.Album.NAME_SORT})
+             VALUES (?, ?, ?, ?, ?)
     """
 
-    addRecord(sql, List(id, RequestContext.getRepository.persistedId, album.name, album.nameKey))
+    addRecord(sql, List(id, RequestContext.getRepository.persistedId, album.name, album.nameKey, SortKey.of(album.name).bytes))
     album.copy(id = Some(id))
 
   override def getAll: List[Album] =
@@ -48,7 +52,7 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
       ) AS ${FieldConst.Album.NUM_OF_ASSETS}
         FROM $tableName a
        WHERE a.${FieldConst.REPO_ID} = ?
-       ORDER BY a.${FieldConst.Album.NAME_KEY}
+       ORDER BY a.${FieldConst.Album.NAME_SORT}, a.${FieldConst.ID}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
@@ -112,7 +116,7 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
              JOIN $membershipTable aa ON aa.${FieldConst.Album.ALBUM_ID} = a.${FieldConst.ID}
        WHERE aa.${FieldConst.REPO_ID} = ?
          AND aa.${FieldConst.Album.ASSET_ID} = ?
-       ORDER BY a.${FieldConst.Album.NAME_KEY}
+       ORDER BY a.${FieldConst.Album.NAME_SORT}, a.${FieldConst.ID}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).map(makeModel)

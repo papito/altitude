@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.TestContext
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
@@ -20,6 +21,7 @@ import org.scalatest.time.Span
 import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters.*
+import scala.util.Random
 
 import altitude.core.Altitude
 import altitude.core.Const
@@ -47,6 +49,7 @@ import altitude.core.models.Settings
 import altitude.core.models.Stats
 import altitude.core.service.ImportPipelineService
 import altitude.core.service.ImportService
+import altitude.core.util.NaturalOrder
 import altitude.core.util.Query
 
 /** The Import record: an Import and its Import files, their outcomes, the Import's counters and its closing */
@@ -157,6 +160,26 @@ import altitude.core.util.Query
     intercept[NotFoundException](imports.open(ImportSource.Upload, destFolderId = theirFolder.id))
     intercept[NotFoundException](imports.open(ImportSource.Upload, destFolderId = Some("no-such-folder")))
     testContext.imports.size shouldBe 2
+  }
+
+  test("An Import's files are listed by path in natural order on both engines") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import with a file under each of `TestContext.NATURAL_NAMES`, in a folder "Trip 9" and in "trip 10", added in a
+     * shuffled order.
+     *
+     * Assertions:
+     *
+     * The Import's files are listed in natural order of their paths on both engines, the order `NaturalOrder` sorts them in
+     * memory: the folders by their numbers, and each folder's files in the order of the names.
+     */
+    val paths = for (folder <- List("Trip 9", "trip 10"); name <- TestContext.NATURAL_NAMES) yield s"$folder/$name"
+    val (opened, _) = importOf(Random.shuffle(paths)*)
+
+    testContext.importFiles(opened.persistedId).map(_.relPath) shouldBe paths
+    Random.shuffle(paths).sorted(using NaturalOrder) shouldBe paths
   }
 
   test("A file added to an Import is pending, and the Import counts it") {

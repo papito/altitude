@@ -1,8 +1,6 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import scalasql.Sc
 import scalasql.Table
 
@@ -11,6 +9,7 @@ import altitude.core.RequestContext
 import altitude.core.dao.sql.tables.AssetEditRow
 import altitude.core.models.AssetEdit
 import altitude.core.models.EditRecipe
+import altitude.core.util.Util
 
 /** Every statement here is hand-written and carries `repository_id`. The recipe is `jsonb` on PostgreSQL, read back as text. */
 abstract class AssetEditDao(override val config: Config) extends BaseDao[AssetEdit] with altitude.core.dao.AssetEditDao:
@@ -53,8 +52,6 @@ abstract class AssetEditDao(override val config: Config) extends BaseDao[AssetEd
 
   private def repositoryId: String = RequestContext.getRepository.persistedId
 
-  private def now: Any = nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC))
-
   private val byAsset = s"${FieldConst.REPO_ID} = ? AND ${F.ASSET_ID} = ?"
 
   /** An unrendered edit version, NULL counting as unlike any: spelled as partial index `asset_edit_01` is, so it is used */
@@ -72,7 +69,7 @@ abstract class AssetEditDao(override val config: Config) extends BaseDao[AssetEd
                               ${F.HEIGHT}, ${F.UPDATED_BY_ACCOUNT_ID}, ${FieldConst.CREATED_AT}, ${FieldConst.UPDATED_AT})
            VALUES (?, ?, $jsonFunc, ?, ?, ?, ?, ?, ?, ?)
       """
-    val at = now
+    val at = nativeUtcTimestamp(Util.utcNow)
     val values = List(
       repositoryId,
       edit.assetId,
@@ -101,7 +98,16 @@ abstract class AssetEditDao(override val config: Config) extends BaseDao[AssetEd
        WHERE $byAsset
       """
     val values =
-      List(ujson.write(recipe.toJson), editVersion, nativeBool(isEdited), width, height, accountId, now, repositoryId, assetId)
+      List(
+        ujson.write(recipe.toJson),
+        editVersion,
+        nativeBool(isEdited),
+        width,
+        height,
+        accountId,
+        nativeUtcTimestamp(Util.utcNow),
+        repositoryId,
+        assetId)
     val updated = updateByBySql(sql, values)
     require(updated == 1, s"The Edit of asset [$assetId] has $updated rows, not one")
 

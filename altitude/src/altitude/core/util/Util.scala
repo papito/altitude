@@ -5,8 +5,11 @@ import java.io.StringWriter
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import org.mindrot.jbcrypt.BCrypt
 import org.slf4j.Logger
@@ -17,6 +20,22 @@ import altitude.core.RequestContext
 import altitude.core.models.Asset
 
 object Util:
+
+  /**
+   * The current moment in UTC to the microsecond, the precision PostgreSQL keeps, so a stamp bound on either engine is the moment
+   * a later read gives back
+   */
+  def utcNow: OffsetDateTime = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
+
+  /** The instant a model's `LocalDateTime` of an instant column stands for: its UTC wall clock, on both engines */
+  def instantOf(utc: LocalDateTime): Instant = utc.toInstant(ZoneOffset.UTC)
+
+  /**
+   * A model's instant as the server zone's wall clock: the zone a Date Imported range cuts its days in
+   * (`SearchQueries.importedFilter`), so an import time is shown on the day a search by its date finds it. Every other moment a
+   * page shows is a `<time>` in the viewer's zone (`includes/local_time`).
+   */
+  def inServerZone(utc: LocalDateTime): LocalDateTime = instantOf(utc).atZone(ZoneId.systemDefault).toLocalDateTime
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def logStacktrace(e: Exception): String =

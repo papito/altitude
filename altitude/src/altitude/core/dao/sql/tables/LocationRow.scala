@@ -1,6 +1,7 @@
 package altitude.core.dao.sql.tables
 
 import java.time.OffsetDateTime
+import scalasql.Bytes
 import scalasql.Table
 
 /** The `location` table: a category (a named container, no pin) or a Location (a pin), as `kind` says */
@@ -11,6 +12,7 @@ case class LocationRow[T[_]](
     kind: T[String],
     name: T[String],
     nameKey: T[String],
+    nameSort: T[Bytes],
     latitude: T[Option[Double]],
     longitude: T[Option[Double]],
     createdAt: T[Option[OffsetDateTime]],

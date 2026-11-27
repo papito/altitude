@@ -24,6 +24,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters.*
+import scala.util.Random
 
 import altitude.core.Altitude
 import altitude.core.Const
@@ -267,6 +268,36 @@ import altitude.core.util.Sha256
     cards.map(_.status).toSet shouldBe Set(WatchFolderStatus.Watching)
     cards.map(card => (card.destination, card.imported, card.failed, card.isScanning)) shouldBe
       List((None, 0, 0, false), (Some("Scans"), 0, 0, false))
+  }
+
+  test("Watch folders are listed in natural order on both engines, the ID breaking a tie") {
+
+    /**
+     * Setup:
+     *
+     * An Admin and a Watch folder into one folder under each of `TestContext.NATURAL_NAMES`, and one more named "a.jpg", each on
+     * a directory of its own, added in a shuffled order. The last is renamed "a.jpg" from "x" by an edit.
+     *
+     * Assertions:
+     *
+     * The cards, and the Watch folders whose destination is their folder, list them in that order on both engines, the order
+     * `NaturalOrder` sorts the names in memory. The two named "a.jpg" come in ID order.
+     *
+     * Edge cases:
+     *
+     * The renamed one sorts by its new name.
+     */
+    val folder = testApp.service.folder.add("Scans")
+    val added = Random.shuffle(TestContext.NATURAL_NAMES).map(name => watch(directory(), name, Some(folder)))
+    val renamed = watch(directory(), "x", Some(folder))
+    watchFolders.update(
+      renamed.persistedId,
+      WatchFolderSpec("a.jpg", renamed.path, Some(folder.persistedId), renamed.deletesImported)): Unit
+    val all = renamed.copy(name = "a.jpg") :: added
+    val expected = TestContext.NATURAL_NAMES.flatMap(name => all.filter(_.name == name).map(_.persistedId).sorted)
+
+    watchFolders.cards().map(_.watchFolder.persistedId) shouldBe expected
+    watchFolders.targeting(folder.persistedId).map(_.persistedId) shouldBe expected
   }
 
   test("A Watch folder's name, path and destination are held to their rules") {

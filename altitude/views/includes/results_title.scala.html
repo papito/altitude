@@ -1,7 +1,7 @@
 @* The results title, a block above the results toolbar. Every scope renders the same block: a folder's path, an album,
    a Location, the Search text or a filtered search's filters (`filters`, the chips under its title) through this
    template, and a person through htmx/person. *@
-@(icon: String, subtitle: Option[String] = None, filters: Option[Html] = None)(title: Html)
+@(icon: String, subtitle: Option[Html] = None, filters: Option[Html] = None)(title: Html)
 
 <div class="results-title" x-data>
 @includes.html.results_title_inner(icon, subtitle, filters = filters)(title)

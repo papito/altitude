@@ -132,6 +132,7 @@ object SearchCursor:
     case SortValue.Real(number) => ujson.Obj("t" -> "real", "v" -> number.toString)
     case SortValue.LocalTimestamp(dateTime) => ujson.Obj("t" -> "ts", "v" -> dateTime.toString)
     case SortValue.UtcInstant(instant) => ujson.Obj("t" -> "tsz", "v" -> instant.toString)
+    case SortValue.Bytes(_) => throw IllegalStateException("A cursor carries a file name, never its sort key")
     case SortValue.Null => ujson.Obj("t" -> "null")
 
   private def sortValueFromJson(json: ujson.Value): SortValue = json("t").str match

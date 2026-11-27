@@ -3,6 +3,7 @@
 @import altitude.core.models.AccountType
 @import altitude.core.models.User
 @import altitude.core.routes.web.partial.UserActionController.AccountCard
+@import altitude.core.util.Util
 
 @* The account cards of the Users page, also reloaded after a change. `usersPage` keeps the tab and the filter through a
    reload and starts on `startTab`. An Admin sees every account, each with its ⋯ menu; anyone else sees the accounts it
@@ -95,7 +96,7 @@
                 <dt>New Libraries</dt>
                 <dd>@newLibraries(card.account)</dd>
                 <dt>Created</dt>
-                <dd>@card.account.createdAt.fold("")(_.toLocalDate.toString)</dd>
+                <dd>@for(created <- card.account.createdAt) {@includes.html.local_time(Util.instantOf(created), withTime = false)}</dd>
             </dl>
         </article>
         }

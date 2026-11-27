@@ -19,6 +19,7 @@ import altitude.core.dao.FolderDao
 import altitude.core.models.Folder
 import altitude.core.util.NameKey
 import altitude.core.util.Query
+import altitude.core.util.SortKey
 
 class FolderService(val app: Altitude) extends BaseService[Folder]:
 
@@ -219,7 +220,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       directCounts: Map[String, Int]): Folder =
     val children = childrenByParentId
       .getOrElse(folder.persistedId, Nil)
-      .sortBy(_.nameKey)
+      .sortBy(child => (SortKey.of(child.name), child.persistedId))
       .map(assembleTree(_, childrenByParentId, directCounts))
 
     folder.copy(

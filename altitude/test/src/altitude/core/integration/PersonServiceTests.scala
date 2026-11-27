@@ -156,6 +156,36 @@ import altitude.core.util.Util
     updatedPerson.isNamed should be(true)
   }
 
+  test("People are listed in natural order on both engines, the named first") {
+
+    /**
+     * Setup:
+     *
+     * A Person under each of `TestContext.NATURAL_NAMES`, added in a shuffled order, the first of the names added as "zzz" and
+     * renamed, so a key left stale would list it last, and an unnamed person.
+     *
+     * Assertions:
+     *
+     * The assignable people list the named ones in that order on both engines, the order `NaturalOrder` sorts the names in
+     * memory, then the unnamed one.
+     *
+     * Edge cases:
+     *
+     * The renamed one sorts by its new name.
+     */
+    val names = TestContext.NATURAL_NAMES.head :: Random.shuffle(TestContext.NATURAL_NAMES.tail)
+    val renamed = testApp.service.person.addPerson(Person(name = Some("zzz")))
+    testApp.service.person.updateName(renamed, names.head)
+    val people =
+      renamed.copy(name = Some(names.head)) :: names.tail.map(name => testApp.service.person.addPerson(Person(name = Some(name))))
+    val unnamed = testApp.service.person.addPerson(Person())
+    val byName = people.map(person => person.name.get -> person.persistedId).toMap
+
+    val ours = (unnamed.persistedId :: people.map(_.persistedId)).toSet
+    testApp.service.person.getAssignable.map(_.persistedId).filter(ours) shouldBe
+      TestContext.NATURAL_NAMES.map(byName) :+ unnamed.persistedId
+  }
+
   test("Update person's name") {
 
     /**

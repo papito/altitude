@@ -1,0 +1,7 @@
+@import java.time.Instant
+@import altitude.core.util.Util
+
+@* A moment as a `<time>` holding its UTC text, which the `localTime` component shows in the viewer's zone and locale: the way
+   every moment a page shows is written, but an import time, which is shown in the server's zone (`Util.inServerZone`) *@
+@(at: Instant, withTime: Boolean)
+<time datetime="@at" x-data="localTime" data-app-time-style="@{ if (withTime) "datetime" else "date" }">@Util.utcText(at, withTime)</time>

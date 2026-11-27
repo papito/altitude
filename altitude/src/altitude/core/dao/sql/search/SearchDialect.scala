@@ -70,8 +70,11 @@ trait SearchDialect:
    */
   def ranked(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows
 
-  /** Whether the engine's schema lets this timestamp column be null */
-  def isNullableTimestamp(field: String): Boolean
+  /**
+   * Whether this timestamp column can be null: the capture time, when no metadata rung resolves one. The import time never is, on
+   * either engine.
+   */
+  def isNullableTimestamp(field: String): Boolean = field == FieldConst.Asset.ORIGINAL_CREATED_AT
 
   /** Where the engine natively places nulls for this direction; the cursor comparison must agree with the ORDER BY */
   def nullsFirst(direction: SortDirection): Boolean
@@ -94,6 +97,13 @@ trait SearchDialect:
       case Const.Search.SORT_SIMILARITY => _.isInstanceOf[SortValue.Real]
       case other => throw IllegalArgumentException(s"No search sorts by [$other]")
     value == SortValue.Null || ofKind(value)
+
+  /**
+   * A Location group's path key: its category's sort key then its own (`name_sort`), or its own alone, as text in the engine's
+   * hex that orders by its bytes as the pair of keys does. No `SortKey` is the start of another, so the keys need no separator,
+   * and a cursor carries the text.
+   */
+  def pathKey(categorySort: Expr[?], locationSort: Expr[?]): Expr[String]
 
   /** Whether [[sortValueMapper]] reads this timestamp column's values as this kind of sort value */
   protected def readsTimestampAs(field: String, value: SortValue): Boolean

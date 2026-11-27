@@ -13,7 +13,6 @@ import scalasql.core.WithSqlExpr
 import scalasql.dialects.Dialect
 import scalasql.query.Select
 
-import altitude.core.FieldConst
 import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
@@ -84,9 +83,8 @@ object SqliteSearchDialect extends SearchDialect:
         SELECT rowid, distance FROM vector_full_scan('asset', '${SqlStr.raw(SceneModel.Siglip2.column)}', $vector))""")
     )
 
-  // Capture time is null when no metadata rung succeeds; import time only on legacy rows, and only ever as a sort column
-  override def isNullableTimestamp(field: String): Boolean =
-    field == FieldConst.CREATED_AT || field == FieldConst.Asset.ORIGINAL_CREATED_AT
+  override def pathKey(categorySort: Expr[?], locationSort: Expr[?]): Expr[String] =
+    Expr[String](implicit ctx => sql"(COALESCE(hex($categorySort), '') || hex($locationSort))")
 
   // SQLite orders NULL before every value
   override def nullsFirst(direction: SortDirection): Boolean = direction == SortDirection.ASC
@@ -104,12 +102,14 @@ object SqliteSearchDialect extends SearchDialect:
       // A similarity; every other number a search sorts by is whole
       case real: java.lang.Double => SortValue.Real(real)
       case number: java.lang.Number => SortValue.Num(number.longValue)
+      case bytes: Array[Byte] => SortValue.Bytes(bytes)
       case other => throw IllegalArgumentException(s"Unsupported sort value: $other")
 
     def put(r: PreparedStatement, idx: Int, v: SortValue): Unit = v match
       case SortValue.Text(text) => r.setString(idx, text)
       case SortValue.Num(number) => r.setLong(idx, number)
       case SortValue.Real(number) => r.setDouble(idx, number)
+      case SortValue.Bytes(bytes) => r.setBytes(idx, bytes)
       // A SQLite cursor never carries a typed timestamp (the engine hands them back as text), but bind one as stored anyway
       case SortValue.LocalTimestamp(dateTime) => r.setString(idx, dateTime.format(SqliteOverrides.DATETIME_FORMATTER))
       case SortValue.UtcInstant(instant) =>

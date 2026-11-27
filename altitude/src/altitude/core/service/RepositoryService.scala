@@ -22,7 +22,7 @@ import altitude.core.models.Repository
 import altitude.core.models.Stats
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
-import altitude.core.util.NaturalOrder
+import altitude.core.util.SortKey
 import altitude.core.util.Util
 
 object RepositoryService:
@@ -149,7 +149,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       .asReadOnly {
         if account.accountType == AccountType.Admin then dao.getAll else dao.getGrantedTo(account.persistedId)
       }
-      .sortBy(_.name)(using NaturalOrder)
+      .sortBy(repository => (SortKey.of(repository.name), repository.persistedId))
 
   /**
    * Gives the account `permissions` in the Library, replacing what it held there. The account's type is read under its row lock,

@@ -62,13 +62,11 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       if asset.isRecycled then throw IllegalOperationException(s"Cannot rename a recycled asset: [$asset]")
       logger.debug(s"Renaming asset [${asset.persistedId}] from [${asset.fileName}] to [$newFilename]")
 
-      val data = Map(
-        FieldConst.Asset.FILENAME -> newFilename
-      )
-      updateById(asset.persistedId, data)
+      // The DAO writes the name's sort key with it
+      updateById(asset.persistedId, Map(FieldConst.Asset.FILENAME -> newFilename))
+      val renamed = asset.copy(fileName = newFilename)
 
       // The Search document holds the words of the file name
-      val renamed = asset.copy(fileName = newFilename)
       app.service.search.reindexAsset(renamed)
       renamed
     }

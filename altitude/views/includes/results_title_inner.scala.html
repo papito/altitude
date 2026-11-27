@@ -8,7 +8,7 @@
    and the subtitle, or a filtered search's chips in its place. A person's title also holds the cover face and the Hide /
    Show / Discard link, rendered here from the person since they are the person scope's alone; choosing the cover and
    those links are Organize's. *@
-@(icon: String, subtitle: Option[String] = None, person: Option[Person] = None, filters: Option[Html] = None)(title: Html)
+@(icon: String, subtitle: Option[Html] = None, person: Option[Person] = None, filters: Option[Html] = None)(title: Html)
 
 @chooseCover(p: Person) = {hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/modals/choose-person-cover-face"
          hx-target="#modalContent"

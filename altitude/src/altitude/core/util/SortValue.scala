@@ -19,6 +19,12 @@ enum SortValue:
 
   /** An instant (PostgreSQL `timestamptz`) */
   case UtcInstant(value: OffsetDateTime)
+
+  /**
+   * A `SortKey`'s bytes, as a file name sort reads `filename_sort`. Never in a cursor, which carries the file name: the statement
+   * binds its key
+   */
+  case Bytes(value: Array[Byte])
   case Null
 
   def bindValue: Any = this match
@@ -27,4 +33,5 @@ enum SortValue:
     case Real(value) => value
     case LocalTimestamp(value) => value
     case UtcInstant(value) => value
+    case Bytes(value) => value
     case Null => throw IllegalStateException("A null sort value is compared with IS NULL, never bound")

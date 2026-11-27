@@ -1,9 +1,12 @@
 package altitude.core.integration
 
+import altitude.test.TestContext
 import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldEqual }
 import org.scalatest.tagobjects.Slow
+
+import scala.util.Random
 
 import altitude.core.Altitude
 import altitude.core.Api
@@ -126,6 +129,31 @@ import altitude.core.models.Repository
     locations.map(_.persistedId) shouldEqual List(alba.persistedId, rome.persistedId, zurich.persistedId)
     locations.map(_.categoryName) shouldEqual List(None, Some("Italy"), None)
     testApp.service.location.getLocationsOfAsset(inNone.persistedId) shouldBe Nil
+  }
+
+  test("Locations and categories are listed in natural order on both engines, a renamed one by its new name") {
+
+    /**
+     * Setup:
+     *
+     * A top-level Location under each of `TestContext.NATURAL_NAMES` but the last two, added in a shuffled order, the first of
+     * the names added as "zzz" and renamed, so a key left stale would list it last; and a category under the next to last name
+     * holding a Location under the last.
+     *
+     * Assertions:
+     *
+     * The path order lists them in the order of the names on both engines, the order `NaturalOrder` sorts them in memory, the
+     * category directly followed by its Location.
+     */
+    val names = TestContext.NATURAL_NAMES
+    val topLevel = names.dropRight(2)
+    val renamed = testApp.service.location.addLocation("zzz", 1.0, 2.0)
+    testApp.service.location.rename(renamed.persistedId, topLevel.head)
+    Random.shuffle(topLevel.tail).foreach(name => testApp.service.location.addLocation(name, 1.0, 2.0))
+    val category = testApp.service.location.addCategory(names(names.length - 2))
+    testApp.service.location.addLocation(names.last, 1.0, 2.0, Some(category.persistedId))
+
+    testApp.service.location.getAll.map(_.name) shouldEqual names
   }
 
   test("Categories and Locations share one case-insensitive name pool per repository") {

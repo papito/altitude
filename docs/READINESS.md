@@ -339,7 +339,7 @@ Decoder limits and timeouts are under [Malicious files](#malicious-files).
 - [ ] HEIC, HEIF, AVIF and WebP likely fail to import: an image's size is read from its header by an ImageIO reader before anything decodes it ([AssetService] `getDimensionsAndDuration`), and no reader on the classpath takes those formats (no TwelveMonkeys, libheif or libavif), so the file is dropped with "No image reader takes" its path, before OpenCV ([ImageUtil] `decode`) is reached. Most RAW files are likely affected too. iOS Safari usually converts HEIC to JPEG on upload; a Watch folder of an iPhone export gets none of that. (unconfirmed) Effort: M.
   - Fix: libheif and libavif (bytedeco, or a `vips` subprocess) and WebP through TwelveMonkeys; consider libvips for the whole decode path.
 - ✅ Time handling is principled and documented: a wall-clock capture time with the zone deliberately dropped, 12 sources tried in order with plausibility checks, and UTC container times handled ([CaptureDateResolver]).
-- [ ] `OffsetTimeOriginal` is never read. "Imported:" ([result_cell.scala.html]) shows the JVM's zone on PostgreSQL ([PostgresOverrides] `getDateTimeField`) and UTC on SQLite ([SqliteOverrides] `toLocalDateTime`), never the viewer's, and without a label. Effort: S.
+- [ ] `OffsetTimeOriginal` is never read. "Imported:" ([result_cell.scala.html]) shows the server's zone (`Util.inServerZone`), the one a Date Imported range cuts its days in, never the viewer's, and without a label. Effort: S.
   - Fix: store `OffsetTimeOriginal` (EXIF 0x9011) beside the wall clock; render the import time in the viewer's zone with `<time datetime>` and `Intl.DateTimeFormat`.
 - [ ] Not usable on a phone. The viewport meta is set, and a portrait viewport docks the explorer at the bottom ([explorer-dock.js]), but the app CSS has no width breakpoint (its `@media` queries are for reduced motion and touch hover), and the nav's fixed widths overflow a 360 px screen ([core.css]). Touch box selection is off ([box-selection.js]), and detail navigation is arrow keys only ([global.js]). Effort: L.
   - Fix: below a breakpoint, stack the explorer or put it in a drawer, wrap the nav, swipe in the detail view, and add `accept="image/*,video/*"` to the file input.
@@ -488,8 +488,6 @@ Entries leave this list when their items close.
 [SearchDao]: ../altitude/src/altitude/core/dao/jdbc/SearchDao.scala
 [SystemMetadataDao]: ../altitude/src/altitude/core/dao/jdbc/SystemMetadataDao.scala
 [UserDao]: ../altitude/src/altitude/core/dao/UserDao.scala
-[PostgresOverrides]: ../altitude/src/altitude/core/dao/postgres/PostgresOverrides.scala
-[SqliteOverrides]: ../altitude/src/altitude/core/dao/sqlite/SqliteOverrides.scala
 [Columns]: ../altitude/src/altitude/core/dao/sql/Columns.scala
 [SearchQueries]: ../altitude/src/altitude/core/dao/sql/search/SearchQueries.scala
 [AssetWithData]: ../altitude/src/altitude/core/models/AssetWithData.scala

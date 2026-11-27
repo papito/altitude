@@ -1,15 +1,19 @@
 package altitude.core.unit
 
+import altitude.test.TestContext
 import altitude.test.TestFocus
+import java.nio.file.Files
+import java.nio.file.Path
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
-import org.scalatest.matchers.should.Matchers.shouldBe
+import org.scalatest.matchers.should.Matchers.*
 import scalasql.Table
 import scalasql.core.DbApi
 import scalasql.dialects.Dialect
 
 import scala.io.Source
 
+import altitude.core.FieldConst
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
@@ -45,6 +49,7 @@ import altitude.core.dao.sql.tables._
       RepositoryRow -> DbApi.renderSql(RepositoryRow.select, Db.config, dialect),
       RepositoryGrantRow -> DbApi.renderSql(RepositoryGrantRow.select, Db.config, dialect),
       SearchDocumentRow -> DbApi.renderSql(SearchDocumentRow.select, Db.config, dialect),
+      SettingRow -> DbApi.renderSql(SettingRow.select, Db.config, dialect),
       StatRow -> DbApi.renderSql(StatRow.select, Db.config, dialect),
       SystemRow -> DbApi.renderSql(SystemRow.select, Db.config, dialect),
       WatchFolderRow -> DbApi.renderSql(WatchFolderRow.select, Db.config, dialect),
@@ -211,33 +216,280 @@ import altitude.core.dao.sql.tables._
     sql.contains("asset0.original_created_at") shouldBe true
   }
 
+  test("Each column is nullable on both engines or on neither, as its row class types it") {
+
+    /**
+     * Setup:
+     *
+     * The columns of every table both schemas declare, each NOT NULL or not as its `CREATE TABLE` says (a primary key column is
+     * NOT NULL), and each row class's fields as its source declares them, an `Option` or not.
+     *
+     * Assertions:
+     *
+     * A column of both schemas is NOT NULL on both or on neither. A row field that is no `Option` is NOT NULL on both engines,
+     * and an `Option` field is nullable on both, so no read meets a NULL its row cannot hold and no column holds a NULL its model
+     * never has.
+     *
+     * Edge cases:
+     *
+     * `created_at` is NOT NULL with a default on both engines and an `Option` in every row, whose models are built before the
+     * database stamps them.
+     */
+    val postgres = schemaTables("postgres")
+    val sqlite = schemaTables("sqlite")
+
+    for {
+      (table, pgColumns) <- postgres
+      sqliteColumns <- sqlite.get(table).toList
+      column <- pgColumns
+      other <- sqliteColumns.find(_.name == column.name)
+    } withClue(s"$table.${column.name}: ")(column.notNull shouldBe other.notNull)
+
+    // The source is read by a pattern, so it must find every field the row selects, and no other
+    for ((table, sql) <- rendered(AltitudeSqliteDialect))
+      withClue(s"${Table.name(table)}: ")(rowFields(Table.name(table)).map(_._1) shouldBe selectedColumns(sql))
+
+    for {
+      (table, fields) <- rowFields
+      (field, isOption) <- fields
+      engine <- List("postgres", "sqlite")
+    } {
+      val column = schemaTables(engine)(table).find(_.name == field).getOrElse(fail(s"No column $table.$field in $engine"))
+      val expected = !isOption || field == FieldConst.CREATED_AT
+      withClue(s"$engine $table.$field: ")(column.notNull shouldBe expected)
+    }
+  }
+
+  test("Both schemas name the same indexes on the same tables, but where an engine's index has no twin") {
+
+    /**
+     * Setup:
+     *
+     * Every `CREATE INDEX` of both schemas, by name, with its table and whether it is unique.
+     *
+     * Assertions:
+     *
+     * Each index is on a table a row class reads, and is on both engines under one name, on the same table and equally unique, so
+     * a plan or a violation told by an index name means one thing on either.
+     *
+     * Edge cases:
+     *
+     * PostgreSQL's vector indexes (`asset_describe`, `face_03`) and its full-text index (`search_document_02`) have no twin,
+     * since SQLite scans the vectors and keeps the text in an FTS5 table; SQLite's `face_04` carries the person an asset's Faces
+     * are probed for, which PostgreSQL's `face_01` includes.
+     */
+    val postgres = schemaIndexes("postgres")
+    val sqlite = schemaIndexes("sqlite")
+    val rowTables = rendered(AltitudeSqliteDialect).map((table, _) => Table.name(table)).toSet
+
+    (postgres ++ sqlite).foreach { case (name, (table, _)) => withClue(s"$name: ")(rowTables should contain(table)) }
+    postgres.keySet.diff(sqlite.keySet) shouldBe Set("asset_describe", "face_03", "search_document_02")
+    sqlite.keySet.diff(postgres.keySet) shouldBe Set("face_04")
+    postgres.keySet.intersect(sqlite.keySet).foreach(name => withClue(s"$name: ")(postgres(name) shouldBe sqlite(name)))
+  }
+
+  test("Every column that references an account leads an index, so an account delete seeks its rows") {
+
+    /**
+     * Setup:
+     *
+     * Every column of both schemas declared `REFERENCES account (id)`.
+     *
+     * Assertions:
+     *
+     * Each leads an index of its table or its table's primary key, so the delete action or key check of an account delete, and
+     * the writes that pass an account's rows on, seek the rows rather than scan the table under the Admins' row locks.
+     */
+    for (engine <- List("postgres", "sqlite")) {
+      val ddl = schemaText(engine)
+      val tables = "(?s)CREATE TABLE (\\w+) \\((.*?)\\n\\)".r.findAllMatchIn(ddl).map(m => m.group(1) -> m.group(2)).toList
+      val referencing = for {
+        (table, body) <- tables
+        column <- "(?m)^\\s*(\\w+) [^\\n]*REFERENCES account \\(id\\)".r.findAllMatchIn(body).map(_.group(1)).toList
+      } yield (table, column)
+
+      referencing should not be empty
+      referencing.foreach {
+        case (table, column) =>
+          val led = s"(?s)CREATE (UNIQUE )?INDEX \\w+ ON $table \\($column[,)]".r.findFirstIn(ddl).isDefined ||
+            tables.toMap.get(table).exists(body => s"PRIMARY KEY \\($column[,)]".r.findFirstIn(body).isDefined)
+          withClue(s"$engine $table.$column: ")(led shouldBe true)
+      }
+    }
+  }
+
+  test("Every PostgreSQL text column an index holds or a list orders by is COLLATE \"C\"") {
+
+    /**
+     * Setup:
+     *
+     * PostgreSQL's `all.sql`: each text column (`TEXT` or `VARCHAR`) that a btree index, a primary key or a unique constraint
+     * holds, and each that a list or a lookup orders or compares by its name (`*_key`, `*_sort`, `name_for_sort`, `path`,
+     * `rel_path`, `dimension`, `setting.name`).
+     *
+     * Assertions:
+     *
+     * Each declares `COLLATE "C"`, so it compares by its bytes as SQLite does, and no locale upgrade can reorder an index under
+     * it. A `*_sort` column, a name's `SortKey`, is no text: `BYTEA` on PostgreSQL and `BLOB` on SQLite, both compared as
+     * `memcmp` compares.
+     *
+     * Edge cases:
+     *
+     * A vector or full-text index (`hnsw`, `gin`) and an index's included columns compare nothing, and an expression is not a
+     * column.
+     */
+    val ddl = schemaText("postgres")
+    val tables = schemaTables("postgres")
+    def isText(column: Column): Boolean = "^\\w+ (TEXT|VARCHAR)\\b".r.findFirstIn(column.declaration).isDefined
+
+    val indexed = (for {
+      m <- "CREATE (UNIQUE )?INDEX \\w+ ON (\\w+)(?: USING (\\w+))? \\(".r.findAllMatchIn(ddl).toList
+      if !Option(m.group(3)).exists(Set("hnsw", "gin"))
+      item <- topLevelItems(ddl, m.end - 1)
+      if "\\w+".r.matches(item)
+    } yield (m.group(2), item)) ++ (for {
+      body <- "(?s)CREATE TABLE (\\w+) \\((.*?)\\n\\)".r.findAllMatchIn(ddl).map(m => m.group(1) -> m.group(2)).toList
+      constraint <- "(?m)^\\s*(?:PRIMARY KEY|UNIQUE) \\(([^)]*)\\)".r.findAllMatchIn(body._2).toList
+      column <- constraint.group(1).split(",").map(_.trim).toList
+    } yield (body._1, column)) ++ (for {
+      (table, columns) <- tables.toList
+      column <- columns
+      if column.declaration.contains("PRIMARY KEY") || "\\bUNIQUE\\b".r.findFirstIn(column.declaration).isDefined
+    } yield (table, column.name))
+
+    val keyNamed = Set("name_for_sort", "path", "rel_path", "dimension")
+    val ordered = for {
+      (table, columns) <- tables.toList
+      column <- columns
+      if column.name.endsWith("_key") || column.name.endsWith("_sort") || keyNamed(column.name) ||
+        (table == "setting" && column.name == "name")
+    } yield (table, column.name)
+
+    val checked = (indexed ++ ordered).distinct.flatMap((table, name) => tables(table).find(_.name == name).map(table -> _))
+    checked.filter((_, column) => isText(column)) should not be empty
+    for ((table, column) <- checked if isText(column))
+      withClue(s"$table.${column.name}: ")(column.declaration should include("COLLATE \"C\""))
+
+    for {
+      (engine, binary) <- List("postgres" -> "BYTEA", "sqlite" -> "BLOB")
+      (table, columns) <- schemaTables(engine)
+      column <- columns if column.name.endsWith("_sort") && column.name != "name_for_sort"
+    } withClue(s"$engine $table.${column.name}: ")(column.declaration should startWith(s"${column.name.toUpperCase} $binary "))
+  }
+
+  test("The scoped tables a test compares repositories by are every table that carries repository_id") {
+
+    /**
+     * Setup:
+     *
+     * `TestContext.SCOPED_TABLES`, and the tables of each schema with a `repository_id` column.
+     *
+     * Assertions:
+     *
+     * The list is those tables on both engines, but `repository_grant`, the accounts' grants in a Library rather than its
+     * content, so a table added with `repository_id` is one `RepositoryIsolationTests` checks.
+     */
+    for (engine <- List("postgres", "sqlite")) {
+      val scoped = schemaTables(engine).collect {
+        case (table, columns) if columns.exists(_.name == FieldConst.REPO_ID) => table
+      }.toSet - "repository_grant"
+
+      withClue(s"$engine: ")(TestContext.SCOPED_TABLES.toSet shouldBe scoped)
+    }
+    TestContext.SCOPED_TABLES.distinct shouldBe TestContext.SCOPED_TABLES
+  }
+
   /** The columns of a rendered `SELECT`, as the table aliases them */
   private def selectedColumns(sql: String): List[String] =
     "[a-z_]+[0-9]+\\.([a-z_0-9]+) AS ".r.findAllMatchIn(sql).map(_.group(1)).toList
 
-  /** `CREATE TABLE` column names per table, with PostgreSQL's inherited `_core` columns folded in */
-  private def schemaColumns(engine: String): Map[String, List[String]] = {
-    val source = Source.fromInputStream(getClass.getResourceAsStream(s"/migrations/$engine/all.sql"))
-    val ddl =
-      try source.mkString
-      finally source.close()
+  /** A column of a `CREATE TABLE`: NOT NULL when it says so or is the primary key, with its declaration in upper case */
+  private case class Column(name: String, notNull: Boolean, declaration: String)
 
+  // Not `IS NOT NULL`, which a CHECK on the line may hold
+  private val NOT_NULL = "(?<!IS )\\bNOT NULL\\b".r
+
+  /** `CREATE TABLE` column names per table, with PostgreSQL's inherited `_core` columns folded in */
+  private def schemaColumns(engine: String): Map[String, List[String]] =
+    schemaTables(engine).map((table, columns) => table -> columns.map(_.name))
+
+  /** `CREATE TABLE` columns per table, with PostgreSQL's inherited `_core` columns folded in */
+  private def schemaTables(engine: String): Map[String, List[Column]] = {
     val tables = "(?s)CREATE TABLE (\\w+) \\((.*?)\\n\\)([^;]*);".r
-      .findAllMatchIn(ddl)
-      .map(m => m.group(1) -> (columnNames(m.group(2)), m.group(3).contains("INHERITS")))
+      .findAllMatchIn(schemaText(engine))
+      .map(m => m.group(1) -> (columnsOf(m.group(2)), m.group(3).contains("INHERITS")))
       .toMap
 
     val core = tables.get("_core").map(_._1).getOrElse(List())
     tables.map { case (name, (columns, inherits)) => name -> (if (inherits) core ++ columns else columns) }
   }
 
-  private def columnNames(body: String): List[String] =
+  /** `CREATE INDEX` names, each with its table and whether it is unique */
+  private def schemaIndexes(engine: String): Map[String, (String, Boolean)] =
+    "CREATE (UNIQUE )?INDEX (\\w+) ON (\\w+)".r
+      .findAllMatchIn(schemaText(engine))
+      .map(m => m.group(2) -> (m.group(3), m.group(1) != null))
+      .toMap
+
+  /** The comma-separated items of the parenthesized list opening at `open`, each trimmed, nested parentheses kept whole */
+  private def topLevelItems(text: String, open: Int): List[String] = {
+    var depth = 0
+    var i = open
+    val items = List.newBuilder[String]
+    var start = open + 1
+    while ({
+      text(i) match {
+        case '(' => depth += 1
+        case ')' => depth -= 1
+        case ',' if depth == 1 =>
+          items += text.substring(start, i).trim
+          start = i + 1
+        case _ =>
+      }
+      i += 1
+      depth > 0
+    }) ()
+    items += text.substring(start, i - 1).trim
+    items.result()
+  }
+
+  private def schemaText(engine: String): String = {
+    val source = Source.fromInputStream(getClass.getResourceAsStream(s"/migrations/$engine/all.sql"))
+    try source.mkString
+    finally source.close()
+  }
+
+  private def columnsOf(body: String): List[Column] =
     body
       .split("\n")
       .map(_.replaceAll("--.*", "").trim)
       .filter(_.nonEmpty)
-      .map(_.takeWhile(c => c.isLetterOrDigit || c == '_'))
-      .filter(_.nonEmpty)
-      .filterNot(word => Set("FOREIGN", "PRIMARY", "UNIQUE", "CHECK", "CONSTRAINT").contains(word.toUpperCase))
+      .map(line => (line.takeWhile(c => c.isLetterOrDigit || c == '_'), line.toUpperCase))
+      .filter(_._1.nonEmpty)
+      .filterNot((word, _) => Set("FOREIGN", "PRIMARY", "UNIQUE", "CHECK", "CONSTRAINT").contains(word.toUpperCase))
+      .map((name, line) => Column(name, NOT_NULL.findFirstIn(line).isDefined || line.contains("PRIMARY KEY"), line))
       .toList
+
+  /**
+   * Each row class's fields by its table, as column names, each `true` when the field is an `Option`: read from the row class's
+   * source, since a field's type argument is erased at runtime
+   */
+  private lazy val rowFields: Map[String, List[(String, Boolean)]] = {
+    val tablesDir = Path.of(sys.env("ALTITUDE_SOURCE_DIR")).resolve("altitude/core/dao/sql/tables")
+    val classes =
+      rendered(AltitudeSqliteDialect).map((table, _) => table.getClass.getSimpleName.stripSuffix("$") -> Table.name(table))
+
+    classes.map {
+      (className, tableName) =>
+        val source = Files.readString(tablesDir.resolve(s"$className.scala"))
+        val body = s"(?s)case class $className\\[T\\[_\\]\\]\\((.*?)\\)\\n".r
+          .findFirstMatchIn(source)
+          .getOrElse(fail(s"No case class $className in its source"))
+          .group(1)
+        tableName -> "(\\w+): T\\[(Option\\[)?".r
+          .findAllMatchIn(body)
+          .map(m => Db.config.columnNameMapper(m.group(1)) -> (m.group(2) != null))
+          .toList
+    }.toMap
+  }
 }

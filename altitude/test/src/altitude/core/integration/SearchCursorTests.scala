@@ -1,6 +1,8 @@
 package altitude.core.integration
 
+import altitude.test.TestContext
 import java.time.{ LocalDate, LocalDateTime, OffsetDateTime, ZoneOffset }
+import java.util.HexFormat
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqual }
 
@@ -79,7 +81,7 @@ import altitude.core.util.*
     def sortKey(a: Dated): Option[String] = sort.field match {
       case FieldConst.Asset.ORIGINAL_CREATED_AT => a.taken.map(_.toString)
       case FieldConst.CREATED_AT => Some(a.imported.withOffsetSameInstant(ZoneOffset.UTC).toString)
-      case FieldConst.Asset.FILENAME => Some(a.filename)
+      case FieldConst.Asset.FILENAME => Some(HexFormat.of.formatHex(SortKey.of(a.filename).bytes))
       case _ => Some("")
     }
     Ordering.by[Dated, Option[String]](sortKey)(nativeOrder(sort.direction)).orElse(Ordering.by[Dated, String](_.id))
@@ -237,6 +239,39 @@ import altitude.core.util.*
         traverseFlat(sort, rpp) shouldEqual assets.sorted(sortThenId(sort)).map(_.id)
       }
     }
+  }
+
+  test("A file name sort walks names in natural order on both engines, through a cursor") {
+
+    /**
+     * Setup:
+     *
+     * One asset under each of `TestContext.NATURAL_NAMES`, imported in a shuffled order: a symbol, a leading number, a space
+     * before a parenthesis, digit runs of one and two digits, an accent and case.
+     *
+     * Assertions:
+     *
+     * Sorted by file name and walked two to a page by cursor, they come in that order on both engines, which is the order
+     * `NaturalOrder` sorts the names in memory; descending walks the reverse.
+     *
+     * Edge cases:
+     *
+     * "IMG_9.jpg" comes before "img_10.jpg" and "a (2).jpg" before "A (10).jpg", which an order of the text alone would reverse.
+     */
+    val named = Random
+      .shuffle(TestContext.NATURAL_NAMES)
+      .map {
+        name =>
+          val asset = testContext.persistAsset()
+          testApp.service.asset.rename(asset.persistedId, name)
+          name -> asset.persistedId
+      }
+      .toMap
+    TestContext.NATURAL_NAMES.reverse.sorted(using NaturalOrder) shouldEqual TestContext.NATURAL_NAMES
+    val expected = TestContext.NATURAL_NAMES.map(named)
+
+    traverseFlat(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC), rpp = 2) shouldEqual expected
+    traverseFlat(SearchSort(FieldConst.Asset.FILENAME, SortDirection.DESC), rpp = 2) shouldEqual expected.reverse
   }
 
   test("Frames captured within one second keep their order by the fraction, flat and grouped, through a cursor") {
@@ -557,49 +592,6 @@ import altitude.core.util.*
     flatPage(SearchSort.Relevance, 5, Some(relevanceCursor), img).records.length shouldBe 5
   }
 
-  if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
-    test("A cursor continues correctly through a legacy null import time") {
-
-      /**
-       * Setup:
-       *
-       * The fixture without its undated assets, one asset's import time cleared to NULL, which only a legacy SQLite row can hold.
-       *
-       * Assertions:
-       *
-       * Grouped by capture day and sorted by import time in either direction, walking one and two assets a page keeps that asset
-       * in its day, first or last in it as SQLite puts nulls for the direction. Ungrouped, the same walks put it first of all
-       * ascending and last of all descending.
-       */
-      val assets = fixture(includeUndated = false)
-      val undated = assets(2)
-      testApp.txManager.withTransaction {
-        update("UPDATE asset SET created_at = NULL WHERE id = ?", undated.id)
-      }
-      val grouping = SearchGrouping(GroupBy.DateTaken)
-
-      List(SortDirection.ASC, SortDirection.DESC).foreach {
-        direction =>
-          val sort = SearchSort(FieldConst.CREATED_AT, direction)
-          val dayOfUndated = assets.filter(_.taken.map(_.toLocalDate) == undated.taken.map(_.toLocalDate))
-          val others = expectedOrder(dayOfUndated.filterNot(_.id == undated.id), grouping, sort)
-          val expectedDay = if (direction == SortDirection.ASC) undated.id :: others else others :+ undated.id
-          val rest =
-            expectedOrder(assets.filterNot(a => a.taken.map(_.toLocalDate) == undated.taken.map(_.toLocalDate)), grouping, sort)
-
-          val flat = assets.filterNot(_.id == undated.id).sorted(sortThenId(sort)).map(_.id)
-          val expectedFlat = if (direction == SortDirection.ASC) undated.id :: flat else flat :+ undated.id
-
-          withClue(s"$sort: ") {
-            traverse(grouping, sort, rpp = 1) shouldEqual expectedDay ++ rest
-            traverse(grouping, sort, rpp = 2) shouldEqual expectedDay ++ rest
-            traverseFlat(sort, rpp = 1) shouldEqual expectedFlat
-            traverseFlat(sort, rpp = 2) shouldEqual expectedFlat
-          }
-      }
-    }
-  }
-
   test("Cursor traversal by Location matches the complete order for every sort field and direction") {
 
     /**
@@ -652,14 +644,15 @@ import altitude.core.util.*
     val page1 = firstPage(grouping, sort, rpp = 5)
     page1.total shouldBe Some(16)
     page1.groups.map(_.total) shouldEqual List(8)
-    page1.nextCursor.map(cursor => (cursor.key, cursor.groupId)) shouldBe Some((Some("berlin"), Some(berlin.persistedId)))
+    page1.nextCursor.map(cursor => (cursor.key, cursor.groupId)) shouldBe Some(
+      (Some(pathKeyOf("Berlin")), Some(berlin.persistedId)))
     val cursorInRome = {
       var page = page1
       while (!page.groups.last.key.cursorGroupId.contains(rome.persistedId))
         page = continue(page.nextCursor.get, grouping, sort, 5)
       page.nextCursor.get
     }
-    cursorInRome.key shouldBe Some("italy" + 1.toChar + "rome")
+    cursorInRome.key shouldBe Some(pathKeyOf("Italy", "Rome"))
 
     testApp.service.location.deleteById(rome.persistedId)
     val afterRome = expectedLocationOrder(List(inNone ++ assets.slice(0, 3)), sort)

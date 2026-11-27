@@ -20,13 +20,13 @@ trait WatchFolderDao extends BaseDao[WatchFolder]:
    */
   def lockPaths(): Unit
 
-  /** By name */
+  /** By name, as the Libraries are listed (`NaturalOrder`), then by ID */
   def all(): List[WatchFolder]
 
   /** Every Watch folder in every Library */
   def everywhere(): List[WatchFolderDao.Placed]
 
-  /** Those whose destination is one of the folders */
+  /** Those whose destination is one of the folders, in the order of [[all]] */
   def targeting(folderIds: Set[String]): List[WatchFolder]
 
   /** Writes what an Admin edits and its owner; how many rows changed */

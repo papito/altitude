@@ -2,7 +2,6 @@ package altitude.core.dao.sqlite
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -42,11 +41,6 @@ trait SqliteOverrides:
   this: BaseDao[?] =>
 
   override protected val dialect: Dialect = AltitudeSqliteDialect
-
-  // An instant is stored as its UTC wall clock and handed back verbatim, as `getDateTimeField` does for the raw paths
-  override protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime = value.toLocalDateTime
-
-  override def instantOf(value: LocalDateTime): Instant = value.toInstant(ZoneOffset.UTC)
 
   override protected def jsonFunc = "?"
 

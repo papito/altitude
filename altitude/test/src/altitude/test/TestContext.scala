@@ -89,6 +89,25 @@ object TestContext {
       IArray.from(across.indices.map(i => (cosine * along(i) + math.sqrt(1 - cosine * cosine) * across(i) / length).toFloat)))
   }
 
+  /**
+   * Names in the order a person reads them (`NaturalOrder`), mixing what orders apart: a symbol, a leading number, a space before
+   * a parenthesis, digit runs of one and two digits, an accent and case, so a test of a list's order checks it against this.
+   */
+  val NATURAL_NAMES: List[String] = List(
+    "\uD83D\uDE42.jpg",
+    "2020.jpg",
+    "a (2).jpg",
+    "A (10).jpg",
+    "a.jpg",
+    "beach.jpg",
+    "emile.jpg",
+    "\u00C9mile.jpg",
+    "IMG_9.jpg",
+    "img_10.jpg",
+    "Zebra.jpg",
+    "zoo.jpg"
+  )
+
   /** The tables that carry `repository_id`, whose rows only their own repository's context reaches */
   val SCOPED_TABLES: List[String] = List(
     "asset",

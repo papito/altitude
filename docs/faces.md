@@ -171,7 +171,10 @@ changing a threshold later does not re-tier existing Faces, and a Video's suppor
 
 `face_01` makes `(asset_id, repository_id, checksum)` unique: the same crop twice in one asset is a
 `DuplicateException`, while two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo).
-`face_02` is `(person_id, detection_score)` for a person's faces.
+On PostgreSQL it includes `person_id`, so the per-asset probes of Search text read an asset's people from the index alone;
+SQLite has no included columns, and a trailing `person_id` would make the crop unique per person rather than per asset, so
+it reads them from `face_04`, `(asset_id, repository_id, person_id)`. `face_02` is `(person_id, detection_score)` for a
+person's faces.
 
 The crops live in the file store (`FileSystemStoreService.addFace`) as
 `faces/<id[0:2]>/<id>-{display,detected,aligned,aligned-gs}.png`.
@@ -278,7 +281,7 @@ The tab's actions:
   "Weiß" and "WEISS", a Greek name with a final sigma and with a plain one ("σοφος" and "σοφοσ"), or a name with a
   full-width letter and the same name without, are one name. A merged-away or bad-match person holds no name. An unnamed
   person's `name_for_sort` is `unknown 0000000042` (the name key of `UNKNOWN_NAME_PREFIX`, then the number padded to ten
-  digits, so the unnamed sort by number as text for as far as the instance-wide label sequence goes), so a name of the
+  digits), so a name of the
   form `Unknown N`, in any case and spacing, is reserved and refused with a validation error. The name is held to 2 to 80
   characters once in NFC, with a name key within `NameKey.MAX_KEY_BYTES` (`PersonService.validName`, which every naming
   path, a rename and a move of a Face to a Person by name, goes through; **Names** in `altitude/AGENTS.md`). `isReservedName` tests the name's NFKC form, as the key folds it, so the form's
@@ -415,8 +418,8 @@ meanwhile). The client shows a 400's message and changes nothing, and reloads th
 whose Person was named meanwhile comes back as a named Person's, offering no name or merge. The controls, the Change
 combobox and what the client does with an answer are
 under **Detail panel** in `altitude/views/AGENTS.md`. `PeopleActionController` serves the Change combobox's options,
-`GET /htmx/people/r/:repoId/assignable` (`getAssignable`: the live people who are not a bad match, named first, then by
-`name_for_sort`, Hidden among them and marked, a named Person whose every Face was purged included; `htmx/assignable_people`), with the Suggested group below when asked with
+`GET /htmx/people/r/:repoId/assignable` (`getAssignable`: the live people who are not a bad match, named first, then in
+natural order of the name by `name_sort` (its `SortKey`, so "Unknown 9" comes before "Unknown 10"), then by ID, Hidden among them and marked, a named Person whose every Face was purged included; `htmx/assignable_people`), with the Suggested group below when asked with
 `faceId`, and a Person's results title on its own, `GET /htmx/people/r/:repoId/p/:personId/title` (`htmx/person_inner`),
 read again after a correction because the title's Hide and Discard links depend on the count.
 

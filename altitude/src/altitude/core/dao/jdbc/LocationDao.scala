@@ -10,6 +10,7 @@ import altitude.core.dao.sql.tables.LocationRow
 import altitude.core.models.Location
 import altitude.core.models.LocationKind
 import altitude.core.util.Query
+import altitude.core.util.SortKey
 
 abstract class LocationDao(override val config: Config) extends BaseDao[Location] with altitude.core.dao.LocationDao:
   final override val tableName = "location"
@@ -17,6 +18,8 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
 
   final override type Row[T[_]] = LocationRow[T]
   final override protected def table: Table[Row] = LocationRow
+
+  override protected val sortKeyColumns: Map[String, String] = Map(FieldConst.Location.NAME -> FieldConst.Location.NAME_SORT)
 
   // `numOfAssets` and `categoryName` come only from `getAll`'s hand-written query; the typed paths never select them
   override protected def toModel(row: LocationRow[Sc]): Location =
@@ -50,8 +53,8 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
     val sql = s"""
         INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Location.CATEGORY_ID},
                                 ${FieldConst.Location.KIND}, ${FieldConst.Location.NAME}, ${FieldConst.Location.NAME_KEY},
-                                ${FieldConst.Location.LATITUDE}, ${FieldConst.Location.LONGITUDE})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                ${FieldConst.Location.NAME_SORT}, ${FieldConst.Location.LATITUDE}, ${FieldConst.Location.LONGITUDE})
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
 
     val values: List[Any] = List(
@@ -61,6 +64,7 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
       location.kind.dbValue,
       location.name,
       location.nameKey,
+      SortKey.of(location.name).bytes,
       location.latitude.orNull,
       location.longitude.orNull
     )
@@ -80,9 +84,9 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
         FROM $tableName l
              LEFT JOIN $tableName p ON p.${FieldConst.ID} = l.${FieldConst.Location.CATEGORY_ID}
        WHERE l.${FieldConst.REPO_ID} = ?
-       ORDER BY COALESCE(p.${FieldConst.Location.NAME_KEY}, l.${FieldConst.Location.NAME_KEY}),
+       ORDER BY COALESCE(p.${FieldConst.Location.NAME_SORT}, l.${FieldConst.Location.NAME_SORT}),
                 CASE WHEN l.${FieldConst.Location.CATEGORY_ID} IS NULL THEN 0 ELSE 1 END,
-                l.${FieldConst.Location.NAME_KEY}
+                l.${FieldConst.Location.NAME_SORT}, l.${FieldConst.ID}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
@@ -149,7 +153,8 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
              LEFT JOIN $tableName p ON p.${FieldConst.ID} = l.${FieldConst.Location.CATEGORY_ID}
        WHERE la.${FieldConst.REPO_ID} = ?
          AND la.${FieldConst.Location.ASSET_ID} = ?
-       ORDER BY COALESCE(p.${FieldConst.Location.NAME_KEY}, l.${FieldConst.Location.NAME_KEY}), l.${FieldConst.Location.NAME_KEY}
+       ORDER BY COALESCE(p.${FieldConst.Location.NAME_SORT}, l.${FieldConst.Location.NAME_SORT}), l.${FieldConst.Location.NAME_SORT},
+                l.${FieldConst.ID}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).map(makeModel)
