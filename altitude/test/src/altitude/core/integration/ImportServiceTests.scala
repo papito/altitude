@@ -396,7 +396,7 @@ import altitude.core.util.SortKey
     /**
      * Setup:
      *
-     * Four Imports opened in turn, alternately closed and left in progress, and an Import of another repository.
+     * Four Imports opened in turn a minute apart, alternately closed and left in progress, and an Import of another repository.
      *
      * Assertions:
      *
@@ -407,7 +407,10 @@ import altitude.core.util.SortKey
      *
      * The other repository's Import is in no list and in no total.
      */
-    val List(firstClosed, firstOpen, secondClosed, secondOpen) = List.fill(4)(imports.open(ImportSource.Upload)): @unchecked
+    val opened = List.fill(4)(imports.open(ImportSource.Upload))
+    val List(firstClosed, firstOpen, secondClosed, secondOpen) = opened: @unchecked
+    // A minute apart, oldest first: opened in turn, they can share a clock tick (Windows' clock is coarse), and a tie falls to the ID
+    opened.zipWithIndex.foreach((anImport, i) => age(anImport, days = 0, minutes = opened.size - i))
     imports.close(firstClosed.persistedId)
     imports.close(secondClosed.persistedId)
 
